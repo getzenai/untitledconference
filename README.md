@@ -26,15 +26,18 @@ npm run dev -- --open
 ```
 
 ### drizzle
+
 - You will need to set DATABASE_URL in your production environment
 - Run npm run db:start to start the docker container
 - Run npm run db:push to update your database schema
 
 ### lucia
+
 - Run npm run db:push to update your database schema
 - Visit /demo/lucia route to view the demo
 
 ### paraglide
+
 - Edit your messages in messages/en.json
 - Consider installing the Sherlock IDE Extension
 - Visit /demo/paraglide route to view the demo
