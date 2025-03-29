@@ -1,0 +1,51 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Launch server",
+			"request": "launch",
+			"runtimeArgs": ["run-script", "dev"],
+			"runtimeExecutable": "npm",
+			"skipFiles": ["<node_internals>/**"],
+			"type": "node",
+			"console": "integratedTerminal"
+		},
+
+		{
+			"type": "chrome",
+			"request": "launch",
+			"name": "Launch browser",
+			"url": "http://localhost:5173/",
+			"webRoot": "${workspaceFolder}"
+		},
+
+		{
+			"name": "Start Database",
+			"request": "launch",
+			"runtimeArgs": ["run-script", "db:start"],
+			"runtimeExecutable": "npm",
+			"skipFiles": ["<node_internals>/**"],
+			"type": "node",
+			"console": "integratedTerminal"
+		},
+
+		{
+			"type": "node",
+			"request": "launch",
+			"name": "Debug Tests",
+			"autoAttachChildProcesses": true,
+			"skipFiles": ["<node_internals>/**"],
+			"program": "${workspaceFolder}/node_modules/vitest/vitest.mjs",
+			"args": ["run", "--testNamePattern=workflow-shares"],
+			"smartStep": true,
+			"console": "integratedTerminal",
+			"cwd": "${workspaceFolder}"
+		}
+	],
+	"compounds": [
+		{
+			"name": "Launch Full Stack",
+			"configurations": ["Start Database", "Launch server", "Launch browser"]
+		}
+	]
+}
