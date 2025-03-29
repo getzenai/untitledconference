@@ -1,11 +1,11 @@
-import { fail, redirect } from '@sveltejs/kit';
-import type { Actions, RequestEvent } from './$types';
-import { db } from '$lib/server/db';
-import { eq } from 'drizzle-orm';
-import * as table from '$lib/server/db/schema';
 import { createSession, generateSessionToken, setSessionTokenCookie } from '$lib/server/auth';
+import { db } from '$lib/server/db';
+import * as table from '$lib/server/db/schema';
 import { hash } from '@node-rs/argon2';
 import { encodeBase32LowerCase } from '@oslojs/encoding';
+import { fail, redirect } from '@sveltejs/kit';
+import { eq } from 'drizzle-orm';
+import type { Actions, RequestEvent } from './$types';
 
 // Create wrapper for setSessionTokenCookie that only requires cookies
 function setCookie(cookies: RequestEvent['cookies'], token: string, expiresAt: Date) {

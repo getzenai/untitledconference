@@ -1,9 +1,9 @@
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import * as schema from '../src/lib/server/db/schema';
 import { hash } from '@node-rs/argon2';
 import { encodeBase32LowerCase } from '@oslojs/encoding';
 import { eq, like } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import * as schema from '../src/lib/server/db/schema';
 import { TEST_USER_EMAIL_PREFIX } from './globals';
 
 // Use a fixed connection string for e2e tests

@@ -1,8 +1,8 @@
-import { fail, redirect } from '@sveltejs/kit';
-import type { Actions, RequestEvent } from './$types';
 import { createSession, generateSessionToken, setSessionTokenCookie } from '$lib/server/auth';
 import { findUserByEmail } from '$lib/server/db/users';
 import { verify } from '@node-rs/argon2';
+import { fail, redirect } from '@sveltejs/kit';
+import type { Actions, RequestEvent } from './$types';
 
 // Create wrapper for setSessionTokenCookie that only requires cookies
 function setCookie(cookies: RequestEvent['cookies'], token: string, expiresAt: Date) {

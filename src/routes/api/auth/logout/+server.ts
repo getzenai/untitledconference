@@ -1,5 +1,5 @@
+import { deleteSessionTokenCookie, invalidateSession, sessionCookieName } from '$lib/server/auth';
 import { redirect } from '@sveltejs/kit';
-import { deleteSessionTokenCookie, sessionCookieName, invalidateSession } from '$lib/server/auth';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async (event) => {

@@ -1,6 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { db } from '.';
 import * as table from './schema';
-import { eq } from 'drizzle-orm';
 
 /**
  * Find a user by email
