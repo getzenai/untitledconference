@@ -15,6 +15,11 @@ export default ts.config(
 	prettier,
 	...svelte.configs['flat/prettier'],
 	{
+		ignores: [
+			'src/lib/components/ui/**/*' // Ignore shadcn UI components
+		]
+	},
+	{
 		languageOptions: {
 			globals: {
 				...globals.browser,
