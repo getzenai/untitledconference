@@ -1,17 +1,20 @@
-# sv
+# SvelteKit Vibe Starter
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A SvelteKit starter application to vibe code with RooCode, powered by [`sv`](https://github.com/sveltejs/cli).
 
-## Creating a project
+## Getting Started
 
-If you're seeing this, you've probably already done this step. Congrats!
+After cloning this starter project, you'll need to initialize the Roo flow by running:
 
 ```bash
-# create a new project in the current directory
-npx sv create
+chmod +x insert-variables.sh
+./insert-variables.sh
+```
 
-# create a new project in my-app
-npx sv create my-app
+Copy the environment variables file:
+
+```bash
+cp .env.example .env
 ```
 
 ## Developing
@@ -24,6 +27,27 @@ npm run dev
 # or start the server and open the app in a new browser tab
 npm run dev -- --open
 ```
+
+### Database Setup
+
+To start the PostgreSQL database using Docker Compose:
+
+```bash
+docker-compose up -d
+```
+
+After the database is running, initialize it with:
+
+```bash
+npm run db:push
+```
+
+You can also use the following database-related commands:
+
+- `npm run db:start` - Start the database container
+- `npm run db:push` - Push schema changes to the database
+- `npm run db:migrate` - Create and apply migrations
+- `npm run db:studio` - Open Drizzle Studio to manage your database
 
 ### drizzle
 
