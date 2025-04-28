@@ -1,21 +1,6 @@
 # SvelteKit Vibe Starter
 
-A SvelteKit starter application to vibe code with RooCode, powered by [`sv`](https://github.com/sveltejs/cli).
-
-## Getting Started
-
-After cloning this starter project, you'll need to initialize the Roo flow by running:
-
-```bash
-chmod +x insert-variables.sh
-./insert-variables.sh
-```
-
-Copy the environment variables file:
-
-```bash
-cp .env.example .env
-```
+A SvelteKit starter application to vibe code with RooCode.
 
 ## Developing
 
