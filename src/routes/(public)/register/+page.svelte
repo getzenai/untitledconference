@@ -9,8 +9,51 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import type { ActionData } from './$types';
-	export let form: ActionData;
+	import { authClient } from '$lib/auth-client';
+	import { goto } from '$app/navigation';
+
+	let email = '';
+	let password = '';
+	let error: string | null = null;
+	let isLoading = false;
+	let successMessage: string | null = null;
+
+	async function handleSubmit() {
+		isLoading = true;
+		error = null;
+		successMessage = null;
+
+		console.log('[Register Page] handleSubmit called. Email:', email);
+
+		try {
+			const { data: signUpData, error: signUpError } = await authClient.signUp.email({
+				email,
+				password,
+				name: '', // Pass empty string to satisfy the 'string' type requirement
+				callbackURL: '/login?verified=true' // For email verification link
+			});
+			console.log('[Register Page] signUpError:', signUpError);
+			console.log('[Register Page] signUpData:', signUpData);
+
+			if (signUpError) {
+				console.error('[Register Page] Sign-up error details:', signUpError);
+				error = signUpError.message || 'Registration failed. Please try again.';
+			} else if (signUpData) {
+				await goto('/home', { replaceState: true });
+			} else {
+				error = 'An unexpected error occurred during registration. No data and no error received.';
+			}
+		} catch (e: unknown) {
+			console.error('[Register Page] Unexpected exception:', e);
+			if (e instanceof Error) {
+				error = e.message;
+			} else {
+				error = 'An unexpected error occurred.';
+			}
+		} finally {
+			isLoading = false;
+		}
+	}
 </script>
 
 <div
@@ -48,7 +91,8 @@
 					<CardDescription>Enter your details to create your account</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form method="POST" class="space-y-4">
+					<form on:submit|preventDefault={handleSubmit} class="space-y-4">
+						<!-- Removed Name Input Field -->
 						<div class="space-y-2">
 							<Label for="email">Email</Label>
 							<Input
@@ -56,8 +100,9 @@
 								name="email"
 								type="email"
 								placeholder="Enter your email"
-								value={form?.email ?? ''}
+								bind:value={email}
 								required
+								disabled={isLoading}
 							/>
 						</div>
 						<div class="space-y-2">
@@ -66,14 +111,25 @@
 								id="password"
 								name="password"
 								type="password"
-								placeholder="Create a password"
+								placeholder="Create a password (min. 8 characters)"
+								bind:value={password}
 								required
+								disabled={isLoading}
 							/>
 						</div>
-						{#if form?.error}
-							<p class="text-sm text-red-500">{form.error}</p>
+						{#if error}
+							<p class="text-sm text-red-500">{error}</p>
 						{/if}
-						<Button type="submit" class="w-full">Create Account</Button>
+						{#if successMessage}
+							<p class="text-sm text-green-500">{successMessage}</p>
+						{/if}
+						<Button type="submit" class="w-full" disabled={isLoading}>
+							{#if isLoading}
+								Creating account...
+							{:else}
+								Create Account
+							{/if}
+						</Button>
 						<p class="text-center text-sm text-muted-foreground">
 							Already have an account? <a href="/login" class="text-primary hover:underline"
 								>Login</a

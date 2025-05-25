@@ -1,87 +1,92 @@
-import { hash } from '@node-rs/argon2';
-import { encodeBase32LowerCase } from '@oslojs/encoding';
+// import { hash } from '@node-rs/argon2'; // Removed
+// import { encodeBase32LowerCase } from '@oslojs/encoding'; // Removed
 import { eq, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '../src/lib/server/db/schema';
+import * as schema from '../src/lib/server/db/auth-schema.ts';
 import { TEST_USER_EMAIL_PREFIX } from './globals';
 
-// Use a fixed connection string for e2e tests
-// This should match your local development database
+// Use a fixed connection string for e2e tests, matching local development.
 const connectionString = 'postgres://root:mysecretpassword@localhost:5432/local';
 const client = postgres(connectionString);
 export const db = drizzle(client, { schema });
 
-// Prefix for test users to easily identify them
-
 export async function cleanupDatabase() {
-	console.log('Cleaning up test database...');
-	// Delete all sessions first (due to foreign key constraint)
-	await db.delete(schema.session);
+	console.log('Cleaning up test database (Better Auth schema)...');
+	try {
+		// Order matters due to foreign key constraints if not using CASCADE effectively
+		// or if wanting to be explicit.
+		// `session` and `account` tables reference `user.id` with ON DELETE CASCADE.
+		// `verification` does not have an explicit FK to user in the provided schema.
 
-	// Delete all users
-	await db.delete(schema.user);
-	console.log('Database cleaned successfully');
+		await db.delete(schema.verification);
+		console.log('Deleted verification tokens.');
+
+		// Deleting users should cascade to sessions and accounts due to schema definition.
+		await db.delete(schema.user);
+		console.log('Deleted users (sessions and accounts should cascade).');
+
+		// As a fallback or explicit step, ensure session and account are empty if cascade didn't occur or to be sure.
+		// These might error if cascade worked and tables are already empty or if user table was deleted first without cascade.
+		// For robustness with ON DELETE CASCADE, just deleting users should be enough for user-related data.
+		// If issues persist, uncomment these:
+		// await db.delete(schema.session);
+		// console.log('Deleted sessions explicitly.');
+		// await db.delete(schema.account);
+		// console.log('Deleted accounts explicitly.');
+
+		console.log('Database cleaned successfully (Better Auth schema).');
+	} catch (error) {
+		console.error('Error during database cleanup:', error);
+		// Optionally re-throw or handle if tests should not proceed
+	}
 }
 
 /**
  * Cleans up only test users and their related data
- * instead of clearing the entire database tables
+ * This function needs careful review based on how verification tokens are linked
+ * and if granular cleanup is preferred over full DB reset for tests.
  */
 export async function cleanupTestUsers() {
-	console.log('Cleaning up test users...');
+	console.log('Cleaning up test users (Better Auth schema)...');
+	try {
+		const testUsers = await db // Corrected: removed duplicate line below
+			.select({ id: schema.user.id, email: schema.user.email })
+			.from(schema.user)
+			.where(like(schema.user.email, `${TEST_USER_EMAIL_PREFIX}%`));
+		if (testUsers.length === 0) {
+			console.log('[Cleanup] No test users found with prefix to clean up.');
+			return;
+		}
+		console.log(
+			`[Cleanup] Found ${testUsers.length} test users to clean:`,
+			testUsers.map((u) => u.email)
+		);
 
-	// Find all test users (those with email starting with the test prefix)
-	const testUsers = await db
-		.select()
-		.from(schema.user)
-		.where(like(schema.user.email, `${TEST_USER_EMAIL_PREFIX}%`));
+		// Delete verification tokens (assuming identifier might be email or related)
+		for (const user of testUsers) {
+			if (user.email) {
+				console.log(`[Cleanup] Attempting to delete verification for ${user.email}`);
+				await db.delete(schema.verification).where(eq(schema.verification.identifier, user.email));
+			}
+		}
+		console.log('[Cleanup] Attempted to clean verification tokens for test users.');
 
-	// Delete sessions for test users first (due to foreign key constraint)
-	for (const user of testUsers) {
-		await db.delete(schema.session).where(eq(schema.session.userId, user.id));
+		// Deleting users will cascade to their sessions and accounts due to ON DELETE CASCADE.
+		console.log(`[Cleanup] Attempting to delete ${testUsers.length} user records...`);
+		await db.delete(schema.user).where(like(schema.user.email, `${TEST_USER_EMAIL_PREFIX}%`));
+
+		console.log(
+			`[Cleanup] Cleaned up ${testUsers.length} test users and their related data successfully.`
+		);
+	} catch (error) {
+		console.error('[Cleanup] Error during test user cleanup:', error);
 	}
-
-	// Delete all test users
-	await db.delete(schema.user).where(like(schema.user.email, `${TEST_USER_EMAIL_PREFIX}%`));
-
-	console.log(`Cleaned up ${testUsers.length} test users successfully`);
 }
 
-/**
- * Creates a test user directly in the database
- */
-export async function createTestUser(email: string, password: string) {
-	// Ensure test users have a prefix for easy identification and cleanup
-	const testEmail = email.startsWith(TEST_USER_EMAIL_PREFIX)
-		? email
-		: `${TEST_USER_EMAIL_PREFIX}${email}`;
+// Obsolete: createTestUser function is removed as test users should be pre-registered via UI
+// or a dedicated seeding mechanism compatible with Better Auth.
+// export async function createTestUser(email: string, password: string) { ... }
 
-	const passwordHash = await hash(password, {
-		memoryCost: 19456,
-		timeCost: 2,
-		outputLen: 32,
-		parallelism: 1
-	});
-
-	const userId = generateUserId();
-	const [user] = await db
-		.insert(schema.user)
-		.values({
-			id: userId,
-			email: testEmail,
-			passwordHash
-		})
-		.returning();
-
-	return user;
-}
-
-/**
- * Generates a user ID for testing
- */
-function generateUserId() {
-	const bytes = crypto.getRandomValues(new Uint8Array(15));
-	const id = encodeBase32LowerCase(bytes);
-	return id;
-}
+// Obsolete: generateUserId function was a helper for createTestUser
+// function generateUserId() { ... }

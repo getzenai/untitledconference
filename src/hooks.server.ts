@@ -1,61 +1,64 @@
+import { auth } from '$lib/auth';
 import { i18n } from '$lib/i18n';
-import * as auth from '$lib/server/auth.js';
-import type { Handle } from '@sveltejs/kit';
+import { error, type Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
+import { svelteKitHandler } from 'better-auth/svelte-kit';
 
-// Define path prefixes for API v1
 const API_V1_PUBLIC_PREFIX = '/api/v1/public';
+const API_V1_TEST_PREFIX = '/api/v1/test';
 const API_V1_PREFIX = '/api/v1';
 
-// First, the Lucia auth handler to populate locals
-const luciaAuthHandler: Handle = async ({ event, resolve }) => {
-	const sessionToken = event.cookies.get(auth.sessionCookieName);
-	if (!sessionToken) {
-		event.locals.user = null;
-		event.locals.session = null;
-	} else {
-		const { session, user } = await auth.validateSessionToken(sessionToken);
-		if (session) {
-			// Refresh cookie if session is valid
-			auth.setSessionTokenCookie(event, sessionToken, session.expiresAt);
-		} else {
-			// Delete cookie if session is invalid
-			auth.deleteSessionTokenCookie(event);
-		}
-		event.locals.user = user;
-		event.locals.session = session;
-	}
-	return resolve(event); // Pass to the next handler in sequence
-};
-
-// Second, the API protection handler
+// This handler protects non-public API v1 routes.
+// It uses auth.api.getSession() to check for an authenticated user
+// and populates event.locals.user if successful.
 const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 
 	if (pathname.startsWith(API_V1_PREFIX)) {
-		// This is an /api/v1 route
 		if (pathname.startsWith(API_V1_PUBLIC_PREFIX)) {
-			// Public /api/v1/public routes: no additional auth check needed here, proceed
 			return resolve(event);
+		} else if (pathname.startsWith(API_V1_TEST_PREFIX)) {
+			const isTestEnv =
+				process.env.NODE_ENV === 'test' ||
+				process.env.PLAYWRIGHT_TEST === 'true' ||
+				process.env.npm_lifecycle_event?.includes('test');
+
+			if (!isTestEnv) {
+				return error(403, 'Test endpoints only available in test environment');
+			} else {
+				return resolve(event);
+			}
 		} else {
-			if (!event.locals.user) {
-				// User is not authenticated, deny access
+			let session;
+			try {
+				const requestHeaders = new Headers(event.request.headers);
+				session = await auth.api.getSession({ headers: requestHeaders });
+			} catch (e) {
+				console.error('[API Protection] Error calling auth.api.getSession:', e);
+				session = null;
+			}
+
+			const user = session?.user;
+			if (!user) {
 				return new Response(JSON.stringify({ message: 'Unauthorized. Please login.' }), {
 					status: 401,
 					headers: { 'Content-Type': 'application/json' }
 				});
 			}
-			// If user is authenticated for a protected API route, allow access.
+			// If user is authenticated, add user to locals for the API route itself.
+			event.locals.user = user;
+
 			return resolve(event);
-			// return resolve(event);
 		}
 	}
-	// For any other path (non /api/v1 routes), proceed
 	return resolve(event);
 };
 
-// Paraglide handler
 const paraglideHandler: Handle = i18n.handle();
 
-// Sequence the handlers: Lucia Auth -> API Protection -> Paraglide
-export const handle: Handle = sequence(luciaAuthHandler, apiProtectionHandler, paraglideHandler);
+// Sequence of handlers: Better Auth, API Protection, Paraglide
+export const handle: Handle = sequence(
+	(params) => svelteKitHandler({ ...params, auth }),
+	apiProtectionHandler,
+	paraglideHandler
+);

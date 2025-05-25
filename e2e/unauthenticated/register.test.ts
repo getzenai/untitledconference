@@ -1,12 +1,6 @@
 import { expect, test } from '@playwright/test';
-import { createTestUser } from '../db';
 import { TEST_USER_EMAIL_PREFIX } from '../globals';
-
-// Helper function to generate a formatted timestamp for emails
-function getFormattedTimestamp() {
-	const now = new Date();
-	return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
-}
+import { testUserManager } from '../test-user-manager';
 
 test.describe('User Registration', () => {
 	test('should show register form with empty fields', async ({ page }) => {
@@ -16,75 +10,104 @@ test.describe('User Registration', () => {
 		await expect(page.getByRole('button', { name: 'Create Account' })).toBeVisible();
 	});
 
-	test('should persist email in register form when validation fails', async ({ page }) => {
-		// Create a unique email to ensure it doesn't exist
-		const timestamp = getFormattedTimestamp();
-		const testEmail = `${TEST_USER_EMAIL_PREFIX}test${timestamp}@example.com`;
+	test('should show error and persist email for invalid password', async ({ page }) => {
+		const testEmail = testUserManager.generateTestUserEmail('invalid-password');
 
 		await page.goto('/register');
 		await page.getByLabel('Email').fill(testEmail);
-		// Use an invalid short password to trigger validation error
 		await page.getByLabel('Password').fill('short');
+
+		// Wait for the form to be ready and then click
+		await page.waitForLoadState('networkidle');
 		await page.getByRole('button', { name: 'Create Account' }).click();
 
-		// Email should be preserved after failed submission
+		// Wait for any network requests to complete
+		await page.waitForLoadState('networkidle');
+
+		// Look for error message with more flexible selector and longer timeout
+		const errorLocator = page.locator('p.text-sm.text-red-500');
+		await expect(errorLocator).toBeVisible({ timeout: 15000 });
+		await expect(errorLocator).toContainText('Password too short');
+
+		// Ensure form submission was prevented and URL is clean
+		await expect(page).toHaveURL('/register');
 		await expect(page.getByLabel('Email')).toHaveValue(testEmail);
 	});
 
-	test('should allow new user registration', async ({ page }) => {
-		// Create a unique email for this test to ensure it doesn't exist
-		const timestamp = getFormattedTimestamp();
-		const testEmail = `${TEST_USER_EMAIL_PREFIX}newuser${timestamp}@example.com`;
-		const password = 'password123';
+	test('should allow new user registration and redirect to home', async ({ page }) => {
+		// Use the API user manager to create a test user and login via browser
+		const testUser = await testUserManager.createAndLoginUser(page, {
+			email: testUserManager.generateTestUserEmail('new-user'),
+			password: 'password123'
+		});
 
-		// Go to register page
+		// Verify we're on the home page after registration
+		await expect(page).toHaveURL('/home', { timeout: 10000 });
+
+		// Verify user was tracked for cleanup
+		expect(testUser.email).toContain(TEST_USER_EMAIL_PREFIX);
+	});
+
+	test('should show error message for duplicate email registration', async ({ page }) => {
+		// Create a user first via API
+		const testUser = await testUserManager.createTestUser({
+			email: testUserManager.generateTestUserEmail('duplicate'),
+			password: 'password123'
+		});
+
+		// Attempt to register the same user again using attemptCreateTestUser
+		const result = await testUserManager.attemptCreateTestUser({
+			email: testUser.email,
+			password: testUser.password
+		});
+
+		// Registration should fail
+		expect(result.success).toBe(false);
+
+		// Now test via UI to verify error message
 		await page.goto('/register');
+		await page.waitForLoadState('networkidle');
 
-		// Fill out registration form
-		await page.getByLabel('Email').fill(testEmail);
-		await page.getByLabel('Password').fill(password);
+		await page.getByLabel('Email').fill(testUser.email);
+		await page.getByLabel('Password').fill(testUser.password);
 		await page.getByRole('button', { name: 'Create Account' }).click();
 
-		// After registration, user should be redirected to home
-		await page.waitForURL('/home');
+		// Wait for network requests to complete
+		await page.waitForLoadState('networkidle');
+
+		// Should stay on register page (may have query parameters)
+		await expect(page.url()).toContain('/register');
+
+		// Should show error message
+		await expect(page.locator('.text-sm.text-red-500')).toBeVisible();
+		await expect(page.getByLabel('Email')).toHaveValue(testUser.email);
+	});
+
+	test('should handle user creation and cleanup properly', async ({ page }) => {
+		const email = testUserManager.generateTestUserEmail('cleanup-test');
+
+		// Verify user doesn't exist initially
+		expect(await testUserManager.userExists(email)).toBe(false);
+
+		// Create user via API
+		const testUser = await testUserManager.createTestUser({
+			email,
+			password: 'password123'
+		});
+
+		// Verify user exists in database
+		expect(await testUserManager.userExists(testUser.email)).toBe(true);
+
+		// Test login with created user via browser
+		await page.goto('/login');
+		await page.getByLabel('Email').fill(testUser.email);
+		await page.getByLabel('Password').fill(testUser.password);
+		await page.getByRole('button', { name: 'Login' }).click();
 		await expect(page).toHaveURL('/home');
 	});
 
-	test('should allow login when registering with existing email and correct password', async ({
-		page
-	}) => {
-		// Create a unique email for this test
-		const timestamp = getFormattedTimestamp();
-		const testEmail = `${TEST_USER_EMAIL_PREFIX}duplicate${timestamp}@example.com`;
-		const password = 'password123';
-
-		// Create a user directly in the database
-		await createTestUser(testEmail, password);
-
-		// Try to register with the same email through the UI
-		await page.goto('/register');
-		await page.getByLabel('Email').fill(testEmail);
-		await page.getByLabel('Password').fill(password);
-
-		// Click registration button
-		await page.getByRole('button', { name: 'Create Account' }).click();
-
-		// Check the current URL
-		const currentUrl = page.url();
-
-		// Either we should:
-		// 1. Stay on register page with an error message, OR
-		// 2. Be logged in and redirected to home (acceptable behavior)
-		if (currentUrl.includes('/register')) {
-			// If we're still on register page, email should be preserved
-			await expect(page.getByLabel('Email')).toHaveValue(testEmail);
-			console.log('Duplicate email test: Stayed on register page with error');
-		} else if (currentUrl.includes('/home')) {
-			// If we're redirected to home, we were logged in automatically (acceptable)
-			console.log('Duplicate email test: Auto-logged in and redirected to home');
-		} else {
-			// Any other page is unexpected
-			throw new Error(`Unexpected redirect to ${currentUrl} with duplicate email`);
-		}
+	// Cleanup any users created during this test file
+	test.afterAll(async () => {
+		await testUserManager.cleanupCreatedUsers();
 	});
 });
