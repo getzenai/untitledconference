@@ -1,7 +1,7 @@
 ## Development Workflow Patterns
 
 - **Version Control:** Use Git for version control.
-- **Collaboration Platform:** Use GitHub CLI (`gh`) or the Github MCP server for interacting with GitHub (e.g., creating PRs).
+- **Collaboration Platform:** Use GitHub MCP server (preferred) or GitHub CLI (`gh`) as fallback for interacting with GitHub (e.g., creating PRs).
 
 **Development Principles:**
 
@@ -32,13 +32,13 @@
       - Create a commit for the feature (`git commit -m "..."`).
       - Push the feature branch (`git push -u origin <branch-name>`).
   4.  **Pull Request & Review Cycle:**
-      - Create a Pull Request using the GitHub CLI (`gh pr create --title "..." --body "..."`) or the Github MCP Server.
+      - Create a Pull Request using the GitHub MCP server (preferred) or fallback to GitHub CLI (`gh pr create --title "..." --body "..."`).
       - **Review:** Review the files you changed yourself by reading them again for a review. Focus on clean code, potential bugs, security, and alignment with requirements.
-      - Add the review findings as comments on the PR (e.g., using `gh pr review --comment --body "..."`).
+      - Add the review findings as comments on the PR using GitHub MCP server (preferred) or fallback to CLI (`gh pr review --comment --body "..."`).
       - **Address Feedback:** If issues are found, address them by committing and pushing fixes to the _same feature branch_.
       - Repeat the review/fix cycle until the PR is approved.
   5.  **Merge & Cleanup:**
-      - Once approved, merge the Pull Request using a squash merge & delete branch (`gh pr merge --squash --delete-branch`).
+      - Once approved, merge the Pull Request using GitHub MCP server (preferred) or fallback to CLI (`gh pr merge --squash --delete-branch`).
       - Checkout the main branch (`git checkout main`).
       - Pull the latest changes (`git pull origin main`).
       - Delete the local feature branch (`git branch -d <branch-name>`).
