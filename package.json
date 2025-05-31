@@ -21,7 +21,10 @@
 		"db:start": "docker compose up",
 		"db:push": "drizzle-kit push",
 		"db:migrate": "drizzle-kit migrate",
-		"db:studio": "drizzle-kit studio"
+		"db:studio": "drizzle-kit studio",
+		"docs:dev": "vitepress dev docs",
+		"docs:build": "vitepress build docs",
+		"docs:preview": "vitepress preview docs"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.9",
@@ -60,6 +63,7 @@
 		"typescript-eslint": "^8.32.1",
 		"vaul-svelte": "^0.3.2",
 		"vite": "^6.3.5",
+		"vitepress": "^1.6.3",
 		"vitest": "^3.1.4",
 		"zod": "^3.25.30"
 	},

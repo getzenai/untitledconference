@@ -40,10 +40,9 @@ You can also use the following database-related commands:
 - Run npm run db:start to start the docker container
 - Run npm run db:push to update your database schema
 
-### lucia
+### better auth
 
-- Run npm run db:push to update your database schema
-- Visit /demo/lucia route to view the demo
+Authentication is implemented using [Better Auth](https://www.better-auth.com). See the documentation for setup and configuration details.
 
 ### paraglide
 
@@ -89,6 +88,14 @@ The following shadcn components are installed and available for use:
 - tooltip - `src/lib/components/ui/tooltip`
 
 For more information on how to use these components, refer to the [shadcn documentation](https://ui.shadcn.com/).
+
+## documentation
+
+Documentation is implemented using [VitePress](https://vitepress.dev) in the `docs` folder. To start the documentation server:
+
+```bash
+npm run docs:dev
+```
 
 ## Building
 
