@@ -1,6 +1,4 @@
-# SvelteKit Vibe Starter
-
-A SvelteKit starter application to vibe code with RooCode.
+# BULEX Case Management Platform
 
 ## Developing
 

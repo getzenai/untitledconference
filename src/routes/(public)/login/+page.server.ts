@@ -1,28 +1,20 @@
-import { auth } from '$lib/auth';
+// Removed: import { auth } from '$lib/auth';
 import type { ServerLoad } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
 
-export const load: ServerLoad = async ({ request }) => {
-	console.log('[Login Page Load] Checking if user is already logged in');
-	const requestHeaders = new Headers(request.headers);
+export const load: ServerLoad = async ({ locals }) => {
+	// locals.user should be populated by the populateLocalsUserHandler in hooks.server.ts
+	const user = locals.user;
 
-	let session;
-	try {
-		session = await auth.api.getSession({ headers: requestHeaders });
-	} catch (e) {
-		console.error('[Login Page Load] Error calling auth.api.getSession:', e);
-		session = null;
-	}
-
-	const user = session?.user;
-	console.log('[Login Page Load] User from session:', user);
+	console.log('[Login Page Load] Checking if user is already logged in (from locals)');
+	console.log('[Login Page Load] User from locals:', user);
 
 	if (user) {
-		console.log('[Login Page Load] User is already logged in, redirecting to /home');
+		console.log('[Login Page Load] User is already logged in (from locals), redirecting to /home');
 		// If user is already logged in, redirect to home page
 		throw redirect(303, '/home');
 	}
 
-	console.log('[Login Page Load] No user found, allowing access to login page');
+	console.log('[Login Page Load] No user found in locals, allowing access to login page');
 	return {};
 };

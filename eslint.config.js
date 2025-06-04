@@ -16,8 +16,21 @@ export default ts.config(
 	...svelte.configs['flat/prettier'],
 	{
 		ignores: [
-			'src/lib/components/ui/**/*' // Ignore shadcn UI components
+			'src/lib/components/ui/**/*', // Ignore shadcn UI components
+			'./docs/.vitepress/' // Ignore VitePress configuration
 		]
+	},
+	{
+		rules: {
+			'@typescript-eslint/no-unused-vars': [
+				'error',
+				{
+					argsIgnorePattern: '^_',
+					varsIgnorePattern: '^_',
+					caughtErrorsIgnorePattern: '^_'
+				}
+			]
+		}
 	},
 	{
 		languageOptions: {

@@ -1,32 +1,23 @@
-import { auth } from '$lib/auth';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ url, request }) => {
-	console.log('[Protected Layout Load] Request URL:', request.url);
-	const requestHeaders = new Headers(request.headers);
-	console.log('[Protected Layout Load] Cookies:', requestHeaders.get('cookie'));
+export const load: LayoutServerLoad = async ({ url, locals }) => {
+	// The svelteKitHandler from better-auth in hooks.server.ts should populate locals.user
+	const user = locals.user;
 
-	let session;
-	try {
-		session = await auth.api.getSession({ headers: requestHeaders });
-	} catch (e) {
-		console.error('[Protected Layout Load] Error calling auth.api.getSession:', e);
-		session = null;
-	}
-
-	console.log('[Protected Layout Load] Session from auth.api.getSession:', session);
-	const user = session?.user; // Assuming session object has a user property
-	console.log('[Protected Layout Load] User derived from session:', user);
+	console.debug('[Protected Layout Load] Request URL:', url.toString());
+	console.debug('[Protected Layout Load] User from locals:', user);
 
 	if (!user) {
-		console.log('[Protected Layout Load] No user from session, redirecting to login.');
-		// If user is not logged in, redirect to login page with return URL
+		console.debug('[Protected Layout Load] No user from locals, redirecting to login.');
+		// If user is not logged in (i.e., locals.user is not set by the auth hook),
+		// redirect to login page with return URL.
 		throw redirect(303, `/login?returnTo=${url.pathname}`);
 	}
 
-	console.log('[Protected Layout Load] User found, allowing access. User data:', user);
+	// User is available from locals, pass it to the layout and child pages
+	console.debug('[Protected Layout Load] User found in locals, allowing access. User data:', user);
 	return {
-		user: user
+		user // This makes `data.user` available to Svelte components
 	};
 };

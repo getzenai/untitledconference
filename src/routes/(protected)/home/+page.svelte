@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { Button } from '$lib/components/ui/button';
+	import { toast } from 'svelte-sonner';
 	import {
 		Card,
 		CardContent,
@@ -58,6 +59,7 @@
 					<Button on:click={handleLogout} variant="outline" disabled={$sessionState.isPending}
 						>Logout</Button
 					>
+					<Button on:click={() => toast('Event has been created.')}>Show Toast</Button>
 				</div>
 			</div>
 		</CardContent>

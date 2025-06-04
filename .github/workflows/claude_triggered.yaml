@@ -34,9 +34,5 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           timeout_minutes: '60'
-          allowed_tools: >-
-            Bash(npm install)
-            Bash(npm run test:*)
-            Bash(npm run lint:format)
-            Bash(npm run build)
-            Bash(npm run db:*)
+          claude_env: 'NODE_VERSION=22'
+          allowed_tools: 'Bash(npm install),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),Bash(npm run build),Bash(npm run db:*)'
