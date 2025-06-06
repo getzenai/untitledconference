@@ -1,6 +1,6 @@
 import { db } from '$lib/server/db';
 import { dummyElementsTable } from '$lib/server/db/dummy-schema';
-import { fail, redirect, error as svelteKitError } from '@sveltejs/kit';
+import { fail, redirect, error as svelteKitError, type ActionFailure } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
@@ -38,7 +38,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		};
 	} catch (err) {
 		console.error('Error loading dummy element for edit:', err);
-		// Check if it's a SvelteKit HttpError-like object and re-throw if so
 		if (
 			typeof err === 'object' &&
 			err !== null &&
@@ -50,44 +49,82 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		throw svelteKitError(500, 'Failed to load dummy element.');
 	}
 };
+
+// Define a simpler return type for the validation helper
+type ValidatedInput = {
+	validData: { id: string; name: string; description: string };
+	parsedDummyId: number;
+	rawFormData: { id: string; name: string; description: string };
+};
+type ValidationInputError = {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	error: ActionFailure<any>;
+};
+type ValidateUpdateInputResult = ValidatedInput | ValidationInputError;
+
+async function validateUpdateInput(
+	request: Request,
+	dummyIdStrFromParams: string | undefined,
+	schema: typeof dummyUpdateFormSchema
+): Promise<ValidateUpdateInputResult> {
+	const formData = await request.formData();
+	const idFromForm = formData.get('id') as string;
+	const name = formData.get('name') as string;
+	const description = formData.get('description') as string;
+	const currentFormData = { id: idFromForm, name, description };
+
+	if (!dummyIdStrFromParams) {
+		return {
+			error: fail(400, {
+				formAction: '?/update',
+				message: 'Dummy ID is required for update.',
+				data: currentFormData
+			})
+		};
+	}
+
+	const parsedDummyId = parseInt(dummyIdStrFromParams, 10);
+	if (isNaN(parsedDummyId)) {
+		return {
+			error: fail(400, {
+				formAction: '?/update',
+				message: 'Invalid Dummy ID format for update.',
+				data: currentFormData
+			})
+		};
+	}
+
+	if (idFromForm !== dummyIdStrFromParams) {
+		return {
+			error: fail(400, {
+				formAction: '?/update',
+				message: 'Mismatched dummy ID.',
+				data: currentFormData
+			})
+		};
+	}
+
+	const validationResult = schema.safeParse(currentFormData);
+
+	if (!validationResult.success) {
+		const errors = validationResult.error.flatten().fieldErrors;
+		return { error: fail(400, { formAction: '?/update', errors, data: currentFormData }) };
+	}
+	return { validData: validationResult.data, parsedDummyId, rawFormData: currentFormData };
+}
+
 export const actions: Actions = {
 	update: async ({ request, locals, params }) => {
 		const user = locals.user;
-
 		const dummyIdStr = params.id;
-		if (!dummyIdStr) {
-			return fail(400, { formAction: '?/update', message: 'Dummy ID is required for update.' });
+
+		const validation = await validateUpdateInput(request, dummyIdStr, dummyUpdateFormSchema);
+
+		if ('error' in validation) {
+			return validation.error;
 		}
 
-		const parsedDummyId = parseInt(dummyIdStr, 10);
-		if (isNaN(parsedDummyId)) {
-			return fail(400, { formAction: '?/update', message: 'Invalid Dummy ID format for update.' });
-		}
-
-		const formData = await request.formData();
-		const idFromForm = formData.get('id') as string;
-		const name = formData.get('name') as string;
-		const description = formData.get('description') as string;
-
-		if (idFromForm !== dummyIdStr) {
-			return fail(400, {
-				formAction: '?/update',
-				data: { id: idFromForm, name, description },
-				message: 'Mismatched dummy ID.'
-			});
-		}
-
-		const validationResult = dummyUpdateFormSchema.safeParse({ id: idFromForm, name, description });
-
-		if (!validationResult.success) {
-			const errors = validationResult.error.flatten().fieldErrors;
-			return fail(400, {
-				formAction: '?/update',
-				data: { id: idFromForm, name, description },
-				errors
-			});
-		}
-		const validData = validationResult.data;
+		const { validData, parsedDummyId, rawFormData } = validation;
 
 		try {
 			const [updatedElement] = await db
@@ -101,10 +138,11 @@ export const actions: Actions = {
 					and(eq(dummyElementsTable.id, parsedDummyId), eq(dummyElementsTable.userId, user.id))
 				)
 				.returning();
+
 			if (!updatedElement) {
 				return fail(404, {
 					formAction: '?/update',
-					data: { id: idFromForm, name, description },
+					data: rawFormData,
 					message: 'Dummy element not found or access denied for update.'
 				});
 			}
@@ -112,8 +150,8 @@ export const actions: Actions = {
 		} catch (dbError) {
 			console.error('Database error updating dummy element:', dbError);
 			return fail(500, {
-				formAction: '?/update', // Also ensuring this one is correct
-				data: { id: idFromForm, name, description },
+				formAction: '?/update',
+				data: rawFormData,
 				message: 'An unexpected error occurred during update.'
 			});
 		}
@@ -142,7 +180,6 @@ export const actions: Actions = {
 				.returning({ id: dummyElementsTable.id });
 			deletedElementInfo = result;
 		} catch (dbError) {
-			// This catch block is for unexpected errors during the database delete operation.
 			console.error('Database error deleting dummy element:', dbError);
 			throw svelteKitError(
 				500,

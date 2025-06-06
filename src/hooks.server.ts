@@ -30,6 +30,15 @@ const API_V1_PREFIX = '/api/v1';
 // This handler protects non-public API v1 routes.
 // It uses auth.api.getSession() to check for an authenticated user
 // and populates event.locals.user if successful.
+
+const isTestEnvironment = (): boolean => {
+	return (
+		process.env.NODE_ENV === 'test' ||
+		process.env.PLAYWRIGHT_TEST === 'true' ||
+		!!process.env.npm_lifecycle_event?.includes('test')
+	);
+};
+
 const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 
@@ -37,12 +46,7 @@ const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 		if (pathname.startsWith(API_V1_PUBLIC_PREFIX)) {
 			return resolve(event);
 		} else if (pathname.startsWith(API_V1_TEST_PREFIX)) {
-			const isTestEnv =
-				process.env.NODE_ENV === 'test' ||
-				process.env.PLAYWRIGHT_TEST === 'true' ||
-				process.env.npm_lifecycle_event?.includes('test');
-
-			if (!isTestEnv) {
+			if (!isTestEnvironment()) {
 				return error(403, 'Test endpoints only available in test environment');
 			} else {
 				return resolve(event);

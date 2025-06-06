@@ -1,3 +1,3 @@
 - Use GitHub MCP tools first, [`gh cli`](https://cli.github.com/) as fallback
 - Read GitHub issue and comments with MCP tool before implementing features, if requested
-- The Github repository is BulexRechtsanwaltsgesellschaftmbH/schadentool
+- The Github repository is getzenai/sveltekit-vibe-starter
