@@ -1,3 +1,4 @@
 - Use GitHub MCP tools first, [`gh cli`](https://cli.github.com/) as fallback
-- Read GitHub issue and comments with MCP tool before implementing features, if requested
+- Make sure actions are also reflected on the local machine. A branch created with the MCP tool needs to be checked out.
+- When a Github issue is referenced read the GitHub issue and comments with MCP tool before implementing code
 - The Github repository is getzenai/sveltekit-vibe-starter

@@ -1,4 +1,4 @@
-# BULEX Case Management Platform
+# Sveltekit Vibe Starter
 
 ## Developing
 

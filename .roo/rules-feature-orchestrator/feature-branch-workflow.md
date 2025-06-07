@@ -41,6 +41,7 @@
 - Once a complete GitHub issue is available (either pre-existing or created by Architect):
   - Create a feature branch using the GitHub MCP tool.
   - Branch name format: `feature/issue-number-short-description` (e.g., `feature/123-user-auth`).
+  - Check that branch out on the local machine.
   - Confirm successful branch creation.
 
 ## 5. Implementation
