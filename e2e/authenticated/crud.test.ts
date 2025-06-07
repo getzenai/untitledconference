@@ -1,21 +1,21 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('Dummies CRUD Operations', () => {
-	const dummyNameBase = 'E2E Test Dummy';
-	const dummyDescriptionBase = 'This is a dummy element created by an E2E test.';
+test.describe('Example Object CRUD Operations', () => {
+	const exampleNameBase = 'E2E Test Example';
+	const exampleDescriptionBase = 'This is an example object created by an E2E test.';
 
 	test.beforeEach(async ({ page }) => {
-		await page.goto('/dummies');
+		await page.goto('/examples/crud');
 	});
 
 	test.describe('Create Operation', () => {
-		test('Happy Path: should create a new dummy element successfully', async ({ page }) => {
-			const uniqueDummyName = `${dummyNameBase} Create Success ${Date.now()}`;
-			await page.getByLabel('Name').fill(uniqueDummyName);
-			await page.getByLabel('Description').fill(`${dummyDescriptionBase} (Create Success)`);
-			await page.getByRole('button', { name: 'Create Element' }).click();
+		test('Happy Path: should create a new example object successfully', async ({ page }) => {
+			const uniqueExampleName = `${exampleNameBase} Create Success ${Date.now()}`;
+			await page.getByLabel('Name').fill(uniqueExampleName);
+			await page.getByLabel('Description').fill(`${exampleDescriptionBase} (Create Success)`);
+			await page.getByRole('button', { name: 'Create Object' }).click();
 			// Wait for the submitting state to resolve by checking the button text changes back
-			await expect(page.getByRole('button', { name: 'Create Element' })).toBeVisible();
+			await expect(page.getByRole('button', { name: 'Create Object' })).toBeVisible();
 			// Wait for form fields to clear as an indication of client-side success handling
 			await expect(page.getByLabel('Name')).toBeEmpty();
 			await expect(page.getByLabel('Description')).toBeEmpty();
@@ -23,35 +23,38 @@ test.describe('Dummies CRUD Operations', () => {
 
 			// Debug: Check URL
 			// Debug: Check URL
-			expect(page.url(), 'Should still be on the /dummies page after creation attempt').toContain(
-				'/dummies'
-			);
+			expect(
+				page.url(),
+				'Should still be on the /examples/crud page after creation attempt'
+			).toContain('/examples/crud');
 
 			// Assert based on UI change (element appearing)
-			const newDummyCard = page.locator(`div.grid > div:has(h3:has-text("${uniqueDummyName}"))`);
+			const newExampleCard = page.locator(
+				`div.grid > div:has(h3:has-text("${uniqueExampleName}"))`
+			);
 			await expect(
-				newDummyCard,
-				`Card with text "${uniqueDummyName}" should be visible after creation.`
+				newExampleCard,
+				`Card with text "${uniqueExampleName}" should be visible after creation.`
 			).toBeVisible();
-		}); // Closes 'Happy Path: should create a new dummy element successfully'
+		}); // Closes 'Happy Path: should create a new example object successfully'
 
 		test('Outlier: should show validation error if name is empty', async ({ page }) => {
-			await page.getByRole('button', { name: 'Create Element' }).click();
+			await page.getByRole('button', { name: 'Create Object' }).click();
 			await expect(page.getByText('Name is required.')).toBeVisible();
 		}); // Closes 'Outlier: should show validation error if name is empty'
 	}); // Closes 'Create Operation'
 
 	test.describe('Read, Update, Delete Operations', () => {
-		// Helper function to create a dummy and return its ID and name
-		async function createDummyElement(page: import('@playwright/test').Page, nameSuffix: string) {
-			const uniqueName = `${dummyNameBase} ${nameSuffix} ${Date.now()}`;
-			const description = `${dummyDescriptionBase} (${nameSuffix})`;
-			await page.goto('/dummies'); // Ensure on correct page
+		// Helper function to create an example and return its ID and name
+		async function createExampleObject(page: import('@playwright/test').Page, nameSuffix: string) {
+			const uniqueName = `${exampleNameBase} ${nameSuffix} ${Date.now()}`;
+			const description = `${exampleDescriptionBase} (${nameSuffix})`;
+			await page.goto('/examples/crud'); // Ensure on correct page
 			await page.getByLabel('Name').fill(uniqueName);
 			await page.getByLabel('Description').fill(description);
-			await page.getByRole('button', { name: 'Create Element' }).click();
+			await page.getByRole('button', { name: 'Create Object' }).click();
 			// Wait for the submitting state to resolve by checking the button text changes back
-			await expect(page.getByRole('button', { name: 'Create Element' })).toBeVisible();
+			await expect(page.getByRole('button', { name: 'Create Object' })).toBeVisible();
 			// Wait for form fields to clear
 			await expect(page.getByLabel('Name')).toBeEmpty();
 			await expect(page.getByLabel('Description')).toBeEmpty();
@@ -61,38 +64,40 @@ test.describe('Dummies CRUD Operations', () => {
 			// Debug: Check URL
 			expect(
 				page.url(),
-				'Helper: Should still be on the /dummies page after creation attempt'
-			).toContain('/dummies');
+				'Helper: Should still be on the /examples/crud page after creation attempt'
+			).toContain('/examples/crud');
 
-			const newDummyCard = page.locator(`div.grid > div:has(h3:has-text("${uniqueName}"))`);
+			const newExampleCard = page.locator(`div.grid > div:has(h3:has-text("${uniqueName}"))`);
 			await expect(
-				newDummyCard,
+				newExampleCard,
 				`Helper: Card with text "${uniqueName}" should be visible after creation.`
 			).toBeVisible();
 			// To get the ID, we still need the link from within this card
-			const viewEditLink = newDummyCard.getByRole('link', { name: 'View/Edit' });
+			const viewEditLink = newExampleCard.getByRole('link', { name: 'View/Edit' });
 			const href = await viewEditLink.getAttribute('href');
 			expect(href, 'View/Edit link must have an href for the created card.').toBeTruthy();
-			const idMatch = href!.match(/\/dummies\/(\d+)/);
+			const idMatch = href!.match(/\/examples\/crud\/(\d+)/);
 			expect(idMatch, 'Href for the created card should contain a numeric ID.').toBeTruthy();
 			return { id: idMatch![1], name: uniqueName, description };
 		}
 
-		test('Read Detail: Happy Path - should display dummy details on its page', async ({ page }) => {
-			const { id, name, description } = await createDummyElement(page, 'ForRead');
-			await page.goto(`/dummies/${id}`);
+		test('Read Detail: Happy Path - should display example details on its page', async ({
+			page
+		}) => {
+			const { id, name, description } = await createExampleObject(page, 'ForRead');
+			await page.goto(`/examples/crud/${id}`);
 
-			await expect(page).toHaveURL(`/dummies/${id}`);
+			await expect(page).toHaveURL(`/examples/crud/${id}`);
 			await expect(page.locator('input[name="name"]')).toHaveValue(name);
 			await expect(page.locator('textarea[name="description"]')).toHaveValue(description);
 		}); // Closes 'Read Detail: Happy Path'
 
-		test('Update: Happy Path - should update an existing dummy element', async ({ page }) => {
-			const { id, name: originalName } = await createDummyElement(page, 'ForUpdate');
-			await page.goto(`/dummies/${id}`);
+		test('Update: Happy Path - should update an existing example object', async ({ page }) => {
+			const { id, name: originalName } = await createExampleObject(page, 'ForUpdate');
+			await page.goto(`/examples/crud/${id}`);
 
 			const updatedName = `${originalName} - Updated`;
-			const updatedDescription = `${dummyDescriptionBase} (Updated)`;
+			const updatedDescription = `${exampleDescriptionBase} (Updated)`;
 
 			await page.locator('input[name="name"]').fill(updatedName);
 			await page.locator('textarea[name="description"]').fill(updatedDescription);
@@ -103,7 +108,7 @@ test.describe('Dummies CRUD Operations', () => {
 			await expect(page.locator('input[name="name"]')).toHaveValue(updatedName);
 			await expect(page.locator('textarea[name="description"]')).toHaveValue(updatedDescription);
 
-			await page.goto('/dummies');
+			await page.goto('/examples/crud');
 			await page.waitForLoadState('networkidle'); // Wait for list to reload
 			await expect(page.getByText(updatedName)).toBeVisible();
 		}); // Closes 'Update: Happy Path'
@@ -111,13 +116,13 @@ test.describe('Dummies CRUD Operations', () => {
 		test('Update: Outlier - should show validation error if name is empty on update', async ({
 			page
 		}) => {
-			const { id } = await createDummyElement(page, 'ForUpdateFail');
-			await page.goto(`/dummies/${id}`);
+			const { id } = await createExampleObject(page, 'ForUpdateFail');
+			await page.goto(`/examples/crud/${id}`);
 
 			await page.locator('input[name="name"]').fill('');
 			await page
 				.locator('textarea[name="description"]')
-				.fill(`${dummyDescriptionBase} (Update Name Empty)`);
+				.fill(`${exampleDescriptionBase} (Update Name Empty)`);
 			await page.getByRole('button', { name: 'Save Changes' }).click();
 			// Wait for the submission to finish (button re-enables)
 			await expect(
@@ -132,8 +137,8 @@ test.describe('Dummies CRUD Operations', () => {
 		}); // Closes 'Update: Outlier'
 
 		test('Delete: Outlier - should cancel deletion when "Cancel" is clicked', async ({ page }) => {
-			const { id, name } = await createDummyElement(page, 'ForDeleteCancel');
-			await page.goto(`/dummies/${id}`);
+			const { id, name } = await createExampleObject(page, 'ForDeleteCancel');
+			await page.goto(`/examples/crud/${id}`);
 
 			await page.getByRole('button', { name: 'Delete' }).click();
 			await expect(page.getByText('Are you absolutely sure?')).toBeVisible();
@@ -142,21 +147,21 @@ test.describe('Dummies CRUD Operations', () => {
 			await expect(page.getByText('Are you absolutely sure?')).not.toBeVisible();
 			await expect(page.locator('input[name="name"]')).toHaveValue(name);
 
-			await page.goto('/dummies'); // Navigate back to check
+			await page.goto('/examples/crud'); // Navigate back to check
 			await expect(page.locator(`div.grid > div:has(h3:has-text("${name}"))`)).toBeVisible();
 		}); // Closes 'Delete: Outlier'
 
-		test('Delete: Happy Path - should delete an existing dummy element', async ({ page }) => {
-			const { id, name } = await createDummyElement(page, 'ForDeleteSuccess');
-			await page.goto(`/dummies/${id}`);
+		test('Delete: Happy Path - should delete an existing example object', async ({ page }) => {
+			const { id, name } = await createExampleObject(page, 'ForDeleteSuccess');
+			await page.goto(`/examples/crud/${id}`);
 
 			await page.getByRole('button', { name: 'Delete' }).click();
 			await expect(page.getByText('Are you absolutely sure?')).toBeVisible();
 			await page.getByRole('button', { name: 'Yes, delete it' }).click();
 
-			await expect(page).toHaveURL('/dummies');
+			await expect(page).toHaveURL('/examples/crud');
 			await page.waitForLoadState('networkidle'); // Wait for list to reload after redirect
 			await expect(page.getByText(name)).not.toBeVisible();
 		}); // Closes 'Delete: Happy Path'
 	}); // Closes 'Read, Update, Delete Operations'
-}); // Closes 'Dummies CRUD Operations'
+}); // Closes 'Example Object CRUD Operations'

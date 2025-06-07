@@ -14,28 +14,28 @@
 	export let data: PageData;
 	export let form: ActionData;
 
-	let idValue = data.dummyElement?.id || '';
-	let nameValue = data.dummyElement?.name || '';
-	let descriptionValue = data.dummyElement?.description || '';
+	let idValue = data.exampleObject?.id || '';
+	let nameValue = data.exampleObject?.name || '';
+	let descriptionValue = data.exampleObject?.description || '';
 
 	let submittingUpdate = false;
 	let submittingDelete = false;
 	let showDeleteConfirm = false;
 
 	$: if (form?.data && form.formAction === '?/update') {
-		idValue = form.data.id || data.dummyElement?.id || '';
-		nameValue = form.data.name || data.dummyElement?.name || '';
-		descriptionValue = form.data.description || data.dummyElement?.description || '';
-	} else if (data.dummyElement) {
-		idValue = data.dummyElement.id;
-		nameValue = data.dummyElement.name;
-		descriptionValue = data.dummyElement.description;
+		idValue = form.data.id || data.exampleObject?.id || '';
+		nameValue = form.data.name || data.exampleObject?.name || '';
+		descriptionValue = form.data.description || data.exampleObject?.description || '';
+	} else if (data.exampleObject) {
+		idValue = data.exampleObject.id;
+		nameValue = data.exampleObject.name;
+		descriptionValue = data.exampleObject.description;
 	}
 </script>
 
 <svelte:head>
-	<title>Edit: {nameValue || 'Dummy Element'}</title>
-	<meta name="description" content="View and Edit Dummy Element {nameValue}" />
+	<title>Edit: {nameValue || 'Example Object'}</title>
+	<meta name="description" content="View and Edit Example Object {nameValue}" />
 </svelte:head>
 
 <div class="container mx-auto p-4 md:p-8">
@@ -43,17 +43,17 @@
 		<h1 class="text-3xl font-bold">
 			View/Edit: <span class="font-normal">{nameValue}</span>
 		</h1>
-		<a href="/dummies">
+		<a href="/examples/crud">
 			<Button variant="outline"><ArrowLeft class="mr-2 h-4 w-4" /> Back to List</Button>
 		</a>
 	</div>
 
-	{#if data.dummyElement}
+	{#if data.exampleObject}
 		<Card.Root class="mb-8">
 			<Card.Header>
 				<Card.Title class="flex items-center">
 					<Edit class="mr-2 h-5 w-5" />
-					Edit Dummy Element
+					Edit Example Object
 				</Card.Title>
 				<Card.Description>Modify the details of '{nameValue}' (ID: {idValue}).</Card.Description>
 			</Card.Header>
@@ -77,7 +77,7 @@
 							id="name-input-edit"
 							name="name"
 							bind:value={nameValue}
-							placeholder="Enter dummy name"
+							placeholder="Enter example name"
 							aria-invalid={form?.errors?.name && form.formAction === '?/update'
 								? 'true'
 								: undefined}
@@ -95,7 +95,7 @@
 							id="description-input-edit"
 							name="description"
 							bind:value={descriptionValue}
-							placeholder="Enter dummy description"
+							placeholder="Enter example description"
 							aria-invalid={form?.errors?.description && form.formAction === '?/update'
 								? 'true'
 								: undefined}
@@ -128,7 +128,7 @@
 								<AlertDialog.Header>
 									<AlertDialog.Title>Are you absolutely sure?</AlertDialog.Title>
 									<AlertDialog.Description>
-										This action cannot be undone. This will permanently delete the dummy element
+										This action cannot be undone. This will permanently delete the example object
 										<strong>{nameValue}</strong>.
 									</AlertDialog.Description>
 								</AlertDialog.Header>
@@ -165,21 +165,21 @@
 			<AlertCircle class="h-4 w-4" />
 			<Alert.Title>Error</Alert.Title>
 			<Alert.Description
-				>Dummy element not found. It may have been deleted or you may not have access.</Alert.Description
+				>Example object not found. It may have been deleted or you may not have access.</Alert.Description
 			>
 		</Alert.Root>
-		<a href="/dummies">
+		<a href="/examples/crud">
 			<Button variant="outline"><ArrowLeft class="mr-2 h-4 w-4" /> Back to List</Button>
 		</a>
 	{/if}
 
 	<Separator class="my-8" />
-	{#if data.dummyElement}
+	{#if data.exampleObject}
 		<Card.Root>
 			<Card.Header><Card.Title>Raw Data (Current)</Card.Title></Card.Header>
 			<Card.Content>
 				<pre class="overflow-x-auto rounded-md bg-muted p-4 text-sm">{JSON.stringify(
-						data.dummyElement,
+						data.exampleObject,
 						null,
 						2
 					)}</pre>

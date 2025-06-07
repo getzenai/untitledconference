@@ -1,7 +1,7 @@
 import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
-import { user } from './auth-schema';
+import { user } from '../auth-schema';
 
-export const dummyElementsTable = pgTable('dummy_elements', {
+export const exampleObjectsTable = pgTable('example_objects', {
 	id: serial('id').primaryKey(),
 	name: text('name').notNull(),
 	description: text('description').notNull(),
@@ -15,5 +15,5 @@ export const dummyElementsTable = pgTable('dummy_elements', {
 		.$onUpdate(() => new Date())
 });
 
-export type DummyElement = typeof dummyElementsTable.$inferSelect;
-export type NewDummyElement = typeof dummyElementsTable.$inferInsert;
+export type ExampleObject = typeof exampleObjectsTable.$inferSelect;
+export type NewExampleObject = typeof exampleObjectsTable.$inferInsert;

@@ -1,11 +1,11 @@
 import { db } from '$lib/server/db';
-import { dummyElementsTable } from '$lib/server/db/dummy-schema';
+import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema';
 import { fail, redirect, error as svelteKitError, type ActionFailure } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 
-const dummyUpdateFormSchema = z.object({
+const exampleUpdateFormSchema = z.object({
 	id: z.string().min(1, 'ID is required.'),
 	name: z.string().min(1, 'Name is required.'),
 	description: z.string().min(1, 'Description is required.')
@@ -14,30 +14,32 @@ const dummyUpdateFormSchema = z.object({
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const user = locals.user;
 
-	const dummyIdStr = params.id;
-	if (!dummyIdStr) {
-		throw svelteKitError(400, 'Dummy ID is required');
+	const exampleIdStr = params.id;
+	if (!exampleIdStr) {
+		throw svelteKitError(400, 'Example ID is required');
 	}
 
-	const parsedDummyId = parseInt(dummyIdStr, 10);
-	if (isNaN(parsedDummyId)) {
-		throw svelteKitError(400, 'Invalid Dummy ID format.');
+	const parsedExampleId = parseInt(exampleIdStr, 10);
+	if (isNaN(parsedExampleId)) {
+		throw svelteKitError(400, 'Invalid Example ID format.');
 	}
 
 	try {
-		const [dummyElement] = await db
+		const [exampleObject] = await db
 			.select()
-			.from(dummyElementsTable)
-			.where(and(eq(dummyElementsTable.id, parsedDummyId), eq(dummyElementsTable.userId, user.id)));
+			.from(exampleObjectsTable)
+			.where(
+				and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id))
+			);
 
-		if (!dummyElement) {
-			throw svelteKitError(404, 'Dummy element not found or access denied');
+		if (!exampleObject) {
+			throw svelteKitError(404, 'Example object not found or access denied');
 		}
 		return {
-			dummyElement
+			exampleObject
 		};
 	} catch (err) {
-		console.error('Error loading dummy element for edit:', err);
+		console.error('Error loading example object for edit:', err);
 		if (
 			typeof err === 'object' &&
 			err !== null &&
@@ -46,14 +48,14 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		) {
 			throw err;
 		}
-		throw svelteKitError(500, 'Failed to load dummy element.');
+		throw svelteKitError(500, 'Failed to load example object.');
 	}
 };
 
 // Define a simpler return type for the validation helper
 type ValidatedInput = {
 	validData: { id: string; name: string; description: string };
-	parsedDummyId: number;
+	parsedExampleId: number;
 	rawFormData: { id: string; name: string; description: string };
 };
 type ValidationInputError = {
@@ -64,8 +66,8 @@ type ValidateUpdateInputResult = ValidatedInput | ValidationInputError;
 
 async function validateUpdateInput(
 	request: Request,
-	dummyIdStrFromParams: string | undefined,
-	schema: typeof dummyUpdateFormSchema
+	exampleIdStrFromParams: string | undefined,
+	schema: typeof exampleUpdateFormSchema
 ): Promise<ValidateUpdateInputResult> {
 	const formData = await request.formData();
 	const idFromForm = formData.get('id') as string;
@@ -73,32 +75,32 @@ async function validateUpdateInput(
 	const description = formData.get('description') as string;
 	const currentFormData = { id: idFromForm, name, description };
 
-	if (!dummyIdStrFromParams) {
+	if (!exampleIdStrFromParams) {
 		return {
 			error: fail(400, {
 				formAction: '?/update',
-				message: 'Dummy ID is required for update.',
+				message: 'Example ID is required for update.',
 				data: currentFormData
 			})
 		};
 	}
 
-	const parsedDummyId = parseInt(dummyIdStrFromParams, 10);
-	if (isNaN(parsedDummyId)) {
+	const parsedExampleId = parseInt(exampleIdStrFromParams, 10);
+	if (isNaN(parsedExampleId)) {
 		return {
 			error: fail(400, {
 				formAction: '?/update',
-				message: 'Invalid Dummy ID format for update.',
+				message: 'Invalid Example ID format for update.',
 				data: currentFormData
 			})
 		};
 	}
 
-	if (idFromForm !== dummyIdStrFromParams) {
+	if (idFromForm !== exampleIdStrFromParams) {
 		return {
 			error: fail(400, {
 				formAction: '?/update',
-				message: 'Mismatched dummy ID.',
+				message: 'Mismatched example ID.',
 				data: currentFormData
 			})
 		};
@@ -110,32 +112,32 @@ async function validateUpdateInput(
 		const errors = validationResult.error.flatten().fieldErrors;
 		return { error: fail(400, { formAction: '?/update', errors, data: currentFormData }) };
 	}
-	return { validData: validationResult.data, parsedDummyId, rawFormData: currentFormData };
+	return { validData: validationResult.data, parsedExampleId, rawFormData: currentFormData };
 }
 
 export const actions: Actions = {
 	update: async ({ request, locals, params }) => {
 		const user = locals.user;
-		const dummyIdStr = params.id;
+		const exampleIdStr = params.id;
 
-		const validation = await validateUpdateInput(request, dummyIdStr, dummyUpdateFormSchema);
+		const validation = await validateUpdateInput(request, exampleIdStr, exampleUpdateFormSchema);
 
 		if ('error' in validation) {
 			return validation.error;
 		}
 
-		const { validData, parsedDummyId, rawFormData } = validation;
+		const { validData, parsedExampleId, rawFormData } = validation;
 
 		try {
 			const [updatedElement] = await db
-				.update(dummyElementsTable)
+				.update(exampleObjectsTable)
 				.set({
 					name: validData.name,
 					description: validData.description,
 					updatedAt: new Date()
 				})
 				.where(
-					and(eq(dummyElementsTable.id, parsedDummyId), eq(dummyElementsTable.userId, user.id))
+					and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id))
 				)
 				.returning();
 
@@ -143,12 +145,12 @@ export const actions: Actions = {
 				return fail(404, {
 					formAction: '?/update',
 					data: rawFormData,
-					message: 'Dummy element not found or access denied for update.'
+					message: 'Example object not found or access denied for update.'
 				});
 			}
 			return { formAction: '?/update', success: true, updated: updatedElement };
 		} catch (dbError) {
-			console.error('Database error updating dummy element:', dbError);
+			console.error('Database error updating example object:', dbError);
 			return fail(500, {
 				formAction: '?/update',
 				data: rawFormData,
@@ -160,27 +162,27 @@ export const actions: Actions = {
 	remove: async ({ locals, params }) => {
 		const user = locals.user;
 
-		const dummyIdStr = params.id;
-		if (!dummyIdStr) {
-			throw svelteKitError(400, 'Dummy ID is required for deletion');
+		const exampleIdStr = params.id;
+		if (!exampleIdStr) {
+			throw svelteKitError(400, 'Example ID is required for deletion');
 		}
 
-		const parsedDummyId = parseInt(dummyIdStr, 10);
-		if (isNaN(parsedDummyId)) {
-			throw svelteKitError(400, 'Invalid Dummy ID format for deletion.');
+		const parsedExampleId = parseInt(exampleIdStr, 10);
+		if (isNaN(parsedExampleId)) {
+			throw svelteKitError(400, 'Invalid Example ID format for deletion.');
 		}
 
 		let deletedElementInfo;
 		try {
 			const [result] = await db
-				.delete(dummyElementsTable)
+				.delete(exampleObjectsTable)
 				.where(
-					and(eq(dummyElementsTable.id, parsedDummyId), eq(dummyElementsTable.userId, user.id))
+					and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id))
 				)
-				.returning({ id: dummyElementsTable.id });
+				.returning({ id: exampleObjectsTable.id });
 			deletedElementInfo = result;
 		} catch (dbError) {
-			console.error('Database error deleting dummy element:', dbError);
+			console.error('Database error deleting example object:', dbError);
 			throw svelteKitError(
 				500,
 				'An unexpected error occurred during the database deletion process.'
@@ -190,9 +192,9 @@ export const actions: Actions = {
 		if (!deletedElementInfo) {
 			throw svelteKitError(
 				404,
-				'Dummy element not found or access denied for deletion. No record was deleted.'
+				'Example object not found or access denied for deletion. No record was deleted.'
 			);
 		}
-		throw redirect(303, '/dummies');
+		throw redirect(303, '/examples/crud');
 	}
 };

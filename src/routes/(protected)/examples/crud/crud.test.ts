@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-// Assuming dummyFormSchema is exported from +page.server.ts or defined here for testing
+// Assuming exampleFormSchema is exported from +page.server.ts or defined here for testing
 // For the purpose of this test file, let's redefine it based on the provided +page.server.ts
-const dummyFormSchema = z.object({
+const exampleFormSchema = z.object({
 	name: z.string().min(1, 'Name is required.'),
 	description: z.string().min(1, 'Description is required.')
 });
 
-// Assuming dummyUpdateFormSchema is exported from [id]/+page.server.ts or defined here
+// Assuming exampleUpdateFormSchema is exported from [id]/+page.server.ts or defined here
 // For the purpose of this test file, let's redefine it based on the provided [id]/+page.server.ts
-const dummyUpdateFormSchema = z.object({
+const exampleUpdateFormSchema = z.object({
 	id: z.string().min(1, 'ID is required.'), // Assuming ID is a string, adjust if it's number after parsing
 	name: z.string().min(1, 'Name is required.'),
 	description: z.string().min(1, 'Description is required.')
 });
 
-describe('Dummy Form Schemas', () => {
-	describe('dummyFormSchema (Create)', () => {
+describe('Example Form Schemas', () => {
+	describe('exampleFormSchema (Create)', () => {
 		it('should validate successfully with valid data', () => {
-			const result = dummyFormSchema.safeParse({
+			const result = exampleFormSchema.safeParse({
 				name: 'Test Name',
 				description: 'Test Description'
 			});
@@ -27,7 +27,7 @@ describe('Dummy Form Schemas', () => {
 		});
 
 		it('should fail validation if name is empty', () => {
-			const result = dummyFormSchema.safeParse({
+			const result = exampleFormSchema.safeParse({
 				name: '',
 				description: 'Test Description'
 			});
@@ -38,7 +38,7 @@ describe('Dummy Form Schemas', () => {
 		});
 
 		it('should fail validation if description is empty', () => {
-			const result = dummyFormSchema.safeParse({
+			const result = exampleFormSchema.safeParse({
 				name: 'Test Name',
 				description: ''
 			});
@@ -51,9 +51,9 @@ describe('Dummy Form Schemas', () => {
 		});
 	});
 
-	describe('dummyUpdateFormSchema (Update)', () => {
+	describe('exampleUpdateFormSchema (Update)', () => {
 		it('should validate successfully with valid data', () => {
-			const result = dummyUpdateFormSchema.safeParse({
+			const result = exampleUpdateFormSchema.safeParse({
 				id: '123',
 				name: 'Updated Name',
 				description: 'Updated Description'
@@ -62,7 +62,7 @@ describe('Dummy Form Schemas', () => {
 		});
 
 		it('should fail validation if id is empty', () => {
-			const result = dummyUpdateFormSchema.safeParse({
+			const result = exampleUpdateFormSchema.safeParse({
 				id: '',
 				name: 'Updated Name',
 				description: 'Updated Description'
@@ -74,7 +74,7 @@ describe('Dummy Form Schemas', () => {
 		});
 
 		it('should fail validation if name is empty', () => {
-			const result = dummyUpdateFormSchema.safeParse({
+			const result = exampleUpdateFormSchema.safeParse({
 				id: '123',
 				name: '',
 				description: 'Updated Description'
@@ -86,7 +86,7 @@ describe('Dummy Form Schemas', () => {
 		});
 
 		it('should fail validation if description is empty', () => {
-			const result = dummyUpdateFormSchema.safeParse({
+			const result = exampleUpdateFormSchema.safeParse({
 				id: '123',
 				name: 'Updated Name',
 				description: ''

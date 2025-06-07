@@ -28,8 +28,8 @@
 </script>
 
 <svelte:head>
-	<title>Dummy Elements</title>
-	<meta name="description" content="Manage Dummy Elements" />
+	<title>Example Objects</title>
+	<meta name="description" content="Manage Example Objects" />
 </svelte:head>
 
 <div class="container mx-auto p-4 md:p-8">
@@ -37,9 +37,9 @@
 		<Card.Header>
 			<Card.Title class="flex items-center">
 				<PlusCircle class="mr-2 h-5 w-5" />
-				Create New Dummy Element
+				Create New Example Object
 			</Card.Title>
-			<Card.Description>Add a new dummy element to the system.</Card.Description>
+			<Card.Description>Add a new example object to the system.</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<form
@@ -62,7 +62,7 @@
 						id="name-input"
 						name="name"
 						bind:value={nameValue}
-						placeholder="Enter dummy name"
+						placeholder="Enter example name"
 						aria-invalid={form?.errors?.name ? 'true' : undefined}
 					/>
 					{#if form?.errors?.name}
@@ -78,7 +78,7 @@
 						id="description-input"
 						name="description"
 						bind:value={descriptionValue}
-						placeholder="Enter dummy description"
+						placeholder="Enter example description"
 						aria-invalid={form?.errors?.description ? 'true' : undefined}
 					/>
 					{#if form?.errors?.description}
@@ -94,7 +94,7 @@
 						Creating...
 					{:else}
 						<PlusCircle class="mr-2 h-4 w-4" />
-						Create Element
+						Create Object
 					{/if}
 				</Button>
 			</form>
@@ -103,25 +103,25 @@
 
 	<Separator class="my-8" />
 
-	<h2 class="mb-6 text-2xl font-semibold">Existing Dummy Elements</h2>
-	{#if data.dummies && data.dummies.length > 0}
+	<h2 class="mb-6 text-2xl font-semibold">Existing Example Objects</h2>
+	{#if data.examples && data.examples.length > 0}
 		<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-			{#each data.dummies as dummy (dummy.id)}
+			{#each data.examples as example (example.id)}
 				<Card.Root>
 					<Card.Header>
-						<Card.Title>{dummy.name}</Card.Title>
+						<Card.Title>{example.name}</Card.Title>
 					</Card.Header>
 					<Card.Content>
-						<p class="text-xs text-muted-foreground">ID: {dummy.id}</p>
+						<p class="text-xs text-muted-foreground">ID: {example.id}</p>
 						<p class="text-xs text-muted-foreground">
-							Created: {new Date(dummy.createdAt).toLocaleString()}
+							Created: {new Date(example.createdAt).toLocaleString()}
 						</p>
 						<p class="text-xs text-muted-foreground">
-							Updated: {new Date(dummy.updatedAt).toLocaleString()}
+							Updated: {new Date(example.updatedAt).toLocaleString()}
 						</p>
 					</Card.Content>
 					<Card.Footer class="flex justify-end gap-2">
-						<a href="/dummies/{dummy.id}" data-sveltekit-preload-data="hover">
+						<a href="/examples/crud/{example.id}" data-sveltekit-preload-data="hover">
 							<Button variant="outline" size="sm">
 								<Edit class="mr-1 h-4 w-4" /> View/Edit
 							</Button>
@@ -131,6 +131,8 @@
 			{/each}
 		</div>
 	{:else}
-		<p class="py-8 text-center text-muted-foreground">No dummy elements found. Create one above!</p>
+		<p class="py-8 text-center text-muted-foreground">
+			No example objects found. Create one above!
+		</p>
 	{/if}
 </div>
