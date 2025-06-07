@@ -17,6 +17,7 @@
 
 - Trace Files (if accessible): If `playwright.config.ts` is configured for tracing (e.g., `use: { trace: 'on-first-retry' }`) and trace files are accessible, these are primary data sources. (AI may need tools/capabilities to parse these).
 - Screenshots (if accessible): If screenshots are saved on failure (e.g., via `testInfo.attach` or trace config), and the AI can access/analyze them, they provide visual context.
+- When a test is failing always read the contents of ./test-results to get a full picture about the failing tests and available locators
 
 ## 4. In-Test Debugging (Code-Based)
 

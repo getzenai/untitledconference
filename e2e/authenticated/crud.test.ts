@@ -30,7 +30,7 @@ test.describe('Example Object CRUD Operations', () => {
 
 			// Assert based on UI change (element appearing)
 			const newExampleCard = page.locator(
-				`div.grid > div:has(h3:has-text("${uniqueExampleName}"))`
+				`div.grid > div:has([data-testid="example-name"]:has-text("${uniqueExampleName}"))`
 			);
 			await expect(
 				newExampleCard,
@@ -67,7 +67,9 @@ test.describe('Example Object CRUD Operations', () => {
 				'Helper: Should still be on the /examples/crud page after creation attempt'
 			).toContain('/examples/crud');
 
-			const newExampleCard = page.locator(`div.grid > div:has(h3:has-text("${uniqueName}"))`);
+			const newExampleCard = page.locator(
+				`div.grid > div:has([data-testid="example-name"]:has-text("${uniqueName}"))`
+			);
 			await expect(
 				newExampleCard,
 				`Helper: Card with text "${uniqueName}" should be visible after creation.`
@@ -76,9 +78,12 @@ test.describe('Example Object CRUD Operations', () => {
 			const viewEditLink = newExampleCard.getByRole('link', { name: 'View/Edit' });
 			const href = await viewEditLink.getAttribute('href');
 			expect(href, 'View/Edit link must have an href for the created card.').toBeTruthy();
-			const idMatch = href!.match(/\/examples\/crud\/(\d+)/);
+			const idMatch = href?.match(/\/examples\/crud\/(\d+)/);
 			expect(idMatch, 'Href for the created card should contain a numeric ID.').toBeTruthy();
-			return { id: idMatch![1], name: uniqueName, description };
+			if (!idMatch) {
+				throw new Error('Could not extract ID from href');
+			}
+			return { id: idMatch[1], name: uniqueName, description };
 		}
 
 		test('Read Detail: Happy Path - should display example details on its page', async ({
@@ -148,7 +153,9 @@ test.describe('Example Object CRUD Operations', () => {
 			await expect(page.locator('input[name="name"]')).toHaveValue(name);
 
 			await page.goto('/examples/crud'); // Navigate back to check
-			await expect(page.locator(`div.grid > div:has(h3:has-text("${name}"))`)).toBeVisible();
+			await expect(
+				page.locator(`div.grid > div:has([data-testid="example-name"]:has-text("${name}"))`)
+			).toBeVisible();
 		}); // Closes 'Delete: Outlier'
 
 		test('Delete: Happy Path - should delete an existing example object', async ({ page }) => {

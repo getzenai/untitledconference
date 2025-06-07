@@ -4,7 +4,7 @@ import { user } from '../auth-schema';
 export const exampleObjectsTable = pgTable('example_objects', {
 	id: serial('id').primaryKey(),
 	name: text('name').notNull(),
-	description: text('description').notNull(),
+	description: text('description'),
 	userId: text('user_id')
 		.notNull()
 		.references(() => user.id, { onDelete: 'cascade' }),

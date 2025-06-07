@@ -67,7 +67,7 @@
 					/>
 					{#if form?.errors?.name}
 						{#each form.errors.name as errorMsg}
-							<p class="text-sm text-destructive">{errorMsg}</p>
+							<p class="text-destructive text-sm">{errorMsg}</p>
 						{/each}
 					{/if}
 				</div>
@@ -83,7 +83,7 @@
 					/>
 					{#if form?.errors?.description}
 						{#each form.errors.description as errorMsg}
-							<p class="text-sm text-destructive">{errorMsg}</p>
+							<p class="text-destructive text-sm">{errorMsg}</p>
 						{/each}
 					{/if}
 				</div>
@@ -109,14 +109,14 @@
 			{#each data.examples as example (example.id)}
 				<Card.Root>
 					<Card.Header>
-						<Card.Title>{example.name}</Card.Title>
+						<Card.Title data-testid="example-name">{example.name}</Card.Title>
 					</Card.Header>
 					<Card.Content>
-						<p class="text-xs text-muted-foreground">ID: {example.id}</p>
-						<p class="text-xs text-muted-foreground">
+						<p class="text-muted-foreground text-xs">ID: {example.id}</p>
+						<p class="text-muted-foreground text-xs">
 							Created: {new Date(example.createdAt).toLocaleString()}
 						</p>
-						<p class="text-xs text-muted-foreground">
+						<p class="text-muted-foreground text-xs">
 							Updated: {new Date(example.updatedAt).toLocaleString()}
 						</p>
 					</Card.Content>
@@ -131,7 +131,7 @@
 			{/each}
 		</div>
 	{:else}
-		<p class="py-8 text-center text-muted-foreground">
+		<p class="text-muted-foreground py-8 text-center">
 			No example objects found. Create one above!
 		</p>
 	{/if}

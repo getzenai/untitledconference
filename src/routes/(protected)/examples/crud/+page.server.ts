@@ -7,7 +7,7 @@ import type { Actions, PageServerLoad } from './$types';
 
 const exampleFormSchema = z.object({
 	name: z.string().min(1, 'Name is required.'),
-	description: z.string().min(1, 'Description is required.')
+	description: z.string().optional()
 });
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -63,7 +63,7 @@ export const actions: Actions = {
 				.insert(exampleObjectsTable)
 				.values({
 					name: validData.name,
-					description: validData.description,
+					description: validData.description || '',
 					userId: user.id
 				})
 				.returning();

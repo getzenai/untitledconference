@@ -57,9 +57,9 @@
 </script>
 
 <div
-	class="container relative grid min-h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-2 lg:px-0"
+	class="relative container grid min-h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-2 lg:px-0"
 >
-	<div class="relative hidden h-full flex-col bg-muted p-10 text-white dark:border-r lg:flex">
+	<div class="bg-muted relative hidden h-full flex-col p-10 text-white lg:flex dark:border-r">
 		<div class="absolute inset-0 bg-zinc-900"></div>
 		<div class="relative z-20 flex flex-1 flex-col justify-center">
 			<div class="mb-8 text-right">
@@ -121,7 +121,7 @@
 						{/if}
 						<button
 							type="button"
-							class="w-full rounded bg-primary px-4 py-2 font-medium text-white hover:bg-primary/90 disabled:opacity-50"
+							class="bg-primary hover:bg-primary/90 w-full rounded px-4 py-2 font-medium text-white disabled:opacity-50"
 							disabled={isLoading}
 							on:click={handleSubmit}
 						>
@@ -131,7 +131,7 @@
 								Login
 							{/if}
 						</button>
-						<p class="text-center text-sm text-muted-foreground">
+						<p class="text-muted-foreground text-center text-sm">
 							Don't have an account? <a href="/register" class="text-primary hover:underline"
 								>Register</a
 							>

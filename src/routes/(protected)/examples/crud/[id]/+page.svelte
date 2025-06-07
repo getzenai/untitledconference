@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
-	import { Button } from '$lib/components/ui/button';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
 	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
@@ -29,7 +29,7 @@
 	} else if (data.exampleObject) {
 		idValue = data.exampleObject.id;
 		nameValue = data.exampleObject.name;
-		descriptionValue = data.exampleObject.description;
+		descriptionValue = data.exampleObject.description || '';
 	}
 </script>
 
@@ -84,7 +84,7 @@
 						/>
 						{#if form?.errors?.name && form.formAction === '?/update'}
 							{#each form.errors.name as errorMsg}
-								<p class="text-sm text-destructive">{errorMsg}</p>
+								<p class="text-destructive text-sm">{errorMsg}</p>
 							{/each}
 						{/if}
 					</div>
@@ -102,7 +102,7 @@
 						/>
 						{#if form?.errors?.description && form.formAction === '?/update'}
 							{#each form.errors.description as errorMsg}
-								<p class="text-sm text-destructive">{errorMsg}</p>
+								<p class="text-destructive text-sm">{errorMsg}</p>
 							{/each}
 						{/if}
 					</div>
@@ -119,10 +119,11 @@
 						</Button>
 
 						<AlertDialog.Root bind:open={showDeleteConfirm}>
-							<AlertDialog.Trigger asChild let:builder>
-								<Button variant="destructive" builders={[builder]} disabled={submittingDelete}>
-									<Trash2 class="mr-2 h-4 w-4" /> Delete
-								</Button>
+							<AlertDialog.Trigger
+								class={buttonVariants({ variant: 'destructive' })}
+								disabled={submittingDelete}
+							>
+								<Trash2 class="mr-2 h-4 w-4" /> Delete
 							</AlertDialog.Trigger>
 							<AlertDialog.Content>
 								<AlertDialog.Header>
@@ -178,7 +179,7 @@
 		<Card.Root>
 			<Card.Header><Card.Title>Raw Data (Current)</Card.Title></Card.Header>
 			<Card.Content>
-				<pre class="overflow-x-auto rounded-md bg-muted p-4 text-sm">{JSON.stringify(
+				<pre class="bg-muted overflow-x-auto rounded-md p-4 text-sm">{JSON.stringify(
 						data.exampleObject,
 						null,
 						2

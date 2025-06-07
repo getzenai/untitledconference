@@ -12,6 +12,10 @@ export default defineConfig({
 			PLAYWRIGHT_TEST: 'true'
 		}
 	},
+	timeout: 5 * 1000, // 5 seconds
+	expect: {
+		timeout: 5 * 1000 // 5 seconds
+	},
 	projects: [
 		{
 			name: 'setup db', // Runs global.setup.ts (cleans DB)

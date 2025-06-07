@@ -3,10 +3,13 @@
 	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import '../app.css';
+
 	let { children } = $props();
 </script>
 
 <ParaglideJS {i18n}>
 	<Toaster />
-	{@render children()}
+	<div class="h-full">
+		{@render children()}
+	</div>
 </ParaglideJS>
