@@ -52,5 +52,6 @@ export default defineConfig({
 	use: {
 		baseURL: 'http://localhost:5174', // Tests navigate to this URL
 		trace: 'on-first-retry'
-	}
+	},
+	reporter: [['html', { outputFolder: 'playwright-report' }]]
 });
