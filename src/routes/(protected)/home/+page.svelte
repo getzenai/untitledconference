@@ -65,6 +65,9 @@
 					<a href="/examples/toast">
 						<Button>Toast Example</Button>
 					</a>
+					<a href="/examples/drag-drop">
+						<Button>Drag Drop Example</Button>
+					</a>
 				</div>
 			</div>
 		</CardContent>
