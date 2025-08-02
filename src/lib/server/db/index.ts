@@ -4,6 +4,16 @@ import postgres from 'postgres';
 import * as authSchema from './auth-schema';
 import * as exampleSchema from './examples/crud-example-schema';
 
-if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
-const client = postgres(env.DATABASE_URL);
-export const db = drizzle(client, { schema: { ...authSchema, ...exampleSchema } });
+let client: ReturnType<typeof postgres> | undefined;
+let _db: ReturnType<typeof drizzle> | undefined;
+
+export const db = new Proxy({} as ReturnType<typeof drizzle>, {
+	get(target, prop, receiver) {
+		if (!_db) {
+			if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+			client = postgres(env.DATABASE_URL);
+			_db = drizzle(client, { schema: { ...authSchema, ...exampleSchema } });
+		}
+		return Reflect.get(_db, prop, receiver);
+	}
+});

@@ -1,4 +1,4 @@
-import { BETTER_AUTH_SECRET, BETTER_AUTH_URL } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { db } from './server/db';
@@ -14,8 +14,8 @@ export const auth = betterAuth({
 
 	// Core Settings - Refer to Better Auth documentation for all available options
 	appName: 'SvelteKitVibeStarter',
-	secret: BETTER_AUTH_SECRET,
-	origin: BETTER_AUTH_URL, // Using 'origin' based on documentation review
+	secret: env.BETTER_AUTH_SECRET || '',
+	origin: env.BETTER_AUTH_URL || '', // Using 'origin' based on documentation review
 
 	// Email & Password Authentication
 	emailAndPassword: {
