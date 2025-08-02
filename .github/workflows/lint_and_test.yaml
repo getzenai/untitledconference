@@ -49,9 +49,9 @@ jobs:
         env:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: mysecretpassword
-          POSTGRES_DB: local
+          POSTGRES_DB: test
         ports:
-          - 5432:5432
+          - 5433:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -75,13 +75,13 @@ jobs:
       - name: Setup environment variables
         run: |
           cp .env.example .env
-          # Override the variables that need different values for testing
-          sed -i 's|DATABASE_URL=.*|DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"|' .env
-          sed -i 's|BETTER_AUTH_SECRET=.*|BETTER_AUTH_SECRET="test-secret-for-github-actions"|' .env
-          sed -i 's|BETTER_AUTH_URL=.*|BETTER_AUTH_URL="http://localhost:5173"|' .env
+          # Create .env.e2e for e2e test configuration
+          echo 'DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"' > .env.e2e
+          echo 'BETTER_AUTH_SECRET="test-secret-for-github-actions"' >> .env.e2e
+          echo 'BETTER_AUTH_URL="http://localhost:5174"' >> .env.e2e
 
-      - name: Push database schema (non-interactive)
-        run: npx drizzle-kit push --force
+      - name: Install dotenv-cli
+        run: npm install -g dotenv-cli
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps

@@ -8,18 +8,28 @@ test.describe('Examples sidebar', () => {
 		const sidebar = page.getByTestId('app-sidebar');
 		await expect(sidebar).toBeVisible();
 
-		// expand the examples
-		await sidebar.getByText('Platform').waitFor();
-		await sidebar.getByRole('button', { name: 'Examples' }).click();
-		await page.waitForTimeout(500); // Wait for animation
+		// Wait for the sidebar to be fully loaded
+		await sidebar.getByText('Platform').waitFor({ state: 'visible' });
 
-		// Check that the sidebar has the correct links
-		const examplesContent = sidebar.getByTestId('content-examples');
-		const crudLink = examplesContent.locator('a[href="/examples/crud"]');
+		// Find and click the Examples trigger to expand the section
+		const examplesTrigger = sidebar.getByTestId('toggle-examples');
+		await expect(examplesTrigger).toBeVisible();
+
+		// Click to expand the Examples section
+		await examplesTrigger.click();
+
+		// Wait a bit for the animation
+		await page.waitForTimeout(500);
+
+		// Check for the links directly within the sidebar using text content
+		const crudLink = sidebar.getByRole('link', { name: 'CRUD' });
 		await expect(crudLink).toBeVisible();
 
-		const toastLink = examplesContent.locator('a[href="/examples/toast"]');
+		const toastLink = sidebar.getByRole('link', { name: 'Toast' });
 		await expect(toastLink).toBeVisible();
+
+		const dragDropLink = sidebar.getByRole('link', { name: 'Drag & Drop' });
+		await expect(dragDropLink).toBeVisible();
 
 		// Check that the active link is highlighted
 		await expect(crudLink).toHaveAttribute('data-active', 'true');
@@ -35,17 +45,24 @@ test.describe('Examples sidebar', () => {
 		const sidebar = page.getByTestId('app-sidebar');
 		await expect(sidebar).toBeVisible();
 
-		// expand the examples
-		await sidebar.getByText('Platform').waitFor();
-		await sidebar.getByRole('button', { name: 'Examples' }).click();
-		await page.waitForTimeout(500); // Wait for animation
+		// Wait for the sidebar to be fully loaded
+		await sidebar.getByText('Platform').waitFor({ state: 'visible' });
+
+		// Find and click the Examples trigger to expand the section
+		const examplesTrigger = sidebar.getByTestId('toggle-examples');
+		await expect(examplesTrigger).toBeVisible();
+
+		// Click to expand the Examples section
+		await examplesTrigger.click();
+
+		// Wait a bit for the animation
+		await page.waitForTimeout(500);
 
 		// Check that the active link is highlighted
-		const examplesContent = sidebar.getByTestId('content-examples');
-		const crudLink = examplesContent.locator('a[href="/examples/crud"]');
+		const crudLink = sidebar.getByRole('link', { name: 'CRUD' });
 		await expect(crudLink).not.toHaveAttribute('data-active', 'true');
 
-		const toastLink = examplesContent.locator('a[href="/examples/toast"]');
+		const toastLink = sidebar.getByRole('link', { name: 'Toast' });
 		await expect(toastLink).toHaveAttribute('data-active', 'true');
 	});
 
@@ -54,18 +71,27 @@ test.describe('Examples sidebar', () => {
 
 		const sidebar = page.getByTestId('app-sidebar');
 
-		// expand the examples
-		await sidebar.getByText('Platform').waitFor();
-		await sidebar.getByRole('button', { name: 'Examples' }).click();
-		await page.waitForTimeout(500); // Wait for animation
+		// Wait for the sidebar to be fully loaded
+		await sidebar.getByText('Platform').waitFor({ state: 'visible' });
 
-		const examplesContent = sidebar.getByTestId('content-examples');
-		const toastLink = examplesContent.locator('a[href="/examples/toast"]');
+		// Find and click the Examples trigger to expand the section
+		const examplesTrigger = sidebar.getByTestId('toggle-examples');
+		await expect(examplesTrigger).toBeVisible();
+
+		// Click to expand the Examples section
+		await examplesTrigger.click();
+
+		// Wait a bit for the animation
+		await page.waitForTimeout(500);
+
+		// Click on the toast link
+		const toastLink = sidebar.getByRole('link', { name: 'Toast' });
 		await toastLink.click();
 
 		await expect(page).toHaveURL('/examples/toast');
 
-		const crudLink = examplesContent.locator('a[href="/examples/crud"]');
+		// Verify active states changed
+		const crudLink = sidebar.getByRole('link', { name: 'CRUD' });
 		await expect(crudLink).not.toHaveAttribute('data-active', 'true');
 		await expect(toastLink).toHaveAttribute('data-active', 'true');
 	});

@@ -21,6 +21,10 @@
 					{
 						title: 'Toast',
 						url: '/examples/toast'
+					},
+					{
+						title: 'Drag & Drop',
+						url: '/examples/drag-drop'
 					}
 				]
 			},

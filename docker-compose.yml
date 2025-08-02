@@ -9,14 +9,13 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: local
-  codebase-index:
-    image: qdrant/qdrant
-    container_name: qdrant-vibe-starter
+  test-db:
+    image: postgres
+    container_name: postgres-vibe-starter-test
+    restart: always
     ports:
-      - 6333:6333
+      - 5433:5432
     environment:
-      QDRANT__SERVICE__API_KEY: mysecretpassword
-    volumes:
-      - qdrant_storage:/qdrant/storage
-volumes:
-  qdrant_storage:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: test

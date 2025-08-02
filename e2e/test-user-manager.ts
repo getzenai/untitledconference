@@ -17,7 +17,7 @@ export class TestUserManager {
 	private baseUrl: string;
 
 	private constructor() {
-		this.baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5173';
+		this.baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5174';
 	}
 
 	static getInstance(): TestUserManager {

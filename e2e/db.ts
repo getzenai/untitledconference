@@ -6,8 +6,9 @@ import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/auth-schema.ts';
 import { TEST_USER_EMAIL_PREFIX } from './globals';
 
-// Use a fixed connection string for e2e tests, matching local development.
-const connectionString = 'postgres://root:mysecretpassword@localhost:5432/local';
+// Use environment variable for database connection, defaulting to test database
+const connectionString =
+	process.env.DATABASE_URL || 'postgres://root:mysecretpassword@localhost:5433/test';
 const client = postgres(connectionString);
 export const db = drizzle(client, { schema });
 

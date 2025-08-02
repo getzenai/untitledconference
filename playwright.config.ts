@@ -1,15 +1,19 @@
 import { defineConfig } from '@playwright/test';
-import 'dotenv/config'; // Load .env file for Playwright config and webServer env
+import { config } from 'dotenv';
+
+// Load .env.e2e file for e2e test configuration
+config({ path: '.env.e2e' });
 
 export default defineConfig({
 	webServer: {
-		command: 'npm run build && npm run preview -- --port 5173',
-		port: 5173, // Playwright waits for this port
-		reuseExistingServer: false, // Do not run on dev server as the tests will fail there
+		command: 'npm run build && npm run preview -- --port 5174',
+		port: 5174, // E2E tests use their own port
+		reuseExistingServer: false, // Always use fresh server for tests
 		env: {
-			BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || 'http://localhost:5173',
+			BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || 'http://localhost:5174',
 			NODE_ENV: 'test',
-			PLAYWRIGHT_TEST: 'true'
+			PLAYWRIGHT_TEST: 'true',
+			DATABASE_URL: process.env.DATABASE_URL
 		}
 	},
 	timeout: 5 * 1000, // 5 seconds
@@ -46,7 +50,7 @@ export default defineConfig({
 		}
 	],
 	use: {
-		baseURL: 'http://localhost:5173', // Tests navigate to this URL
+		baseURL: 'http://localhost:5174', // Tests navigate to this URL
 		trace: 'on-first-retry'
 	}
 });
