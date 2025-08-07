@@ -1,0 +1,60 @@
+{
+	"$schema": "https://json.schemastore.org/claude-code-settings.json",
+	"includeCoAuthoredBy": false,
+	"permissions": {
+		"allow": [
+			"Bash(cat:*)",
+			"Bash(find:*)",
+			"Bash(git diff:*)",
+			"Bash(grep:*)",
+			"Bash(ls:*)",
+			"Bash(mkdir:*)",
+			"Bash(npm run build:*)",
+			"Bash(npm run check:*)",
+			"Bash(npm run lint:*)",
+			"Bash(npm run lint)",
+			"Bash(npm run test:*)",
+			"Bash(npx playwright test:*)",
+			"Bash(npx prettier:*)",
+			"Bash(tmux capture-pane:*)",
+			"Bash(tmux kill-session:*)",
+			"Bash(tmux list-sessions:*)",
+			"Bash(tmux ls:*)",
+			"Bash(tmux new-session:*)",
+			"Bash(tmux send-keys:*)",
+			"mcp__github__get_issue_comments",
+			"mcp__github__get_issue",
+			"mcp__github__get_pull_request_comments",
+			"mcp__github__get_pull_request_reviews",
+			"mcp__github__search_issues",
+			"mcp__playwright__browser_click",
+			"mcp__playwright__browser_close",
+			"mcp__playwright__browser_console_messages",
+			"mcp__playwright__browser_evaluate",
+			"mcp__playwright__browser_navigate",
+			"mcp__playwright__browser_snapshot",
+			"mcp__playwright__browser_type",
+			"WebFetch(domain:ai-sdk.dev)",
+			"WebFetch(domain:www.shadcn-svelte.com)"
+		],
+		"deny": []
+	},
+	"enabledMcpjsonServers": ["playwright", "github"],
+	"hooks": {
+		"PostToolUse": [
+			{
+				"matcher": "Write|Edit|MultiEdit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": "file_path=$(jq -r '.tool_input.file_path'); if echo \"$file_path\" | grep -qE '\\.(ts|js|svelte|md|json)$'; then npx prettier --write \"$file_path\"; fi"
+					},
+					{
+						"type": "command",
+						"command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|js|svelte)$'; then npx eslint --fix \"$file_path\" 1>&2 || exit 2; fi; }"
+					}
+				]
+			}
+		]
+	}
+}

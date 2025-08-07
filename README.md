@@ -38,6 +38,20 @@ You can also use the following database-related commands:
 - Run npm run db:start to start the docker container
 - Run npm run db:push to update your database schema
 
+### GitHub MCP Server
+
+To enable GitHub integration for Claude Code:
+
+1. Generate a GitHub Personal Access Token at https://github.com/settings/personal-access-tokens
+2. Configure the token with the following permissions:
+   - Read access to metadata
+   - Read and Write access to actions, code, commit statuses, issues, pull requests, and workflows
+3. Copy the example settings file:
+   ```bash
+   cp .claude/settings.local.json.example .claude/settings.local.json
+   ```
+4. Add your token to `.claude/settings.local.json` in the env section
+
 ### better auth
 
 Authentication is implemented using [Better Auth](https://www.better-auth.com). See the documentation for setup and configuration details.
