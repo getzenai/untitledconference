@@ -3,9 +3,9 @@ set -e
 
 echo "🚀 Setting up your development environment..."
 
-# Install PostgreSQL client tools
-echo "🐘 Installing PostgreSQL client tools..."
-sudo apt-get update && sudo apt-get install -y postgresql-client
+# Install PostgreSQL client tools and tmux
+echo "🐘 Installing PostgreSQL client tools and tmux..."
+sudo apt-get update && sudo apt-get install -y postgresql-client tmux
 
 # Install dependencies first (as recommended by GitHub docs)
 echo "📦 Installing npm dependencies..."
