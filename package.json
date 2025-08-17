@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "vite dev --host",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
@@ -20,6 +20,7 @@
 		"test:e2e:ui-mode": "playwright test --ui",
 		"db:start": "docker compose up",
 		"db:push": "drizzle-kit push",
+		"db:push:force": "drizzle-kit push --force",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
 		"docs:dev": "vitepress dev docs",

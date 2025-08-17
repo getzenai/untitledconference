@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/javascript-node:1-20-bookworm
+    volumes:
+      - ..:/workspace:cached
+    # Keep container running for development
+    command: sleep infinity
+    network_mode: service:db
+    environment:
+      DATABASE_URL: postgres://root:mysecretpassword@localhost:5432/local
+      BETTER_AUTH_SECRET: dev_codespaces_default_secret_change_in_production
+      BETTER_AUTH_URL: http://localhost:5173
+      NODE_ENV: development
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: local
+    ports:
+      - 5432:5432
+
+  test-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: mysecretpassword
+      POSTGRES_DB: test
+    ports:
+      - 5433:5432
+
+volumes:
+  postgres-data:
+  postgres-test-data:
