@@ -9,6 +9,9 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: local
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   test-db:
     image: postgres
     container_name: postgres-vibe-starter-test
@@ -19,3 +22,9 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: test
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  postgres_test_data:
