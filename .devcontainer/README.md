@@ -89,7 +89,7 @@ Claude Code CLI is pre-installed in every Codespace. To use it:
 2. **Add Token to GitHub Secrets:**
 
    - Copy the generated token
-   - Go to your repository Settings → Secrets and variables → Codespaces
+   - Go to [your Settings → Codespaces](https://github.com/settings/codespaces/secrets/new)
    - Add new secret: `CLAUDE_CODE_OAUTH_TOKEN`
    - Paste your token value
 
