@@ -16,7 +16,7 @@
 		"lint:format": "prettier --write . && eslint .",
 		"test:unit": "vitest run src/",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:e2e": "dotenv -e .env.e2e -- bash -c 'npx drizzle-kit push --force && playwright test'",
+		"test:e2e": "dotenv -e .env -- bash -c 'DATABASE_URL=\"$TEST_DATABASE_URL\" npx drizzle-kit push --force' && playwright test",
 		"test:e2e:ui-mode": "playwright test --ui",
 		"db:start": "docker compose up",
 		"db:push": "drizzle-kit push",

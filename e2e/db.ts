@@ -6,9 +6,9 @@ import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/auth-schema.ts';
 import { TEST_USER_EMAIL_PREFIX } from './globals';
 
-// Use environment variable for database connection, defaulting to test database
+// Use TEST_DATABASE_URL for tests, with fallback to localhost test database (never dev database)
 const connectionString =
-	process.env.DATABASE_URL || 'postgres://root:mysecretpassword@localhost:5433/test';
+	process.env.TEST_DATABASE_URL || 'postgres://root:mysecretpassword@localhost:5433/test';
 const client = postgres(connectionString);
 export const db = drizzle(client, { schema });
 

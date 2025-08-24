@@ -6,14 +6,19 @@
 
 	// Features to add to the dev container
 	"features": {
-		"ghcr.io/devcontainers/features/node:1": {
-			"version": "20"
-		},
 		"ghcr.io/devcontainers/features/github-cli:1": {}
+	},
+
+	// Host requirements for the dev container
+	"hostRequirements": {
+		"memory": "16gb"
 	},
 
 	// Configure tool-specific properties
 	"customizations": {
+		"codespaces": {
+			"openFiles": [".devcontainer/README.md"]
+		},
 		"vscode": {
 			"extensions": [
 				"svelte.svelte-vscode",
@@ -67,13 +72,6 @@
 			"label": "Drizzle Studio",
 			"onAutoForward": "notify"
 		}
-	},
-
-	// Environment variables
-	"containerEnv": {
-		"DATABASE_URL": "postgres://root:mysecretpassword@db:5432/local",
-		"BETTER_AUTH_URL": "http://localhost:5173",
-		"NODE_ENV": "development"
 	},
 
 	// Commands to run after container is created

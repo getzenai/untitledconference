@@ -1,8 +1,8 @@
 import { defineConfig } from '@playwright/test';
 import { config } from 'dotenv';
 
-// Load .env.e2e file for e2e test configuration
-config({ path: '.env.e2e' });
+// Load main .env file which now contains TEST_DATABASE_URL
+config();
 
 export default defineConfig({
 	webServer: {
@@ -10,10 +10,10 @@ export default defineConfig({
 		port: 5174, // E2E tests use their own port
 		reuseExistingServer: false, // Always use fresh server for tests
 		env: {
-			BETTER_AUTH_URL: process.env.BETTER_AUTH_URL || 'http://localhost:5174',
+			BETTER_AUTH_URL: 'http://localhost:5174',
 			NODE_ENV: 'test',
 			PLAYWRIGHT_TEST: 'true',
-			DATABASE_URL: process.env.DATABASE_URL
+			DATABASE_URL: process.env.TEST_DATABASE_URL // Use TEST_DATABASE_URL for tests, no fallback
 		}
 	},
 	timeout: 5 * 1000, // 5 seconds

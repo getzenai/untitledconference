@@ -3,58 +3,33 @@ set -e
 
 echo "🚀 Setting up your development environment..."
 
-# Install PostgreSQL client tools and tmux
-echo "🐘 Installing PostgreSQL client tools and tmux..."
-sudo apt-get update && sudo apt-get install -y postgresql-client tmux
-
 # Install dependencies first (as recommended by GitHub docs)
 echo "📦 Installing npm dependencies..."
 npm install
 
-# Wait for PostgreSQL to be ready (with timeout)
-echo "⏳ Waiting for PostgreSQL to be ready..."
-timeout=30  # Maximum wait time in seconds
-elapsed=0
-while ! pg_isready -h localhost -p 5432 -U root > /dev/null 2>&1; do
-  if [ $elapsed -ge $timeout ]; then
-    echo "❌ Error: PostgreSQL did not become ready within ${timeout} seconds"
-    echo "Please check if the PostgreSQL container is running properly"
-    exit 1
-  fi
-  echo "Waiting for PostgreSQL... (${elapsed}s/${timeout}s)"
-  sleep 2
-  elapsed=$((elapsed + 2))
-done
-echo "✅ PostgreSQL is ready!"
+# Databases will be ready due to healthchecks in docker-compose.yml
+echo "✅ Databases are ready (healthchecks passed)!"
 
 # Set up environment files
 echo "🔧 Setting up environment files..."
+
+# Setup .env file
 if [ ! -f .env ]; then
-  cat > .env << EOF
-DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"
-BETTER_AUTH_SECRET="dev_codespaces_default_secret_change_in_production"
-BETTER_AUTH_URL="http://localhost:5173"
-
-# GitHub OAuth (optional - only if you want GitHub sign-in)
-GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID:-}"
-GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET:-}"
-EOF
-  echo "✅ Created .env file with default dev values"
-fi
-
-if [ ! -f .env.e2e ]; then
-  cat > .env.e2e << EOF
-DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"
-BETTER_AUTH_SECRET="dev_codespaces_default_secret_change_in_production"
-BETTER_AUTH_URL="http://localhost:5174"
-NODE_ENV="test"
-PLAYWRIGHT_TEST="true"
-
-# GitHub OAuth (optional)
-GITHUB_CLIENT_ID="${GITHUB_CLIENT_ID:-}"
-GITHUB_CLIENT_SECRET="${GITHUB_CLIENT_SECRET:-}"
-EOF
-  echo "✅ Created .env.e2e file"
+  # Copy the devcontainer-specific .env file
+  cp .devcontainer/.env.devcontainer .env
+  
+  # Replace placeholders with actual Codespace secrets if they exist
+  if [ -n "${GITHUB_CLIENT_ID}" ]; then
+    sed -i "s/GITHUB_CLIENT_ID=.*/GITHUB_CLIENT_ID=\"${GITHUB_CLIENT_ID}\"/" .env
+  fi
+  if [ -n "${GITHUB_CLIENT_SECRET}" ]; then
+    sed -i "s/GITHUB_CLIENT_SECRET=.*/GITHUB_CLIENT_SECRET=\"${GITHUB_CLIENT_SECRET}\"/" .env
+  fi
+  if [ -n "${CLAUDE_CODE_OAUTH_TOKEN}" ]; then
+    sed -i "s/CLAUDE_CODE_OAUTH_TOKEN=.*/CLAUDE_CODE_OAUTH_TOKEN=\"${CLAUDE_CODE_OAUTH_TOKEN}\"/" .env
+  fi
+  
+  echo "✅ Created .env file from devcontainer template"
 fi
 
 # Run database migrations
@@ -64,10 +39,6 @@ npm run db:push:force
 # Install Playwright browsers if needed
 echo "🎭 Installing Playwright browsers..."
 npx playwright install chromium --with-deps
-
-# Install Claude Code CLI
-echo "🤖 Installing Claude Code CLI..."
-npm install -g @anthropic-ai/claude-code
 
 # Check environment configuration status
 echo ""

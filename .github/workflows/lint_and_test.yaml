@@ -88,14 +88,11 @@ jobs:
 
       - name: Setup environment variables
         run: |
-          cp .env.example .env
-          # Create .env.e2e for e2e test configuration
-          echo 'DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"' > .env.e2e
-          echo 'BETTER_AUTH_SECRET="test-secret-for-github-actions"' >> .env.e2e
-          echo 'BETTER_AUTH_URL="http://localhost:5174"' >> .env.e2e
-
-      - name: Install dotenv-cli
-        run: npm install -g dotenv-cli
+          # Create .env with both dev and test database URLs
+          echo 'DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"' > .env
+          echo 'TEST_DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"' >> .env
+          echo 'BETTER_AUTH_SECRET="test-secret-for-github-actions"' >> .env
+          echo 'BETTER_AUTH_URL="http://localhost:5173"' >> .env
 
       - name: Cache Playwright binaries
         uses: actions/cache@v4

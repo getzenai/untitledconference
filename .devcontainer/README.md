@@ -1,6 +1,73 @@
-# GitHub Codespaces & Dev Container Setup
+# 🎉 Welcome to SvelteKit Vibe Starter Dev Container!
 
-This folder contains the configuration for GitHub Codespaces and VS Code Dev Containers, enabling you to develop this SvelteKit application in a consistent, cloud-based environment.
+## 🚀 Quick Start Commands
+
+```bash
+npm run dev          # Start the development server
+npm run test         # Run all tests
+npm run test:e2e     # Run E2E tests
+npm run db:studio    # Open Drizzle Studio
+npm run lint         # Lint the code
+npm run format       # Format the code
+```
+
+## 📡 Available Services
+
+**Access from your browser/host:**
+
+- **Dev Server**: http://localhost:5173
+- **PostgreSQL Dev**: localhost:5432
+- **PostgreSQL Test**: localhost:5433
+- **Drizzle Studio**: http://localhost:5555 (when running)
+
+**Database connections in code use Docker service names:**
+
+- **Dev DB**: `postgres://root:mysecretpassword@project-db:5432/local`
+- **Test DB**: `postgres://root:mysecretpassword@test-db:5432/test`
+
+## 🔐 Environment Configuration
+
+### Automatic Setup
+
+Environment variables are automatically configured:
+
+- Single `.env` file created from `.devcontainer/.env.devcontainer` template
+- `IS_DEVCONTAINER=true` automatically switches database hosts
+- Database connections use Docker service names (project-db, test-db)
+- Both `DATABASE_URL` and `TEST_DATABASE_URL` are configured
+- Authentication secrets have safe defaults for development
+- Third-party secrets are pulled from Codespace secrets
+
+### Optional Codespace Secrets
+
+Add these in [GitHub Settings → Codespaces](https://github.com/settings/codespaces):
+
+- `GITHUB_CLIENT_ID` & `GITHUB_CLIENT_SECRET` - Enable "Sign in with GitHub"
+- `CLAUDE_CODE_OAUTH_TOKEN` - Enable Claude Code CLI (see setup below)
+
+## 🤖 Setting Up Claude Code
+
+1. **On your local machine**, generate a token:
+
+   ```bash
+   claude setup-token
+   ```
+
+2. **Add to GitHub Secrets**:
+
+   - Go to [Settings → Codespaces](https://github.com/settings/codespaces/secrets/new)
+   - Add secret: `CLAUDE_CODE_OAUTH_TOKEN`
+   - Paste your token value
+   - Recreate the Codespace for changes to take effect
+
+3. **Use Claude Code**:
+   ```bash
+   claude-code
+   ```
+
+---
+
+# Full Documentation
 
 ## 🚀 Quick Start with GitHub Codespaces
 
@@ -123,26 +190,23 @@ Claude Code CLI is pre-installed in every Codespace. To use it:
 
 For local VS Code Dev Containers:
 
-1. **Create a `.env` file** in the project root:
+1. **Environment Setup is Automatic** - The `.env` file is created from `.devcontainer/.env.devcontainer` template
 
-   ```bash
-   # Required (defaults provided for dev)
-   DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"
-   BETTER_AUTH_SECRET="dev_local_secret_change_in_production"
-   BETTER_AUTH_URL="http://localhost:5173"
+2. **To Add Optional Secrets Locally**:
 
-   # Optional - GitHub OAuth (only if you want GitHub sign-in)
-   GITHUB_CLIENT_ID="your_github_client_id"
-   GITHUB_CLIENT_SECRET="your_github_client_secret"
+   - Set environment variables before opening the container:
+     ```bash
+     export GITHUB_CLIENT_ID="your_github_client_id"
+     export GITHUB_CLIENT_SECRET="your_github_client_secret"
+     export CLAUDE_CODE_OAUTH_TOKEN="your_claude_token"
+     ```
+   - Or manually edit the generated `.env` file after container creation
 
-   # Optional - Claude Code CLI
-   CLAUDE_CODE_OAUTH_TOKEN="your_claude_token"
-   ```
+3. **Database Connections**:
+   - Inside container: Uses Docker service names (`project-db:5432`, `test-db:5432`)
+   - From host machine: Uses localhost with mapped ports (`localhost:5432`, `localhost:5433`)
 
-2. **Open in Dev Container** - VS Code will automatically use these values
-3. **Never commit `.env` files** - Already in .gitignore for safety
-
-**Note:** The post-create script automatically creates `.env` with default dev values if it doesn't exist, so you only need to add this file if you want to customize the secrets (e.g., add GitHub OAuth or Claude Code token).
+**Note:** The `.env` file is automatically created with proper database URLs for the container environment. Third-party secrets are only needed if you want to enable optional features like GitHub OAuth or Claude Code.
 
 ## 🛠️ Customization
 
