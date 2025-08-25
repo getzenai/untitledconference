@@ -120,10 +120,9 @@
 							<p class="text-sm text-red-500">{error}</p>
 						{/if}
 						<button
-							type="button"
+							type="submit"
 							class="bg-primary hover:bg-primary/90 w-full rounded px-4 py-2 font-medium text-white disabled:opacity-50"
 							disabled={isLoading}
-							on:click={handleSubmit}
 						>
 							{#if isLoading}
 								Logging in...
