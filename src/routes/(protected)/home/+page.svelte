@@ -56,7 +56,7 @@
 				{/if}
 
 				<div class="flex flex-col gap-4 sm:flex-row">
-					<Button on:click={handleLogout} variant="outline" disabled={$sessionState.isPending}
+					<Button onclick={handleLogout} variant="outline" disabled={$sessionState.isPending}
 						>Logout</Button
 					>
 					<a href="/examples/crud">
