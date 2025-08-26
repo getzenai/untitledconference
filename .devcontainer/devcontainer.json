@@ -77,6 +77,11 @@
 	// Commands to run after container is created
 	"postCreateCommand": "bash .devcontainer/post-create.sh",
 
+	// Environment variables
+	"containerEnv": {
+		"CLAUDE_CONFIG_DIR": "/home/node/.config/claude"
+	},
+
 	// Uncomment to connect as root instead
 	// "remoteUser": "root",
 	"remoteUser": "node",
