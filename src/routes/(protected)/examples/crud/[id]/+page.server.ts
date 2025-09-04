@@ -1,4 +1,5 @@
 import { db } from '$lib/server/db';
+import { member } from '$lib/server/db/auth-schema';
 import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema';
 import { fail, redirect, error as svelteKitError, type ActionFailure } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
@@ -25,18 +26,32 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	}
 
 	try {
-		const [exampleObject] = await db
+		// Get user's active organization
+		const userMembership = await db
 			.select()
-			.from(exampleObjectsTable)
-			.where(
-				and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id))
-			);
+			.from(member)
+			.where(eq(member.userId, user.id))
+			.limit(1);
+
+		const organizationId = userMembership[0]?.organizationId || null;
+
+		// Build where conditions to include organizationId
+		const whereConditions = organizationId
+			? and(
+					eq(exampleObjectsTable.id, parsedExampleId),
+					eq(exampleObjectsTable.userId, user.id),
+					eq(exampleObjectsTable.organizationId, organizationId)
+				)
+			: and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id));
+
+		const [exampleObject] = await db.select().from(exampleObjectsTable).where(whereConditions);
 
 		if (!exampleObject) {
 			throw svelteKitError(404, 'Example object not found or access denied');
 		}
 		return {
-			exampleObject
+			exampleObject,
+			organizationId
 		};
 	} catch (err) {
 		console.error('Error loading example object for edit:', err);
@@ -129,6 +144,24 @@ export const actions: Actions = {
 		const { validData, parsedExampleId, rawFormData } = validation;
 
 		try {
+			// Get user's active organization
+			const userMembership = await db
+				.select()
+				.from(member)
+				.where(eq(member.userId, user.id))
+				.limit(1);
+
+			const organizationId = userMembership[0]?.organizationId || null;
+
+			// Build where conditions to include organizationId
+			const whereConditions = organizationId
+				? and(
+						eq(exampleObjectsTable.id, parsedExampleId),
+						eq(exampleObjectsTable.userId, user.id),
+						eq(exampleObjectsTable.organizationId, organizationId)
+					)
+				: and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id));
+
 			const [updatedElement] = await db
 				.update(exampleObjectsTable)
 				.set({
@@ -136,9 +169,7 @@ export const actions: Actions = {
 					description: validData.description,
 					updatedAt: new Date()
 				})
-				.where(
-					and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id))
-				)
+				.where(whereConditions)
 				.returning();
 
 			if (!updatedElement) {
@@ -174,11 +205,27 @@ export const actions: Actions = {
 
 		let deletedElementInfo;
 		try {
+			// Get user's active organization
+			const userMembership = await db
+				.select()
+				.from(member)
+				.where(eq(member.userId, user.id))
+				.limit(1);
+
+			const organizationId = userMembership[0]?.organizationId || null;
+
+			// Build where conditions to include organizationId
+			const whereConditions = organizationId
+				? and(
+						eq(exampleObjectsTable.id, parsedExampleId),
+						eq(exampleObjectsTable.userId, user.id),
+						eq(exampleObjectsTable.organizationId, organizationId)
+					)
+				: and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id));
+
 			const [result] = await db
 				.delete(exampleObjectsTable)
-				.where(
-					and(eq(exampleObjectsTable.id, parsedExampleId), eq(exampleObjectsTable.userId, user.id))
-				)
+				.where(whereConditions)
 				.returning({ id: exampleObjectsTable.id });
 			deletedElementInfo = result;
 		} catch (dbError) {

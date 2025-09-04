@@ -74,9 +74,25 @@ npm run psql:test "QUERY" # Query test database
 ```bash
 npm run test              # Run all tests (unit + e2e)
 npm run test:e2e          # Run E2E tests only
+npm run test:e2e -- --grep "testname"  # Run specific test by name
 npm run lint              # Check code quality
 npm run format            # Format code
 ```
+
+#### Test Debugging Guidelines
+
+When tests are failing:
+
+1. **Debug with additional code**: Add console.log statements, debug logs, or specific experiments in the test execution to understand what's happening
+2. **Run specific tests**: Use `npm run test:e2e -- --grep "testname"` to iterate on specific failing tests rather than running the entire suite
+3. **Task tracking for failing tests**: When fixing failing tests, create a separate todo task for each failing test. Mark the task as completed only when:
+   - The test is passing, OR
+   - You've attempted at least 10 debugging iterations and cannot find a solution
+4. **Systematic debugging approach**:
+   - First, understand what the test is trying to achieve
+   - Add logging to see actual vs expected behavior
+   - Check if the issue is with the test setup, the application code, or test assertions
+   - Review any recent changes that might have affected the test
 
 ### Development
 
@@ -130,3 +146,5 @@ This project includes a complete dev container setup with:
 - Production deployments should use secure connection strings
 - The psql npm scripts include safety checks to prevent connections to remote databases
 - Claude Code permissions are restricted to localhost database access only
+- documentation regarding the better auth organisation plugin can be read here: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/organization.mdx
+- Docs for the better auth admin plugin can be read here: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/admin.mdx

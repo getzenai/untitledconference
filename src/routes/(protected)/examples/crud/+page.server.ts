@@ -1,7 +1,8 @@
 import { db } from '$lib/server/db';
+import { member } from '$lib/server/db/auth-schema';
 import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema';
 import { fail, error as svelteKitError } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -14,14 +15,32 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
 
 	try {
+		// Get user's active organization
+		const userMembership = await db
+			.select()
+			.from(member)
+			.where(eq(member.userId, user.id))
+			.limit(1);
+
+		const organizationId = userMembership[0]?.organizationId || null;
+
+		// Filter examples by both userId and organizationId
+		const whereConditions = organizationId
+			? and(
+					eq(exampleObjectsTable.userId, user.id),
+					eq(exampleObjectsTable.organizationId, organizationId)
+				)
+			: eq(exampleObjectsTable.userId, user.id);
+
 		const examples = await db
 			.select()
 			.from(exampleObjectsTable)
-			.where(eq(exampleObjectsTable.userId, user.id))
+			.where(whereConditions)
 			.orderBy(exampleObjectsTable.createdAt);
 
 		return {
-			examples
+			examples,
+			organizationId
 		};
 	} catch (err) {
 		console.error('Error loading example objects:', err);
@@ -59,12 +78,22 @@ export const actions: Actions = {
 		const validData = validationResult.data;
 
 		try {
+			// Get user's active organization
+			const userMembership = await db
+				.select()
+				.from(member)
+				.where(eq(member.userId, user.id))
+				.limit(1);
+
+			const organizationId = userMembership[0]?.organizationId || null;
+
 			const [newExampleObject] = await db
 				.insert(exampleObjectsTable)
 				.values({
 					name: validData.name,
 					description: validData.description || '',
-					userId: user.id
+					userId: user.id,
+					organizationId
 				})
 				.returning();
 

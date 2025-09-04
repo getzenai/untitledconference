@@ -1,8 +1,8 @@
 import { auth } from '$lib/auth';
-import type { ServerLoad } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from './$types';
 
-export const load: ServerLoad = async ({ request }) => {
+export const load: PageServerLoad = async ({ request, url }) => {
 	console.log('[Register Page Load] Checking if user is already logged in');
 	const requestHeaders = new Headers(request.headers);
 
@@ -23,6 +23,15 @@ export const load: ServerLoad = async ({ request }) => {
 		throw redirect(303, '/home');
 	}
 
+	// Check for invitation code
+	const invitationCode = url.searchParams.get('invitation');
+	// Don't expose invitation email for security - users must know the email
+	// We'll validate on the backend after registration
+
 	console.log('[Register Page Load] No user found, allowing access to register page');
-	return {};
+	return {
+		invitationCode,
+		invitationEmail: null,
+		invitationOrgName: null
+	};
 };

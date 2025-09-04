@@ -10,6 +10,12 @@ test.describe('User Registration', () => {
 		await expect(page.getByRole('button', { name: 'Create Account' })).toBeVisible();
 	});
 
+	test('should show organization name field in registration form', async ({ page }) => {
+		await page.goto('/register');
+		await expect(page.getByLabel('Organization Name (Optional)')).toBeVisible();
+		await expect(page.getByText("You'll be the administrator of this organization")).toBeVisible();
+	});
+
 	test('should show error and persist email for invalid password', async ({ page }) => {
 		const testEmail = testUserManager.generateTestUserEmail('invalid-password');
 

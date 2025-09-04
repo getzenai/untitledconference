@@ -3,8 +3,8 @@
 	import FrameIcon from '@lucide/svelte/icons/frame';
 	import LifeBuoyIcon from '@lucide/svelte/icons/life-buoy';
 	import SendIcon from '@lucide/svelte/icons/send';
-	import Settings2Icon from '@lucide/svelte/icons/settings-2';
 	import SquareTerminalIcon from '@lucide/svelte/icons/square-terminal';
+	import ShieldIcon from '@lucide/svelte/icons/shield';
 
 	const data = {
 		navMain: [
@@ -32,22 +32,6 @@
 				title: 'Models',
 				url: '#',
 				icon: BotIcon
-			},
-
-			{
-				title: 'Settings',
-				url: '#',
-				icon: Settings2Icon,
-				items: [
-					{
-						title: 'General',
-						url: '#'
-					},
-					{
-						title: 'Team',
-						url: '#'
-					}
-				]
 			}
 		],
 		navSecondary: [
@@ -90,6 +74,21 @@
 		// eslint-disable-next-line no-undef -- App is a global SvelteKit type
 		user: App.Locals['user'];
 	} = $props();
+
+	// Add admin menu item if user is admin
+	const navMainWithAdmin = $derived(
+		user?.role === 'admin'
+			? [
+					...data.navMain,
+					{
+						title: 'Admin',
+						url: '/admin',
+						icon: ShieldIcon,
+						isActive: false
+					}
+				]
+			: data.navMain
+	);
 </script>
 
 <Sidebar.Root bind:ref {variant} class={className} data-testid="app-sidebar">
@@ -115,7 +114,7 @@
 		</Sidebar.Menu>
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<NavMain items={data.navMain} />
+		<NavMain items={navMainWithAdmin} />
 		<NavProjects projects={data.projects} />
 		<NavSecondary items={data.navSecondary} class="mt-auto" />
 	</Sidebar.Content>

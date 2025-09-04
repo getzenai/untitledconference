@@ -5,6 +5,9 @@ declare global {
 		interface Locals {
 			user: import('$lib/server/auth').SessionValidationResult['user'];
 			session: import('$lib/server/auth').SessionValidationResult['session'];
+			isAdmin?: boolean;
+			organizationId?: string | null;
+			organizationRole?: string | null;
 		}
 	}
 }

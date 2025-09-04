@@ -4,13 +4,47 @@ import { error, type Handle } from '@sveltejs/kit'; // Removed ResolveOptions
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
-// This new handler will attempt to populate event.locals.user on every request.
+// This new handler will attempt to populate event.locals.user and organization on every request.
 const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 	try {
 		const requestHeaders = new Headers(event.request.headers);
 		const session = await auth.api.getSession({ headers: requestHeaders });
 		if (session?.user) {
 			event.locals.user = session.user;
+
+			// Check if user is a system admin
+			event.locals.isAdmin = session.user.role === 'admin';
+
+			// Get active organization from session
+			if (session.session?.activeOrganizationId) {
+				event.locals.organizationId = session.session.activeOrganizationId;
+
+				// Get user's role in the active organization
+				try {
+					const orgMembers = await auth.api.listMembers({
+						headers: requestHeaders,
+						query: {
+							organizationId: session.session.activeOrganizationId
+						}
+					});
+
+					const currentMember = orgMembers?.members?.find((m) => m.userId === session.user.id);
+
+					if (currentMember) {
+						event.locals.organizationRole = currentMember.role;
+					} else {
+						event.locals.organizationRole = null;
+					}
+				} catch (e) {
+					console.error('[PopulateLocalsUserHandler] Error fetching organization role:', e);
+					event.locals.organizationRole = null;
+				}
+			} else {
+				// No active organization set
+				event.locals.organizationId = null;
+				event.locals.organizationRole = null;
+			}
+
 			console.log('[PopulateLocalsUserHandler] Set event.locals.user:', event.locals.user?.email);
 		} else {
 			console.log('[PopulateLocalsUserHandler] No session or user found.');
@@ -82,7 +116,7 @@ const paraglideHandler: Handle = i18n.handle();
 // Sequence of handlers: Better Auth, API Protection, Paraglide
 export const handle: Handle = sequence(
 	populateLocalsUserHandler, // Run this first to ensure locals.user is set
-	(params) => svelteKitHandler({ ...params, auth }),
+	({ event, resolve }) => svelteKitHandler({ auth, event, resolve, building: false }),
 	apiProtectionHandler,
 	paraglideHandler
 );

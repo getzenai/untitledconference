@@ -43,32 +43,40 @@ export class TestUserManager {
 		options: {
 			email?: string;
 			password?: string;
+			organizationName?: string;
 		} = {}
 	): Promise<TestUser> {
 		const email = options.email || this.generateTestUserEmail();
 		const password = options.password || 'password123';
-
-		console.log(`[TestUserManager] Creating test user via API: ${email}`);
+		const organizationName = options.organizationName;
 
 		const response = await fetch(`${this.baseUrl}/api/v1/test/register`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'
 			},
-			body: JSON.stringify({ email, password })
+			body: JSON.stringify({ email, password, organizationName })
 		});
 
-		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(`Registration failed: ${error.error || response.statusText}`);
+		const responseText = await response.text();
+		let result;
+
+		try {
+			result = JSON.parse(responseText);
+		} catch (_e) {
+			console.error('[TestUserManager] Failed to parse response:', responseText);
+			throw new Error(`Registration failed: Invalid response from server`);
 		}
 
-		const result = await response.json();
+		if (!response.ok) {
+			console.error('[TestUserManager] Registration failed with status:', response.status);
+			console.error('[TestUserManager] Error response:', result);
+			throw new Error(`Registration failed: ${result.error || response.statusText}`);
+		}
 
 		// Track created user for cleanup
 		this.createdUsers.add(email);
 
-		console.log(`[TestUserManager] Successfully created user via API: ${email}`);
 		return {
 			id: result.user.id,
 			email: result.user.email,
@@ -80,8 +88,6 @@ export class TestUserManager {
 	 * Login with user credentials via API
 	 */
 	async loginUser(email: string, password: string): Promise<TestUser> {
-		console.log(`[TestUserManager] Logging in user via API: ${email}`);
-
 		const response = await fetch(`${this.baseUrl}/api/v1/public/login`, {
 			method: 'POST',
 			headers: {
@@ -97,7 +103,6 @@ export class TestUserManager {
 
 		const result = await response.json();
 
-		console.log(`[TestUserManager] Successfully logged in via API: ${email}`);
 		return {
 			id: result.user.id,
 			email: result.user.email,
@@ -110,8 +115,6 @@ export class TestUserManager {
 	 * Logout user via API
 	 */
 	async logoutUser(token: string): Promise<void> {
-		console.log('[TestUserManager] Logging out user via API');
-
 		const response = await fetch(`${this.baseUrl}/api/v1/public/logout`, {
 			method: 'POST',
 			headers: {
@@ -124,8 +127,6 @@ export class TestUserManager {
 			const error = await response.json();
 			throw new Error(`Logout failed: ${error.error || response.statusText}`);
 		}
-
-		console.log('[TestUserManager] Successfully logged out via API');
 	}
 
 	/**
@@ -153,13 +154,13 @@ export class TestUserManager {
 		options: {
 			email?: string;
 			password?: string;
+			organizationName?: string;
 		} = {}
 	): Promise<{ user: TestUser; success: boolean }> {
 		try {
 			const user = await this.createTestUser(options);
 			return { user, success: true };
-		} catch (error) {
-			console.log(`[TestUserManager] Registration failed: ${error}`);
+		} catch (_error) {
 			return {
 				user: {
 					id: '',
@@ -179,6 +180,7 @@ export class TestUserManager {
 		options: {
 			email?: string;
 			password?: string;
+			organizationName?: string;
 		} = {}
 	): Promise<TestUser> {
 		// Create user via API
@@ -207,11 +209,8 @@ export class TestUserManager {
 	 */
 	async cleanupCreatedUsers(): Promise<void> {
 		if (this.createdUsers.size === 0) {
-			console.log('[TestUserManager] No users to cleanup');
 			return;
 		}
-
-		console.log(`[TestUserManager] Cleaning up ${this.createdUsers.size} created users`);
 
 		try {
 			for (const email of this.createdUsers) {
@@ -219,7 +218,6 @@ export class TestUserManager {
 			}
 
 			this.createdUsers.clear();
-			console.log('[TestUserManager] Successfully cleaned up created users');
 		} catch (error) {
 			console.error(`[TestUserManager] Error during user cleanup: ${error}`);
 		}
