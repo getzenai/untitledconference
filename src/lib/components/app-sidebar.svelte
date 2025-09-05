@@ -4,7 +4,6 @@
 	import LifeBuoyIcon from '@lucide/svelte/icons/life-buoy';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import SquareTerminalIcon from '@lucide/svelte/icons/square-terminal';
-	import ShieldIcon from '@lucide/svelte/icons/shield';
 
 	const data = {
 		navMain: [
@@ -61,6 +60,7 @@
 	import NavProjects from './nav-projects.svelte';
 	import NavSecondary from './nav-secondary.svelte';
 	import NavUser from './nav-user.svelte';
+	import NavAdmin from './nav-admin.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import CommandIcon from '@lucide/svelte/icons/command';
 	import type { ComponentProps } from 'svelte';
@@ -75,20 +75,8 @@
 		user: App.Locals['user'];
 	} = $props();
 
-	// Add admin menu item if user is admin
-	const navMainWithAdmin = $derived(
-		user?.role === 'admin'
-			? [
-					...data.navMain,
-					{
-						title: 'Admin',
-						url: '/admin',
-						icon: ShieldIcon,
-						isActive: false
-					}
-				]
-			: data.navMain
-	);
+	// Check if user is admin
+	const isAdmin = $derived(user?.role === 'admin');
 </script>
 
 <Sidebar.Root bind:ref {variant} class={className} data-testid="app-sidebar">
@@ -114,8 +102,11 @@
 		</Sidebar.Menu>
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<NavMain items={navMainWithAdmin} />
+		<NavMain items={data.navMain} />
 		<NavProjects projects={data.projects} />
+		{#if isAdmin}
+			<NavAdmin />
+		{/if}
 		<NavSecondary items={data.navSecondary} class="mt-auto" />
 	</Sidebar.Content>
 	<Sidebar.Footer>

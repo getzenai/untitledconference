@@ -12,16 +12,10 @@ test.describe('Admin Dashboard Access Control', () => {
 
 	test('should redirect non-admin users from admin page', async ({ page }) => {
 		// Try to access admin page directly
-		await page.goto('/admin');
+		await page.goto('/admin/users');
 
-		// Should redirect to home or show access denied
+		// Should redirect to home
 		await expect(page).toHaveURL('/home');
-
-		// Check for possible error toast
-		const errorToast = page.getByText(/Access denied|Admin privileges required/i);
-		if (await errorToast.isVisible({ timeout: 1000 }).catch(() => false)) {
-			await expect(errorToast).toBeVisible();
-		}
 	});
 });
 

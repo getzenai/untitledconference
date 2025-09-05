@@ -8,6 +8,10 @@ declare global {
 			isAdmin?: boolean;
 			organizationId?: string | null;
 			organizationRole?: string | null;
+			impersonating?: {
+				originalUserId: string;
+				originalUserEmail: string;
+			} | null;
 		}
 	}
 }

@@ -3,7 +3,7 @@ import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/auth-schema';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -52,6 +52,18 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		// Better Auth returns user directly on success
 		if (result.user) {
+			// Check if this is the first user and make them admin
+			const [userCount] = await db.select({ count: count() }).from(schema.user);
+
+			if (userCount.count === 1) {
+				// This is the first user, make them admin
+				console.log('[Test Register API] First user detected, setting as admin');
+				await db
+					.update(schema.user)
+					.set({ role: 'admin' })
+					.where(eq(schema.user.id, result.user.id));
+			}
+
 			let organization = null;
 
 			// Always ensure organization exists for test users (all test users should have an org)

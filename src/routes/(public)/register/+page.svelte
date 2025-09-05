@@ -23,9 +23,11 @@
 	let isLoading = false;
 	let successMessage: string | null = null;
 	let invitationCode = data.invitationCode;
+	let isFirstUser = data.isFirstUser;
 
 	onMount(() => {
-		// If we have an invitation code, store it
+		// If we have an invitation code from Better Auth, store it
+		// The invitation code is a secure token, not base64 encoded data
 		if (invitationCode) {
 			sessionStorage.setItem('pendingInvitation', invitationCode);
 		}
@@ -52,6 +54,21 @@
 				console.error('[Register Page] Sign-up error details:', signUpError);
 				error = signUpError.message || 'Registration failed. Please try again.';
 			} else if (signUpData) {
+				// If this is the first user, make them admin
+				if (isFirstUser && signUpData.user) {
+					console.log('[Register Page] First user registered, setting as admin');
+					try {
+						await authClient.admin.setRole({
+							userId: signUpData.user.id,
+							role: 'admin'
+						});
+						console.log('[Register Page] Successfully set first user as admin');
+					} catch (roleError) {
+						console.error('[Register Page] Failed to set admin role:', roleError);
+						// Don't fail registration, just log the error
+					}
+				}
+
 				// Handle invitation acceptance if we have an invitation code
 				if (invitationCode) {
 					try {
@@ -185,7 +202,13 @@
 			<Card>
 				<CardHeader>
 					<CardTitle>Create Account</CardTitle>
-					<CardDescription>Enter your details to create your account</CardDescription>
+					<CardDescription>
+						{#if isFirstUser}
+							You'll be the first user and will automatically become the system administrator
+						{:else}
+							Enter your details to create your account
+						{/if}
+					</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<form on:submit|preventDefault={handleSubmit} class="space-y-4">

@@ -15,6 +15,19 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 			// Check if user is a system admin
 			event.locals.isAdmin = session.user.role === 'admin';
 
+			// Check if we're impersonating (Better Auth adds impersonatedBy to the session)
+			const impersonatedBy =
+				session.session?.impersonatedBy || (session as { impersonatedBy?: string }).impersonatedBy;
+
+			if (impersonatedBy) {
+				event.locals.impersonating = {
+					originalUserId: impersonatedBy,
+					originalUserEmail: '' // Could be fetched if needed for display
+				};
+			} else {
+				event.locals.impersonating = null;
+			}
+
 			// Get active organization from session
 			if (session.session?.activeOrganizationId) {
 				event.locals.organizationId = session.session.activeOrganizationId;
