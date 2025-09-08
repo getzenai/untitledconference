@@ -59,6 +59,9 @@
 					<Button onclick={handleLogout} variant="outline" disabled={$sessionState.isPending}
 						>Logout</Button
 					>
+					<a href="/documents">
+						<Button>Documents</Button>
+					</a>
 					<a href="/examples/crud">
 						<Button>CRUD Example</Button>
 					</a>

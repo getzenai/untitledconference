@@ -5,6 +5,7 @@
 		"allow": [
 			"Bash(cat:*)",
 			"Bash(find:*)",
+			"Bash(gh pr view:*)",
 			"Bash(git diff:*)",
 			"Bash(grep:*)",
 			"Bash(ls:*)",
@@ -16,8 +17,8 @@
 			"Bash(npm run lint)",
 			"Bash(npm run psql:dev:*)",
 			"Bash(npm run psql:test:*)",
-			"Bash(npm run test)",
 			"Bash(npm run test:*)",
+			"Bash(npm run test)",
 			"Bash(npm test:*)",
 			"Bash(npx playwright test:*)",
 			"Bash(npx prettier:*)",
@@ -41,6 +42,8 @@
 			"mcp__playwright__browser_type",
 			"WebFetch(domain:ai-sdk.dev)",
 			"WebFetch(domain:raw.githubusercontent.com)",
+			"WebFetch(domain:svelte.dev)",
+			"WebFetch(domain:tiptap.dev)",
 			"WebFetch(domain:www.better-auth.com)",
 			"WebFetch(domain:www.shadcn-svelte.com)"
 		],

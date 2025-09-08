@@ -24,6 +24,10 @@
 					{
 						title: 'Drag & Drop',
 						url: '/examples/drag-drop'
+					},
+					{
+						title: 'Documents',
+						url: '/documents'
 					}
 				]
 			},

@@ -148,3 +148,48 @@ This project includes a complete dev container setup with:
 - Claude Code permissions are restricted to localhost database access only
 - documentation regarding the better auth organisation plugin can be read here: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/organization.mdx
 - Docs for the better auth admin plugin can be read here: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/admin.mdx
+
+## Tiptap Documentation
+
+- **Tiptap LLM Reference**: https://tiptap.dev/llms.txt
+
+## Svelte and SvelteKit Documentation
+
+For framework reference, use these official documentation resources:
+
+### Quick Reference (Recommended)
+
+- **Svelte (compact)**: https://svelte.dev/docs/svelte/llms-small.txt
+- **SvelteKit (compact)**: https://svelte.dev/docs/kit/llms-small.txt
+
+### Full Documentation (Large files, use when needed)
+
+- **Svelte (full)**: https://svelte.dev/docs/svelte/llms.txt (~5000 lines)
+- **SvelteKit (full)**: https://svelte.dev/docs/kit/llms.txt (~2000 lines)
+
+When you need specific Svelte/SvelteKit information:
+
+1. First check the compact versions for quick answers
+2. If more detail is needed, fetch specific sections from the full docs
+3. Use WebFetch with targeted prompts like: "Find information about form actions in SvelteKit"
+
+## Shadcn-svelte Select Component Usage
+
+```svelte
+<script>
+	import * as Select from '$lib/components/ui/select';
+	let value = '';
+	$: if (value) {
+		/* react to changes */
+	}
+</script>
+
+<Select.Root type="single" bind:value>
+	<Select.Trigger>{value || 'Choose'}</Select.Trigger>
+	<Select.Content>
+		<Select.Item value="opt1" label="Label">Display Text</Select.Item>
+	</Select.Content>
+</Select.Root>
+```
+
+Note: Uses `bind:value` with reactive statements, NOT `onValueChange` or `onSelectedChange`
