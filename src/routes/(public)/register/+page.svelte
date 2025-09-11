@@ -9,12 +9,13 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { authClient } from '$lib/auth-client';
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import type { PageData } from './$types';
+	import { goto } from '$app/navigation';
+	import { authClient } from '$lib/auth-client';
+	import type { PageData, ActionData } from './$types';
 
 	export let data: PageData;
+	export let form: ActionData;
 
 	let email = data.invitationEmail || '';
 	let password = '';
@@ -23,6 +24,8 @@
 	let isLoading = false;
 	let successMessage: string | null = null;
 	let invitationCode = data.invitationCode;
+	let systemToken = data.systemToken;
+	let invitationRole = data.invitationRole;
 	let isFirstUser = data.isFirstUser;
 
 	onMount(() => {
@@ -36,133 +39,41 @@
 	async function handleSubmit() {
 		isLoading = true;
 		error = null;
-		successMessage = null;
-
-		console.log('[Register Page] handleSubmit called. Email:', email);
 
 		try {
+			console.log('[Register Page] Attempting sign-up with:', { email });
+
+			// Sign up the user - Better Auth will automatically sign them in with autoSignIn: true
 			const { data: signUpData, error: signUpError } = await authClient.signUp.email({
 				email,
 				password,
-				name: '',
-				callbackURL: '/login?verified=true' // For email verification link
+				name: ''
 			});
-			console.log('[Register Page] signUpError:', signUpError);
-			console.log('[Register Page] signUpData:', signUpData);
 
 			if (signUpError) {
-				console.error('[Register Page] Sign-up error details:', signUpError);
-				error = signUpError.message || 'Registration failed. Please try again.';
-			} else if (signUpData) {
-				// If this is the first user, make them admin
-				if (isFirstUser && signUpData.user) {
-					console.log('[Register Page] First user registered, setting as admin');
-					try {
-						await authClient.admin.setRole({
-							userId: signUpData.user.id,
-							role: 'admin'
-						});
-						console.log('[Register Page] Successfully set first user as admin');
-					} catch (roleError) {
-						console.error('[Register Page] Failed to set admin role:', roleError);
-						// Don't fail registration, just log the error
-					}
-				}
-
-				// Handle invitation acceptance if we have an invitation code
-				if (invitationCode) {
-					try {
-						const { error: acceptError } = await authClient.organization.acceptInvitation({
-							invitationId: invitationCode
-						});
-
-						if (acceptError) {
-							console.error('[Register Page] Invitation acceptance error:', acceptError);
-							error = `Account created successfully, but failed to accept invitation: ${acceptError.message || 'Invalid or expired invitation'}. Please login and ask for a new invitation.`;
-							isLoading = false;
-							return; // Don't redirect on error
-						} else {
-							// Clear the invitation from session storage
-							sessionStorage.removeItem('pendingInvitation');
-						}
-					} catch (err) {
-						console.error('[Register Page] Error accepting invitation:', err);
-						error =
-							'Account created but failed to join organization. Please login and ask for a new invitation.';
-						isLoading = false;
-						return; // Don't redirect on error
-					}
-				} else if (organizationName) {
-					// Create organization if no invitation and org name provided
-					// Generate base slug from organization name
-					const baseSlug = organizationName
-						.toLowerCase()
-						.replace(/\s+/g, '-')
-						.replace(/[^a-z0-9-]/g, '');
-
-					let slug = baseSlug;
-					let attempts = 0;
-					const maxAttempts = 10;
-					let orgData = null;
-					let lastOrgError = null;
-
-					// Try to create organization with unique slug
-					while (attempts < maxAttempts) {
-						const { data, error: orgError } = await authClient.organization.create({
-							name: organizationName,
-							slug: slug
-						});
-
-						if (data) {
-							orgData = data;
-							break;
-						}
-
-						if (orgError) {
-							// Check if error is due to duplicate slug
-							if (
-								orgError.message?.toLowerCase().includes('already exists') ||
-								orgError.message?.toLowerCase().includes('duplicate') ||
-								orgError.message?.toLowerCase().includes('unique')
-							) {
-								// Try with a different slug
-								attempts++;
-								// Add random suffix for uniqueness
-								const randomSuffix = Math.random().toString(36).substring(2, 8);
-								slug = `${baseSlug}-${randomSuffix}`;
-								lastOrgError = null; // Clear error for retry
-							} else {
-								// Other error, stop trying
-								lastOrgError = orgError;
-								break;
-							}
-						}
-					}
-
-					if (orgData) {
-						// Set the new organization as active
-						await authClient.organization.setActive({
-							organizationId: orgData.id
-						});
-					} else if (lastOrgError) {
-						console.error('[Register Page] Organization creation error:', lastOrgError);
-						error = `Account created but organization creation failed: ${lastOrgError.message}`;
-					} else {
-						error =
-							'Account created but unable to create organization. Please try a different name.';
-					}
-				}
-
-				await goto('/home', { replaceState: true });
-			} else {
-				error = 'An unexpected error occurred during registration. No data and no error received.';
+				console.error('[Register Page] Sign-up error:', signUpError);
+				error = signUpError.message || 'Registration failed';
+				return;
 			}
+
+			if (!signUpData) {
+				error = 'Registration failed - no user data returned';
+				return;
+			}
+
+			console.log('[Register Page] Sign-up successful, user created:', signUpData);
+
+			// Better Auth's autoSignIn should have already signed in the user
+			// The server-side database hook will handle admin role assignment for first user
+			// Just redirect to home
+			console.log('[Register Page] Redirecting to home after successful registration');
+			await goto('/home', { replaceState: true });
 		} catch (e: unknown) {
-			console.error('[Register Page] Unexpected exception:', e);
+			console.error('[Register Page] Unexpected error:', e);
 			if (e instanceof Error) {
 				error = e.message;
 			} else {
-				error = 'An unexpected error occurred.';
+				error = 'An unexpected error occurred';
 			}
 		} finally {
 			isLoading = false;
@@ -203,7 +114,9 @@
 				<CardHeader>
 					<CardTitle>Create Account</CardTitle>
 					<CardDescription>
-						{#if isFirstUser}
+						{#if systemToken && invitationRole}
+							You've been invited to join as a {invitationRole}
+						{:else if isFirstUser}
 							You'll be the first user and will automatically become the system administrator
 						{:else}
 							Enter your details to create your account
@@ -241,7 +154,14 @@
 								disabled={isLoading}
 							/>
 						</div>
-						{#if !invitationCode}
+						{#if systemToken}
+							<input type="hidden" name="systemToken" value={systemToken} />
+							<input type="hidden" name="invitationRole" value={invitationRole} />
+						{/if}
+						{#if invitationCode}
+							<input type="hidden" name="invitationCode" value={invitationCode} />
+						{/if}
+						{#if !invitationCode && !systemToken}
 							<div class="space-y-2">
 								<Label for="organizationName">Organization Name (Optional)</Label>
 								<Input
@@ -256,10 +176,17 @@
 									You'll be the administrator of this organization
 								</p>
 							</div>
-						{:else}
+						{:else if invitationCode}
 							<div class="bg-muted rounded-lg p-3">
 								<p class="text-sm">You'll join an existing organization after registration.</p>
 							</div>
+						{:else if systemToken}
+							<div class="bg-muted rounded-lg p-3">
+								<p class="text-sm">You've been invited to join as a {invitationRole}.</p>
+							</div>
+						{/if}
+						{#if form && typeof form === 'object' && 'error' in form && form.error}
+							<p class="text-sm text-red-500">{form.error}</p>
 						{/if}
 						{#if error}
 							<p class="text-sm text-red-500">{error}</p>

@@ -193,3 +193,47 @@ When you need specific Svelte/SvelteKit information:
 ```
 
 Note: Uses `bind:value` with reactive statements, NOT `onValueChange` or `onSelectedChange`
+
+## SvelteKit Server Actions Best Practices
+
+### Redirect Handling
+
+- **ALWAYS** use `throw redirect()` in server actions (form actions, load functions, API routes)
+- **ALWAYS** place `throw redirect()` calls **OUTSIDE** of try-catch blocks
+- The `redirect()` function throws a special redirect response that SvelteKit handles
+- Catching redirects will prevent SvelteKit from handling them properly
+- Use status code 303 for form actions (changes method to GET after submission)
+
+#### Correct Pattern:
+
+```typescript
+import { redirect, fail } from '@sveltejs/kit';
+
+export const actions = {
+	default: async ({ request }) => {
+		try {
+			// ... do some work
+		} catch (error) {
+			return fail(500, { error: 'Something went wrong' });
+		}
+
+		// Throw redirect OUTSIDE try-catch
+		throw redirect(303, '/success');
+	}
+};
+```
+
+#### Wrong Pattern:
+
+```typescript
+export const actions = {
+	default: async ({ request }) => {
+		try {
+			// ... do some work
+			throw redirect(303, '/success'); // ❌ Don't do this!
+		} catch (error) {
+			// This will catch the redirect and prevent it from working!
+		}
+	}
+};
+```

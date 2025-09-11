@@ -102,3 +102,23 @@ export const invitation = pgTable('invitation', {
 		.notNull()
 		.references(() => user.id, { onDelete: 'cascade' })
 });
+
+export const systemInvitation = pgTable('system_invitation', {
+	id: text('id').primaryKey(),
+	email: text('email').notNull(),
+	invitedBy: text('invited_by')
+		.notNull()
+		.references(() => user.id, { onDelete: 'cascade' }),
+	role: text('role')
+		.$defaultFn(() => 'user')
+		.notNull(),
+	resetLink: text('reset_link'),
+	lastGeneratedAt: timestamp('last_generated_at'),
+	acceptedAt: timestamp('accepted_at'),
+	createdAt: timestamp('created_at')
+		.$defaultFn(() => /* @__PURE__ */ new Date())
+		.notNull(),
+	updatedAt: timestamp('updated_at')
+		.$defaultFn(() => /* @__PURE__ */ new Date())
+		.notNull()
+});
