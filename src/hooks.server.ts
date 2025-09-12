@@ -1,6 +1,6 @@
 import { auth } from '$lib/auth';
 import { i18n } from '$lib/i18n';
-import { error, type Handle } from '@sveltejs/kit'; // Removed ResolveOptions
+import { type Handle } from '@sveltejs/kit'; // Removed ResolveOptions
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
@@ -48,8 +48,7 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 					} else {
 						event.locals.organizationRole = null;
 					}
-				} catch (e) {
-					console.error('[PopulateLocalsUserHandler] Error fetching organization role:', e);
+				} catch (_e) {
 					event.locals.organizationRole = null;
 				}
 			} else {
@@ -57,13 +56,8 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 				event.locals.organizationId = null;
 				event.locals.organizationRole = null;
 			}
-
-			console.log('[PopulateLocalsUserHandler] Set event.locals.user:', event.locals.user?.email);
-		} else {
-			console.log('[PopulateLocalsUserHandler] No session or user found.');
 		}
-	} catch (e) {
-		console.error('[PopulateLocalsUserHandler] Error calling auth.api.getSession:', e);
+	} catch (_e) {
 		// Do not throw an error here, just proceed without setting locals.user
 		// Other parts of the system (like protected layouts) will handle unauthorized access.
 	}
@@ -79,11 +73,9 @@ const API_V1_PREFIX = '/api/v1';
 // and populates event.locals.user if successful.
 
 const isTestEnvironment = (): boolean => {
-	return (
-		process.env.NODE_ENV === 'test' ||
-		process.env.PLAYWRIGHT_TEST === 'true' ||
-		!!process.env.npm_lifecycle_event?.includes('test')
-	);
+	// SECURITY: Only allow test endpoints when explicitly enabled
+	// This prevents accidental exposure of test endpoints in production
+	return process.env.ENABLE_TEST_ENDPOINTS === 'true';
 };
 
 const apiProtectionHandler: Handle = async ({ event, resolve }) => {
@@ -94,7 +86,13 @@ const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 			return resolve(event);
 		} else if (pathname.startsWith(API_V1_TEST_PREFIX)) {
 			if (!isTestEnvironment()) {
-				return error(403, 'Test endpoints only available in test environment');
+				return new Response(
+					JSON.stringify({ message: 'Test endpoints only available in test environment' }),
+					{
+						status: 403,
+						headers: { 'Content-Type': 'application/json' }
+					}
+				);
 			} else {
 				return resolve(event);
 			}
@@ -103,8 +101,7 @@ const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 			try {
 				const requestHeaders = new Headers(event.request.headers);
 				session = await auth.api.getSession({ headers: requestHeaders });
-			} catch (e) {
-				console.error('[API Protection] Error calling auth.api.getSession:', e);
+			} catch (_e) {
 				session = null;
 			}
 

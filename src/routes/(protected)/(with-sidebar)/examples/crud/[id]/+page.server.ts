@@ -3,26 +3,20 @@ import { member } from '$lib/server/db/auth-schema';
 import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema';
 import { fail, redirect, error as svelteKitError, type ActionFailure } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
+import { exampleUpdateFormSchema } from '../crud.validation';
 import type { Actions, PageServerLoad } from './$types';
-
-const exampleUpdateFormSchema = z.object({
-	id: z.string().min(1, 'ID is required.'),
-	name: z.string().min(1, 'Name is required.'),
-	description: z.string().min(1, 'Description is required.')
-});
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const user = locals.user;
 
 	const exampleIdStr = params.id;
 	if (!exampleIdStr) {
-		throw svelteKitError(400, 'Example ID is required');
+		throw svelteKitError(400, { message: 'Example ID is required' });
 	}
 
 	const parsedExampleId = parseInt(exampleIdStr, 10);
 	if (isNaN(parsedExampleId)) {
-		throw svelteKitError(400, 'Invalid Example ID format.');
+		throw svelteKitError(400, { message: 'Invalid Example ID format.' });
 	}
 
 	try {
@@ -47,7 +41,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		const [exampleObject] = await db.select().from(exampleObjectsTable).where(whereConditions);
 
 		if (!exampleObject) {
-			throw svelteKitError(404, 'Example object not found or access denied');
+			throw svelteKitError(404, { message: 'Example object not found or access denied' });
 		}
 		return {
 			exampleObject,
@@ -63,13 +57,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		) {
 			throw err;
 		}
-		throw svelteKitError(500, 'Failed to load example object.');
+		throw svelteKitError(500, { message: 'Failed to load example object.' });
 	}
 };
 
 // Define a simpler return type for the validation helper
 type ValidatedInput = {
-	validData: { id: string; name: string; description: string };
+	validData: { id: string; name: string; description?: string };
 	parsedExampleId: number;
 	rawFormData: { id: string; name: string; description: string };
 };
@@ -195,12 +189,12 @@ export const actions: Actions = {
 
 		const exampleIdStr = params.id;
 		if (!exampleIdStr) {
-			throw svelteKitError(400, 'Example ID is required for deletion');
+			throw svelteKitError(400, { message: 'Example ID is required for deletion' });
 		}
 
 		const parsedExampleId = parseInt(exampleIdStr, 10);
 		if (isNaN(parsedExampleId)) {
-			throw svelteKitError(400, 'Invalid Example ID format for deletion.');
+			throw svelteKitError(400, { message: 'Invalid Example ID format for deletion.' });
 		}
 
 		let deletedElementInfo;
@@ -230,17 +224,15 @@ export const actions: Actions = {
 			deletedElementInfo = result;
 		} catch (dbError) {
 			console.error('Database error deleting example object:', dbError);
-			throw svelteKitError(
-				500,
-				'An unexpected error occurred during the database deletion process.'
-			);
+			throw svelteKitError(500, {
+				message: 'An unexpected error occurred during the database deletion process.'
+			});
 		}
 
 		if (!deletedElementInfo) {
-			throw svelteKitError(
-				404,
-				'Example object not found or access denied for deletion. No record was deleted.'
-			);
+			throw svelteKitError(404, {
+				message: 'Example object not found or access denied for deletion. No record was deleted.'
+			});
 		}
 		throw redirect(303, '/examples/crud');
 	}

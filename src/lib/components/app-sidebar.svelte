@@ -28,6 +28,10 @@
 					{
 						title: 'Documents',
 						url: '/documents'
+					},
+					{
+						title: 'UI Components',
+						url: '/examples/ui-components'
 					}
 				]
 			},

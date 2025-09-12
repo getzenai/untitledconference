@@ -1,239 +1,179 @@
-# Claude Code Instructions for SvelteKit Vibe Starter
+# Claude Code Instructions
 
 ## Project Overview
 
-This is a SvelteKit starter project with PostgreSQL database, Drizzle ORM, Better Auth, and comprehensive development tooling. The project includes both development and test databases running in Docker containers.
+SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive tooling. Uses Docker containers for dev/test databases.
 
-## Database Access
+## Routing: RESTful Pattern
 
-### PostgreSQL CLI Tooling Available
+- `/resource` - List/redirect
+- `/resource/new` - Create form
+- `/resource/[id]` - View/edit item
+  Never show different content at same URL based on state.
 
-The development container includes PostgreSQL CLI tools (`psql`) for database interaction. Use the safe npm scripts provided:
-
-#### Development Database
+## Database Commands
 
 ```bash
-# Execute queries against the development database
+# Development database queries (safe for Claude Code)
 npm run psql:dev "SELECT * FROM users LIMIT 5;"
-npm run psql:dev "SELECT description FROM reference_project_image WHERE id = 12 LIMIT 1;"
-
-# Or use the full command format for Claude Code
-Bash(npm run psql:dev "SELECT * FROM users LIMIT 5;" | head -30)
-```
-
-#### Test Database
-
-```bash
-# Execute queries against the test database
 npm run psql:test "SELECT * FROM users LIMIT 5;"
 
-# Or use the full command format for Claude Code
-Bash(npm run psql:test "SELECT * FROM users LIMIT 5;" | head -30)
+# Database operations
+npm run db:start     # Start containers
+npm run db:push      # Push schema changes
+npm run db:studio    # Open Drizzle Studio
+npm run db:migrate   # Run migrations
 ```
 
-### Database Connection Details
+**Connections:**
 
-**Development Database:**
+- Dev: `postgres://root:mysecretpassword@localhost:5432/local`
+- Test: `postgres://root:mysecretpassword@localhost:5433/test`
 
-- Internal (container): `postgres://root:mysecretpassword@project-db:5432/local`
-- External (host): `postgres://root:mysecretpassword@localhost:5432/local`
-
-**Test Database:**
-
-- Internal (container): `postgres://root:mysecretpassword@test-db:5432/test`
-- External (host): `postgres://root:mysecretpassword@localhost:5433/test`
-
-### Safety Features
-
-The `npm run psql:dev` and `npm run psql:test` commands include safety checks that only allow connections to:
-
-- `localhost`
-- `127.0.0.1`
-- `project-db` (dev container service)
-- `test-db` (dev container service)
-
-This prevents accidental connections to production or other remote databases.
-
-## Development Commands
-
-### Database Operations
+## Testing Commands
 
 ```bash
-npm run db:start          # Start PostgreSQL containers
-npm run db:push           # Push schema changes to dev database
-npm run db:studio         # Open Drizzle Studio
-npm run db:migrate        # Run pending migrations
-
-# Safe database querying (Claude Code approved)
-npm run psql:dev "QUERY"  # Query development database
-npm run psql:test "QUERY" # Query test database
-```
-
-### Testing & Quality
-
-```bash
-npm run test              # Run all tests (unit + e2e)
-npm run test:e2e          # Run E2E tests only
-npm run test:e2e -- --grep "testname"  # Run specific test by name
+npm run test              # All tests
+npm run test:e2e          # E2E tests only
+npm run test:e2e -- --grep "name"  # Specific test
 npm run lint              # Check code quality
 npm run format            # Format code
 ```
 
-#### Test Debugging Guidelines
+### E2E Test Debugging
 
-When tests are failing:
+1. Run single failing test: `npm run test:e2e -- --grep "exact name"`
+2. Check `./test-report-for-coding-agents/all-failures.md` for summaries
+3. Create todo per failing test, mark complete after fix or 10 attempts
+4. Add logging to understand actual vs expected behavior
 
-1. **Debug with additional code**: Add console.log statements, debug logs, or specific experiments in the test execution to understand what's happening
-2. **Run specific tests**: Use `npm run test:e2e -- --grep "testname"` to iterate on specific failing tests rather than running the entire suite
-3. **Task tracking for failing tests**: When fixing failing tests, create a separate todo task for each failing test. Mark the task as completed only when:
-   - The test is passing, OR
-   - You've attempted at least 10 debugging iterations and cannot find a solution
-4. **Systematic debugging approach**:
-   - First, understand what the test is trying to achieve
-   - Add logging to see actual vs expected behavior
-   - Check if the issue is with the test setup, the application code, or test assertions
-   - Review any recent changes that might have affected the test
+### E2E Timeouts (playwright.config.ts)
 
-### Development
+- Actions: 1000ms (click, fill, type)
+- Assertions: 1000ms (toBeVisible, etc.)
+- Navigation: 5000ms
+- Overall test: 30000ms
+
+**Allowed exceptions only:**
+
+- `waitForLoadState('networkidle', { timeout: 5000 })`
+- `waitForURL(..., { timeout: 5000 })`
+- `waitForResponse(..., { timeout: 5000 })`
+
+Never add timeouts to UI operations. Playwright auto-waits.
+
+### Page Object Model
+
+Tests use POM pattern. See `/e2e/CLAUDE.md` for details.
+
+- Pages in `/e2e/pages/`
+- Actions in `/e2e/actions/`
+- Tests in `/e2e/critical-paths/`
+
+## Development
 
 ```bash
-npm run dev               # Start development server (port 5173)
-npm run build             # Build for production
+npm run dev    # Start dev server (port 5173)
+npm run build  # Build for production
 ```
-
-## Database Schema
-
-The project uses Drizzle ORM. Schema files are located in:
-
-- `src/lib/server/db/` - Main database schemas
-- `drizzle/` - Migration files
 
 ## Environment Variables
 
-The project automatically configures database URLs in development:
-
-- `DATABASE_URL` - Points to development database
-- `TEST_DATABASE_URL` - Points to test database
-
-## Claude Code Permissions
-
-Claude Code can safely use these database commands:
-
-- `Bash(npm run psql:dev "SELECT ..." | head -30)`
-- `Bash(npm run psql:test "SELECT ..." | head -30)`
-- All other standard npm scripts for development
+- `DATABASE_URL` - Dev database (auto-configured)
+- `TEST_DATABASE_URL` - Test database (auto-configured)
 
 ## Port Forwarding
 
-- **5173**: SvelteKit dev server
-- **5432**: PostgreSQL development database
-- **5433**: PostgreSQL test database
-- **5555**: Drizzle Studio (when running)
+- 5173: SvelteKit dev server
+- 5432: PostgreSQL dev database
+- 5433: PostgreSQL test database
+- 5555: Drizzle Studio
 
-## Development Container
+## Component Guidelines
 
-This project includes a complete dev container setup with:
-
-- Node.js 20
-- PostgreSQL client tools
-- All project dependencies pre-installed
-- Automatic database setup
-- Claude Code CLI pre-installed
-
-## Security Notes
-
-- Development databases use default credentials for convenience
-- Production deployments should use secure connection strings
-- The psql npm scripts include safety checks to prevent connections to remote databases
-- Claude Code permissions are restricted to localhost database access only
-- documentation regarding the better auth organisation plugin can be read here: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/organization.mdx
-- Docs for the better auth admin plugin can be read here: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/admin.mdx
-
-## Tiptap Documentation
-
-- **Tiptap LLM Reference**: https://tiptap.dev/llms.txt
-
-## Svelte and SvelteKit Documentation
-
-For framework reference, use these official documentation resources:
-
-### Quick Reference (Recommended)
-
-- **Svelte (compact)**: https://svelte.dev/docs/svelte/llms-small.txt
-- **SvelteKit (compact)**: https://svelte.dev/docs/kit/llms-small.txt
-
-### Full Documentation (Large files, use when needed)
-
-- **Svelte (full)**: https://svelte.dev/docs/svelte/llms.txt (~5000 lines)
-- **SvelteKit (full)**: https://svelte.dev/docs/kit/llms.txt (~2000 lines)
-
-When you need specific Svelte/SvelteKit information:
-
-1. First check the compact versions for quick answers
-2. If more detail is needed, fetch specific sections from the full docs
-3. Use WebFetch with targeted prompts like: "Find information about form actions in SvelteKit"
-
-## Shadcn-svelte Select Component Usage
+### Select Component (bits-ui)
 
 ```svelte
-<script>
+<script lang="ts">
 	import * as Select from '$lib/components/ui/select';
-	let value = '';
-	$: if (value) {
-		/* react to changes */
-	}
+	let value = $state<string>(''); // String for single select
+	const options = [
+		{ value: 'opt1', label: 'Option 1' },
+		{ value: 'opt2', label: 'Option 2' }
+	];
+	let label = $derived(
+		value ? options.find((o) => o.value === value)?.label || 'Select' : 'Select'
+	);
 </script>
 
 <Select.Root type="single" bind:value>
-	<Select.Trigger>{value || 'Choose'}</Select.Trigger>
+	<Select.Trigger>{label}</Select.Trigger>
 	<Select.Content>
-		<Select.Item value="opt1" label="Label">Display Text</Select.Item>
+		{#each options as opt}
+			<Select.Item value={opt.value} label={opt.label} />
+		{/each}
 	</Select.Content>
 </Select.Root>
 ```
 
-Note: Uses `bind:value` with reactive statements, NOT `onValueChange` or `onSelectedChange`
+## Tiptap Editor
 
-## SvelteKit Server Actions Best Practices
+- **Tiptap LLM Reference**: https://tiptap.dev/llms.txt
 
-### Redirect Handling
+## Better Auth Docs
 
-- **ALWAYS** use `throw redirect()` in server actions (form actions, load functions, API routes)
-- **ALWAYS** place `throw redirect()` calls **OUTSIDE** of try-catch blocks
-- The `redirect()` function throws a special redirect response that SvelteKit handles
-- Catching redirects will prevent SvelteKit from handling them properly
-- Use status code 303 for form actions (changes method to GET after submission)
+- Organization: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/organization.mdx
+- Admin: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/admin.mdx
 
-#### Correct Pattern:
+## Svelte/SvelteKit Docs (Compact)
 
-```typescript
-import { redirect, fail } from '@sveltejs/kit';
+- Svelte: https://svelte.dev/docs/svelte/llms-small.txt
+- SvelteKit: https://svelte.dev/docs/kit/llms-small.txt
 
-export const actions = {
-	default: async ({ request }) => {
-		try {
-			// ... do some work
-		} catch (error) {
-			return fail(500, { error: 'Something went wrong' });
-		}
+## Important Guidelines
 
-		// Throw redirect OUTSIDE try-catch
-		throw redirect(303, '/success');
-	}
-};
-```
+### Code Style
 
-#### Wrong Pattern:
+- Follow existing patterns and conventions
+- Check neighboring files for library usage
+- Never add comments unless asked
+- Use existing components as reference
 
-```typescript
-export const actions = {
-	default: async ({ request }) => {
-		try {
-			// ... do some work
-			throw redirect(303, '/success'); // ❌ Don't do this!
-		} catch (error) {
-			// This will catch the redirect and prevent it from working!
-		}
-	}
-};
-```
+### Security
+
+- Never expose or log secrets/keys
+- Never commit secrets to repository
+- Test endpoints only work in test environment
+
+### Testing Philosophy
+
+- Fix root cause, not symptoms
+- Run specific tests when debugging
+- Check test reports after failures
+- Task per failing test until fixed
+
+## Decision Making
+
+Act as expert software engineer. Make decisions based on:
+
+- Codebase maintainability
+- Ability to add features fast
+- Ship fast and reliable
+  Argue for these decisions.
+
+## Playwright Coding Agent Reporter
+
+Uses `@zenai/playwright-coding-agent-reporter` for AI-optimized failure reporting.
+
+After test failures:
+
+1. Check `./test-report-for-coding-agents/all-failures.md`
+2. Individual reports in subdirectories
+3. Use 3-minute timeout for full suite: `Bash(npm run test:e2e, timeout: 180000)`
+
+## Important Reminders
+
+- Do only what's asked, nothing more
+- Prefer editing over creating files
+- Never create documentation unless requested
+- Always check CLAUDE.md in subdirectories for context-specific instructions

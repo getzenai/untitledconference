@@ -33,3 +33,7 @@ src/lib/paraglide
 # Playwright
 e2e/.auth
 playwright-report
+test-report-for-coding-agents
+
+# Feedback files
+playwright-coding-reporter-feedback-update.md

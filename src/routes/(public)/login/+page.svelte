@@ -17,6 +17,11 @@
 	let error: string | null = null;
 	let isLoading = false;
 	async function handleSubmit() {
+		// Validate fields
+		if (!email || !password) {
+			error = 'Email and password are required';
+			return;
+		}
 		isLoading = true;
 		error = null;
 		try {
@@ -34,6 +39,8 @@
 			if (signInError) {
 				console.error('[Login Page] Sign-in error details:', signInError);
 				error = signInError.message || 'Invalid credentials or server error.';
+				// Clear password on error
+				password = '';
 			} else if (sessionData) {
 				console.log('[Login Page] Login successful, attempting redirect...');
 				const returnTo = $page.url.searchParams.get('returnTo') || '/home';
@@ -50,6 +57,8 @@
 			} else {
 				error = 'An unexpected error occurred.';
 			}
+			// Clear password on any error
+			password = '';
 		} finally {
 			isLoading = false;
 		}
@@ -100,7 +109,6 @@
 								type="email"
 								placeholder="Enter your email"
 								bind:value={email}
-								required
 								disabled={isLoading}
 							/>
 						</div>
@@ -112,12 +120,11 @@
 								type="password"
 								placeholder="Enter your password"
 								bind:value={password}
-								required
 								disabled={isLoading}
 							/>
 						</div>
 						{#if error}
-							<p class="text-sm text-red-500">{error}</p>
+							<div role="alert" class="error-message text-sm text-red-500">{error}</div>
 						{/if}
 						<button
 							type="submit"

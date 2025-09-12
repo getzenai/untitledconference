@@ -34,6 +34,8 @@ setup('authenticate', async ({ page }) => {
 
 		// Establish browser session via UI login (don't create user again)
 		await page.goto('/login');
+		// Wait for page to be fully loaded with JavaScript
+		await page.waitForLoadState('networkidle');
 		await page.getByLabel('Email').fill(testUser.email);
 		await page.getByLabel('Password').fill(PRE_REGISTERED_TEST_PASSWORD);
 		await page.getByRole('button', { name: 'Login' }).click();

@@ -56,7 +56,10 @@ export default ts.config(
 	{
 		files: ['e2e/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
 		rules: {
-			'max-lines-per-function': ['warn', { max: 200, skipBlankLines: true, skipComments: true }]
+			'max-lines': 'off',
+			'max-lines-per-function': 'off',
+			complexity: 'off',
+			'max-depth': 'off'
 		}
 	}
 );

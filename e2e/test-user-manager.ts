@@ -232,6 +232,32 @@ export class TestUserManager {
 	}
 
 	/**
+	 * Delete a specific user by email
+	 */
+	async deleteUser(email: string): Promise<void> {
+		try {
+			// First delete from organizations if user is an owner
+			const user = await db
+				.select({ id: schema.user.id })
+				.from(schema.user)
+				.where(eq(schema.user.email, email))
+				.limit(1);
+
+			if (user.length > 0) {
+				// Delete user - this will cascade to related records
+				await db.delete(schema.user).where(eq(schema.user.email, email));
+
+				// Remove from tracked users
+				this.createdUsers.delete(email);
+
+				console.log(`[TestUserManager] Deleted user: ${email}`);
+			}
+		} catch (error) {
+			console.error(`[TestUserManager] Error deleting user ${email}: ${error}`);
+		}
+	}
+
+	/**
 	 * Reset the manager state
 	 */
 	reset(): void {

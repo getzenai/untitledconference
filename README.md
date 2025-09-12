@@ -1,122 +1,97 @@
-# Sveltekit Vibe Starter
+# SvelteKit Vibe Starter
 
-## Developing
+A production-ready SvelteKit starter template with PostgreSQL, authentication, and comprehensive testing.
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-### Database Setup
-
-To start the PostgreSQL database using Docker Compose:
+## Quick Start
 
 ```bash
-docker-compose up -d
-```
+# Install dependencies
+npm install
 
-After the database is running, initialize it with:
+# Start database
+npm run db:start
 
-```bash
+# Initialize database schema
 npm run db:push
+
+# Start development server
+npm run dev
 ```
 
-You can also use the following database-related commands:
+Visit http://localhost:5173
 
-- `npm run db:start` - Start the database container
-- `npm run db:push` - Push schema changes to the database
-- `npm run db:migrate` - Create and apply migrations
-- `npm run db:studio` - Open Drizzle Studio to manage your database
+## Features
 
-### drizzle
+- **SvelteKit** - Full-stack framework with SSR
+- **PostgreSQL** - Database with Drizzle ORM
+- **Better Auth** - Authentication with organizations
+- **Shadcn/ui** - Pre-configured UI components
+- **Testing** - Unit, integration, and E2E tests
+- **Docker** - Development containers
+- **TypeScript** - Full type safety
 
-- You will need to set DATABASE_URL in your production environment
-- Run npm run db:start to start the docker container
-- Run npm run db:push to update your database schema
+## Database
 
-### GitHub MCP Server
-
-To enable GitHub integration for Claude Code:
-
-1. Generate a GitHub Personal Access Token at https://github.com/settings/personal-access-tokens
-2. Configure the token with the following permissions:
-   - Read access to metadata
-   - Read and Write access to actions, code, commit statuses, issues, pull requests, and workflows
-3. Copy the example settings file:
-   ```bash
-   cp .claude/settings.local.json.example .claude/settings.local.json
-   ```
-4. Add your token to `.claude/settings.local.json` in the env section
-
-### better auth
-
-Authentication is implemented using [Better Auth](https://www.better-auth.com). See the documentation for setup and configuration details.
-
-### paraglide
-
-- Edit your messages in messages/en.json
-- Consider installing the Sherlock IDE Extension
-- Visit /demo/paraglide route to view the demo
-
-### shadcn components
-
-The following shadcn components are installed and available for use:
-
-- accordion - `src/lib/components/ui/accordion`
-- alert - `src/lib/components/ui/alert`
-- alert-dialog - `src/lib/components/ui/alert-dialog`
-- avatar - `src/lib/components/ui/avatar`
-- badge - `src/lib/components/ui/badge`
-- breadcrumb - `src/lib/components/ui/breadcrumb`
-- button - `src/lib/components/ui/button`
-- card - `src/lib/components/ui/card`
-- checkbox - `src/lib/components/ui/checkbox`
-- dialog - `src/lib/components/ui/dialog`
-- drawer - `src/lib/components/ui/drawer`
-- dropdown-menu - `src/lib/components/ui/dropdown-menu`
-- form - `src/lib/components/ui/form`
-- input - `src/lib/components/ui/input`
-- label - `src/lib/components/ui/label`
-- menubar - `src/lib/components/ui/menubar`
-- pagination - `src/lib/components/ui/pagination`
-- progress - `src/lib/components/ui/progress`
-- radio-group - `src/lib/components/ui/radio-group`
-- resizable - `src/lib/components/ui/resizable`
-- scroll-area - `src/lib/components/ui/scroll-area`
-- select - `src/lib/components/ui/select`
-- separator - `src/lib/components/ui/separator`
-- sheet - `src/lib/components/ui/sheet`
-- skeleton - `src/lib/components/ui/skeleton`
-- slider - `src/lib/components/ui/slider`
-- sonner - `src/lib/components/ui/sonner`
-- switch - `src/lib/components/ui/switch`
-- table - `src/lib/components/ui/table`
-- tabs - `src/lib/components/ui/tabs`
-- textarea - `src/lib/components/ui/textarea`
-- tooltip - `src/lib/components/ui/tooltip`
-
-For more information on how to use these components, refer to the [shadcn documentation](https://ui.shadcn.com/).
-
-## documentation
-
-Documentation is implemented using [VitePress](https://vitepress.dev) in the `docs` folder. To start the documentation server:
+PostgreSQL runs in Docker containers for development and testing:
 
 ```bash
-npm run docs:dev
+npm run db:start    # Start containers
+npm run db:push     # Push schema changes
+npm run db:migrate  # Run migrations
+npm run db:studio   # Open Drizzle Studio
+```
+
+**Note:** Set DATABASE_URL in production environment.
+
+## Testing
+
+Comprehensive test suite with Page Object Model:
+
+```bash
+npm run test           # Run all tests
+npm run test:e2e       # E2E tests only
+npm run lint           # Code quality check
+npm run format         # Format code
+```
+
+For E2E test development, see `/e2e/CLAUDE.md`.
+
+## Authentication
+
+Uses [Better Auth](https://www.better-auth.com) with organization support. Features include:
+
+- User registration and login
+- Organization management
+- Role-based access control
+- Admin dashboard
+
+## UI Components
+
+Pre-installed [shadcn/ui](https://ui.shadcn.com) components in `src/lib/components/ui/`. Includes buttons, forms, dialogs, tables, and more.
+
+## Internationalization
+
+Powered by Paraglide. Edit translations in `messages/en.json`.
+
+## Documentation
+
+VitePress documentation site:
+
+```bash
+npm run docs:dev   # Start docs server
 ```
 
 ## Building
 
-To create a production version of your app:
-
 ```bash
-npm run build
+npm run build    # Production build
+npm run preview  # Preview production build
 ```
 
-You can preview the production build with `npm run preview`.
+## AI Agent Instructions
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+For Claude Code and other AI agents, see `/CLAUDE.md` for detailed codebase instructions and conventions.
+
+## Deployment
+
+Configure an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.

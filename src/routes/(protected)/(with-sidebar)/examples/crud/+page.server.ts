@@ -3,13 +3,8 @@ import { member } from '$lib/server/db/auth-schema';
 import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema';
 import { fail, error as svelteKitError } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
-
-const exampleFormSchema = z.object({
-	name: z.string().min(1, 'Name is required.'),
-	description: z.string().optional()
-});
+import { exampleFormSchema } from './crud.validation';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
@@ -53,7 +48,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		) {
 			throw err;
 		}
-		throw svelteKitError(500, 'Failed to load example objects.');
+		throw svelteKitError(500, { message: 'Failed to load example objects.' });
 	}
 };
 

@@ -17,16 +17,12 @@
 	export let data: PageData;
 	export let form: ActionData;
 
-	let email = data.invitationEmail || '';
+	let email = '';
 	let password = '';
-	let organizationName = data.invitationOrgName || '';
 	let error: string | null = null;
 	let isLoading = false;
 	let successMessage: string | null = null;
 	let invitationCode = data.invitationCode;
-	let systemToken = data.systemToken;
-	let invitationRole = data.invitationRole;
-	let isFirstUser = data.isFirstUser;
 
 	onMount(() => {
 		// If we have an invitation code from Better Auth, store it
@@ -37,6 +33,18 @@
 	});
 
 	async function handleSubmit() {
+		// Validate required fields
+		if (!email || !password) {
+			error = 'Email and password are required';
+			return;
+		}
+
+		// Validate password length
+		if (password.length < 8) {
+			error = 'Password must be at least 8 characters';
+			return;
+		}
+
 		isLoading = true;
 		error = null;
 
@@ -51,23 +59,45 @@
 			});
 
 			if (signUpError) {
-				console.error('[Register Page] Sign-up error:', signUpError);
-				error = signUpError.message || 'Registration failed';
-				return;
+				console.error('[Register Page] Sign-up error details:', signUpError);
+				// Better error message for duplicate email
+				if (signUpError.message?.includes('already') || signUpError.message?.includes('exists')) {
+					error = 'User already exists. Use another email.';
+				} else {
+					error = signUpError.message || 'Registration failed. Please try again.';
+				}
+				// Clear password field on error
+				password = '';
+			} else if (signUpData) {
+				// Handle invitation acceptance if we have an invitation code
+				if (invitationCode) {
+					try {
+						const { error: acceptError } = await authClient.organization.acceptInvitation({
+							invitationId: invitationCode
+						});
+
+						if (acceptError) {
+							console.error('[Register Page] Invitation acceptance error:', acceptError);
+							error = `Account created successfully, but failed to accept invitation: ${acceptError.message || 'Invalid or expired invitation'}. Please login and ask for a new invitation.`;
+							isLoading = false;
+							return; // Don't redirect on error
+						} else {
+							// Clear the invitation from session storage
+							sessionStorage.removeItem('pendingInvitation');
+						}
+					} catch (err) {
+						console.error('[Register Page] Error accepting invitation:', err);
+						error =
+							'Account created but failed to join organization. Please login and ask for a new invitation.';
+						isLoading = false;
+						return; // Don't redirect on error
+					}
+				}
+
+				await goto('/home', { replaceState: true });
+			} else {
+				error = 'An unexpected error occurred during registration. No data and no error received.';
 			}
-
-			if (!signUpData) {
-				error = 'Registration failed - no user data returned';
-				return;
-			}
-
-			console.log('[Register Page] Sign-up successful, user created:', signUpData);
-
-			// Better Auth's autoSignIn should have already signed in the user
-			// The server-side database hook will handle admin role assignment for first user
-			// Just redirect to home
-			console.log('[Register Page] Redirecting to home after successful registration');
-			await goto('/home', { replaceState: true });
 		} catch (e: unknown) {
 			console.error('[Register Page] Unexpected error:', e);
 			if (e instanceof Error) {
@@ -113,15 +143,7 @@
 			<Card>
 				<CardHeader>
 					<CardTitle>Create Account</CardTitle>
-					<CardDescription>
-						{#if systemToken && invitationRole}
-							You've been invited to join as a {invitationRole}
-						{:else if isFirstUser}
-							You'll be the first user and will automatically become the system administrator
-						{:else}
-							Enter your details to create your account
-						{/if}
-					</CardDescription>
+					<CardDescription>Enter your details to create your account</CardDescription>
 				</CardHeader>
 				<CardContent>
 					<form on:submit|preventDefault={handleSubmit} class="space-y-4">
@@ -133,7 +155,6 @@
 								type="email"
 								placeholder="Enter your email"
 								bind:value={email}
-								required
 								disabled={isLoading}
 							/>
 							{#if invitationCode}
@@ -150,55 +171,33 @@
 								type="password"
 								placeholder="Create a password (min. 8 characters)"
 								bind:value={password}
-								required
 								disabled={isLoading}
 							/>
 						</div>
-						{#if systemToken}
-							<input type="hidden" name="systemToken" value={systemToken} />
-							<input type="hidden" name="invitationRole" value={invitationRole} />
-						{/if}
 						{#if invitationCode}
 							<input type="hidden" name="invitationCode" value={invitationCode} />
-						{/if}
-						{#if !invitationCode && !systemToken}
-							<div class="space-y-2">
-								<Label for="organizationName">Organization Name (Optional)</Label>
-								<Input
-									id="organizationName"
-									name="organizationName"
-									type="text"
-									placeholder="Enter your organization name (optional)"
-									bind:value={organizationName}
-									disabled={isLoading}
-								/>
-								<p class="text-muted-foreground text-xs">
-									You'll be the administrator of this organization
-								</p>
-							</div>
-						{:else if invitationCode}
 							<div class="bg-muted rounded-lg p-3">
 								<p class="text-sm">You'll join an existing organization after registration.</p>
-							</div>
-						{:else if systemToken}
-							<div class="bg-muted rounded-lg p-3">
-								<p class="text-sm">You've been invited to join as a {invitationRole}.</p>
 							</div>
 						{/if}
 						{#if form && typeof form === 'object' && 'error' in form && form.error}
 							<p class="text-sm text-red-500">{form.error}</p>
 						{/if}
 						{#if error}
-							<p class="text-sm text-red-500">{error}</p>
+							<div role="alert" class="error-message text-destructive text-sm text-red-500">
+								{error}
+							</div>
 						{/if}
 						{#if successMessage}
-							<p class="text-sm text-green-500">{successMessage}</p>
+							<div role="status" class="success-message text-sm text-green-500">
+								{successMessage}
+							</div>
 						{/if}
 						<Button type="submit" class="w-full" disabled={isLoading}>
 							{#if isLoading}
 								Creating account...
 							{:else}
-								Create Account
+								Register
 							{/if}
 						</Button>
 						<p class="text-muted-foreground text-center text-sm">

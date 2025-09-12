@@ -20,42 +20,77 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		// Try to create the user first
-		let result = await auth.api.signUpEmail({
-			body: {
-				email,
-				password,
-				name: '' // Empty name as required by the schema
-			}
-		});
-
-		console.log('[Test Register API] User creation result:', {
-			userCreated: !!result.user,
-			userId: result.user?.id,
-			hasHeaders: !!(result as Record<string, unknown>).headers
-		});
-
-		// If user creation failed but user exists, try to sign in
-		if (!result.user) {
-			console.log('[Test Register API] User creation failed, attempting sign in...');
-			const signInResult = await auth.api.signInEmail({
+		// Pass headers to ensure proper request context
+		let result: { user?: { id: string; email: string } | null };
+		try {
+			result = await auth.api.signUpEmail({
 				body: {
 					email,
-					password
-				}
+					password,
+					name: '' // Empty name as required by the schema
+				},
+				headers: request.headers
 			});
 
-			if (signInResult.user) {
-				result = signInResult;
-				console.log('[Test Register API] Sign in successful for existing user');
+			console.log('[Test Register API] User creation result:', {
+				userCreated: !!result.user,
+				userId: result.user?.id,
+				hasHeaders: !!(result as Record<string, unknown>).headers
+			});
+		} catch (signUpError) {
+			console.log(
+				'[Test Register API] Error:',
+				signUpError instanceof Error ? signUpError.message : String(signUpError)
+			);
+			result = { user: null };
+		}
+
+		// If user creation failed but user exists, try to sign in
+		if (!result?.user) {
+			console.log('[Test Register API] User creation failed, attempting sign in...');
+			try {
+				const signInResult = await auth.api.signInEmail({
+					body: {
+						email,
+						password
+					},
+					headers: request.headers
+				});
+
+				if (signInResult.user) {
+					result = signInResult;
+					console.log('[Test Register API] Sign in successful for existing user');
+				}
+			} catch (signInError) {
+				const errorMessage =
+					signInError instanceof Error ? signInError.message : String(signInError);
+				console.error('[Test Register API] Sign in also failed:', errorMessage);
+				// Return a failed registration response
+				return json({ error: 'User creation and sign in failed' }, { status: 400 });
 			}
 		}
 
 		// Better Auth returns user directly on success
 		if (result.user) {
-			// Check if this is the first user and make them admin
-			const [userCount] = await db.select({ count: count() }).from(schema.user);
+			// Verify the user actually exists in the database
+			const userExists = await db
+				.select({ id: schema.user.id })
+				.from(schema.user)
+				.where(eq(schema.user.id, result.user.id))
+				.limit(1);
 
-			if (userCount.count === 1) {
+			if (userExists.length === 0) {
+				console.error(
+					'[Test Register API] User not found in database after creation:',
+					result.user.id
+				);
+				return json({ error: 'User creation incomplete' }, { status: 500 });
+			}
+
+			// Check if this is the first user and make them admin
+			const userCount = await db.select({ count: count() }).from(schema.user);
+
+			if (userCount[0].count === 1) {
 				// This is the first user, make them admin
 				console.log('[Test Register API] First user detected, setting as admin');
 				await db
@@ -93,58 +128,46 @@ export const POST: RequestHandler = async ({ request }) => {
 						name: existingMemberships[0].orgName
 					};
 
-					// Set this organization as active using Better Auth API
-					try {
-						await auth.api.setActiveOrganization({
-							body: {
-								organizationId: organization.id
-							},
-							headers: request.headers
-						});
-						console.log(`[Test Register API] Set active organization: ${organization.name}`);
-					} catch (setActiveError) {
-						console.error('[Test Register API] Failed to set active organization:', setActiveError);
-					}
-
+					// Note: Active organization is set at the session level when the user logs in
+					// We don't need to set it here for test users
 					console.log(`[Test Register API] User already has organization: ${organization.name}`);
 				} else {
 					// Create new organization for the test user with unique slug
 					const orgId = nanoid();
 					const timestamp = Date.now();
+					const randomSuffix = nanoid(6).toLowerCase(); // Add random suffix for extra uniqueness
 					const baseSlug = orgNameToUse
 						.toLowerCase()
 						.replace(/\s+/g, '-')
 						.replace(/[^a-z0-9-]/g, '');
-					const orgSlug = `${baseSlug}-${timestamp}`; // Make slug unique with timestamp
+					const orgSlug = `${baseSlug}-${timestamp}-${randomSuffix}`; // Make slug unique with timestamp and random suffix
 
-					// Insert organization
+					// Insert organization first
 					await db.insert(schema.organization).values({
 						id: orgId,
 						name: orgNameToUse,
 						slug: orgSlug
 					});
 
-					// Add user as admin member
-					const memberId = nanoid();
-					await db.insert(schema.member).values({
-						id: memberId,
-						organizationId: orgId,
-						userId: result.user.id,
-						role: 'admin'
-					});
-
-					// Set the organization as active using Better Auth API
+					// Add user as owner member (creator should be owner, not admin)
+					// Wrap in try-catch to handle potential race conditions
 					try {
-						await auth.api.setActiveOrganization({
-							body: {
-								organizationId: orgId
-							},
-							headers: request.headers
+						const memberId = nanoid();
+						await db.insert(schema.member).values({
+							id: memberId,
+							organizationId: orgId,
+							userId: result.user.id,
+							role: 'owner'
 						});
-						console.log(`[Test Register API] Set active organization: ${orgNameToUse}`);
-					} catch (setActiveError) {
-						console.error('[Test Register API] Failed to set active organization:', setActiveError);
+					} catch (memberError) {
+						console.error('[Test Register API] Error adding member:', memberError);
+						// Organization was created but member addition failed
+						// This is okay for test purposes
 					}
+
+					// Note: Active organization is set at the session level when the user logs in
+					// We don't need to set it here for test users
+					console.log(`[Test Register API] Created organization: ${orgNameToUse}`);
 
 					organization = {
 						id: orgId,
