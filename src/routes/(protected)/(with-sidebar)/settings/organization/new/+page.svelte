@@ -13,9 +13,9 @@
 	} from '$lib/components/ui/card';
 	import { toast } from 'svelte-sonner';
 
-	let organizationName = '';
-	let isCreatingOrg = false;
-	let createOrgError = '';
+	let organizationName = $state('');
+	let isCreatingOrg = $state(false);
+	let createOrgError = $state('');
 
 	async function generateUniqueSlug(baseName: string) {
 		const baseSlug = baseName

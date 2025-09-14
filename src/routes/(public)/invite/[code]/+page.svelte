@@ -13,7 +13,11 @@
 	import { toast } from 'svelte-sonner';
 	import type { PageData } from './$types';
 
-	export let data: PageData;
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
 
 	interface InvitationInfo {
 		id: string;
@@ -24,11 +28,11 @@
 	}
 
 	let invitationCode = data.invitationCode;
-	let invitationInfo: InvitationInfo | null = null;
-	let isLoading = true;
-	let isAccepting = false;
-	let error: string | null = data.error || null;
-	let isLoggedIn = false;
+	let invitationInfo: InvitationInfo | null = $state(null);
+	let isLoading = $state(true);
+	let isAccepting = $state(false);
+	let error: string | null = $state(data.error || null);
+	let isLoggedIn = $state(false);
 	let userEmail = '';
 
 	onMount(async () => {

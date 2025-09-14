@@ -3,7 +3,7 @@
 	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import ImpersonationBanner from '$lib/components/impersonation-banner.svelte';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import '../app.css';
 
 	let { children } = $props();
@@ -12,7 +12,7 @@
 	$effect(() => {
 		const styleEl = document.getElementById('impersonation-styles');
 
-		if ($page.data.impersonating) {
+		if (page.data.impersonating) {
 			if (!styleEl) {
 				const newStyleEl = document.createElement('style');
 				newStyleEl.id = 'impersonation-styles';
@@ -28,10 +28,10 @@
 
 <ParaglideJS {i18n}>
 	<Toaster />
-	{#if $page.data.impersonating}
+	{#if page.data.impersonating}
 		<div class="fixed inset-x-0 top-0 z-[100]">
 			<ImpersonationBanner
-				impersonatedUser={{ email: $page.data.user?.email || '', id: $page.data.user?.id || '' }}
+				impersonatedUser={{ email: page.data.user?.email || '', id: page.data.user?.id || '' }}
 			/>
 		</div>
 		<div class="h-[52px]"></div>

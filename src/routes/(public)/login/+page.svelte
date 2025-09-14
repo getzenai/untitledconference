@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { preventDefault } from 'svelte/legacy';
+
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import {
@@ -10,12 +12,12 @@
 	} from '$lib/components/ui/card';
 	import { authClient } from '$lib/auth-client';
 	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 
-	let email = '';
-	let password = '';
-	let error: string | null = null;
-	let isLoading = false;
+	let email = $state('');
+	let password = $state('');
+	let error: string | null = $state(null);
+	let isLoading = $state(false);
 	async function handleSubmit() {
 		// Validate fields
 		if (!email || !password) {
@@ -43,7 +45,7 @@
 				password = '';
 			} else if (sessionData) {
 				console.log('[Login Page] Login successful, attempting redirect...');
-				const returnTo = $page.url.searchParams.get('returnTo') || '/home';
+				const returnTo = page.url.searchParams.get('returnTo') || '/home';
 				await goto(returnTo, { replaceState: true });
 			} else {
 				// This case implies signInError is null and sessionData is null
@@ -100,7 +102,7 @@
 					<CardDescription>Enter your credentials to access your account</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form on:submit|preventDefault={handleSubmit} class="space-y-4">
+					<form onsubmit={preventDefault(handleSubmit)} class="space-y-4">
 						<div class="space-y-2">
 							<Label for="email">Email</Label>
 							<Input

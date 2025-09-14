@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { run } from 'svelte/legacy';
+
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
@@ -12,51 +14,64 @@
 	import AlertCircleIcon from '@lucide/svelte/icons/alert-circle';
 	import TrashIcon from '@lucide/svelte/icons/trash';
 
-	// Props
-	export let document: {
-		id: number;
-		title: string;
-		content: JSONContent | unknown;
-		plainText: string | null;
-	};
-	export let form: {
-		success?: boolean;
-		document?: typeof document;
-		error?: string;
-		transformed?: string;
-		mock?: boolean;
-		action?: string;
-	} | null = null;
-	export let showDelete = true;
-	export let showBackButton = true;
-	export let backUrl = '/documents';
-	export let deleteRedirect = '/documents';
-	let className = '';
-	export { className as class };
+	interface Props {
+		// Props
+		document: {
+			id: number;
+			title: string;
+			content: JSONContent | unknown;
+			plainText: string | null;
+		};
+		form?: {
+			success?: boolean;
+			document?: typeof document;
+			error?: string;
+			transformed?: string;
+			mock?: boolean;
+			action?: string;
+		} | null;
+		showDelete?: boolean;
+		showBackButton?: boolean;
+		backUrl?: string;
+		deleteRedirect?: string;
+		class?: string;
+	}
+
+	let {
+		document,
+		form = null,
+		showDelete = true,
+		showBackButton = true,
+		backUrl = '/documents',
+		deleteRedirect = '/documents',
+		class: className = ''
+	}: Props = $props();
 
 	// State
-	let saveStatus: 'idle' | 'saving' | 'saved' | 'error' = 'idle';
-	let editorComponent: TiptapEditor | null = null;
+	let saveStatus: 'idle' | 'saving' | 'saved' | 'error' = $state('idle');
+	let editorComponent: TiptapEditor | null = $state(null);
 	let titleDebounceTimer: ReturnType<typeof setTimeout>;
 	let contentDebounceTimer: ReturnType<typeof setTimeout>;
-	let documentTitle = document.title;
-	let lastSavedTitle = document.title;
-	let lastSavedContent = JSON.stringify(document.content);
+	let documentTitle = $state(document.title);
+	let lastSavedTitle = $state(document.title);
+	let lastSavedContent = $state(JSON.stringify(document.content));
 
 	// Handle form response
-	$: if (form?.success && form.document) {
-		saveStatus = 'saved';
-		lastSavedTitle = form.document.title;
-		lastSavedContent = JSON.stringify(form.document.content);
-		setTimeout(() => {
-			saveStatus = 'idle';
-		}, 2000);
-	} else if (form?.error) {
-		saveStatus = 'error';
-		setTimeout(() => {
-			saveStatus = 'idle';
-		}, 3000);
-	}
+	run(() => {
+		if (form?.success && form.document) {
+			saveStatus = 'saved';
+			lastSavedTitle = form.document.title;
+			lastSavedContent = JSON.stringify(form.document.content);
+			setTimeout(() => {
+				saveStatus = 'idle';
+			}, 2000);
+		} else if (form?.error) {
+			saveStatus = 'error';
+			setTimeout(() => {
+				saveStatus = 'idle';
+			}, 3000);
+		}
+	});
 
 	async function saveDocument(content: JSONContent, plainText: string, immediate = false) {
 		// Clear existing timer

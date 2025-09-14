@@ -9,9 +9,13 @@
 	import EditIcon from '@lucide/svelte/icons/edit';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 
-	export let data: PageData;
+	interface Props {
+		data: PageData;
+	}
 
-	let creatingDocument = false;
+	let { data }: Props = $props();
+
+	let creatingDocument = $state(false);
 
 	function handleDeleteClick(id: number, event: Event) {
 		event.stopPropagation();

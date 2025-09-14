@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import {
 		Card,
@@ -26,7 +26,7 @@
 
 	onMount(() => {
 		// Check for error parameter (invalid/expired token)
-		const errorParam = $page.url.searchParams.get('error');
+		const errorParam = page.url.searchParams.get('error');
 		if (errorParam === 'INVALID_TOKEN') {
 			toast.error(
 				'This invitation link has expired or is invalid. Please request a new invitation.'
@@ -36,7 +36,7 @@
 		}
 
 		// Get the token from URL parameters
-		token = $page.url.searchParams.get('token') || '';
+		token = page.url.searchParams.get('token') || '';
 		if (!token) {
 			toast.error('This invitation link appears to be invalid. Please request a new invitation.');
 			goto('/login');

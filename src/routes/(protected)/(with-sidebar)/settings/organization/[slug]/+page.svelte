@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { run } from 'svelte/legacy';
+
 	import { page } from '$app/stores';
 	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
@@ -26,33 +28,39 @@
 	import { toast } from 'svelte-sonner';
 	import type { PageData, ActionData } from './$types';
 
-	export let data: PageData;
-	export let form: ActionData;
-
-	let inviteEmail = '';
-	let inviteRole = 'member';
-	let isInviting = false;
-	let showLeaveDialog = false;
-	let selectedNewOwner = '';
-	let isLeavingOrg = false;
-
-	$: organization = data.organization;
-	$: members = data.members || [];
-	$: invitations = data.invitations || [];
-	$: currentMember = data.currentMember;
-
-	$: if (form?.success && form?.invitationId) {
-		const invitationLink = `${$page.url.origin}/invite/${form.invitationId}`;
-		navigator.clipboard.writeText(invitationLink);
-		toast.success('Invitation created and link copied to clipboard');
-		inviteEmail = '';
-	} else if (form?.error) {
-		if ((form as Record<string, unknown>).needsOwnerTransfer) {
-			showLeaveDialog = true;
-		} else {
-			toast.error(form.error);
-		}
+	interface Props {
+		data: PageData;
+		form: ActionData;
 	}
+
+	let { data, form }: Props = $props();
+
+	let inviteEmail = $state('');
+	let inviteRole = $state('member');
+	let isInviting = $state(false);
+	let showLeaveDialog = $state(false);
+	let selectedNewOwner = $state('');
+	let isLeavingOrg = $state(false);
+
+	let organization = $derived(data.organization);
+	let members = $derived(data.members || []);
+	let invitations = $derived(data.invitations || []);
+	let currentMember = $derived(data.currentMember);
+
+	run(() => {
+		if (form?.success && form?.invitationId) {
+			const invitationLink = `${$page.url.origin}/invite/${form.invitationId}`;
+			navigator.clipboard.writeText(invitationLink);
+			toast.success('Invitation created and link copied to clipboard');
+			inviteEmail = '';
+		} else if (form?.error) {
+			if ((form as Record<string, unknown>).needsOwnerTransfer) {
+				showLeaveDialog = true;
+			} else {
+				toast.error(form.error);
+			}
+		}
+	});
 
 	function isAdmin(member: typeof currentMember): boolean {
 		return member?.role === 'admin' || member?.role === 'owner';

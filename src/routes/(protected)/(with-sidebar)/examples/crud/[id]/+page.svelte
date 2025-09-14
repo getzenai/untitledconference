@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { run } from 'svelte/legacy';
+
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
@@ -11,26 +13,32 @@
 	import * as Alert from '$lib/components/ui/alert';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
 
-	export let data: PageData;
-	export let form: ActionData;
-
-	let idValue = data.exampleObject?.id || '';
-	let nameValue = data.exampleObject?.name || '';
-	let descriptionValue = data.exampleObject?.description || '';
-
-	let submittingUpdate = false;
-	let submittingDelete = false;
-	let showDeleteConfirm = false;
-
-	$: if (form?.data && form.formAction === '?/update') {
-		idValue = form.data.id || data.exampleObject?.id || '';
-		nameValue = form.data.name || data.exampleObject?.name || '';
-		descriptionValue = form.data.description || data.exampleObject?.description || '';
-	} else if (data.exampleObject) {
-		idValue = data.exampleObject.id;
-		nameValue = data.exampleObject.name;
-		descriptionValue = data.exampleObject.description || '';
+	interface Props {
+		data: PageData;
+		form: ActionData;
 	}
+
+	let { data, form }: Props = $props();
+
+	let idValue = $state(data.exampleObject?.id || '');
+	let nameValue = $state(data.exampleObject?.name || '');
+	let descriptionValue = $state(data.exampleObject?.description || '');
+
+	let submittingUpdate = $state(false);
+	let submittingDelete = $state(false);
+	let showDeleteConfirm = $state(false);
+
+	run(() => {
+		if (form?.data && form.formAction === '?/update') {
+			idValue = form.data.id || data.exampleObject?.id || '';
+			nameValue = form.data.name || data.exampleObject?.name || '';
+			descriptionValue = form.data.description || data.exampleObject?.description || '';
+		} else if (data.exampleObject) {
+			idValue = data.exampleObject.id;
+			nameValue = data.exampleObject.name;
+			descriptionValue = data.exampleObject.description || '';
+		}
+	});
 </script>
 
 <svelte:head>

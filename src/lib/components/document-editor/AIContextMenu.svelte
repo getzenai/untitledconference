@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { run } from 'svelte/legacy';
+
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
@@ -9,24 +11,36 @@
 	import { browser } from '$app/environment';
 	import { onDestroy, tick } from 'svelte';
 
-	export let visible = false;
-	export let x = 0;
-	export let y = 0;
-	export let selectedContent: Record<string, unknown> | null = null;
-	export let documentContext: Record<string, unknown> | null = null;
-	export let onTransform: ((result: Record<string, unknown>) => void) | undefined = undefined;
-	export let onClose: (() => void) | undefined = undefined;
+	interface Props {
+		visible?: boolean;
+		x?: number;
+		y?: number;
+		selectedContent?: Record<string, unknown> | null;
+		documentContext?: Record<string, unknown> | null;
+		onTransform?: ((result: Record<string, unknown>) => void) | undefined;
+		onClose?: (() => void) | undefined;
+	}
+
+	let {
+		visible = $bindable(false),
+		x = 0,
+		y = 0,
+		selectedContent = null,
+		documentContext = null,
+		onTransform = undefined,
+		onClose = undefined
+	}: Props = $props();
 
 	// Calculate position to prevent going off-screen (hug the edges)
-	$: adjustedX = browser ? Math.min(x, window.innerWidth - 330) : x; // 320px width (w-80)
-	$: adjustedY = browser ? Math.min(y, window.innerHeight - 190) : y; // Approximate minimum height
+	let adjustedX = $derived(browser ? Math.min(x, window.innerWidth - 330) : x); // 320px width (w-80)
+	let adjustedY = $derived(browser ? Math.min(y, window.innerHeight - 190) : y); // Approximate minimum height
 
-	let prompt = '';
-	let _selectedPreset = '';
-	let isSubmitting = false;
-	let errorMessage = '';
+	let prompt = $state('');
+	let _selectedPreset = $state('');
+	let isSubmitting = $state(false);
+	let errorMessage = $state('');
 
-	let formElement: HTMLFormElement;
+	let formElement: HTMLFormElement | undefined = $state();
 
 	const presetPrompts = [
 		{
@@ -48,24 +62,26 @@
 	];
 
 	// Watch for preset selection changes and auto-submit
-	$: if (_selectedPreset) {
-		const preset = presetPrompts.find((p) => p.value === _selectedPreset);
-		if (preset) {
-			// Check if we have selected content for transformation presets
-			if (!selectedContent) {
-				errorMessage = 'Please select some text first to apply this transformation';
-				_selectedPreset = ''; // Reset the selection
-			} else {
-				prompt = preset.prompt;
-				// Auto-submit after next tick when DOM is updated
-				tick().then(() => {
-					if (formElement) {
-						formElement.requestSubmit();
-					}
-				});
+	run(() => {
+		if (_selectedPreset) {
+			const preset = presetPrompts.find((p) => p.value === _selectedPreset);
+			if (preset) {
+				// Check if we have selected content for transformation presets
+				if (!selectedContent) {
+					errorMessage = 'Please select some text first to apply this transformation';
+					_selectedPreset = ''; // Reset the selection
+				} else {
+					prompt = preset.prompt;
+					// Auto-submit after next tick when DOM is updated
+					tick().then(() => {
+						if (formElement) {
+							formElement.requestSubmit();
+						}
+					});
+				}
 			}
 		}
-	}
+	});
 
 	function handleClose() {
 		visible = false;
@@ -92,19 +108,21 @@
 		}
 	}
 
-	$: if (browser) {
-		if (visible) {
-			// Add event listeners when menu becomes visible
-			setTimeout(() => {
-				window.addEventListener('click', handleClickOutside);
-				window.addEventListener('keydown', handleKeydown);
-			}, 0);
-		} else {
-			// Clean up event listeners
-			window.removeEventListener('click', handleClickOutside);
-			window.removeEventListener('keydown', handleKeydown);
+	run(() => {
+		if (browser) {
+			if (visible) {
+				// Add event listeners when menu becomes visible
+				setTimeout(() => {
+					window.addEventListener('click', handleClickOutside);
+					window.addEventListener('keydown', handleKeydown);
+				}, 0);
+			} else {
+				// Clean up event listeners
+				window.removeEventListener('click', handleClickOutside);
+				window.removeEventListener('keydown', handleKeydown);
+			}
 		}
-	}
+	});
 
 	// Cleanup on destroy
 	onDestroy(() => {

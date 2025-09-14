@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import * as Collapsible from '$lib/components/ui/collapsible/index.js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { cn } from '$lib/utils.js';
@@ -59,7 +59,7 @@
 								<Sidebar.MenuSubItem>
 									<Sidebar.MenuSubButton
 										href={subItem.url}
-										data-active={$page.url.pathname === subItem.url}
+										data-active={page.url.pathname === subItem.url}
 									>
 										<span>{subItem.title}</span>
 									</Sidebar.MenuSubButton>

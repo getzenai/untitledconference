@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { run } from 'svelte/legacy';
+
 	import type { PageData, ActionData } from './$types';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -10,21 +12,29 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { Edit, PlusCircle } from 'lucide-svelte';
 
-	export let data: PageData;
-	export let form: ActionData;
-
-	let nameValue = '';
-	let descriptionValue = '';
-	let submitting = false;
-	$: if (form?.data) {
-		nameValue = form.data.name || '';
-		descriptionValue = form.data.description || '';
+	interface Props {
+		data: PageData;
+		form: ActionData;
 	}
 
-	$: if (form?.success) {
-		nameValue = '';
-		descriptionValue = '';
-	}
+	let { data, form }: Props = $props();
+
+	let nameValue = $state('');
+	let descriptionValue = $state('');
+	let submitting = $state(false);
+	run(() => {
+		if (form?.data) {
+			nameValue = form.data.name || '';
+			descriptionValue = form.data.description || '';
+		}
+	});
+
+	run(() => {
+		if (form?.success) {
+			nameValue = '';
+			descriptionValue = '';
+		}
+	});
 </script>
 
 <svelte:head>

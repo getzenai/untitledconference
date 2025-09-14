@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import UsersIcon from '@lucide/svelte/icons/users';
 
@@ -14,10 +14,7 @@
 	<Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
 	<Sidebar.Menu>
 		<Sidebar.MenuItem>
-			<Sidebar.MenuButton
-				tooltipContent="Users"
-				data-active={$page.url.pathname === '/admin/users'}
-			>
+			<Sidebar.MenuButton tooltipContent="Users" data-active={page.url.pathname === '/admin/users'}>
 				{#snippet child({ props })}
 					<a href="/admin/users" {...props}>
 						<UsersIcon />

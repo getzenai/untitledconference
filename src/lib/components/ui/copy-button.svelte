@@ -4,14 +4,24 @@
 	import { browser } from '$app/environment';
 	import { onDestroy } from 'svelte';
 
-	export let value: string;
-	export let size: 'default' | 'sm' | 'lg' | 'icon' = 'icon';
-	export let variant: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link' = 'outline';
-	export let title: string = 'Copy to clipboard';
-	let className: string = '';
-	export { className as class };
+	interface Props {
+		value: string;
+		size?: 'default' | 'sm' | 'lg' | 'icon';
+		variant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link';
+		title?: string;
+		class?: string;
+	}
 
-	let copied = false;
+	let {
+		value,
+		size = 'icon',
+		variant = 'outline',
+		title = 'Copy to clipboard',
+		class: className = ''
+	}: Props = $props();
+	
+
+	let copied = $state(false);
 	let timeoutId: NodeJS.Timeout | undefined;
 
 	// Clean up timeout on component destroy to prevent memory leak

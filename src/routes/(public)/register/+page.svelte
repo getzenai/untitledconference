@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { preventDefault } from 'svelte/legacy';
+
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -14,13 +16,17 @@
 	import { authClient } from '$lib/auth-client';
 	import type { PageData, ActionData } from './$types';
 
-	export let data: PageData;
-	export let form: ActionData;
+	interface Props {
+		data: PageData;
+		form: ActionData;
+	}
 
-	let email = '';
-	let password = '';
-	let error: string | null = null;
-	let isLoading = false;
+	let { data, form }: Props = $props();
+
+	let email = $state('');
+	let password = $state('');
+	let error: string | null = $state(null);
+	let isLoading = $state(false);
 	let successMessage: string | null = null;
 	let invitationCode = data.invitationCode;
 
@@ -146,7 +152,7 @@
 					<CardDescription>Enter your details to create your account</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form on:submit|preventDefault={handleSubmit} class="space-y-4">
+					<form onsubmit={preventDefault(handleSubmit)} class="space-y-4">
 						<div class="space-y-2">
 							<Label for="email">Email</Label>
 							<Input

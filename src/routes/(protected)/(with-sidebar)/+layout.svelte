@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb/index.js';
 	import { Separator } from '$lib/components/ui/separator/index.js';
@@ -8,7 +8,7 @@
 </script>
 
 <Sidebar.Provider>
-	<AppSidebar user={$page.data.user} variant="inset" data-testid="app-sidebar" />
+	<AppSidebar user={page.data.user} variant="inset" data-testid="app-sidebar" />
 	<Sidebar.Inset>
 		<header class="flex h-16 shrink-0 items-center gap-2">
 			<div class="flex items-center gap-2 px-4">

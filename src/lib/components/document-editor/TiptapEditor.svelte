@@ -25,22 +25,29 @@
 	import UndoIcon from '@lucide/svelte/icons/undo';
 	import RedoIcon from '@lucide/svelte/icons/redo';
 
-	export let content: JSONContent = {
-		type: 'doc',
-		content: [
-			{
-				type: 'paragraph',
-				content: []
-			}
-		]
-	};
-	export let placeholder = 'Start writing...';
-	export let onUpdate:
-		| ((content: JSONContent, plainText: string, immediate?: boolean) => void)
-		| undefined = undefined;
-	export let editable = true;
-	let className = '';
-	export { className as class };
+	interface Props {
+		content?: JSONContent;
+		placeholder?: string;
+		onUpdate?: ((content: JSONContent, plainText: string, immediate?: boolean) => void) | undefined;
+		editable?: boolean;
+		class?: string;
+	}
+
+	let {
+		content = $bindable({
+			type: 'doc',
+			content: [
+				{
+					type: 'paragraph',
+					content: []
+				}
+			]
+		}),
+		placeholder = 'Start writing...',
+		onUpdate = undefined,
+		editable = true,
+		class: className = ''
+	}: Props = $props();
 
 	// Track if content has changed since last save
 	let lastSavedContent = '';
@@ -67,15 +74,15 @@
 		return currentContent !== lastSavedContent;
 	}
 
-	let element: HTMLDivElement;
-	let editor: Editor;
+	let element: HTMLDivElement | undefined = $state();
+	let editor: Editor | undefined = $state();
 
 	// AI Context Menu state
-	let aiMenuVisible = false;
-	let aiMenuX = 0;
-	let aiMenuY = 0;
-	let aiMenuContent: Record<string, unknown> | null = null;
-	let aiMenuDocumentContext: Record<string, unknown> | null = null;
+	let aiMenuVisible = $state(false);
+	let aiMenuX = $state(0);
+	let aiMenuY = $state(0);
+	let aiMenuContent: Record<string, unknown> | null = $state(null);
+	let aiMenuDocumentContext: Record<string, unknown> | null = $state(null);
 	let savedSelection: { from: number; to: number } | null = null;
 
 	// Debounce function for auto-save
@@ -150,6 +157,7 @@
 					AIContextMenuExtension.configure({
 						onContextMenu: ({ x, y, selectedContent, documentContext }) => {
 							// Save the current selection before showing menu
+							if (!editor) return;
 							const { from, to } = editor.state.selection;
 							savedSelection = { from, to };
 
@@ -162,7 +170,7 @@
 							// Add a class to maintain selection visibility when AI menu is open
 							if (from !== to) {
 								editor.commands.setTextSelection({ from, to });
-								element.classList.add('ai-menu-open');
+								element?.classList.add('ai-menu-open');
 							}
 						}
 					})
@@ -212,36 +220,36 @@
 	}
 
 	// Button actions
-	const toggleBold = () => editor.chain().focus().toggleBold().run();
-	const toggleItalic = () => editor.chain().focus().toggleItalic().run();
-	const toggleStrike = () => editor.chain().focus().toggleStrike().run();
-	const toggleCode = () => editor.chain().focus().toggleCode().run();
+	const toggleBold = () => editor?.chain().focus().toggleBold().run();
+	const toggleItalic = () => editor?.chain().focus().toggleItalic().run();
+	const toggleStrike = () => editor?.chain().focus().toggleStrike().run();
+	const toggleCode = () => editor?.chain().focus().toggleCode().run();
 
 	const setHeading = (level: 1 | 2 | 3) => {
-		editor.chain().focus().toggleHeading({ level }).run();
+		editor?.chain().focus().toggleHeading({ level }).run();
 	};
 
-	const setParagraph = () => editor.chain().focus().setParagraph().run();
-	const toggleBulletList = () => editor.chain().focus().toggleBulletList().run();
-	const toggleOrderedList = () => editor.chain().focus().toggleOrderedList().run();
-	const toggleBlockquote = () => editor.chain().focus().toggleBlockquote().run();
+	const setParagraph = () => editor?.chain().focus().setParagraph().run();
+	const toggleBulletList = () => editor?.chain().focus().toggleBulletList().run();
+	const toggleOrderedList = () => editor?.chain().focus().toggleOrderedList().run();
+	const toggleBlockquote = () => editor?.chain().focus().toggleBlockquote().run();
 
-	const undo = () => editor.chain().focus().undo().run();
-	const redo = () => editor.chain().focus().redo().run();
+	const undo = () => editor?.chain().focus().undo().run();
+	const redo = () => editor?.chain().focus().redo().run();
 
 	// Helper to check if a mark/node is active
-	$: isBold = editor?.isActive('bold');
-	$: isItalic = editor?.isActive('italic');
-	$: isStrike = editor?.isActive('strike');
-	$: isCode = editor?.isActive('code');
-	$: isH1 = editor?.isActive('heading', { level: 1 });
-	$: isH2 = editor?.isActive('heading', { level: 2 });
-	$: isH3 = editor?.isActive('heading', { level: 3 });
-	$: isBulletList = editor?.isActive('bulletList');
-	$: isOrderedList = editor?.isActive('orderedList');
-	$: isBlockquote = editor?.isActive('blockquote');
-	$: canUndo = editor?.can().undo();
-	$: canRedo = editor?.can().redo();
+	let isBold = $derived(editor?.isActive('bold'));
+	let isItalic = $derived(editor?.isActive('italic'));
+	let isStrike = $derived(editor?.isActive('strike'));
+	let isCode = $derived(editor?.isActive('code'));
+	let isH1 = $derived(editor?.isActive('heading', { level: 1 }));
+	let isH2 = $derived(editor?.isActive('heading', { level: 2 }));
+	let isH3 = $derived(editor?.isActive('heading', { level: 3 }));
+	let isBulletList = $derived(editor?.isActive('bulletList'));
+	let isOrderedList = $derived(editor?.isActive('orderedList'));
+	let isBlockquote = $derived(editor?.isActive('blockquote'));
+	let canUndo = $derived(editor?.can().undo());
+	let canRedo = $derived(editor?.can().redo());
 </script>
 
 <div class={cn('bg-background flex h-full flex-col overflow-hidden rounded-lg border', className)}>
