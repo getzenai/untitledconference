@@ -1,4 +1,16 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"hello_world": "Hello, {name} from en!"
+	"protected_examples_paraglide_hello_world": "Hello, {name}!",
+	"protected_examples_paraglide_page_title": "Paraglide.js Internationalization Demo",
+	"protected_examples_paraglide_page_description": "Switch between languages to see the content update dynamically",
+	"protected_examples_paraglide_current_language": "Current Language",
+	"protected_examples_paraglide_select_language": "Select Language",
+	"protected_examples_paraglide_demo_description": "This message is dynamically loaded based on the selected language. The translations are managed through Paraglide.js and the Inlang ecosystem.",
+	"protected_examples_paraglide_how_it_works": "How it works",
+	"protected_examples_paraglide_how_it_works_1": "Messages are stored in JSON files in the /messages directory",
+	"protected_examples_paraglide_how_it_works_2": "Paraglide compiles these at build time for optimal performance",
+	"protected_examples_paraglide_how_it_works_3": "Language detection uses first successful strategy: localStorage → URL → browser preference → base locale (en)",
+	"protected_examples_paraglide_how_it_works_4": "Switching languages saves the preference to localStorage and triggers a page reload (URL remains unchanged when using localStorage)",
+	"protected_examples_paraglide_language_english": "English",
+	"protected_examples_paraglide_language_german": "Deutsch"
 }

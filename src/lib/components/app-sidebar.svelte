@@ -32,6 +32,10 @@
 					{
 						title: 'UI Components',
 						url: '/examples/ui-components'
+					},
+					{
+						title: 'Multi Language',
+						url: '/examples/paraglide'
 					}
 				]
 			},

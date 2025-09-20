@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import {
@@ -18,7 +16,8 @@
 	let password = $state('');
 	let error: string | null = $state(null);
 	let isLoading = $state(false);
-	async function handleSubmit() {
+	async function handleSubmit(event: SubmitEvent) {
+		event.preventDefault();
 		// Validate fields
 		if (!email || !password) {
 			error = 'Email and password are required';
@@ -102,7 +101,7 @@
 					<CardDescription>Enter your credentials to access your account</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form onsubmit={preventDefault(handleSubmit)} class="space-y-4">
+					<form onsubmit={handleSubmit} class="space-y-4">
 						<div class="space-y-2">
 							<Label for="email">Email</Label>
 							<Input

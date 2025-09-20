@@ -1,9 +1,8 @@
 <script lang="ts">
-	import { i18n } from '$lib/i18n';
-	import { ParaglideJS } from '@inlang/paraglide-sveltekit';
 	import { Toaster } from '$lib/components/ui/sonner';
 	import ImpersonationBanner from '$lib/components/impersonation-banner.svelte';
 	import { page } from '$app/state';
+	import { locales, localizeHref } from '$lib/paraglide/runtime';
 	import '../app.css';
 
 	let { children } = $props();
@@ -26,17 +25,21 @@
 	});
 </script>
 
-<ParaglideJS {i18n}>
-	<Toaster />
-	{#if page.data.impersonating}
-		<div class="fixed inset-x-0 top-0 z-[100]">
-			<ImpersonationBanner
-				impersonatedUser={{ email: page.data.user?.email || '', id: page.data.user?.id || '' }}
-			/>
-		</div>
-		<div class="h-[52px]"></div>
-	{/if}
-	<div class="h-full">
-		{@render children()}
+<Toaster />
+{#if page.data.impersonating}
+	<div class="fixed inset-x-0 top-0 z-[100]">
+		<ImpersonationBanner
+			impersonatedUser={{ email: page.data.user?.email || '', id: page.data.user?.id || '' }}
+		/>
 	</div>
-</ParaglideJS>
+	<div class="h-[52px]"></div>
+{/if}
+<div class="h-full">
+	{@render children()}
+</div>
+
+<div style="display:none">
+	{#each locales as locale}
+		<a href={localizeHref(page.url.pathname, { locale })}>{locale}</a>
+	{/each}
+</div>

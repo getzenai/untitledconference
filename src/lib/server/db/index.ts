@@ -11,6 +11,9 @@ export const db = new Proxy({} as ReturnType<typeof drizzle>, {
 	get(target, prop, receiver) {
 		if (!_db) {
 			if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+			// Redact password from the connection string for logging
+			const sanitizedUrl = env.DATABASE_URL.replace(/:([^@]+)@/, ':****@');
+			console.log('🚀 Initializing database connection to:', sanitizedUrl);
 			client = postgres(env.DATABASE_URL);
 			_db = drizzle(client, { schema: { ...authSchema, ...exampleSchema } });
 		}

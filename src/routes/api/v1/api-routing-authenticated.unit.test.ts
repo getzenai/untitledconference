@@ -3,6 +3,15 @@ import { auth } from '$lib/auth';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handle } from '../../../hooks.server.js';
 
+const paraglideMiddlewareMock = vi.hoisted(() =>
+	vi.fn(
+		async (
+			request: Request,
+			handler: (args: { request: Request; locale: string }) => Response | Promise<Response>
+		) => handler({ request, locale: 'en' })
+	)
+);
+
 // Mock the auth module
 vi.mock('$lib/auth', () => ({
 	auth: {
@@ -13,14 +22,8 @@ vi.mock('$lib/auth', () => ({
 	}
 }));
 
-// Mock i18n
-vi.mock('$lib/i18n', () => ({
-	i18n: {
-		handle:
-			() =>
-			({ event, resolve }: { event: unknown; resolve: (e: unknown) => unknown }) =>
-				resolve(event)
-	}
+vi.mock('$lib/paraglide/server', () => ({
+	paraglideMiddleware: paraglideMiddlewareMock
 }));
 
 // Mock Better Auth SvelteKit handler
@@ -33,12 +36,11 @@ const mockAuth = vi.mocked(auth);
 
 // Helper to create mock events
 function createMockEvent(pathname: string, method: string = 'GET') {
+	const url = new URL(`http://localhost${pathname}`);
+	const request = new Request(url, { method, headers: new Headers() });
 	return {
-		url: { pathname },
-		request: {
-			method,
-			headers: new Headers()
-		},
+		url,
+		request,
 		locals: {} as any,
 		platform: undefined,
 		params: {},

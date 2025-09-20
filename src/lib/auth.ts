@@ -98,7 +98,14 @@ export const auth = betterAuth({
 	appName: 'SvelteKitVibeStarter',
 	secret: env.BETTER_AUTH_SECRET || '',
 	baseURL: env.BETTER_AUTH_URL || 'http://localhost:5173', // Provide fallback URL
-	trustedOrigins: ['http://127.0.0.1:5173', 'http://localhost:5173'],
+	trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS
+		? env.BETTER_AUTH_TRUSTED_ORIGINS.split(',').map((origin) => origin.trim())
+		: [
+				'http://127.0.0.1:5173',
+				'http://localhost:5173',
+				'http://127.0.0.1:5174',
+				'http://localhost:5174'
+			],
 
 	// Email & Password Authentication
 	emailAndPassword: {

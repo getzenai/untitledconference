@@ -46,6 +46,10 @@ ENV PATH=$PATH:/usr/local/share/npm-global/bin
 ARG CLAUDE_CODE_VERSION=latest
 RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
+# Install codex cli
+RUN npm install -g @openai/codex
+
+
 # Create Claude config directories with proper permissions
 RUN mkdir -p /home/node/.claude /home/node/.config/claude && \
     chown -R node:node /home/node/.claude /home/node/.config/claude

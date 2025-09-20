@@ -1,5 +1,5 @@
 import { auth } from '$lib/auth';
-import { i18n } from '$lib/i18n';
+import { paraglideMiddleware } from '$lib/paraglide/server';
 import { type Handle } from '@sveltejs/kit'; // Removed ResolveOptions
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
@@ -121,12 +121,20 @@ const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-const paraglideHandler: Handle = i18n.handle();
+const paraglideHandle: Handle = ({ event, resolve }) =>
+	paraglideMiddleware(event.request, ({ request: localizedRequest, locale }) => {
+		event.request = localizedRequest;
+		return resolve(event, {
+			transformPageChunk: ({ html }) => {
+				return html.replace('%lang%', locale);
+			}
+		});
+	});
 
 // Sequence of handlers: Better Auth, API Protection, Paraglide
 export const handle: Handle = sequence(
 	populateLocalsUserHandler, // Run this first to ensure locals.user is set
 	({ event, resolve }) => svelteKitHandler({ auth, event, resolve, building: false }),
 	apiProtectionHandler,
-	paraglideHandler
+	paraglideHandle
 );
