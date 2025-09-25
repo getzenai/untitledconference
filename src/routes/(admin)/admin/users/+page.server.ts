@@ -317,5 +317,45 @@ export const actions: Actions = {
 				error: 'Failed to regenerate invitation'
 			});
 		}
+	},
+
+	setEmailVerification: async ({ locals, request }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const userId = formData.get('userId');
+		const emailVerifiedValue = formData.get('emailVerified');
+
+		if (typeof userId !== 'string' || typeof emailVerifiedValue !== 'string') {
+			return fail(400, { error: 'Invalid request data' });
+		}
+
+		if (emailVerifiedValue !== 'true' && emailVerifiedValue !== 'false') {
+			return fail(400, { error: 'Invalid verification status' });
+		}
+
+		const emailVerified = emailVerifiedValue === 'true';
+
+		try {
+			const [updatedUser] = await db
+				.update(schema.user)
+				.set({
+					emailVerified,
+					updatedAt: new Date()
+				})
+				.where(eq(schema.user.id, userId))
+				.returning({ id: schema.user.id });
+
+			if (!updatedUser) {
+				return fail(404, { error: 'User not found' });
+			}
+
+			return { success: true };
+		} catch (error) {
+			console.error('Error updating email verification status:', error);
+			return fail(500, { error: 'Failed to update email verification status' });
+		}
 	}
 };

@@ -20,6 +20,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Select, SelectContent, SelectItem, SelectTrigger } from '$lib/components/ui/select';
+	import { Switch } from '$lib/components/ui/switch';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import {
 		AlertDialog,
@@ -32,7 +33,17 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
-	import { Shield, Users, UserX, UserCheck, Mail, Clock, RefreshCw, UserPlus } from 'lucide-svelte';
+	import {
+		Shield,
+		Users,
+		UserX,
+		UserCheck,
+		Mail,
+		Clock,
+		RefreshCw,
+		Loader2,
+		UserPlus
+	} from 'lucide-svelte';
 	import CopyButton from '$lib/components/ui/copy-button.svelte';
 	import {
 		Tooltip,
@@ -83,6 +94,7 @@
 	let isCreatingInvitation = $state(false);
 	let invitationLink = $state('');
 	let regeneratingInvitationId = $state<string | null>(null);
+	let emailVerificationLoading = $state<Record<string, boolean>>({});
 
 	// Create user dialog state
 	let createDialogOpen = $state(false);
@@ -215,6 +227,72 @@
 		} catch (error) {
 			console.error('Error loading admin data:', error);
 			toast.error('Failed to load admin data');
+		}
+	}
+
+	async function updateEmailVerificationStatus(userId: string, email: string, nextValue: boolean) {
+		const targetUser = users.find((u) => u.id === userId);
+		if (!targetUser) {
+			return;
+		}
+
+		if (emailVerificationLoading[userId]) {
+			return;
+		}
+
+		if (targetUser.emailVerified === nextValue) {
+			return;
+		}
+
+		const previousValue = targetUser.emailVerified;
+
+		emailVerificationLoading = { ...emailVerificationLoading, [userId]: true };
+		users = users.map((user) =>
+			user.id === userId ? { ...user, emailVerified: nextValue } : user
+		);
+
+		try {
+			const formData = new FormData();
+			formData.set('userId', userId);
+			formData.set('emailVerified', nextValue ? 'true' : 'false');
+
+			const response = await fetch('?/setEmailVerification', {
+				method: 'POST',
+				body: formData
+			});
+
+			// Check if the response is successful based on HTTP status
+			// SvelteKit actions return 2xx for success, 4xx/5xx for failures
+			if (!response.ok) {
+				// Try to parse error message from response
+				let errorMessage = 'Failed to update email verification status';
+				try {
+					const responseText = await response.text();
+					if (responseText) {
+						const result = JSON.parse(responseText);
+						if (result?.error) {
+							errorMessage = result.error;
+						}
+					}
+				} catch (_e) {
+					// If parsing fails, use default error message
+				}
+				throw new Error(errorMessage);
+			}
+
+			// Success - the action has completed successfully
+			toast.success(`Email verification ${nextValue ? 'enabled' : 'disabled'} for ${email}`);
+		} catch (error) {
+			console.error('Error updating email verification status:', error);
+			toast.error(
+				error instanceof Error ? error.message : 'Failed to update email verification status'
+			);
+			users = users.map((user) =>
+				user.id === userId ? { ...user, emailVerified: previousValue } : user
+			);
+		} finally {
+			const { [userId]: _, ...rest } = emailVerificationLoading;
+			emailVerificationLoading = rest;
 		}
 	}
 
@@ -756,11 +834,29 @@
 									{/if}
 								</TableCell>
 								<TableCell>
-									{#if user.emailVerified}
-										<UserCheck class="h-4 w-4 text-green-500" />
-									{:else}
-										<UserX class="text-muted-foreground h-4 w-4" />
-									{/if}
+									<div class="flex items-center gap-3">
+										<Switch
+											checked={user.emailVerified}
+											disabled={Boolean(emailVerificationLoading[user.id])}
+											aria-label={user.emailVerified
+												? `Mark ${user.email} as unverified`
+												: `Mark ${user.email} as verified`}
+											onCheckedChange={(checked) =>
+												updateEmailVerificationStatus(user.id, user.email, checked)}
+										/>
+										<div class="flex items-center gap-1 text-sm">
+											{#if emailVerificationLoading[user.id]}
+												<Loader2 class="text-muted-foreground h-4 w-4 animate-spin" />
+												<span>Updating...</span>
+											{:else if user.emailVerified}
+												<UserCheck class="h-4 w-4 text-green-500" />
+												<span>Verified</span>
+											{:else}
+												<UserX class="text-muted-foreground h-4 w-4" />
+												<span>Unverified</span>
+											{/if}
+										</div>
+									</div>
 								</TableCell>
 								<TableCell>
 									{#if user.banned}
