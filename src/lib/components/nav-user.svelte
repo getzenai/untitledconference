@@ -4,6 +4,7 @@
 	import BuildingIcon from '@lucide/svelte/icons/building';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
+	import UserIcon from '@lucide/svelte/icons/user';
 
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
@@ -82,6 +83,10 @@
 
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
+					<DropdownMenu.Item onclick={() => goto('/settings/account')}>
+						<UserIcon />
+						View profile
+					</DropdownMenu.Item>
 					<DropdownMenu.Item onclick={() => goto('/settings/organization')}>
 						<BuildingIcon />
 						Organization

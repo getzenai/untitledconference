@@ -2,6 +2,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import PasswordInput from '$lib/components/ui/password-input.svelte';
+	import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '$lib/validators/password';
 	import {
 		Card,
 		CardContent,
@@ -45,8 +47,12 @@
 		}
 
 		// Validate password length
-		if (password.length < 8) {
-			error = 'Password must be at least 8 characters';
+		if (password.length < PASSWORD_MIN_LENGTH) {
+			error = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+			return;
+		}
+		if (password.length > PASSWORD_MAX_LENGTH) {
+			error = `Password must be less than ${PASSWORD_MAX_LENGTH} characters`;
 			return;
 		}
 
@@ -170,13 +176,14 @@
 						</div>
 						<div class="space-y-2">
 							<Label for="password">Password</Label>
-							<Input
+							<PasswordInput
 								id="password"
 								name="password"
-								type="password"
-								placeholder="Create a password (min. 8 characters)"
+								placeholder={`Create a password (${PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters)`}
 								bind:value={password}
 								disabled={isLoading}
+								minlength={PASSWORD_MIN_LENGTH}
+								maxlength={PASSWORD_MAX_LENGTH}
 							/>
 						</div>
 						{#if invitationCode}
