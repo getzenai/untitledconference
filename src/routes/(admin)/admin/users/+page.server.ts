@@ -8,7 +8,7 @@ import {
 } from '$lib/server/services/system-invitation';
 import { fail } from '@sveltejs/kit';
 import { generateRandomString } from 'better-auth/crypto';
-import { desc } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
 // Helper function to trigger password reset and poll for link
@@ -84,7 +84,7 @@ export const actions: Actions = {
 	createInvitation: async ({ locals, request }) => {
 		// Check if user is admin
 		if (!locals.user || locals.user.role !== 'admin') {
-			return fail(401, { error: 'Unauthorized' });
+			return fail(401, { action: 'createInvitation', error: 'Unauthorized' });
 		}
 
 		const formData = await request.formData();
@@ -92,16 +92,16 @@ export const actions: Actions = {
 		const role = formData.get('role') as string;
 
 		if (!email) {
-			return fail(400, { error: 'Email is required' });
+			return fail(400, { action: 'createInvitation', error: 'Email is required' });
 		}
 
 		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 		if (!emailRegex.test(email)) {
-			return fail(400, { error: 'Invalid email address' });
+			return fail(400, { action: 'createInvitation', error: 'Invalid email address' });
 		}
 
 		if (role && !['user', 'admin'].includes(role)) {
-			return fail(400, { error: 'Invalid role' });
+			return fail(400, { action: 'createInvitation', error: 'Invalid role' });
 		}
 
 		try {
@@ -131,6 +131,7 @@ export const actions: Actions = {
 				// Link generation is still in progress, but the invitation was created successfully
 				console.log('[Admin] Invitation created but link generation timed out for:', email);
 				return {
+					action: 'createInvitation',
 					success: true,
 					invitationLink: null,
 					message: 'Invitation created. The link will be available shortly.'
@@ -138,6 +139,7 @@ export const actions: Actions = {
 			}
 
 			return {
+				action: 'createInvitation',
 				success: true,
 				invitationLink
 			};
@@ -146,18 +148,135 @@ export const actions: Actions = {
 
 			if (error instanceof Error) {
 				if (error.message.includes('already exists')) {
-					return fail(400, { error: error.message });
+					return fail(400, {
+						action: 'createInvitation',
+						error: error.message
+					});
 				}
 			}
 
-			return fail(500, { error: 'Failed to create invitation' });
+			return fail(500, {
+				action: 'createInvitation',
+				error: 'Failed to create invitation'
+			});
+		}
+	},
+
+	createUser: async ({ locals, request }) => {
+		if (!locals.user || locals.user.role !== 'admin') {
+			return fail(401, { action: 'createUser', error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const rawEmail = formData.get('email');
+		const rawPassword = formData.get('password');
+		const rawRole = formData.get('role');
+
+		const email = typeof rawEmail === 'string' ? rawEmail.trim() : '';
+		const password = typeof rawPassword === 'string' ? rawPassword : '';
+		const role = (
+			typeof rawRole === 'string' && ['user', 'admin'].includes(rawRole) ? rawRole : 'user'
+		) as 'user' | 'admin';
+
+		if (!email || !password) {
+			return fail(400, {
+				action: 'createUser',
+				error: 'Email and password are required'
+			});
+		}
+
+		const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+		if (!emailRegex.test(email)) {
+			return fail(400, { action: 'createUser', error: 'Invalid email address' });
+		}
+
+		if (password.length < 12) {
+			return fail(400, {
+				action: 'createUser',
+				error: 'Password must be at least 12 characters long'
+			});
+		}
+
+		try {
+			const { user: createdUser } = await auth.api.createUser({
+				body: {
+					email,
+					password,
+					role,
+					name: ''
+				},
+				headers: request.headers
+			});
+
+			if (!createdUser) {
+				return fail(500, {
+					action: 'createUser',
+					error: 'Failed to create user'
+				});
+			}
+
+			const [fullUser] = await db
+				.select({
+					id: schema.user.id,
+					name: schema.user.name,
+					email: schema.user.email,
+					role: schema.user.role,
+					banned: schema.user.banned,
+					banReason: schema.user.banReason,
+					createdAt: schema.user.createdAt,
+					emailVerified: schema.user.emailVerified
+				})
+				.from(schema.user)
+				.where(eq(schema.user.id, createdUser.id))
+				.limit(1);
+
+			if (!fullUser) {
+				return fail(500, {
+					action: 'createUser',
+					error: 'Failed to load created user'
+				});
+			}
+
+			return {
+				action: 'createUser',
+				success: true,
+				createdUser: fullUser
+			};
+		} catch (error) {
+			console.error('Error creating user:', error);
+
+			if (error instanceof Error) {
+				if (error.message.includes('USER_ALREADY_EXISTS')) {
+					return fail(400, {
+						action: 'createUser',
+						error: 'A user with this email already exists'
+					});
+				}
+				if (error.message.includes('PASSWORD_TOO_SHORT')) {
+					return fail(400, {
+						action: 'createUser',
+						error: 'Password is too short'
+					});
+				}
+				if (error.message.includes('PASSWORD_TOO_LONG')) {
+					return fail(400, {
+						action: 'createUser',
+						error: 'Password is too long'
+					});
+				}
+			}
+
+			return fail(500, {
+				action: 'createUser',
+				error: 'Failed to create user'
+			});
 		}
 	},
 
 	regenerateInvitation: async ({ locals, request }) => {
 		// Check if user is admin
 		if (!locals.user || locals.user.role !== 'admin') {
-			return fail(401, { error: 'Unauthorized' });
+			return fail(401, { action: 'regenerateInvitation', error: 'Unauthorized' });
 		}
 
 		const formData = await request.formData();
@@ -165,7 +284,10 @@ export const actions: Actions = {
 		const email = formData.get('email') as string;
 
 		if (!invitationId || !email) {
-			return fail(400, { error: 'Invalid invitation data' });
+			return fail(400, {
+				action: 'regenerateInvitation',
+				error: 'Invalid invitation data'
+			});
 		}
 
 		try {
@@ -176,6 +298,7 @@ export const actions: Actions = {
 				// Link generation is still in progress
 				console.log('[Admin] Invitation regeneration timed out for:', email);
 				return {
+					action: 'regenerateInvitation',
 					success: true,
 					invitationLink: null,
 					message: 'Invitation regenerated. The link will be available shortly.'
@@ -183,12 +306,16 @@ export const actions: Actions = {
 			}
 
 			return {
+				action: 'regenerateInvitation',
 				success: true,
 				invitationLink
 			};
 		} catch (error) {
 			console.error('Error regenerating invitation:', error);
-			return fail(500, { error: 'Failed to regenerate invitation' });
+			return fail(500, {
+				action: 'regenerateInvitation',
+				error: 'Failed to regenerate invitation'
+			});
 		}
 	}
 };

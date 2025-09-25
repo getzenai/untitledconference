@@ -32,7 +32,7 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
-	import { Shield, Users, UserX, UserCheck, Mail, Clock, RefreshCw } from 'lucide-svelte';
+	import { Shield, Users, UserX, UserCheck, Mail, Clock, RefreshCw, UserPlus } from 'lucide-svelte';
 	import CopyButton from '$lib/components/ui/copy-button.svelte';
 	import {
 		Tooltip,
@@ -44,6 +44,8 @@
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types';
 	import { INVITATION_EXPIRY_SECONDS } from '$lib/constants';
+	import { generateRandomPassword } from '$lib/utils/password';
+	import { PASSWORD_MIN_LENGTH } from '$lib/validators/password';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -82,30 +84,112 @@
 	let invitationLink = $state('');
 	let regeneratingInvitationId = $state<string | null>(null);
 
+	// Create user dialog state
+	let createDialogOpen = $state(false);
+	let createEmail = $state('');
+	let createPassword = $state('');
+	let createRole = $state('user');
+	let isCreatingUser = $state(false);
+	let showCreateUserSuccess = $state(false);
+	let createUserError = $state<string | null>(null);
+	let createdUserDetails = $state<User | null>(null);
+
+	function prepareCreateDialog() {
+		createEmail = '';
+		createPassword = generateRandomPassword();
+		createRole = 'user';
+		createUserError = null;
+		createdUserDetails = null;
+		showCreateUserSuccess = false;
+		isCreatingUser = false;
+	}
+
+	function resetCreateDialogState(refresh = false) {
+		createEmail = '';
+		createPassword = generateRandomPassword();
+		createRole = 'user';
+		createUserError = null;
+		createdUserDetails = null;
+		const shouldRefresh = refresh && showCreateUserSuccess;
+		showCreateUserSuccess = false;
+		isCreatingUser = false;
+
+		if (shouldRefresh) {
+			void loadAdminData();
+		}
+	}
+
 	// Handle form response
 	$effect(() => {
-		if (form?.success) {
-			if (form?.invitationLink) {
-				invitationLink = form.invitationLink;
-				showInvitationSuccess = true;
-				// Clear regenerating state
+		const actionType = (form as { action?: string } | null)?.action;
+
+		if (!actionType) {
+			return;
+		}
+
+		if (actionType === 'createInvitation' || actionType === 'regenerateInvitation') {
+			if (form?.success) {
+				if (form?.invitationLink) {
+					invitationLink = form.invitationLink;
+					showInvitationSuccess = true;
+					inviteDialogOpen = true;
+					toast.success('Invitation link ready');
+				} else if (form?.message) {
+					toast.success(form.message);
+					inviteDialogOpen = false;
+					resetInviteDialog();
+					void goto('/admin/users', { invalidateAll: true });
+				}
+			} else if (form?.error) {
+				toast.error(form.error);
+			}
+
+			if (actionType === 'createInvitation') {
+				isCreatingInvitation = false;
 				regeneratingInvitationId = null;
-			} else if (form?.message) {
-				// Invitation created/regenerated but link generation timed out
-				toast.success(form.message);
-				inviteDialogOpen = false;
-				resetInviteDialog();
-				// Reload to show the new invitation in the list
-				goto('/admin/users', { invalidateAll: true });
 			}
-			isCreatingInvitation = false;
-			if (form?.invitationLink) {
-				toast.success('Invitation link ready');
+
+			if (actionType === 'regenerateInvitation') {
+				regeneratingInvitationId = null;
 			}
-		} else if (form?.error) {
-			toast.error(form.error);
-			isCreatingInvitation = false;
-			regeneratingInvitationId = null;
+		}
+
+		if (actionType === 'createUser') {
+			if (form?.success && form?.createdUser) {
+				const created = form.createdUser as User;
+				const existingUser = users.find((user) => user.id === created.id);
+
+				if (existingUser) {
+					users = users.map((user) => (user.id === created.id ? { ...user, ...created } : user));
+				} else {
+					users = [created, ...users].sort(
+						(a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+					);
+					stats = {
+						...stats,
+						totalUsers: stats.totalUsers + 1,
+						adminUsers: created.role === 'admin' ? stats.adminUsers + 1 : stats.adminUsers
+					};
+				}
+
+				// Preserve the password for display (it's already in createPassword from the form)
+				// Only update email and details
+				createEmail = created.email;
+				createdUserDetails = created;
+				showCreateUserSuccess = true;
+				createUserError = null;
+				toast.success('User created successfully');
+
+				// Clear form state after handling
+				form = null;
+			} else if (form?.error) {
+				createUserError = form.error;
+				toast.error(form.error);
+				// Clear form state after handling error
+				form = null;
+			}
+
+			isCreatingUser = false;
 		}
 	});
 
@@ -344,111 +428,270 @@
 	<!-- User Management -->
 	<Card>
 		<CardHeader>
-			<div class="flex items-center justify-between">
+			<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 				<div>
 					<CardTitle>User Management</CardTitle>
 					<CardDescription>View and manage all system users</CardDescription>
 				</div>
-				<Dialog.Root
-					bind:open={inviteDialogOpen}
-					onOpenChange={(open) => !open && resetInviteDialog()}
-				>
-					<Dialog.Trigger class={buttonVariants({ variant: 'default' })}>
-						<Mail class="mr-2 h-4 w-4" />
-						Invite User
-					</Dialog.Trigger>
-					<Dialog.Content class="sm:max-w-md">
-						{#if !showInvitationSuccess}
-							<Dialog.Header>
-								<Dialog.Title>Invite New User</Dialog.Title>
-								<Dialog.Description>
-									Create an invitation to join the platform. You'll receive a link to share with the
-									new user.
-								</Dialog.Description>
-							</Dialog.Header>
-							<form
-								method="POST"
-								action="?/createInvitation"
-								use:enhance={() => {
-									isCreatingInvitation = true;
-									return async ({ update }) => {
-										await update();
-									};
-								}}
-							>
+				<div class="flex flex-wrap items-center gap-2">
+					<Dialog.Root
+						bind:open={createDialogOpen}
+						onOpenChange={(open) => {
+							if (open) {
+								prepareCreateDialog();
+							} else {
+								// Only reset state when closing, don't refresh
+								resetCreateDialogState(false);
+							}
+						}}
+					>
+						<Dialog.Trigger class={buttonVariants({ variant: 'secondary' })}>
+							<UserPlus class="mr-2 h-4 w-4" />
+							Create User
+						</Dialog.Trigger>
+						<Dialog.Content class="sm:max-w-md">
+							{#if !showCreateUserSuccess}
+								<Dialog.Header>
+									<Dialog.Title>Create User Account</Dialog.Title>
+									<Dialog.Description>
+										Provision a new account and share credentials directly with the user.
+									</Dialog.Description>
+								</Dialog.Header>
+								<form
+									method="POST"
+									action="?/createUser"
+									use:enhance={() => {
+										isCreatingUser = true;
+										createUserError = null;
+										// Store the password value before form submission
+										const submittedPassword = createPassword;
+										return async ({ update }) => {
+											await update();
+											// Restore the password after update
+											createPassword = submittedPassword;
+											isCreatingUser = false;
+										};
+									}}
+								>
+									<div class="space-y-4">
+										<div class="space-y-2">
+											<Label for="create-email">Email Address</Label>
+											<Input
+												id="create-email"
+												name="email"
+												type="email"
+												placeholder="user@example.com"
+												bind:value={createEmail}
+												required
+												disabled={isCreatingUser}
+											/>
+										</div>
+										<div class="space-y-2">
+											<Label for="create-password">Temporary Password</Label>
+											<div class="flex items-center gap-2">
+												<Input
+													id="create-password"
+													name="password"
+													type="text"
+													bind:value={createPassword}
+													required
+													minlength={PASSWORD_MIN_LENGTH}
+													disabled={isCreatingUser}
+													class="font-mono"
+												/>
+												<CopyButton value={createPassword} />
+												<Button
+													type="button"
+													variant="outline"
+													onclick={() => (createPassword = generateRandomPassword())}
+													disabled={isCreatingUser}
+												>
+													Regenerate
+												</Button>
+											</div>
+											<p class="text-muted-foreground text-sm">
+												Share this password with the user. They can change it after signing in.
+											</p>
+										</div>
+										<div class="space-y-2">
+											<Label for="create-role">Initial Role</Label>
+											<input type="hidden" name="role" value={createRole} />
+											<Select
+												type="single"
+												value={createRole}
+												onValueChange={(value) => value && (createRole = value)}
+												disabled={isCreatingUser}
+											>
+												<SelectTrigger id="create-role">
+													<span class="capitalize">{createRole}</span>
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="user">User</SelectItem>
+													<SelectItem value="admin">Admin</SelectItem>
+												</SelectContent>
+											</Select>
+										</div>
+										{#if createUserError}
+											<p class="text-destructive text-sm">{createUserError}</p>
+										{/if}
+									</div>
+									<Dialog.Footer>
+										<Button
+											type="submit"
+											disabled={isCreatingUser || !createEmail || !createPassword}
+										>
+											{isCreatingUser ? 'Creating User...' : 'Create User'}
+										</Button>
+									</Dialog.Footer>
+								</form>
+							{:else}
+								<Dialog.Header>
+									<Dialog.Title>User Created</Dialog.Title>
+									<Dialog.Description>
+										Share the details below with the user so they can sign in.
+									</Dialog.Description>
+								</Dialog.Header>
 								<div class="space-y-4">
 									<div class="space-y-2">
-										<Label for="invite-email">Email Address</Label>
-										<Input
-											id="invite-email"
-											name="email"
-											type="email"
-											placeholder="user@example.com"
-											bind:value={inviteEmail}
-											required
-											disabled={isCreatingInvitation}
-										/>
+										<Label>Email</Label>
+										<Input value={createEmail} readonly class="font-mono text-sm" />
 									</div>
 									<div class="space-y-2">
-										<Label for="invite-role">Initial Role</Label>
-										<input type="hidden" name="role" value={inviteRole} />
-										<Select
-											type="single"
-											value={inviteRole}
-											onValueChange={(value) => value && (inviteRole = value)}
-											disabled={isCreatingInvitation}
-										>
-											<SelectTrigger id="invite-role">
-												<span class="capitalize">{inviteRole}</span>
-											</SelectTrigger>
-											<SelectContent>
-												<SelectItem value="user">User</SelectItem>
-												<SelectItem value="admin">Admin</SelectItem>
-											</SelectContent>
-										</Select>
+										<Label>Temporary Password</Label>
+										<Input value={createPassword} readonly class="font-mono text-sm" />
+										<p class="text-muted-foreground text-sm">
+											Ask the user to update their password after their first sign in.
+										</p>
+									</div>
+									{#if createdUserDetails?.role}
+										<p class="text-muted-foreground text-sm">
+											Assigned role: <span class="capitalize">{createdUserDetails.role}</span>
+										</p>
+									{/if}
+									<div class="flex items-center gap-2 pt-2">
+										<CopyButton value={`Email: ${createEmail}\nPassword: ${createPassword}`} />
+										<span class="text-muted-foreground text-sm">Copy credentials</span>
 									</div>
 								</div>
 								<Dialog.Footer>
 									<Button
-										type="submit"
-										disabled={!inviteEmail || !inviteRole || isCreatingInvitation}
+										type="button"
+										onclick={async () => {
+											createDialogOpen = false;
+											resetCreateDialogState(true);
+											// Clear form state and refresh page
+											form = null;
+											await goto('/admin/users', { invalidateAll: true });
+										}}
 									>
-										{isCreatingInvitation ? 'Creating Invitation...' : 'Create Invitation'}
+										Close
 									</Button>
 								</Dialog.Footer>
-							</form>
-						{:else}
-							<Dialog.Header>
-								<Dialog.Title>Invitation Created</Dialog.Title>
-								<Dialog.Description>
-									The invitation has been created successfully. Share the link below with the user.
-								</Dialog.Description>
-							</Dialog.Header>
-							<div class="space-y-4">
-								<div class="space-y-2">
-									<Label>Invitation Link</Label>
-									<div class="flex items-center space-x-2">
-										<Input value={invitationLink} readonly class="font-mono text-sm" />
-										<CopyButton value={invitationLink} />
-									</div>
-									<p class="text-muted-foreground text-sm">
-										This link will expire in {INVITATION_EXPIRY_SECONDS / 3600} hours. Share it with
-										the user to complete their registration.
-									</p>
-								</div>
-							</div>
-							<Dialog.Footer>
-								<Button
-									type="button"
-									onclick={() => {
-										inviteDialogOpen = false;
-										resetInviteDialog();
-									}}>Close</Button
+							{/if}
+						</Dialog.Content>
+					</Dialog.Root>
+					<Dialog.Root
+						bind:open={inviteDialogOpen}
+						onOpenChange={(open) => !open && resetInviteDialog()}
+					>
+						<Dialog.Trigger class={buttonVariants({ variant: 'default' })}>
+							<Mail class="mr-2 h-4 w-4" />
+							Invite User
+						</Dialog.Trigger>
+						<Dialog.Content class="sm:max-w-md">
+							{#if !showInvitationSuccess}
+								<Dialog.Header>
+									<Dialog.Title>Invite New User</Dialog.Title>
+									<Dialog.Description>
+										Create an invitation to join the platform. You'll receive a link to share with
+										the new user.
+									</Dialog.Description>
+								</Dialog.Header>
+								<form
+									method="POST"
+									action="?/createInvitation"
+									use:enhance={() => {
+										isCreatingInvitation = true;
+										return async ({ update }) => {
+											await update();
+										};
+									}}
 								>
-							</Dialog.Footer>
-						{/if}
-					</Dialog.Content>
-				</Dialog.Root>
+									<div class="space-y-4">
+										<div class="space-y-2">
+											<Label for="invite-email">Email Address</Label>
+											<Input
+												id="invite-email"
+												name="email"
+												type="email"
+												placeholder="user@example.com"
+												bind:value={inviteEmail}
+												required
+												disabled={isCreatingInvitation}
+											/>
+										</div>
+										<div class="space-y-2">
+											<Label for="invite-role">Initial Role</Label>
+											<input type="hidden" name="role" value={inviteRole} />
+											<Select
+												type="single"
+												value={inviteRole}
+												onValueChange={(value) => value && (inviteRole = value)}
+												disabled={isCreatingInvitation}
+											>
+												<SelectTrigger id="invite-role">
+													<span class="capitalize">{inviteRole}</span>
+												</SelectTrigger>
+												<SelectContent>
+													<SelectItem value="user">User</SelectItem>
+													<SelectItem value="admin">Admin</SelectItem>
+												</SelectContent>
+											</Select>
+										</div>
+									</div>
+									<Dialog.Footer>
+										<Button
+											type="submit"
+											disabled={!inviteEmail || !inviteRole || isCreatingInvitation}
+										>
+											{isCreatingInvitation ? 'Creating Invitation...' : 'Create Invitation'}
+										</Button>
+									</Dialog.Footer>
+								</form>
+							{:else}
+								<Dialog.Header>
+									<Dialog.Title>Invitation Created</Dialog.Title>
+									<Dialog.Description>
+										The invitation has been created successfully. Share the link below with the
+										user.
+									</Dialog.Description>
+								</Dialog.Header>
+								<div class="space-y-4">
+									<div class="space-y-2">
+										<Label>Invitation Link</Label>
+										<div class="flex items-center space-x-2">
+											<Input value={invitationLink} readonly class="font-mono text-sm" />
+											<CopyButton value={invitationLink} />
+										</div>
+										<p class="text-muted-foreground text-sm">
+											This link will expire in {INVITATION_EXPIRY_SECONDS / 3600} hours. Share it with
+											the user to complete their registration.
+										</p>
+									</div>
+								</div>
+								<Dialog.Footer>
+									<Button
+										type="button"
+										onclick={() => {
+											inviteDialogOpen = false;
+											resetInviteDialog();
+										}}>Close</Button
+									>
+								</Dialog.Footer>
+							{/if}
+						</Dialog.Content>
+					</Dialog.Root>
+				</div>
 			</div>
 		</CardHeader>
 		<CardContent>
@@ -658,19 +901,7 @@
 													action="?/regenerateInvitation"
 													use:enhance={() => {
 														regeneratingInvitationId = invitation.id;
-														return async ({ result, update }) => {
-															if (result.type === 'success') {
-																const data = result.data as ActionData;
-																if (data?.invitationLink) {
-																	invitationLink = data.invitationLink;
-																	showInvitationSuccess = true;
-																	inviteDialogOpen = true;
-																}
-															} else if (result.type === 'failure') {
-																const data = result.data as { error?: string };
-																toast.error(data?.error || 'Failed to regenerate invitation');
-															}
-															regeneratingInvitationId = null;
+														return async ({ update }) => {
 															await update();
 														};
 													}}
