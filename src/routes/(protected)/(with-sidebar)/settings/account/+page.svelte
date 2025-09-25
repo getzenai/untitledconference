@@ -131,7 +131,29 @@
 		<CardContent class="space-y-4">
 			<div class="space-y-1">
 				<Label>Email</Label>
-				<p class="text-sm font-medium">{data.user?.email ?? 'Unknown'}</p>
+				<div class="flex items-center gap-2">
+					<p class="text-sm font-medium">{data.user?.email ?? 'Unknown'}</p>
+					{#if data.user?.emailVerified}
+						<span
+							class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400"
+						>
+							Verified
+						</span>
+					{:else}
+						<span
+							class="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+						>
+							Unverified
+						</span>
+					{/if}
+				</div>
+				{#if !data.user?.emailVerified}
+					<div class="mt-2">
+						<a href="/verify-email" class="text-primary text-sm font-medium hover:underline">
+							Resend verification email
+						</a>
+					</div>
+				{/if}
 			</div>
 			<div class="space-y-1">
 				<Label>Role</Label>

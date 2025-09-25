@@ -96,7 +96,7 @@
 		try {
 			await authClient.sendVerificationEmail({
 				email,
-				callbackURL: window.location.origin + returnToTarget
+				callbackURL: window.location.origin + '/email-verified'
 			});
 
 			successMessage = 'Verification email sent! Please check your inbox.';

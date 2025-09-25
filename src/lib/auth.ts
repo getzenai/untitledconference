@@ -8,7 +8,11 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { INVITATION_EXPIRY_SECONDS } from './constants';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
-import { generateVerificationEmailContent, sendEmail } from './server/services/email-service';
+import {
+	generatePasswordResetEmailContent,
+	generateVerificationEmailContent,
+	sendEmail
+} from './server/services/email-service';
 import { markInvitationAsAccepted } from './server/services/system-invitation';
 
 const requireEmailVerification =
@@ -40,17 +44,16 @@ async function storeInvitationResetLink(email: string, url: string) {
 }
 
 /**
- * Logs password reset request (placeholder for future email implementation)
+ * Sends password reset email
  */
-async function logPasswordResetRequest(email: string, url: string) {
-	console.log('[Auth] Password reset requested for:', email);
-	console.log('[Auth] Reset URL:', url);
-	// TODO: Implement email sending for regular password resets
-	// await sendEmail({
-	//   to: email,
-	//   subject: 'Reset Your Password',
-	//   html: `<p><a href="${url}">Reset your password</a></p>`
-	// });
+async function sendPasswordResetEmail(email: string, url: string) {
+	const { subject, text, html } = generatePasswordResetEmailContent(url, email);
+	await sendEmail({
+		to: email,
+		subject,
+		text,
+		html
+	});
 }
 
 /**
@@ -123,8 +126,8 @@ export const auth = betterAuth({
 				// INVITATION PATH: Store the reset link in the system_invitation table
 				await storeInvitationResetLink(user.email, url);
 			} else {
-				// REGULAR PASSWORD RESET PATH: Log for now (email implementation pending)
-				await logPasswordResetRequest(user.email, url);
+				// REGULAR PASSWORD RESET PATH: Send password reset email
+				await sendPasswordResetEmail(user.email, url);
 			}
 		},
 		onPasswordReset: async ({ user }) => {
@@ -139,7 +142,12 @@ export const auth = betterAuth({
 		sendOnSignUp: requireEmailVerification,
 		autoSignInAfterVerification: true,
 		sendVerificationEmail: async ({ user, url }) => {
-			const { subject, text, html } = generateVerificationEmailContent(url, user.email);
+			// Add custom callback URL to redirect to our success page after verification
+			const verificationUrl = new URL(url);
+			verificationUrl.searchParams.set('callbackURL', '/email-verified');
+			const finalUrl = verificationUrl.toString();
+
+			const { subject, text, html } = generateVerificationEmailContent(finalUrl, user.email);
 			await sendEmail({
 				to: user.email,
 				subject,

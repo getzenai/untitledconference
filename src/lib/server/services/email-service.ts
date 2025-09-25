@@ -1,6 +1,9 @@
 import { env } from '$env/dynamic/private';
 import sgMail from '@sendgrid/mail';
-import { generateVerificationEmailTemplate } from '../email-templates';
+import {
+	generatePasswordResetEmailContent,
+	generateVerificationEmailTemplate
+} from '../email-templates';
 
 interface EmailData {
 	to: string;
@@ -62,3 +65,5 @@ export function generateVerificationEmailContent(
 		userEmail
 	});
 }
+
+export { generatePasswordResetEmailContent };
