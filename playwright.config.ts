@@ -18,6 +18,7 @@ export default defineConfig({
 			NODE_ENV: 'test',
 			PLAYWRIGHT_TEST: 'true',
 			DATABASE_URL: process.env.TEST_DATABASE_URL, // Use TEST_DATABASE_URL for tests, no fallback
+			REQUIRE_EMAIL_VERIFICATION: 'false', // Skip verification in E2E runs
 			ENABLE_TEST_ENDPOINTS: 'true'
 		}
 	},

@@ -8,7 +8,11 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { INVITATION_EXPIRY_SECONDS } from './constants';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
+import { generateVerificationEmailContent, sendEmail } from './server/services/email-service';
 import { markInvitationAsAccepted } from './server/services/system-invitation';
+
+const requireEmailVerification =
+	env.REQUIRE_EMAIL_VERIFICATION === undefined ? true : env.REQUIRE_EMAIL_VERIFICATION === 'true';
 
 /**
  * Checks if a password reset URL is for an invitation
@@ -110,6 +114,7 @@ export const auth = betterAuth({
 	// Email & Password Authentication
 	emailAndPassword: {
 		enabled: true,
+		requireEmailVerification,
 		autoSignIn: true, // Explicitly enable auto-signin after signup
 		resetPasswordTokenExpiresIn: INVITATION_EXPIRY_SECONDS, // Use centralized config
 		sendResetPassword: async ({ user, url }) => {
@@ -127,6 +132,31 @@ export const auth = betterAuth({
 			console.log('[Auth] Password reset completed for:', user.email);
 			await markInvitationAsAccepted(user.email);
 		}
+	},
+
+	// Email Verification Configuration
+	emailVerification: {
+		sendOnSignUp: requireEmailVerification,
+		autoSignInAfterVerification: true,
+		sendVerificationEmail: async ({ user, url }) => {
+			const { subject, text, html } = generateVerificationEmailContent(url, user.email);
+			await sendEmail({
+				to: user.email,
+				subject,
+				text,
+				html
+			});
+		}
+	},
+
+	// Social Providers Configuration
+	socialProviders: {
+		// Example for GitHub - uncomment and configure if you use it
+		// github: {
+		//   clientId: process.env.GITHUB_CLIENT_ID!, // Ensure these are in $env/static/private if used
+		//   clientSecret: process.env.GITHUB_CLIENT_SECRET!, // Ensure these are in $env/static/private if used
+		// },
+		// Add other providers like Google, Apple, etc., as needed
 	},
 
 	// Database Hooks for server-side logic during user operations

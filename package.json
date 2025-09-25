@@ -88,6 +88,8 @@
 	"dependencies": {
 		"@ai-sdk/azure": "^2.0.24",
 		"@ai-sdk/svelte": "^3.0.34",
+		"@inlang/paraglide-sveltekit": "^0.15.5",
+		"@sendgrid/mail": "^8.1.6",
 		"@tiptap/core": "^3.4.1",
 		"@tiptap/extension-bubble-menu": "^3.4.1",
 		"@tiptap/extension-history": "^3.4.1",

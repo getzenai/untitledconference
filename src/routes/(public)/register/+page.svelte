@@ -105,7 +105,8 @@
 					}
 				}
 
-				await goto('/home', { replaceState: true });
+				// Redirect to verify-email page instead of home
+				await goto('/verify-email', { replaceState: true });
 			} else {
 				error = 'An unexpected error occurred during registration. No data and no error received.';
 			}

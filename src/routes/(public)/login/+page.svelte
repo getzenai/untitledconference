@@ -27,29 +27,66 @@
 		error = null;
 		try {
 			console.log('[Login Page] Attempting sign-in with:', { email });
-			const { data: sessionData, error: signInError } = await authClient.signIn.email({
-				email,
-				password,
-				rememberMe: true // Or false, or make it a checkbox
-				// callbackURL is for email verification, not post-login redirect by default
-			});
+			let redirectedToVerify = false;
+			let signInErrorMessage: string | null = null;
 
-			console.log('[Login Page] signInError:', signInError);
-			console.log('[Login Page] sessionData:', sessionData);
+			const signInResult = await authClient.signIn.email(
+				{
+					email,
+					password,
+					rememberMe: true
+				},
+				{
+					onError: async (ctx) => {
+						console.error('[Login Page] Sign-in error details:', ctx.error);
+						const message = ctx.error.message?.toLowerCase() ?? '';
+						if (ctx.error.status === 403 && message.includes('email not verified')) {
+							redirectedToVerify = true;
+							const search = new URLSearchParams();
+							if (email) {
+								search.set('email', email);
+							}
+							const returnTo = page.url.searchParams.get('returnTo');
+							if (returnTo) {
+								search.set('returnTo', returnTo);
+							}
+							const verifyUrl = `/verify-email${search.toString() ? `?${search.toString()}` : ''}`;
+							await goto(verifyUrl, { replaceState: true });
+							return;
+						}
+						signInErrorMessage = ctx.error.message || 'Invalid credentials or server error.';
+					}
+				}
+			);
 
-			if (signInError) {
-				console.error('[Login Page] Sign-in error details:', signInError);
-				error = signInError.message || 'Invalid credentials or server error.';
-				// Clear password on error
-				password = '';
-			} else if (sessionData) {
-				console.log('[Login Page] Login successful, attempting redirect...');
+			if (redirectedToVerify) {
+				return;
+			}
+
+			const { data: sessionData } = signInResult ?? {};
+
+			if (signInErrorMessage) {
+				error = signInErrorMessage;
+				return;
+			}
+
+			if (sessionData) {
+				console.log('[Login Page] Login successful, checking verification status...');
+
+				// Check if user needs email verification
+				const sessionResponse = await authClient.getSession();
+				if (sessionResponse?.data?.user && !sessionResponse.data.user.emailVerified) {
+					console.log('[Login Page] User email not verified, redirecting to verify-email');
+					await goto('/verify-email', { replaceState: true });
+					return;
+				}
+
+				console.log('[Login Page] User verified, redirecting to returnTo or home...');
 				const returnTo = page.url.searchParams.get('returnTo') || '/home';
 				await goto(returnTo, { replaceState: true });
 			} else {
-				// This case implies signInError is null and sessionData is null
-				console.log('[Login Page] No sessionData and no signInError.');
-				error = 'Login attempt did not result in a session or an error.';
+				console.log('[Login Page] No sessionData returned.');
+				error = 'Login attempt did not result in a session.';
 			}
 		} catch (e: unknown) {
 			console.error('[Login Page] Unexpected exception during sign-in:', e);
