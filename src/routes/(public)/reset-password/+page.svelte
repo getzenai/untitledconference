@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { enhance } from '$app/forms';
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import * as Form from '$lib/components/ui/form';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import {
 		Card,
 		CardContent,
@@ -12,62 +13,73 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import { Eye, EyeOff } from 'lucide-svelte';
-	import { passwordSchema, getPasswordRequirementsFromSchema } from '$lib/validators/password';
-	import type { ActionData, PageData } from './$types';
+	import { authClient } from '$lib/auth-client';
+	import { getPasswordRequirementsFromSchema } from '$lib/validators/password';
+	import { resetPasswordSchema } from './schema';
+	import { page } from '$app/state';
 
-	interface Props {
-		data: PageData;
-		form: ActionData;
-	}
+	const token = $derived(page.url.searchParams.get('token') || '');
 
-	let { data, form }: Props = $props();
-
-	let password = $state('');
 	let showPassword = $state(false);
-	let errorMessage = $state('');
-	let isLoading = $state(false);
 	let didReset = $state(false);
-	let token = $state(data.token ?? '');
 
-	$effect(() => {
-		token = data.token ?? '';
-	});
+	const form = superForm(
+		{ password: '', token: '' },
+		{
+			validators: zodClient(resetPasswordSchema),
+			SPA: true, // Prevent default form submission
+			onSubmit: async ({ formData, cancel }) => {
+				// Cancel the default form submission
+				cancel();
 
-	$effect(() => {
-		if (form?.error) {
-			errorMessage = form.error;
-			isLoading = false;
-			didReset = false;
-		} else if (form?.success) {
-			errorMessage = '';
-			isLoading = false;
-			didReset = true;
+				const password = formData.get('password') as string;
+				const token = formData.get('token') as string;
+
+				try {
+					// Use Better Auth client to reset password
+					const { data: resetData, error: resetError } = await authClient.resetPassword({
+						newPassword: password,
+						token
+					});
+
+					if (resetError) {
+						errors.set({
+							_errors: [
+								resetError.message ||
+									'This reset link is invalid or has expired. Please request a new one.'
+							]
+						});
+						return;
+					}
+
+					if (resetData) {
+						didReset = true;
+
+						// Auto-redirect to login after successful reset
+						setTimeout(() => {
+							goto('/login');
+						}, 3000);
+					} else {
+						errors.set({ _errors: ['Failed to reset password. Please try again.'] });
+					}
+				} catch (_err) {
+					errors.set({
+						_errors: ['This reset link is invalid or has expired. Please request a new one.']
+					});
+				}
+			}
 		}
-	});
+	);
 
+	const { form: formData, enhance, submitting, errors } = form;
 	const passwordRequirements = getPasswordRequirementsFromSchema();
 
-	function validate() {
-		errorMessage = '';
-
-		if (!password) {
-			errorMessage = 'Password is required';
-			return false;
+	// Set the token value when available
+	$effect(() => {
+		if (token) {
+			$formData.token = token;
 		}
-
-		const result = passwordSchema.safeParse(password);
-		if (!result.success) {
-			errorMessage = result.error.errors[0].message;
-			return false;
-		}
-
-		if (!token) {
-			errorMessage = 'This reset link is invalid or has expired. Please request a new one.';
-			return false;
-		}
-
-		return true;
-	}
+	});
 </script>
 
 <div
@@ -107,66 +119,49 @@
 							</Button>
 						</div>
 					{:else}
-						<form
-							method="POST"
-							use:enhance={() => {
-								if (!validate()) {
-									return async () => {};
-								}
-
-								isLoading = true;
-								didReset = false;
-
-								return async ({ result, update }) => {
-									if (result.type === 'success') {
-										password = '';
-										await update();
-									} else if (result.type === 'failure') {
-										await update();
-									} else if (result.type === 'error') {
-										console.error('[Reset Password] Submission error:', result.error);
-										errorMessage = 'Something went wrong. Please try again.';
-									}
-
-									isLoading = false;
-								};
-							}}
-							class="space-y-4"
-						>
+						<form use:enhance class="space-y-4">
 							<input type="hidden" name="token" value={token} />
 
-							<div class="space-y-2">
-								<Label for="password">New password</Label>
-								<div class="relative">
-									<Input
-										id="password"
-										name="password"
-										type={showPassword ? 'text' : 'password'}
-										autocomplete="new-password"
-										placeholder="Enter a secure password"
-										bind:value={password}
-										disabled={isLoading}
-										class="pr-10"
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										class="text-muted-foreground absolute top-1/2 right-1 -translate-y-1/2"
-										aria-label={showPassword ? 'Hide password' : 'Show password'}
-										onclick={() => (showPassword = !showPassword)}
-									>
-										{#if showPassword}
-											<EyeOff class="size-4" />
-										{:else}
-											<Eye class="size-4" />
-										{/if}
-									</Button>
-								</div>
-							</div>
+							<Form.Field {form} name="password">
+								<Form.Control>
+									{#snippet children({ props })}
+										<Form.Label>New password</Form.Label>
+										<div class="relative">
+											<Input
+												{...props}
+												type={showPassword ? 'text' : 'password'}
+												autocomplete="new-password"
+												placeholder="Enter a secure password"
+												bind:value={$formData.password}
+												disabled={$submitting}
+												class="pr-10"
+											/>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												class="text-muted-foreground absolute top-1/2 right-1 -translate-y-1/2"
+												aria-label={showPassword ? 'Hide password' : 'Show password'}
+												onclick={() => (showPassword = !showPassword)}
+											>
+												{#if showPassword}
+													<EyeOff class="size-4" />
+												{:else}
+													<Eye class="size-4" />
+												{/if}
+											</Button>
+										</div>
+									{/snippet}
+								</Form.Control>
+								<Form.FieldErrors />
+							</Form.Field>
 
-							{#if errorMessage}
-								<p class="text-destructive text-sm">{errorMessage}</p>
+							{#if $errors._errors}
+								<div role="alert" class="text-sm text-red-500">
+									{#each $errors._errors as error}
+										<p>{error}</p>
+									{/each}
+								</div>
 							{/if}
 
 							<div class="text-muted-foreground text-xs">
@@ -178,13 +173,13 @@
 								</ul>
 							</div>
 
-							<Button type="submit" class="w-full" disabled={isLoading}>
-								{#if isLoading}
+							<Form.Button type="submit" class="w-full" disabled={$submitting}>
+								{#if $submitting}
 									Updating password...
 								{:else}
 									Update password
 								{/if}
-							</Button>
+							</Form.Button>
 						</form>
 					{/if}
 				</CardContent>

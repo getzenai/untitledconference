@@ -3,8 +3,10 @@ import { member } from '$lib/server/db/auth-schema';
 import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema';
 import { fail, error as svelteKitError } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
+import { superValidate } from 'sveltekit-superforms';
+import { zod } from 'sveltekit-superforms/adapters';
 import type { Actions, PageServerLoad } from './$types';
-import { exampleFormSchema } from './crud.validation';
+import { exampleFormSchema } from './schema';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const user = locals.user;
@@ -33,9 +35,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.where(whereConditions)
 			.orderBy(exampleObjectsTable.createdAt);
 
+		const form = await superValidate(zod(exampleFormSchema));
+
 		return {
 			examples,
-			organizationId
+			organizationId,
+			form
 		};
 	} catch (err) {
 		console.error('Error loading example objects:', err);
@@ -53,24 +58,16 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	create: async ({ request, locals }) => {
-		const user = locals.user;
+	create: async (event) => {
+		const user = event.locals.user;
 
-		const formData = await request.formData();
-		const name = formData.get('name') as string;
-		const description = formData.get('description') as string;
+		const form = await superValidate(event, zod(exampleFormSchema));
 
-		const validationResult = exampleFormSchema.safeParse({ name, description });
-
-		if (!validationResult.success) {
-			const errors = validationResult.error.flatten().fieldErrors;
-			return fail(400, {
-				data: { name, description },
-				errors
-			});
+		if (!form.valid) {
+			return fail(400, { form });
 		}
 
-		const validData = validationResult.data;
+		const validData = form.data;
 
 		try {
 			// Get user's active organization
@@ -93,18 +90,14 @@ export const actions: Actions = {
 				.returning();
 
 			if (!newExampleObject) {
-				return fail(500, {
-					data: { name, description },
-					message: 'Failed to create example object.'
-				});
+				form.errors._errors = ['Failed to create example object.'];
+				return fail(500, { form });
 			}
-			return { success: true, created: newExampleObject };
+			return { form, success: true, created: newExampleObject };
 		} catch (dbError) {
 			console.error('Database error creating example object:', dbError);
-			return fail(500, {
-				data: { name, description },
-				message: 'An unexpected error occurred.'
-			});
+			form.errors._errors = ['An unexpected error occurred.'];
+			return fail(500, { form });
 		}
 	}
 };

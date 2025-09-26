@@ -1,6 +1,7 @@
 import { auth } from '$lib/auth';
 import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/auth-schema';
+import { createLogger } from '$lib/server/logger';
 import {
 	createSystemInvitation,
 	listAllInvitations,
@@ -10,6 +11,8 @@ import { fail } from '@sveltejs/kit';
 import { generateRandomString } from 'better-auth/crypto';
 import { desc, eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
+
+const logger = createLogger('AdminUsers');
 
 // Helper function to trigger password reset and poll for link
 async function triggerInvitationLink(email: string, invitationId: string, headers: Headers) {
@@ -129,7 +132,7 @@ export const actions: Actions = {
 
 			if (!invitationLink) {
 				// Link generation is still in progress, but the invitation was created successfully
-				console.log('[Admin] Invitation created but link generation timed out for:', email);
+				logger.warn('Invitation created but link generation timed out', { email });
 				return {
 					action: 'createInvitation',
 					success: true,
@@ -144,7 +147,7 @@ export const actions: Actions = {
 				invitationLink
 			};
 		} catch (error) {
-			console.error('Error creating invitation:', error);
+			logger.error('Error creating invitation', error as Error);
 
 			if (error instanceof Error) {
 				if (error.message.includes('already exists')) {
@@ -243,7 +246,7 @@ export const actions: Actions = {
 				createdUser: fullUser
 			};
 		} catch (error) {
-			console.error('Error creating user:', error);
+			logger.error('Error creating user', error as Error);
 
 			if (error instanceof Error) {
 				if (error.message.includes('USER_ALREADY_EXISTS')) {
@@ -296,7 +299,7 @@ export const actions: Actions = {
 
 			if (!invitationLink) {
 				// Link generation is still in progress
-				console.log('[Admin] Invitation regeneration timed out for:', email);
+				logger.warn('Invitation regeneration timed out', { email });
 				return {
 					action: 'regenerateInvitation',
 					success: true,
@@ -311,7 +314,7 @@ export const actions: Actions = {
 				invitationLink
 			};
 		} catch (error) {
-			console.error('Error regenerating invitation:', error);
+			logger.error('Error regenerating invitation', error as Error);
 			return fail(500, {
 				action: 'regenerateInvitation',
 				error: 'Failed to regenerate invitation'
@@ -354,7 +357,7 @@ export const actions: Actions = {
 
 			return { success: true };
 		} catch (error) {
-			console.error('Error updating email verification status:', error);
+			logger.error('Error updating email verification status', error as Error);
 			return fail(500, { error: 'Failed to update email verification status' });
 		}
 	}

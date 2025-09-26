@@ -1,7 +1,10 @@
 import { db } from '$lib/server/db';
+import { createLogger } from '$lib/server/logger';
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 import { sql } from 'drizzle-orm';
+
+const logger = createLogger('HealthCheck');
 
 export const GET: RequestHandler = async () => {
 	try {
@@ -16,7 +19,7 @@ export const GET: RequestHandler = async () => {
 			{ status: 200 }
 		);
 	} catch (error) {
-		console.error('Health check failed:', error);
+		logger.error('Health check failed', error as Error);
 		let errorMessage = 'unknown error';
 		if (error instanceof Error) {
 			errorMessage = error.message;

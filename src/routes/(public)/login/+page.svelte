@@ -1,6 +1,9 @@
 <script lang="ts">
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
+	import { Checkbox } from '$lib/components/ui/checkbox';
 	import {
 		Card,
 		CardContent,
@@ -11,96 +14,68 @@
 	import { authClient } from '$lib/auth-client';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { loginSchema } from './schema';
 
-	let email = $state('');
-	let password = $state('');
-	let error: string | null = $state(null);
-	let isLoading = $state(false);
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		// Validate fields
-		if (!email || !password) {
-			error = 'Email and password are required';
-			return;
-		}
-		isLoading = true;
-		error = null;
-		try {
-			console.log('[Login Page] Attempting sign-in with:', { email });
-			let redirectedToVerify = false;
-			let signInErrorMessage: string | null = null;
+	const form = superForm(
+		{ email: '', password: '', rememberMe: true },
+		{
+			validators: zodClient(loginSchema),
+			SPA: true, // Prevent default form submission
+			onSubmit: async ({ formData, cancel }) => {
+				// Cancel the default form submission
+				cancel();
 
-			const signInResult = await authClient.signIn.email(
-				{
-					email,
-					password,
-					rememberMe: true
-				},
-				{
-					onError: async (ctx) => {
-						console.error('[Login Page] Sign-in error details:', ctx.error);
-						const message = ctx.error.message?.toLowerCase() ?? '';
-						if (ctx.error.status === 403 && message.includes('email not verified')) {
-							redirectedToVerify = true;
-							const search = new URLSearchParams();
-							if (email) {
-								search.set('email', email);
-							}
+				const email = formData.get('email') as string;
+				const password = formData.get('password') as string;
+				const rememberMe = formData.get('rememberMe') === 'on';
+
+				try {
+					// Use Better Auth client-side authentication
+					const { data: sessionData, error: signInError } = await authClient.signIn.email({
+						email,
+						password,
+						rememberMe
+					});
+
+					if (signInError) {
+						// Handle email verification error
+						if (signInError.status === 403 && signInError.message?.includes('Email not verified')) {
+							const params = new URLSearchParams({ email });
 							const returnTo = page.url.searchParams.get('returnTo');
-							if (returnTo) {
-								search.set('returnTo', returnTo);
-							}
-							const verifyUrl = `/verify-email${search.toString() ? `?${search.toString()}` : ''}`;
-							await goto(verifyUrl, { replaceState: true });
+							if (returnTo) params.set('returnTo', returnTo);
+							await goto(`/verify-email?${params}`);
 							return;
 						}
-						signInErrorMessage = ctx.error.message || 'Invalid credentials or server error.';
+
+						// Set form error
+						errors.set({ _errors: [signInError.message || 'Invalid credentials.'] });
+						return;
 					}
+
+					if (sessionData?.user) {
+						// Check email verification
+						if (!sessionData.user.emailVerified) {
+							const params = new URLSearchParams({ email });
+							const returnTo = page.url.searchParams.get('returnTo');
+							if (returnTo) params.set('returnTo', returnTo);
+							await goto(`/verify-email?${params}`);
+							return;
+						}
+
+						// Redirect to home or returnTo URL
+						const returnTo = page.url.searchParams.get('returnTo') || '/home';
+						await goto(returnTo);
+					} else {
+						errors.set({ _errors: ['Login failed. Please try again.'] });
+					}
+				} catch (_err) {
+					errors.set({ _errors: ['An unexpected error occurred during login.'] });
 				}
-			);
-
-			if (redirectedToVerify) {
-				return;
 			}
-
-			const { data: sessionData } = signInResult ?? {};
-
-			if (signInErrorMessage) {
-				error = signInErrorMessage;
-				return;
-			}
-
-			if (sessionData) {
-				console.log('[Login Page] Login successful, checking verification status...');
-
-				// Check if user needs email verification
-				const sessionResponse = await authClient.getSession();
-				if (sessionResponse?.data?.user && !sessionResponse.data.user.emailVerified) {
-					console.log('[Login Page] User email not verified, redirecting to verify-email');
-					await goto('/verify-email', { replaceState: true });
-					return;
-				}
-
-				console.log('[Login Page] User verified, redirecting to returnTo or home...');
-				const returnTo = page.url.searchParams.get('returnTo') || '/home';
-				await goto(returnTo, { replaceState: true });
-			} else {
-				console.log('[Login Page] No sessionData returned.');
-				error = 'Login attempt did not result in a session.';
-			}
-		} catch (e: unknown) {
-			console.error('[Login Page] Unexpected exception during sign-in:', e);
-			if (e instanceof Error) {
-				error = e.message;
-			} else {
-				error = 'An unexpected error occurred.';
-			}
-			// Clear password on any error
-			password = '';
-		} finally {
-			isLoading = false;
 		}
-	}
+	);
+
+	const { form: formData, enhance, submitting, errors } = form;
 </script>
 
 <div
@@ -138,48 +113,75 @@
 					<CardDescription>Enter your credentials to access your account</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form onsubmit={handleSubmit} class="space-y-4">
-						<div class="space-y-2">
-							<Label for="email">Email</Label>
-							<Input
-								id="email"
-								name="email"
-								type="email"
-								placeholder="Enter your email"
-								bind:value={email}
-								disabled={isLoading}
-							/>
-						</div>
-						<div class="space-y-2">
-							<div class="flex items-center justify-between">
-								<Label for="password">Password</Label>
-								<a href="/forgot-password" class="text-primary text-sm hover:underline">
-									Forgot your password?
-								</a>
+					<form use:enhance class="space-y-4">
+						<Form.Field {form} name="email">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Form.Label>Email</Form.Label>
+									<Input
+										{...props}
+										type="email"
+										placeholder="Enter your email"
+										bind:value={$formData.email}
+										disabled={$submitting}
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<Form.Field {form} name="password">
+							<Form.Control>
+								{#snippet children({ props })}
+									<div class="flex items-center justify-between">
+										<Form.Label>Password</Form.Label>
+										<a href="/forgot-password" class="text-primary text-sm hover:underline">
+											Forgot your password?
+										</a>
+									</div>
+									<Input
+										{...props}
+										type="password"
+										placeholder="Enter your password"
+										bind:value={$formData.password}
+										disabled={$submitting}
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<Form.Field {form} name="rememberMe">
+							<Form.Control>
+								{#snippet children({ props })}
+									<div class="flex items-center space-x-2">
+										<Checkbox
+											{...props}
+											bind:checked={$formData.rememberMe}
+											disabled={$submitting}
+										/>
+										<Form.Label class="text-sm font-normal">Remember me</Form.Label>
+									</div>
+								{/snippet}
+							</Form.Control>
+						</Form.Field>
+
+						{#if $errors._errors}
+							<div role="alert" class="text-sm text-red-500">
+								{#each $errors._errors as error}
+									<p>{error}</p>
+								{/each}
 							</div>
-							<Input
-								id="password"
-								name="password"
-								type="password"
-								placeholder="Enter your password"
-								bind:value={password}
-								disabled={isLoading}
-							/>
-						</div>
-						{#if error}
-							<div role="alert" class="error-message text-sm text-red-500">{error}</div>
 						{/if}
-						<button
-							type="submit"
-							class="bg-primary hover:bg-primary/90 w-full rounded px-4 py-2 font-medium text-white disabled:opacity-50"
-							disabled={isLoading}
-						>
-							{#if isLoading}
+
+						<Form.Button type="submit" class="w-full" disabled={$submitting}>
+							{#if $submitting}
 								Logging in...
 							{:else}
 								Login
 							{/if}
-						</button>
+						</Form.Button>
+
 						<p class="text-muted-foreground text-center text-sm">
 							Don't have an account? <a href="/register" class="text-primary hover:underline"
 								>Register</a

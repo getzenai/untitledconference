@@ -1,11 +1,8 @@
 <script lang="ts">
-	import { preventDefault } from 'svelte/legacy';
-
-	import { page } from '$app/state';
-	import { authClient } from '$lib/auth-client';
-	import { Button } from '$lib/components/ui/button';
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import {
 		Card,
 		CardContent,
@@ -13,62 +10,50 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
+	import { authClient } from '$lib/auth-client';
+	import { page } from '$app/state';
+	import { forgotPasswordSchema } from './schema';
 
 	const confirmationCopy =
 		'If an account with that email exists, we just sent password reset instructions. Please check your inbox and spam folder.';
 
-	let email = $state('');
-	let error: string | null = $state(null);
-	let infoMessage = $state('');
-	let isLoading = $state(false);
+	let showSuccessMessage = $state(false);
 
-	function validate() {
-		const trimmed = email.trim();
-		email = trimmed;
+	const form = superForm(
+		{ email: '' },
+		{
+			validators: zodClient(forgotPasswordSchema),
+			SPA: true, // Prevent default form submission
+			onSubmit: async ({ formData, cancel }) => {
+				// Cancel the default form submission
+				cancel();
 
-		if (!trimmed) {
-			error = 'Email is required';
-			return false;
-		}
+				const email = formData.get('email') as string;
 
-		const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-		if (!emailPattern.test(trimmed)) {
-			error = 'Enter a valid email address';
-			return false;
-		}
+				try {
+					const origin = page.url.origin;
+					const redirectTo = `${origin}/reset-password`;
 
-		error = null;
-		return true;
-	}
+					// Use Better Auth client to request password reset
+					await authClient.forgetPassword({
+						email,
+						redirectTo
+					});
 
-	async function handleSubmit() {
-		if (!validate()) {
-			return;
-		}
+					// Ignore error for security - always show success
 
-		isLoading = true;
-		infoMessage = '';
-
-		try {
-			const origin = page.url.origin;
-			const redirectTo = `${origin}/reset-password`;
-			const { error: requestError } = await authClient.forgetPassword({
-				email,
-				redirectTo
-			});
-
-			if (requestError) {
-				console.error('[Forgot Password] Request error:', requestError);
+					// Always show success message for security
+					// We don't want to reveal whether an email exists
+					showSuccessMessage = true;
+				} catch (_err) {
+					// Always show success message for security
+					showSuccessMessage = true;
+				}
 			}
-
-			infoMessage = confirmationCopy;
-		} catch (err) {
-			console.error('[Forgot Password] Unexpected error:', err);
-			infoMessage = confirmationCopy;
-		} finally {
-			isLoading = false;
 		}
-	}
+	);
+
+	const { form: formData, enhance, submitting } = form;
 </script>
 
 <div
@@ -88,36 +73,46 @@
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form onsubmit={preventDefault(handleSubmit)} class="space-y-4">
-						<div class="space-y-2">
-							<Label for="email">Email</Label>
-							<Input
-								id="email"
-								name="email"
-								type="email"
-								placeholder="you@example.com"
-								bind:value={email}
-								disabled={isLoading}
-							/>
+					{#if showSuccessMessage}
+						<div class="space-y-4 text-center">
+							<p class="text-muted-foreground text-sm">{confirmationCopy}</p>
+							<p class="text-muted-foreground text-center text-sm">
+								Remembered your password?
+								<a href="/login" class="text-primary hover:underline">Return to login</a>
+							</p>
 						</div>
-						{#if error}
-							<p class="text-destructive text-sm">{error}</p>
-						{/if}
-						{#if infoMessage}
-							<p class="text-muted-foreground text-sm">{infoMessage}</p>
-						{/if}
-						<Button type="submit" class="w-full" disabled={isLoading}>
-							{#if isLoading}
-								Sending instructions...
-							{:else}
-								Send reset link
-							{/if}
-						</Button>
-						<p class="text-muted-foreground text-center text-sm">
-							Remembered your password?
-							<a href="/login" class="text-primary hover:underline">Return to login</a>
-						</p>
-					</form>
+					{:else}
+						<form use:enhance class="space-y-4">
+							<Form.Field {form} name="email">
+								<Form.Control>
+									{#snippet children({ props })}
+										<Form.Label>Email</Form.Label>
+										<Input
+											{...props}
+											type="email"
+											placeholder="you@example.com"
+											bind:value={$formData.email}
+											disabled={$submitting}
+										/>
+									{/snippet}
+								</Form.Control>
+								<Form.FieldErrors />
+							</Form.Field>
+
+							<Form.Button type="submit" class="w-full" disabled={$submitting}>
+								{#if $submitting}
+									Sending instructions...
+								{:else}
+									Send reset link
+								{/if}
+							</Form.Button>
+
+							<p class="text-muted-foreground text-center text-sm">
+								Remembered your password?
+								<a href="/login" class="text-primary hover:underline">Return to login</a>
+							</p>
+						</form>
+					{/if}
 				</CardContent>
 			</Card>
 		</div>

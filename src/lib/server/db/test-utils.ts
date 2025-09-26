@@ -1,8 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { createLogger } from '../logger';
 import * as authSchema from './auth-schema';
 import * as exampleSchema from './examples/crud-example-schema';
+
+const logger = createLogger('TestUtils');
 
 // Test database connections map - one per test file to avoid connection issues
 const testConnections = new Map<
@@ -93,7 +96,7 @@ export async function cleanupTestDatabase(connectionId: string = 'default') {
 		await db.delete(authSchema.account);
 		await db.delete(authSchema.user);
 	} catch (error) {
-		console.error('Error during test database cleanup:', error);
+		logger.error('Error during test database cleanup', error as Error);
 		throw error;
 	}
 }

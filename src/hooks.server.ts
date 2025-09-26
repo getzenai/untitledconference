@@ -1,14 +1,25 @@
 import { auth } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
+import { createLogger } from '$lib/server/logger';
 import { type Handle } from '@sveltejs/kit'; // Removed ResolveOptions
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
+const logger = createLogger('Hooks');
+
 // This new handler will attempt to populate event.locals.user and organization on every request.
 const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
+	logger.debug('Processing request for:', event.url.pathname);
 	try {
 		const requestHeaders = new Headers(event.request.headers);
 		const session = await auth.api.getSession({ headers: requestHeaders });
+		logger.debug('Session check:', {
+			hasSession: !!session,
+			hasUser: !!session?.user,
+			userId: session?.user?.id,
+			email: session?.user?.email,
+			path: event.url.pathname
+		});
 		if (session?.user) {
 			event.locals.user = session.user;
 
@@ -60,6 +71,7 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 	} catch (_e) {
 		// Do not throw an error here, just proceed without setting locals.user
 		// Other parts of the system (like protected layouts) will handle unauthorized access.
+		logger.debug('Failed to get session, proceeding without auth');
 	}
 	return resolve(event);
 };

@@ -6,3 +6,5 @@ src/lib/components/ui/
 
 # VitePress
 .vitepress/
+
+ai-dev-docs/

@@ -1,55 +1,44 @@
 <script lang="ts">
-	import { run } from 'svelte/legacy';
-
-	import type { PageData, ActionData } from './$types';
-	import { enhance } from '$app/forms';
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import type { PageData } from './$types';
+	import * as Form from '$lib/components/ui/form';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
-	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Separator } from '$lib/components/ui/separator';
 	import { AlertCircle, Trash2, Edit, Save, ArrowLeft } from 'lucide-svelte';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
+	import { exampleFormSchema } from '../schema';
+	import { enhance as svelteKitEnhance } from '$app/forms';
 
 	interface Props {
 		data: PageData;
-		form: ActionData;
 	}
 
-	let { data, form }: Props = $props();
+	let { data }: Props = $props();
 
-	let idValue = $state(data.exampleObject?.id || '');
-	let nameValue = $state(data.exampleObject?.name || '');
-	let descriptionValue = $state(data.exampleObject?.description || '');
+	const form = superForm(data.form, {
+		validators: zodClient(exampleFormSchema)
+	});
 
-	let submittingUpdate = $state(false);
+	const { form: formData, enhance, submitting } = form;
+
 	let submittingDelete = $state(false);
 	let showDeleteConfirm = $state(false);
-
-	run(() => {
-		if (form?.data && form.formAction === '?/update') {
-			idValue = form.data.id || data.exampleObject?.id || '';
-			nameValue = form.data.name || data.exampleObject?.name || '';
-			descriptionValue = form.data.description || data.exampleObject?.description || '';
-		} else if (data.exampleObject) {
-			idValue = data.exampleObject.id;
-			nameValue = data.exampleObject.name;
-			descriptionValue = data.exampleObject.description || '';
-		}
-	});
 </script>
 
 <svelte:head>
-	<title>Edit: {nameValue || 'Example Object'}</title>
-	<meta name="description" content="View and Edit Example Object {nameValue}" />
+	<title>Edit: {$formData.name || 'Example Object'}</title>
+	<meta name="description" content="View and Edit Example Object {$formData.name}" />
 </svelte:head>
 
 <div class="container mx-auto p-4 md:p-8">
 	<div class="mb-6 flex items-center justify-between">
 		<h1 class="text-3xl font-bold">
-			View/Edit: <span class="font-normal">{nameValue}</span>
+			View/Edit: <span class="font-normal">{$formData.name}</span>
 		</h1>
 		<a href="/examples/crud">
 			<Button variant="outline"><ArrowLeft class="mr-2 h-4 w-4" /> Back to List</Button>
@@ -63,61 +52,40 @@
 					<Edit class="mr-2 h-5 w-5" />
 					Edit Example Object
 				</Card.Title>
-				<Card.Description>Modify the details of '{nameValue}' (ID: {idValue}).</Card.Description>
+				<Card.Description
+					>Modify the details of '{$formData.name}' (ID: {data.exampleObject
+						?.id}).</Card.Description
+				>
 			</Card.Header>
 			<Card.Content>
-				<form
-					method="POST"
-					action="?/update"
-					use:enhance={() => {
-						submittingUpdate = true;
-						return async ({ update }) => {
-							await update();
-							submittingUpdate = false;
-						};
-					}}
-				>
-					<input type="hidden" name="id" bind:value={idValue} />
+				<form method="POST" action="?/update" use:enhance>
+					<Form.Field {form} name="name">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>Name</Form.Label>
+								<Input {...props} bind:value={$formData.name} placeholder="Enter example name" />
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
 
-					<div class="mb-4 space-y-1">
-						<Label for="name-input-edit">Name</Label>
-						<Input
-							id="name-input-edit"
-							name="name"
-							bind:value={nameValue}
-							placeholder="Enter example name"
-							aria-invalid={form?.errors?.name && form.formAction === '?/update'
-								? 'true'
-								: undefined}
-						/>
-						{#if form?.errors?.name && form.formAction === '?/update'}
-							{#each form.errors.name as errorMsg}
-								<p class="text-destructive text-sm">{errorMsg}</p>
-							{/each}
-						{/if}
-					</div>
+					<Form.Field {form} name="description">
+						<Form.Control>
+							{#snippet children({ props })}
+								<Form.Label>Description</Form.Label>
+								<Textarea
+									{...props}
+									bind:value={$formData.description}
+									placeholder="Enter example description"
+								/>
+							{/snippet}
+						</Form.Control>
+						<Form.FieldErrors />
+					</Form.Field>
 
-					<div class="mb-6 space-y-1">
-						<Label for="description-input-edit">Description</Label>
-						<Textarea
-							id="description-input-edit"
-							name="description"
-							bind:value={descriptionValue}
-							placeholder="Enter example description"
-							aria-invalid={form?.errors?.description && form.formAction === '?/update'
-								? 'true'
-								: undefined}
-						/>
-						{#if form?.errors?.description && form.formAction === '?/update'}
-							{#each form.errors.description as errorMsg}
-								<p class="text-destructive text-sm">{errorMsg}</p>
-							{/each}
-						{/if}
-					</div>
-
-					<div class="flex items-center justify-between">
-						<Button type="submit" disabled={submittingUpdate}>
-							{#if submittingUpdate}
+					<div class="mt-6 flex items-center justify-between">
+						<Button type="submit" disabled={$submitting}>
+							{#if $submitting}
 								<Save class="mr-2 h-4 w-4 animate-spin" />
 								Saving...
 							{:else}
@@ -138,15 +106,15 @@
 									<AlertDialog.Title>Are you absolutely sure?</AlertDialog.Title>
 									<AlertDialog.Description>
 										This action cannot be undone. This will permanently delete the example object
-										<strong>{nameValue}</strong>.
+										<strong>{$formData.name}</strong>.
 									</AlertDialog.Description>
 								</AlertDialog.Header>
 								<AlertDialog.Footer>
 									<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 									<form
 										method="POST"
-										action="?/remove"
-										use:enhance={() => {
+										action="?/delete"
+										use:svelteKitEnhance={() => {
 											submittingDelete = true;
 											return async ({ update }) => {
 												await update();
@@ -154,13 +122,15 @@
 											};
 										}}
 									>
-										<Button type="submit" variant="destructive" disabled={submittingDelete}>
+										<AlertDialog.Action type="submit" disabled={submittingDelete}>
 											{#if submittingDelete}
-												<Trash2 class="mr-2 h-4 w-4 animate-spin" /> Deleting...
+												<Trash2 class="mr-2 h-4 w-4 animate-spin" />
+												Deleting...
 											{:else}
-												<Trash2 class="mr-2 h-4 w-4" /> Yes, delete it
+												<Trash2 class="mr-2 h-4 w-4" />
+												Delete Forever
 											{/if}
-										</Button>
+										</AlertDialog.Action>
 									</form>
 								</AlertDialog.Footer>
 							</AlertDialog.Content>
@@ -169,30 +139,51 @@
 				</form>
 			</Card.Content>
 		</Card.Root>
-	{:else}
-		<Alert.Root variant="destructive" class="mb-6">
-			<AlertCircle class="h-4 w-4" />
-			<Alert.Title>Error</Alert.Title>
-			<Alert.Description
-				>Example object not found. It may have been deleted or you may not have access.</Alert.Description
-			>
-		</Alert.Root>
-		<a href="/examples/crud">
-			<Button variant="outline"><ArrowLeft class="mr-2 h-4 w-4" /> Back to List</Button>
-		</a>
-	{/if}
 
-	<Separator class="my-8" />
-	{#if data.exampleObject}
+		<Separator class="my-8" />
+
 		<Card.Root>
-			<Card.Header><Card.Title>Raw Data (Current)</Card.Title></Card.Header>
+			<Card.Header>
+				<Card.Title class="text-xl">Example Object Details</Card.Title>
+				<Card.Description>Read-only information about this example object.</Card.Description>
+			</Card.Header>
 			<Card.Content>
-				<pre class="bg-muted overflow-x-auto rounded-md p-4 text-sm">{JSON.stringify(
-						data.exampleObject,
-						null,
-						2
-					)}</pre>
+				<div class="space-y-4">
+					<div>
+						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">ID</h3>
+						<p class="font-mono text-lg">{data.exampleObject.id}</p>
+					</div>
+					<div>
+						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">Created</h3>
+						<p class="text-lg">
+							{new Date(data.exampleObject.createdAt).toLocaleString('en-US', {
+								dateStyle: 'medium',
+								timeStyle: 'short'
+							})}
+						</p>
+					</div>
+					<div>
+						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">Owner</h3>
+						<p class="text-lg">{data.exampleObject.userId}</p>
+					</div>
+					{#if data.organizationId}
+						<div>
+							<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">
+								Organization ID
+							</h3>
+							<p class="text-lg">{data.organizationId}</p>
+						</div>
+					{/if}
+				</div>
 			</Card.Content>
 		</Card.Root>
+	{:else}
+		<Alert.Root>
+			<AlertCircle class="h-4 w-4" />
+			<Alert.Title>No Data Available</Alert.Title>
+			<Alert.Description>
+				The requested example object could not be loaded. Please go back and try again.
+			</Alert.Description>
+		</Alert.Root>
 	{/if}
 </div>

@@ -1,24 +1,32 @@
-import { auth } from '$lib/auth';
 import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/auth-schema';
-import { fail } from '@sveltejs/kit';
+import { createLogger } from '$lib/server/logger';
 import { like } from 'drizzle-orm';
-import type { Actions } from './$types';
+import { superValidate } from 'sveltekit-superforms';
+import { zod } from 'sveltekit-superforms/adapters';
+import type { PageServerLoad } from './$types';
+import { completeRegistrationSchema } from './schema';
 
-export const actions: Actions = {
-	default: async ({ request }) => {
-		const formData = await request.formData();
-		const token = formData.get('token') as string;
-		const newPassword = formData.get('password') as string;
+const logger = createLogger('CompleteRegistration');
 
-		if (!token || !newPassword) {
-			return fail(400, { error: 'Missing required fields' });
-		}
+export const load: PageServerLoad = async ({ url }) => {
+	const token = url.searchParams.get('token') ?? '';
 
-		if (newPassword.length < 8) {
-			return fail(400, { error: 'Password must be at least 8 characters' });
-		}
+	logger.info('Complete registration page accessed', {
+		hasToken: !!token,
+		tokenLength: token.length
+	});
 
+	const form = await superValidate(zod(completeRegistrationSchema));
+
+	// Pre-fill the token in the form
+	form.data.token = token;
+
+	// Validate the token and get the email
+	let email = '';
+	let isValidToken = false;
+
+	if (token) {
 		try {
 			// Find the invitation by token in the resetLink path
 			// The URL format is: /api/auth/reset-password/{token}?callbackURL=...
@@ -28,42 +36,29 @@ export const actions: Actions = {
 				.where(like(schema.systemInvitation.resetLink, `%/reset-password/${token}?%`))
 				.limit(1);
 
-			if (invitations.length === 0) {
-				console.error('No invitation found for token');
-				return fail(400, {
-					error: 'This invitation link has expired or is invalid. Please request a new invitation.'
+			if (invitations.length > 0) {
+				email = invitations[0].email;
+				isValidToken = true;
+				logger.info('Valid invitation token found', {
+					email,
+					tokenPrefix: token.substring(0, 8) + '...'
+				});
+			} else {
+				logger.warn('Invalid or expired invitation token', {
+					tokenPrefix: token.substring(0, 8) + '...'
 				});
 			}
-
-			const invitation = invitations[0];
-			const email = invitation.email;
-
-			// Reset the password
-			const resetResponse = await auth.api.resetPassword({
-				body: {
-					newPassword,
-					token
-				},
-				headers: request.headers,
-				asResponse: true
-			});
-
-			if (!resetResponse || !resetResponse.ok) {
-				console.error('Password reset failed');
-				return fail(400, {
-					error: 'This invitation link has expired or is invalid. Please request a new invitation.'
-				});
-			}
-
-			// Password reset successful - return email for client-side login
-			return {
-				success: true,
-				email,
-				password: newPassword // Pass the password for auto-login
-			};
 		} catch (error) {
-			console.error('Error completing registration:', error);
-			return fail(500, { error: 'Failed to complete registration. Please try again.' });
+			logger.error('Error validating invitation token', error as Error, {
+				tokenPrefix: token.substring(0, 8) + '...'
+			});
 		}
 	}
+
+	return {
+		form,
+		token,
+		email,
+		isValidToken
+	};
 };

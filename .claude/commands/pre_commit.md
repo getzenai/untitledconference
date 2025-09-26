@@ -3,7 +3,7 @@ allowed-tools: Bash(npm run:*)
 description: Run checks before creating a PR
 ---
 
-Run the following commands and try to fix any errors
+Run the following commands and try to fix any errors right away. If you need to fix errors run the commands again to see that everything still passes after changes.
 
 - npm run lint:format
 - npm run check

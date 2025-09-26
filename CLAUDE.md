@@ -77,10 +77,30 @@ npm run dev    # Start dev server (port 5173)
 npm run build  # Build for production
 ```
 
+## Logging
+
+Use Winston logger for structured logging:
+
+```javascript
+import { createLogger } from '$lib/server/logger';
+
+const logger = createLogger('ComponentName');
+
+// Usage
+logger.debug('Debug message', { userId: 123 });
+logger.info('Info message');
+logger.warn('Warning message');
+logger.error('Error message', error, { context: 'additional' });
+```
+
+Logger is configured via environment variables (see Environment Variables section).
+
 ## Environment Variables
 
 - `DATABASE_URL` - Dev database (auto-configured)
 - `TEST_DATABASE_URL` - Test database (auto-configured)
+- `LOG_LEVEL` - Logging level: error, warn, info, debug (default: warn)
+- `LOG_FORMAT` - Logging format: human, json (default: human)
 
 ## Port Forwarding
 
@@ -88,6 +108,81 @@ npm run build  # Build for production
 - 5432: PostgreSQL dev database
 - 5433: PostgreSQL test database
 - 5555: Drizzle Studio
+
+## SvelteKit Server Actions Best Practices
+
+### Handling Redirects in Try-Catch Blocks
+
+**IMPORTANT**: In SvelteKit, `redirect()` throws a special `Redirect` object that should not be caught as an error. Always handle redirects properly:
+
+```javascript
+// ❌ BAD: Redirect gets caught as error
+try {
+	// ... database operations
+	throw redirect(303, '/success');
+} catch (error) {
+	console.error('Error:', error); // Logs the redirect as error!
+	return fail(500, { message: 'Error occurred' });
+}
+
+// ✅ GOOD: Re-throw redirects
+try {
+	// ... database operations
+	throw redirect(303, '/success');
+} catch (error) {
+	// Re-throw redirects (check for Response with redirect status)
+	if (error instanceof Response && error.status >= 300 && error.status < 400) {
+		throw error;
+	}
+	console.error('Actual error:', error);
+	return fail(500, { message: 'Error occurred' });
+}
+
+// ✅ BETTER: Keep redirects outside try-catch when possible
+try {
+	// ... database operations that might fail
+	const result = await db.delete(table).where(condition);
+	if (!result) {
+		return fail(404, { message: 'Not found' });
+	}
+} catch (error) {
+	console.error('Database error:', error);
+	return fail(500, { message: 'Database error' });
+}
+// Redirect only after successful operation
+throw redirect(303, '/success');
+```
+
+## Form Validation & Authentication Patterns
+
+### Implementation Guides
+
+For detailed implementation patterns, see the AI-optimized howto guides:
+
+- **[Authentication Patterns](./ai-dev-docs/howtos/better-auth-patterns.md)**: Better Auth client/server implementation, session management, error handling
+- **[Forms with Server Actions](./ai-dev-docs/howtos/formsnap-superforms-with-actions.md)**: Database operations, CRUD patterns, progressive enhancement
+- **[Client-Only Forms (SPA Mode)](./ai-dev-docs/howtos/formsnap-superforms-client-only.md)**: Authentication forms, async handling, Svelte 5 stores
+
+### Quick Reference
+
+**Form Schema Organization:**
+
+- Place `schema.ts` alongside route files
+- Export both schema and TypeScript type
+- Reuse `passwordSchema` from `$lib/validators/password`
+
+**When to use which pattern:**
+
+- **Server Actions**: Database operations, file uploads, progressive enhancement needed
+- **Client-Only (SPA)**: Authentication forms, Better Auth methods, real-time validation
+- **Always**: Use Zod schemas, Formsnap components, proper error handling
+
+### External Documentation
+
+- **Zod API**: https://zod.dev/api
+- **Formsnap**: https://formsnap.dev/docs/quick-start
+- **Superforms**: https://superforms.rocks/api
+- **shadcn-svelte Forms**: https://shadcn-svelte.com/docs/components/form
 
 ## Component Guidelines
 

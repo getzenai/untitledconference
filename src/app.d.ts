@@ -13,6 +13,8 @@ declare global {
 				originalUserEmail: string;
 			} | null;
 			locale?: import('$lib/paraglide/runtime').Locale;
+			ip?: string;
+			userAgent?: string;
 		}
 	}
 }

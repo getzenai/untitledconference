@@ -74,7 +74,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (result.user) {
 			// Verify the user actually exists in the database
 			const userExists = await db
-				.select({ id: schema.user.id })
+				.select({ id: schema.user.id, emailVerified: schema.user.emailVerified })
 				.from(schema.user)
 				.where(eq(schema.user.id, result.user.id))
 				.limit(1);
@@ -85,6 +85,15 @@ export const POST: RequestHandler = async ({ request }) => {
 					result.user.id
 				);
 				return json({ error: 'User creation incomplete' }, { status: 500 });
+			}
+
+			// For test users, always mark email as verified to bypass verification in tests
+			if (!userExists[0].emailVerified) {
+				console.log('[Test Register API] Marking test user email as verified');
+				await db
+					.update(schema.user)
+					.set({ emailVerified: true })
+					.where(eq(schema.user.id, result.user.id));
 			}
 
 			// Check if this is the first user and make them admin

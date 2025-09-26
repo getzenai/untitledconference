@@ -7,6 +7,8 @@ export const load: PageServerLoad = async ({ locals, request }) => {
 		throw redirect(303, '/login');
 	}
 
+	let redirectPath: string | null = null;
+
 	try {
 		const headers = request.headers;
 
@@ -19,21 +21,21 @@ export const load: PageServerLoad = async ({ locals, request }) => {
 			const activeOrg = organizations?.find((org) => org.id === activeMember.organizationId);
 
 			if (activeOrg?.slug) {
-				// Redirect to the organization details page
-				throw redirect(303, `/settings/organization/${activeOrg.slug}`);
+				// Set redirect to the organization details page
+				redirectPath = `/settings/organization/${activeOrg.slug}`;
 			}
 		}
 
-		// User doesn't have an organization, redirect to create new
-		throw redirect(303, '/settings/organization/new');
-	} catch (error) {
-		// If an error is a redirect, re-throw it
-		if (error instanceof Error && 'status' in error && 'location' in error) {
-			throw error;
+		// If no redirect path set, user doesn't have an organization
+		if (!redirectPath) {
+			redirectPath = '/settings/organization/new';
 		}
-
-		// For other errors, redirect to new organization page
+	} catch (error) {
+		// For API errors, redirect to new organization page
 		console.error('Error checking organization status:', error);
-		throw redirect(303, '/settings/organization/new');
+		redirectPath = '/settings/organization/new';
 	}
+
+	// Perform redirect outside try-catch
+	throw redirect(303, redirectPath);
 };

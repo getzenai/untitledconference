@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { Button } from '$lib/components/ui/button';
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
 	import PasswordInput from '$lib/components/ui/password-input.svelte';
 	import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '$lib/validators/password';
 	import {
@@ -11,116 +12,96 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
-	import type { PageData, ActionData } from './$types';
+	import { goto } from '$app/navigation';
+	import { registerSchema } from './schema';
+	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 
-	interface Props {
-		data: PageData;
-		form: ActionData;
-	}
+	// Check for invitation code in URL
+	const invitationCode = $derived(page.url.searchParams.get('invitation'));
 
-	let { data, form }: Props = $props();
+	// Initialize form client-side
+	const form = superForm(
+		{ email: '', password: '', invitationCode: '' },
+		{
+			validators: zodClient(registerSchema),
+			SPA: true, // Prevent default form submission
+			onSubmit: async ({ formData, cancel }) => {
+				// Cancel the default form submission
+				cancel();
 
-	let email = $state('');
-	let password = $state('');
-	let error: string | null = $state(null);
-	let isLoading = $state(false);
-	let successMessage: string | null = null;
-	let invitationCode = data.invitationCode;
+				const email = formData.get('email') as string;
+				const password = formData.get('password') as string;
+				const invitationCodeValue = formData.get('invitationCode') as string | null;
+
+				try {
+					// Sign up the user using Better Auth client
+					const { data: signUpData, error: signUpError } = await authClient.signUp.email({
+						email,
+						password,
+						name: '' // Better Auth requires a name field
+					});
+
+					if (signUpError) {
+						// Better error message for duplicate email
+						if (
+							signUpError.message?.includes('already') ||
+							signUpError.message?.includes('exists')
+						) {
+							errors.set({ _errors: ['User already exists. Use another email.'] });
+						} else {
+							errors.set({
+								_errors: [signUpError.message || 'Registration failed. Please try again.']
+							});
+						}
+						return;
+					}
+
+					if (signUpData?.user) {
+						// Handle invitation acceptance if we have an invitation code
+						if (invitationCodeValue) {
+							try {
+								const { error: acceptError } = await authClient.organization.acceptInvitation({
+									invitationId: invitationCodeValue
+								});
+
+								if (acceptError) {
+									// Don't fail completely, the account was created
+								}
+							} catch (_err) {
+								// Don't fail completely, the account was created
+							}
+						}
+
+						// Check if email verification is required
+						const requiresVerification = signUpData.user && !signUpData.user.emailVerified;
+						if (requiresVerification) {
+							await goto('/verify-email');
+						} else {
+							// User is auto-signed in, redirect to home
+							await goto('/home');
+						}
+					} else {
+						errors.set({ _errors: ['Registration failed. Please try again.'] });
+					}
+				} catch (_err) {
+					errors.set({ _errors: ['An unexpected error occurred during registration.'] });
+				}
+			}
+		}
+	);
+
+	const { form: formData, enhance, submitting, errors } = form;
 
 	onMount(() => {
-		// If we have an invitation code from Better Auth, store it
-		// The invitation code is a secure token, not base64 encoded data
-		if (invitationCode) {
-			sessionStorage.setItem('pendingInvitation', invitationCode);
+		// If we have an invitation code from URL, store it and set in form
+		const urlInvitation = page.url.searchParams.get('invitation');
+		if (urlInvitation) {
+			sessionStorage.setItem('pendingInvitation', urlInvitation);
+			$formData.invitationCode = urlInvitation;
 		}
 	});
-
-	async function handleSubmit(event: SubmitEvent) {
-		event.preventDefault();
-		// Validate required fields
-		if (!email || !password) {
-			error = 'Email and password are required';
-			return;
-		}
-
-		// Validate password length
-		if (password.length < PASSWORD_MIN_LENGTH) {
-			error = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
-			return;
-		}
-		if (password.length > PASSWORD_MAX_LENGTH) {
-			error = `Password must be less than ${PASSWORD_MAX_LENGTH} characters`;
-			return;
-		}
-
-		isLoading = true;
-		error = null;
-
-		try {
-			console.log('[Register Page] Attempting sign-up with:', { email });
-
-			// Sign up the user - Better Auth will automatically sign them in with autoSignIn: true
-			const { data: signUpData, error: signUpError } = await authClient.signUp.email({
-				email,
-				password,
-				name: ''
-			});
-
-			if (signUpError) {
-				console.error('[Register Page] Sign-up error details:', signUpError);
-				// Better error message for duplicate email
-				if (signUpError.message?.includes('already') || signUpError.message?.includes('exists')) {
-					error = 'User already exists. Use another email.';
-				} else {
-					error = signUpError.message || 'Registration failed. Please try again.';
-				}
-				// Clear password field on error
-				password = '';
-			} else if (signUpData) {
-				// Handle invitation acceptance if we have an invitation code
-				if (invitationCode) {
-					try {
-						const { error: acceptError } = await authClient.organization.acceptInvitation({
-							invitationId: invitationCode
-						});
-
-						if (acceptError) {
-							console.error('[Register Page] Invitation acceptance error:', acceptError);
-							error = `Account created successfully, but failed to accept invitation: ${acceptError.message || 'Invalid or expired invitation'}. Please login and ask for a new invitation.`;
-							isLoading = false;
-							return; // Don't redirect on error
-						} else {
-							// Clear the invitation from session storage
-							sessionStorage.removeItem('pendingInvitation');
-						}
-					} catch (err) {
-						console.error('[Register Page] Error accepting invitation:', err);
-						error =
-							'Account created but failed to join organization. Please login and ask for a new invitation.';
-						isLoading = false;
-						return; // Don't redirect on error
-					}
-				}
-
-				// Redirect to verify-email page instead of home
-				await goto('/verify-email', { replaceState: true });
-			} else {
-				error = 'An unexpected error occurred during registration. No data and no error received.';
-			}
-		} catch (e: unknown) {
-			console.error('[Register Page] Unexpected error:', e);
-			if (e instanceof Error) {
-				error = e.message;
-			} else {
-				error = 'An unexpected error occurred';
-			}
-		} finally {
-			isLoading = false;
-		}
-	}
 </script>
 
 <div
@@ -158,61 +139,68 @@
 					<CardDescription>Enter your details to create your account</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form onsubmit={handleSubmit} class="space-y-4">
-						<div class="space-y-2">
-							<Label for="email">Email</Label>
-							<Input
-								id="email"
-								name="email"
-								type="email"
-								placeholder="Enter your email"
-								bind:value={email}
-								disabled={isLoading}
-							/>
-							{#if invitationCode}
-								<p class="text-muted-foreground text-sm">
-									Please use the email address associated with your invitation
-								</p>
-							{/if}
-						</div>
-						<div class="space-y-2">
-							<Label for="password">Password</Label>
-							<PasswordInput
-								id="password"
-								name="password"
-								placeholder={`Create a password (${PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters)`}
-								bind:value={password}
-								disabled={isLoading}
-								minlength={PASSWORD_MIN_LENGTH}
-								maxlength={PASSWORD_MAX_LENGTH}
-							/>
-						</div>
+					<form use:enhance class="space-y-4">
+						<Form.Field {form} name="email">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Form.Label>Email</Form.Label>
+									<Input
+										{...props}
+										type="email"
+										placeholder="Enter your email"
+										bind:value={$formData.email}
+										disabled={$submitting}
+									/>
+									{#if invitationCode}
+										<p class="text-muted-foreground mt-1 text-sm">
+											Please use the email address associated with your invitation
+										</p>
+									{/if}
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
+						<Form.Field {form} name="password">
+							<Form.Control>
+								{#snippet children({ props })}
+									<Form.Label>Password</Form.Label>
+									<PasswordInput
+										{...props}
+										placeholder={`Create a password (${PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters)`}
+										bind:value={$formData.password}
+										disabled={$submitting}
+										minlength={PASSWORD_MIN_LENGTH}
+										maxlength={PASSWORD_MAX_LENGTH}
+									/>
+								{/snippet}
+							</Form.Control>
+							<Form.FieldErrors />
+						</Form.Field>
+
 						{#if invitationCode}
 							<input type="hidden" name="invitationCode" value={invitationCode} />
 							<div class="bg-muted rounded-lg p-3">
 								<p class="text-sm">You'll join an existing organization after registration.</p>
 							</div>
 						{/if}
-						{#if form && typeof form === 'object' && 'error' in form && form.error}
-							<p class="text-sm text-red-500">{form.error}</p>
-						{/if}
-						{#if error}
-							<div role="alert" class="error-message text-destructive text-s">
-								{error}
+
+						{#if $errors._errors}
+							<div role="alert" class="text-destructive text-sm">
+								{#each $errors._errors as error}
+									<p>{error}</p>
+								{/each}
 							</div>
 						{/if}
-						{#if successMessage}
-							<div role="status" class="success-message text-sm text-green-500">
-								{successMessage}
-							</div>
-						{/if}
-						<Button type="submit" class="w-full" disabled={isLoading}>
-							{#if isLoading}
+
+						<Form.Button type="submit" class="w-full" disabled={$submitting}>
+							{#if $submitting}
 								Creating account...
 							{:else}
 								Register
 							{/if}
-						</Button>
+						</Form.Button>
+
 						<p class="text-muted-foreground text-center text-sm">
 							Already have an account? <a href="/login" class="text-primary hover:underline"
 								>Login</a

@@ -8,12 +8,15 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { INVITATION_EXPIRY_SECONDS } from './constants';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
+import { createLogger } from './server/logger';
 import {
 	generatePasswordResetEmailContent,
 	generateVerificationEmailContent,
 	sendEmail
 } from './server/services/email-service';
 import { markInvitationAsAccepted } from './server/services/system-invitation';
+
+const logger = createLogger('Auth');
 
 const requireEmailVerification =
 	env.REQUIRE_EMAIL_VERIFICATION === undefined ? true : env.REQUIRE_EMAIL_VERIFICATION === 'true';
@@ -40,7 +43,7 @@ async function storeInvitationResetLink(email: string, url: string) {
 		.where(
 			and(eq(schema.systemInvitation.email, email), isNull(schema.systemInvitation.acceptedAt))
 		);
-	console.log('[Auth] Invitation link stored for:', email);
+	logger.info('Invitation link stored', { email });
 }
 
 /**
@@ -89,7 +92,7 @@ async function getRoleFromInvitation(
  * Logs successful user creation with assigned role
  */
 function logUserCreationWithRole(user: { email: string; role?: string }) {
-	console.log('[Auth Hook] User created successfully:', user.email, 'Role:', user.role);
+	logger.info('User created successfully', { email: user.email, role: user.role });
 }
 
 // The Drizzle adapter for Better Auth uses the provided db instance.
@@ -132,7 +135,7 @@ export const auth = betterAuth({
 		},
 		onPasswordReset: async ({ user }) => {
 			// Mark invitation as accepted when password is reset (user completes registration)
-			console.log('[Auth] Password reset completed for:', user.email);
+			logger.info('Password reset completed', { email: user.email });
 			await markInvitationAsAccepted(user.email);
 		}
 	},
@@ -172,7 +175,7 @@ export const auth = betterAuth({
 		user: {
 			create: {
 				before: async (user) => {
-					console.log('[Auth Hook] Before user creation:', user.email);
+					logger.debug('Before user creation', { email: user.email });
 
 					let role: string | undefined;
 
@@ -181,14 +184,17 @@ export const auth = betterAuth({
 						// Check if this is the first user
 						const isFirstUser = await checkIsFirstUserWithLock(tx);
 						if (isFirstUser) {
-							console.log('[Auth Hook] First user detected, will be admin');
+							logger.info('First user detected, will be admin', { email: user.email });
 							role = 'admin';
 						}
 						// Check if user has a system invitation
 						else {
 							const invitationRole = await getRoleFromInvitation(tx, user.email);
 							if (invitationRole) {
-								console.log('[Auth Hook] User from system invitation, role:', invitationRole);
+								logger.info('User from system invitation', {
+									email: user.email,
+									role: invitationRole
+								});
 								role = invitationRole;
 							}
 							// else: role remains undefined, admin plugin will set default role
@@ -228,7 +234,7 @@ export const auth = betterAuth({
 			async sendInvitationEmail(data) {
 				// In a real app, you would send an email here
 				// For now, we'll just log it and rely on the copy link functionality
-				console.log('Invitation created for:', data.email, 'ID:', data.id);
+				logger.info('Invitation created', { email: data.email, id: data.id });
 			}
 		}),
 		admin({

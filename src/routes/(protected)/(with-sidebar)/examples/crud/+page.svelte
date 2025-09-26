@@ -1,40 +1,32 @@
 <script lang="ts">
-	import { run } from 'svelte/legacy';
-
-	import type { PageData, ActionData } from './$types';
-	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
+	import { superForm } from 'sveltekit-superforms';
+	import { zodClient } from 'sveltekit-superforms/adapters';
+	import * as Form from '$lib/components/ui/form';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
-	import { Label } from '$lib/components/ui/label';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Separator } from '$lib/components/ui/separator';
 	import { Edit, PlusCircle } from 'lucide-svelte';
+	import { exampleFormSchema } from './crud.validation';
+	import type { PageData } from './$types';
 
 	interface Props {
 		data: PageData;
-		form: ActionData;
 	}
 
-	let { data, form }: Props = $props();
+	let { data }: Props = $props();
 
-	let nameValue = $state('');
-	let descriptionValue = $state('');
-	let submitting = $state(false);
-	run(() => {
-		if (form?.data) {
-			nameValue = form.data.name || '';
-			descriptionValue = form.data.description || '';
+	const form = superForm(data.form, {
+		validators: zodClient(exampleFormSchema),
+		onResult: ({ result }) => {
+			if (result.type === 'success') {
+				// Form will be automatically reset by superforms
+			}
 		}
 	});
 
-	run(() => {
-		if (form?.success) {
-			nameValue = '';
-			descriptionValue = '';
-		}
-	});
+	const { form: formData, enhance, submitting, errors } = form;
 </script>
 
 <svelte:head>
@@ -52,61 +44,54 @@
 			<Card.Description>Add a new example object to the system.</Card.Description>
 		</Card.Header>
 		<Card.Content>
-			<form
-				method="POST"
-				action="?/create"
-				use:enhance={() => {
-					submitting = true;
-					return async ({ result, update }) => {
-						await update();
-						submitting = false;
-						if (result.type === 'success' || result.status === 200) {
-							await invalidateAll();
-						}
-					};
-				}}
-			>
-				<div class="mb-4 space-y-1">
-					<Label for="name-input">Name</Label>
-					<Input
-						id="name-input"
-						name="name"
-						bind:value={nameValue}
-						placeholder="Enter example name"
-						aria-invalid={form?.errors?.name ? 'true' : undefined}
-					/>
-					{#if form?.errors?.name}
-						{#each form.errors.name as errorMsg}
-							<p class="text-destructive text-sm">{errorMsg}</p>
-						{/each}
-					{/if}
-				</div>
+			<form method="POST" action="?/create" use:enhance>
+				<Form.Field {form} name="name">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Form.Label>Name</Form.Label>
+							<Input
+								{...props}
+								placeholder="Enter example name"
+								bind:value={$formData.name}
+								disabled={$submitting}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
 
-				<div class="mb-6 space-y-1">
-					<Label for="description-input">Description</Label>
-					<Textarea
-						id="description-input"
-						name="description"
-						bind:value={descriptionValue}
-						placeholder="Enter example description"
-						aria-invalid={form?.errors?.description ? 'true' : undefined}
-					/>
-					{#if form?.errors?.description}
-						{#each form.errors.description as errorMsg}
-							<p class="text-destructive text-sm">{errorMsg}</p>
-						{/each}
-					{/if}
-				</div>
+				<Form.Field {form} name="description">
+					<Form.Control>
+						{#snippet children({ props })}
+							<Form.Label>Description</Form.Label>
+							<Textarea
+								{...props}
+								placeholder="Enter example description"
+								bind:value={$formData.description}
+								disabled={$submitting}
+							/>
+						{/snippet}
+					</Form.Control>
+					<Form.FieldErrors />
+				</Form.Field>
 
-				<Button type="submit" disabled={submitting}>
-					{#if submitting}
+				{#if $errors._errors}
+					<div role="alert" class="mb-4 text-sm text-red-500">
+						{#each $errors._errors as error}
+							<p>{error}</p>
+						{/each}
+					</div>
+				{/if}
+
+				<Form.Button type="submit" disabled={$submitting}>
+					{#if $submitting}
 						<PlusCircle class="mr-2 h-4 w-4 animate-spin" />
 						Creating...
 					{:else}
 						<PlusCircle class="mr-2 h-4 w-4" />
 						Create Object
 					{/if}
-				</Button>
+				</Form.Button>
 			</form>
 		</Card.Content>
 	</Card.Root>

@@ -74,8 +74,8 @@ export async function transferOwnershipSafely(
 		});
 
 		return { success: true };
-	} catch (error) {
-		console.error('Error during ownership transfer:', error);
+	} catch (_error) {
+		// This is a utility function, logging should be done by the caller
 		return { success: false, error: 'Failed to transfer ownership' };
 	}
 }
