@@ -1,8 +1,11 @@
 import { Page } from '@playwright/test';
 import { eq } from 'drizzle-orm';
 import * as schema from '../src/lib/server/db/auth-schema';
+import { createLogger } from '../src/lib/server/logger';
 import { cleanupTestUsers, db } from './db';
 import { TEST_USER_EMAIL_PREFIX } from './globals';
+
+const logger = createLogger('TestUserManager');
 
 export interface TestUser {
 	id: string;
@@ -64,13 +67,12 @@ export class TestUserManager {
 		try {
 			result = JSON.parse(responseText);
 		} catch (_e) {
-			console.error('[TestUserManager] Failed to parse response:', responseText);
+			logger.debug('Failed to parse response', { responseText });
 			throw new Error(`Registration failed: Invalid response from server`);
 		}
 
 		if (!response.ok) {
-			console.error('[TestUserManager] Registration failed with status:', response.status);
-			console.error('[TestUserManager] Error response:', result);
+			logger.debug('Registration failed', { status: response.status, error: result });
 			throw new Error(`Registration failed: ${result.error || response.statusText}`);
 		}
 
@@ -142,7 +144,7 @@ export class TestUserManager {
 
 			return user.length > 0;
 		} catch (error) {
-			console.error(`[TestUserManager] Error checking user existence: ${error}`);
+			logger.debug('Error checking user existence', error);
 			return false;
 		}
 	}
@@ -219,7 +221,7 @@ export class TestUserManager {
 
 			this.createdUsers.clear();
 		} catch (error) {
-			console.error(`[TestUserManager] Error during user cleanup: ${error}`);
+			logger.debug('Error during user cleanup', error);
 		}
 	}
 
@@ -250,10 +252,10 @@ export class TestUserManager {
 				// Remove from tracked users
 				this.createdUsers.delete(email);
 
-				console.log(`[TestUserManager] Deleted user: ${email}`);
+				logger.debug('Deleted user', { email });
 			}
 		} catch (error) {
-			console.error(`[TestUserManager] Error deleting user ${email}: ${error}`);
+			logger.debug('Error deleting user', error, { email });
 		}
 	}
 

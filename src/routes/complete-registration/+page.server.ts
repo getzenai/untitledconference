@@ -3,7 +3,7 @@ import * as schema from '$lib/server/db/auth-schema';
 import { createLogger } from '$lib/server/logger';
 import { like } from 'drizzle-orm';
 import { superValidate } from 'sveltekit-superforms';
-import { zod } from 'sveltekit-superforms/adapters';
+import { zod4 } from 'sveltekit-superforms/adapters';
 import type { PageServerLoad } from './$types';
 import { completeRegistrationSchema } from './schema';
 
@@ -17,10 +17,11 @@ export const load: PageServerLoad = async ({ url }) => {
 		tokenLength: token.length
 	});
 
-	const form = await superValidate(zod(completeRegistrationSchema));
+	// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms zod4 adapter
+	const form = await superValidate(zod4(completeRegistrationSchema));
 
 	// Pre-fill the token in the form
-	form.data.token = token;
+	(form.data as { token?: string }).token = token;
 
 	// Validate the token and get the email
 	let email = '';

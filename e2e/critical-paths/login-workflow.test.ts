@@ -1,8 +1,11 @@
+import { createLogger } from '../../src/lib/server/logger';
 import { expect, test } from '../fixtures/test';
 import { CrudPage } from '../pages/crud.page';
 import { HomePage } from '../pages/home.page';
 import { LoginPage } from '../pages/login.page';
 import { testUserManager } from '../test-user-manager';
+
+const logger = createLogger('LoginWorkflowTest');
 
 /**
  * Critical Login Workflow Test
@@ -31,7 +34,7 @@ test.describe('Critical Login Workflow', () => {
 			password: 'LoginTest123!'
 		});
 
-		console.log('=== STEP 1: Login User ===');
+		logger.debug('STEP 1: Login User');
 		await loginPage.goto();
 		await loginPage.loginAndWaitForRedirect(testUser.email, testUser.password, '/home');
 
@@ -39,7 +42,7 @@ test.describe('Critical Login Workflow', () => {
 		expect(await homePage.isLoggedIn()).toBeTruthy();
 		expect(page.url()).toContain('/home');
 
-		console.log('=== STEP 2: Navigate to Protected Content ===');
+		logger.debug('STEP 2: Navigate to Protected Content');
 		await crudPage.goto();
 		await crudPage.waitForPageLoad();
 
@@ -47,12 +50,12 @@ test.describe('Critical Login Workflow', () => {
 		expect(await crudPage.isCreateButtonVisible()).toBeTruthy();
 		expect(page.url()).toContain('/examples/crud');
 
-		console.log('=== STEP 3: Verify Protected Action ===');
+		logger.debug('STEP 3: Verify Protected Action');
 		// Verify we can interact with protected content (CRUD page loads and is functional)
 		// Check that we can see the "Existing Example Objects" text
 		await expect(page.getByText('Existing Example Objects')).toBeVisible();
 
-		console.log('✅ Critical login workflow completed successfully!');
+		logger.debug('Critical login workflow completed successfully');
 
 		// Clean up
 		await context.close();

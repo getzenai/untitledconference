@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
-	import type { PageData } from './$types';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import * as Form from '$lib/components/ui/form';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -11,17 +10,14 @@
 	import { AlertCircle, Trash2, Edit, Save, ArrowLeft } from 'lucide-svelte';
 	import * as Alert from '$lib/components/ui/alert';
 	import * as AlertDialog from '$lib/components/ui/alert-dialog';
-	import { exampleFormSchema } from '../schema';
 	import { enhance as svelteKitEnhance } from '$app/forms';
+	import { exampleFormSchema } from '../schema';
 
-	interface Props {
-		data: PageData;
-	}
-
-	let { data }: Props = $props();
+	let { data } = $props();
 
 	const form = superForm(data.form, {
-		validators: zodClient(exampleFormSchema)
+		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+		validators: zod4Client(exampleFormSchema)
 	});
 
 	const { form: formData, enhance, submitting } = form;
@@ -40,8 +36,11 @@
 		<h1 class="text-3xl font-bold">
 			View/Edit: <span class="font-normal">{$formData.name}</span>
 		</h1>
-		<a href="/examples/crud">
-			<Button variant="outline"><ArrowLeft class="mr-2 h-4 w-4" /> Back to List</Button>
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+		<a href="/examples/crud" data-sveltekit-preload-data="hover">
+			<Button variant="outline">
+				<ArrowLeft class="mr-2 h-4 w-4" /> Back to List
+			</Button>
 		</a>
 	</div>
 
@@ -75,7 +74,7 @@
 								<Form.Label>Description</Form.Label>
 								<Textarea
 									{...props}
-									bind:value={$formData.description}
+									bind:value={$formData.description as string}
 									placeholder="Enter example description"
 								/>
 							{/snippet}
@@ -152,6 +151,14 @@
 					<div>
 						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">ID</h3>
 						<p class="font-mono text-lg">{data.exampleObject.id}</p>
+					</div>
+					<div>
+						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">Name</h3>
+						<p class="text-lg">{$formData.name}</p>
+					</div>
+					<div>
+						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">Description</h3>
+						<p class="text-lg">{$formData.description || 'No description'}</p>
 					</div>
 					<div>
 						<h3 class="text-muted-foreground mb-2 text-sm font-semibold uppercase">Created</h3>

@@ -1,5 +1,8 @@
 import { Page, expect } from '@playwright/test';
+import { createLogger } from '../../src/lib/server/logger';
 import { CrudPage } from '../pages/crud.page';
+
+const logger = createLogger('CrudActions');
 
 export interface ExampleObject {
 	id?: string;
@@ -289,7 +292,7 @@ export class CrudActions {
 			// Find and click the View/Edit button for the item
 			const item = await this.crudPage.getItemByName(name);
 			if (!(await item.isVisible())) {
-				console.log(`Item "${name}" not found on page`);
+				logger.debug('Item not found on page', { name });
 				return false;
 			}
 
@@ -305,13 +308,16 @@ export class CrudActions {
 			// Verify the name is displayed
 			const nameInput = this.page.getByRole('textbox', { name: 'Name' });
 			const nameValue = await nameInput.inputValue();
-			console.log(`Name in form: "${nameValue}", expected: "${name}"`);
+			logger.debug('Name mismatch in form', { actual: nameValue, expected: name });
 
 			// Verify description if provided
 			if (expectedDescription) {
 				const descInput = this.page.getByRole('textbox', { name: 'Description' });
 				const descValue = await descInput.inputValue();
-				console.log(`Description in form: "${descValue}", expected: "${expectedDescription}"`);
+				logger.debug('Description mismatch in form', {
+					actual: descValue,
+					expected: expectedDescription
+				});
 				const matches = nameValue === name && descValue === expectedDescription;
 
 				// Navigate back to list
@@ -327,7 +333,7 @@ export class CrudActions {
 
 			return nameValue === name;
 		} catch (error) {
-			console.error('Error verifying object details:', error);
+			logger.debug('Error verifying object details', error);
 			// Try to navigate back to list page on error
 			await this.page.goto('/examples/crud').catch(() => {});
 			return false;

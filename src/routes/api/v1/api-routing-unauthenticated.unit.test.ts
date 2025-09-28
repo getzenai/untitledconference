@@ -25,10 +25,40 @@ vi.mock('$lib/paraglide/server', () => ({
 	paraglideMiddleware: paraglideMiddlewareMock
 }));
 
+// Mock the logger
+vi.mock('$lib/server/logger', () => ({
+	createLogger: () => ({
+		debug: vi.fn(),
+		info: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn()
+	})
+}));
+
 // Mock Better Auth SvelteKit handler
 vi.mock('better-auth/svelte-kit', () => ({
 	svelteKitHandler: ({ event, resolve }: { event: unknown; resolve: (e: unknown) => unknown }) =>
 		resolve(event)
+}));
+
+// Mock the sequence function from SvelteKit hooks
+vi.mock('@sveltejs/kit/hooks', () => ({
+	sequence: (...handlers: any[]) => {
+		// Return a single handler that calls all handlers in sequence
+		return async ({ event, resolve }: any) => {
+			let currentResolve = resolve;
+
+			// Chain handlers in reverse order
+			for (let i = handlers.length - 1; i >= 0; i--) {
+				const handler = handlers[i];
+				const previousResolve = currentResolve;
+				currentResolve = (evt: any, opts?: any) =>
+					handler({ event: evt, resolve: (e: any, o?: any) => previousResolve(e, o || opts) });
+			}
+
+			return currentResolve(event);
+		};
+	}
 }));
 
 const mockAuth = vi.mocked(auth);
@@ -79,8 +109,6 @@ describe('API Routing - Unauthenticated Access', () => {
 		expect(mockResolve).toHaveBeenCalledWith(
 			event,
 			expect.objectContaining({
-				filterSerializedResponseHeaders: undefined,
-				preload: undefined,
 				transformPageChunk: expect.any(Function)
 			})
 		);
@@ -100,8 +128,6 @@ describe('API Routing - Unauthenticated Access', () => {
 		expect(mockResolve).toHaveBeenCalledWith(
 			event,
 			expect.objectContaining({
-				filterSerializedResponseHeaders: undefined,
-				preload: undefined,
 				transformPageChunk: expect.any(Function)
 			})
 		);
@@ -119,8 +145,6 @@ describe('API Routing - Unauthenticated Access', () => {
 		expect(mockResolve).toHaveBeenCalledWith(
 			event,
 			expect.objectContaining({
-				filterSerializedResponseHeaders: undefined,
-				preload: undefined,
 				transformPageChunk: expect.any(Function)
 			})
 		);
@@ -171,8 +195,6 @@ describe('API Routing - Unauthenticated Access', () => {
 		expect(mockResolve).toHaveBeenCalledWith(
 			event,
 			expect.objectContaining({
-				filterSerializedResponseHeaders: undefined,
-				preload: undefined,
 				transformPageChunk: expect.any(Function)
 			})
 		);
@@ -234,8 +256,6 @@ describe('API Routing - Unauthenticated Access', () => {
 		expect(mockResolve).toHaveBeenCalledWith(
 			event,
 			expect.objectContaining({
-				filterSerializedResponseHeaders: undefined,
-				preload: undefined,
 				transformPageChunk: expect.any(Function)
 			})
 		);

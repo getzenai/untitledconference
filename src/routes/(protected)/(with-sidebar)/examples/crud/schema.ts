@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 
 // Base schema for the form fields (both create and update)
 export const exampleFormSchema = z.object({

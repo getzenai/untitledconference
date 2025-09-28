@@ -1,6 +1,9 @@
+import { createLogger } from '../../src/lib/server/logger';
 import { CrudActions } from '../actions/crud.actions';
 import { expect, test } from '../fixtures/test';
 import { testUserManager } from '../test-user-manager';
+
+const logger = createLogger('UserJourneyTest');
 
 /**
  * Critical User Journey Test
@@ -28,7 +31,7 @@ test.describe('Critical User Journey', () => {
 			// Initialize action helpers
 			const crudActions = new CrudActions(page);
 
-			console.log('=== STEP 1: Register User ===');
+			logger.debug('STEP 1: Register User');
 			await registerPage.goto();
 			await registerPage.registerAndWaitForRedirect(
 				userEmail,
@@ -42,32 +45,32 @@ test.describe('Critical User Journey', () => {
 			expect(await homePage.isLoggedIn()).toBeTruthy();
 			expect(page.url()).toContain('/home');
 
-			console.log('=== STEP 2: Verify Organization Access ===');
+			logger.debug('STEP 2: Verify Organization Access');
 			await organizationPage.goto();
 			await organizationPage.waitForPageLoad();
 			expect(await organizationPage.isOrganizationPageVisible()).toBeTruthy();
 
-			console.log('=== STEP 3: Create CRUD Item ===');
+			logger.debug('STEP 3: Create CRUD Item');
 			await crudActions.navigateToCrudPage();
 			await crudActions.createExampleObject(crudItemName, 'Core journey test description');
 			await crudActions.verifyObjectExists(crudItemName);
 
-			console.log('=== STEP 4: Logout User ===');
+			logger.debug('STEP 4: Logout User');
 			await homePage.goto();
 			await homePage.logout();
 			expect(page.url()).toContain('/login');
 
-			console.log('=== STEP 5: Login User Again ===');
+			logger.debug('STEP 5: Login User Again');
 			await loginPage.loginAndWaitForRedirect(userEmail, password, '/home');
 			expect(await homePage.isLoggedIn()).toBeTruthy();
 
-			console.log('=== STEP 6: Verify Item Still Exists ===');
+			logger.debug('STEP 6: Verify Item Still Exists');
 			await crudActions.navigateToCrudPage();
 			// Wait for page to fully load before verification
 			await page.waitForLoadState('networkidle');
 			await crudActions.verifyObjectExists(crudItemName);
 
-			console.log('=== FINAL VERIFICATION ===');
+			logger.debug('FINAL VERIFICATION');
 			// Ensure we're on the correct page and wait for it to be stable
 			expect(page.url()).toContain('/examples/crud');
 			await page.waitForLoadState('networkidle');
@@ -79,7 +82,7 @@ test.describe('Critical User Journey', () => {
 			// Verify CRUD functionality is available (confirms authenticated state)
 			expect(await crudPage.isCreateButtonVisible()).toBeTruthy();
 
-			console.log('✅ Core user journey test passed successfully!');
+			logger.debug('Core user journey test passed successfully');
 		}
 	);
 
@@ -94,7 +97,7 @@ test.describe('Critical User Journey', () => {
 			const password = 'SimpleTest123!';
 			const itemName = `Simple Item ${timestamp}`;
 
-			console.log('=== Basic Journey: Register and Create ===');
+			logger.debug('Basic Journey: Register and Create');
 
 			// Register owner with organization
 			await registerPage.goto();
@@ -121,7 +124,7 @@ test.describe('Critical User Journey', () => {
 			await crudActions.createExampleObject(itemName, 'Basic test description');
 			await crudActions.verifyObjectExists(itemName);
 
-			console.log('✅ Basic user journey completed successfully!');
+			logger.debug('Basic user journey completed successfully');
 		}
 	);
 });

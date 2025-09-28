@@ -54,7 +54,6 @@ Add these in [GitHub Settings → Codespaces](https://github.com/settings/codesp
    ```
 
 2. **Add to GitHub Secrets**:
-
    - Go to [Settings → Codespaces](https://github.com/settings/codespaces/secrets/new)
    - Add secret: `CLAUDE_CODE_OAUTH_TOKEN`
    - Paste your token value
@@ -74,7 +73,6 @@ Add these in [GitHub Settings → Codespaces](https://github.com/settings/codesp
 ### Creating a New Codespace
 
 1. **From GitHub.com:**
-
    - Navigate to your repository
    - Click the green "Code" button
    - Select the "Codespaces" tab
@@ -99,7 +97,6 @@ You can create multiple Codespaces for parallel development:
    ```
 
 2. **Managing Codespaces:**
-
    - View all: https://github.com/codespaces
    - Stop unused Codespaces to save on usage
    - Delete old Codespaces you're done with
@@ -154,7 +151,6 @@ Claude Code CLI is pre-installed in every Codespace. To use it:
    ```
 
 2. **Add Token to GitHub Secrets:**
-
    - Copy the generated token
    - Go to [your Settings → Codespaces](https://github.com/settings/codespaces/secrets/new)
    - Add new secret: `CLAUDE_CODE_OAUTH_TOKEN`
@@ -193,7 +189,6 @@ For local VS Code Dev Containers:
 1. **Environment Setup is Automatic** - The `.env` file is created from `.devcontainer/.env.devcontainer` template
 
 2. **To Add Optional Secrets Locally**:
-
    - Set environment variables before opening the container:
      ```bash
      export GITHUB_CLIENT_ID="your_github_client_id"

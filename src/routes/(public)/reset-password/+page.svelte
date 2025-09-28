@@ -1,10 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
-	import * as Form from '$lib/components/ui/form';
+	import { page } from '$app/state';
+	import { authClient } from '$lib/auth-client';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import {
 		Card,
 		CardContent,
@@ -12,11 +10,13 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { Eye, EyeOff } from 'lucide-svelte';
-	import { authClient } from '$lib/auth-client';
+	import * as Form from '$lib/components/ui/form';
+	import { Input } from '$lib/components/ui/input';
 	import { getPasswordRequirementsFromSchema } from '$lib/validators/password';
+	import { Eye, EyeOff } from 'lucide-svelte';
+	import { superForm } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { resetPasswordSchema } from './schema';
-	import { page } from '$app/state';
 
 	const token = $derived(page.url.searchParams.get('token') || '');
 
@@ -26,7 +26,8 @@
 	const form = superForm(
 		{ password: '', token: '' },
 		{
-			validators: zodClient(resetPasswordSchema),
+			// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+			validators: zod4Client(resetPasswordSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {
 				// Cancel the default form submission

@@ -2,7 +2,6 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
 	import * as Form from '$lib/components/ui/form';
 	import {
 		Card,
@@ -14,15 +13,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
-	import type { PageData } from './$types';
 	import { authClient } from '$lib/auth-client';
-	import { completeRegistrationSchema } from './schema';
 
-	interface Props {
-		data: PageData;
-	}
-
-	let { data }: Props = $props();
+	let { data } = $props();
 
 	onMount(() => {
 		// Check for error parameter (invalid/expired token)
@@ -31,6 +24,7 @@
 			toast.error(
 				'This invitation link has expired or is invalid. Please request a new invitation.'
 			);
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			goto('/login');
 			return;
 		}
@@ -38,12 +32,12 @@
 		// Check if token is available
 		if (!data.token || !data.isValidToken) {
 			toast.error('This invitation link appears to be invalid. Please request a new invitation.');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			goto('/login');
 		}
 	});
 
 	const form = superForm(data.form, {
-		validators: zodClient(completeRegistrationSchema),
 		SPA: true, // Prevent default form submission
 		onSubmit: async ({ formData, cancel }) => {
 			// Cancel the default form submission
@@ -81,12 +75,15 @@
 
 					if (signInError) {
 						toast.success('Registration completed! Please log in with your new password.');
+						// eslint-disable-next-line svelte/no-navigation-without-resolve
 						await goto('/login');
 					} else if (signInData?.user) {
 						toast.success('Registration completed successfully!');
+						// eslint-disable-next-line svelte/no-navigation-without-resolve
 						await goto('/home');
 					} else {
 						toast.success('Registration completed! Please log in with your new password.');
+						// eslint-disable-next-line svelte/no-navigation-without-resolve
 						await goto('/login');
 					}
 				} else {
@@ -130,7 +127,7 @@
 
 				{#if $errors._errors}
 					<div role="alert" class="text-sm text-red-500">
-						{#each $errors._errors as error}
+						{#each $errors._errors as error, i (i)}
 							<p>{error}</p>
 						{/each}
 					</div>

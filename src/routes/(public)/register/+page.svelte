@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
-	import * as Form from '$lib/components/ui/form';
-	import { Input } from '$lib/components/ui/input';
-	import PasswordInput from '$lib/components/ui/password-input.svelte';
-	import { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } from '$lib/validators/password';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { authClient } from '$lib/auth-client';
 	import {
 		Card,
 		CardContent,
@@ -12,11 +9,14 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { authClient } from '$lib/auth-client';
-	import { goto } from '$app/navigation';
-	import { registerSchema } from './schema';
+	import * as Form from '$lib/components/ui/form';
+	import { Input } from '$lib/components/ui/input';
+	import PasswordInput from '$lib/components/ui/password-input.svelte';
+	import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '$lib/validators/password';
 	import { onMount } from 'svelte';
-	import { page } from '$app/state';
+	import { superForm } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
+	import { registerSchema } from './schema';
 
 	// Check for invitation code in URL
 	const invitationCode = $derived(page.url.searchParams.get('invitation'));
@@ -25,7 +25,8 @@
 	const form = superForm(
 		{ email: '', password: '', invitationCode: '' },
 		{
-			validators: zodClient(registerSchema),
+			// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+			validators: zod4Client(registerSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {
 				// Cancel the default form submission

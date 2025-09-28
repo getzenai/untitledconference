@@ -1,5 +1,5 @@
 import { passwordSchema } from '$lib/validators/password';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 
 export const createUserSchema = z.object({
 	email: z.string().email('Please enter a valid email address'),

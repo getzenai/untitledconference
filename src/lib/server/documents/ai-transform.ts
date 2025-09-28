@@ -1,6 +1,6 @@
 import { AIProviderFactory } from '$lib/server/ai/factory';
 import { AIServiceError } from '$lib/server/ai/types';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { extractValidatedContent, validateTiptapContent } from './tiptap-validator';
 import { validateJsonDepth, validatePromptLength } from './validation-constants';
 

@@ -1,6 +1,6 @@
 import { createLogger } from '$lib/server/logger';
 import { superValidate } from 'sveltekit-superforms';
-import { zod } from 'sveltekit-superforms/adapters';
+import { zod4 } from 'sveltekit-superforms/adapters';
 import type { PageServerLoad } from './$types';
 import { accountSettingsSchema } from './schema';
 
@@ -16,6 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		userAgent: locals.userAgent
 	});
 
-	const form = await superValidate(zod(accountSettingsSchema));
+	// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms zod4 adapter
+	const form = await superValidate(zod4(accountSettingsSchema));
 	return { form };
 };

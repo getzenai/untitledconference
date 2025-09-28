@@ -1,8 +1,11 @@
 import { expect, test as setup } from '@playwright/test';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createLogger } from '../src/lib/server/logger';
 import { PRE_REGISTERED_TEST_EMAIL, PRE_REGISTERED_TEST_PASSWORD } from './globals';
 import { testUserManager } from './test-user-manager';
+
+const logger = createLogger('AuthSetup');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,7 +52,7 @@ setup('authenticate', async ({ page }) => {
 		// Save the authentication state for reuse in authenticated tests
 		await page.context().storageState({ path: authFile });
 	} catch (error) {
-		console.error(`[Auth Setup] Authentication failed: ${error}`);
+		logger.debug('Authentication failed', error);
 		throw new Error(`[Auth Setup] Failed to create/authenticate test user: ${error}`);
 	}
 });

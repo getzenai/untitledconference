@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import * as Form from '$lib/components/ui/form';
 	import { Button } from '$lib/components/ui/button';
 	import * as Card from '$lib/components/ui/card';
@@ -8,17 +8,12 @@
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { Separator } from '$lib/components/ui/separator';
 	import { Edit, PlusCircle } from 'lucide-svelte';
-	import { exampleFormSchema } from './crud.validation';
-	import type { PageData } from './$types';
-
-	interface Props {
-		data: PageData;
-	}
-
-	let { data }: Props = $props();
+	import { exampleFormSchema } from './schema';
+	let { data } = $props();
 
 	const form = superForm(data.form, {
-		validators: zodClient(exampleFormSchema),
+		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+		validators: zod4Client(exampleFormSchema),
 		onResult: ({ result }) => {
 			if (result.type === 'success') {
 				// Form will be automatically reset by superforms
@@ -67,7 +62,7 @@
 							<Textarea
 								{...props}
 								placeholder="Enter example description"
-								bind:value={$formData.description}
+								bind:value={$formData.description as string}
 								disabled={$submitting}
 							/>
 						{/snippet}
@@ -77,7 +72,7 @@
 
 				{#if $errors._errors}
 					<div role="alert" class="mb-4 text-sm text-red-500">
-						{#each $errors._errors as error}
+						{#each $errors._errors as error, i (i)}
 							<p>{error}</p>
 						{/each}
 					</div>
@@ -116,6 +111,7 @@
 						</p>
 					</Card.Content>
 					<Card.Footer class="flex justify-end gap-2">
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 						<a href="/examples/crud/{example.id}" data-sveltekit-preload-data="hover">
 							<Button variant="outline" size="sm">
 								<Edit class="mr-1 h-4 w-4" /> View/Edit

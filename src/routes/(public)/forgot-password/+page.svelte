@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
-	import * as Form from '$lib/components/ui/form';
-	import { Input } from '$lib/components/ui/input';
+	import { page } from '$app/state';
+	import { authClient } from '$lib/auth-client';
 	import {
 		Card,
 		CardContent,
@@ -10,8 +8,10 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { authClient } from '$lib/auth-client';
-	import { page } from '$app/state';
+	import * as Form from '$lib/components/ui/form';
+	import { Input } from '$lib/components/ui/input';
+	import { superForm } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { forgotPasswordSchema } from './schema';
 
 	const confirmationCopy =
@@ -22,7 +22,8 @@
 	const form = superForm(
 		{ email: '' },
 		{
-			validators: zodClient(forgotPasswordSchema),
+			// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+			validators: zod4Client(forgotPasswordSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {
 				// Cancel the default form submission

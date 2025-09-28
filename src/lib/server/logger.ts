@@ -1,11 +1,28 @@
-import { building } from '$app/environment';
-import { env } from '$env/dynamic/private';
 import winston from 'winston';
 
 const { combine, timestamp, json, printf, colorize, errors } = winston.format;
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 type LogFormat = 'human' | 'json';
+
+// Dynamic imports for SvelteKit modules that might not be available
+let building = false;
+let env: Record<string, string | undefined> = process.env;
+
+// Try to import SvelteKit modules if available
+try {
+	const appModule = await import('$app/environment');
+	building = appModule.building;
+} catch {
+	// Not in SvelteKit environment, use defaults
+}
+
+try {
+	const envModule = await import('$env/dynamic/private');
+	env = envModule.env;
+} catch {
+	// Not in SvelteKit environment, use process.env
+}
 
 function getLogLevel(): LogLevel {
 	if (building) return 'warn';

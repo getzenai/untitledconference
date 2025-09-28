@@ -1,7 +1,7 @@
 import { env } from '$env/dynamic/private';
 import { createAzure } from '@ai-sdk/azure';
 import { generateObject, generateText } from 'ai';
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { AIServiceError, TEXT_TRANSFORM_PROMPTS, type AIProvider } from './types';
 
 /**

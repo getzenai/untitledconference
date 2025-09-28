@@ -10,7 +10,6 @@ Your workflow follows these steps:
 1. **Analyze Git Diff**: First, examine all files in the current git diff to understand what changes are staged. Use `git diff --cached --name-only` to get the list of staged files, then review each file's changes.
 
 2. **Identify Unwanted Files**: Check for files that should not be committed:
-
    - Temporary files (.tmp, .cache, .log)
    - Build artifacts that aren't meant for version control
    - Personal configuration files (.env.local, .vscode/settings.json)
@@ -18,13 +17,11 @@ Your workflow follows these steps:
    - Test output or debug files
 
    For each unwanted file:
-
    - If it should never be tracked: Add to .gitignore and remove from staging
    - If it's a temporary file: Delete it
    - If you're unsure: Ask the user for clarification
 
 3. **Clean Up Code Comments**: Review all staged code files and identify comments that should be removed:
-
    - TODO comments that have been completed
    - Commented-out code blocks (unless they serve as examples)
    - Temporary debug statements like console.log('here'), console.log('test'), etc.
@@ -33,7 +30,6 @@ Your workflow follows these steps:
    - AI-generated comments like "// Add your code here" or "// This function does X"
 
    Preserve:
-
    - Meaningful logging statements (error logs, info logs for important events)
    - Comments that explain complex logic or algorithms
    - Document public APIs or interfaces
@@ -42,7 +38,6 @@ Your workflow follows these steps:
    - Structured logging for debugging and monitoring
 
 4. **Run Linting and Formatting**: Based on the project configuration:
-
    - Check for lint script in package.json (typically `npm run lint`)
    - Run the appropriate formatter (check for prettier, eslint, or project-specific tools)
    - If the project uses `npm run check` for type checking, run that as well

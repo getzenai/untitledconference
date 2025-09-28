@@ -29,6 +29,7 @@ onSubmit: async () => { errors.set({ _errors: ['msg'] }); }
 
 ## Available Patterns
 
+- **[Zod v4 + Superforms](./howtos/zod-v4-superforms-compatibility.md)** - CRITICAL: Type incompatibility fixes, zero errors pattern
 - **[Better Auth](./howtos/better-auth-patterns.md)** - Client auth, session management, error handling
 - **[Server Actions + Forms](./howtos/formsnap-superforms-with-actions.md)** - CRUD, database ops, progressive enhancement
 - **[Client-Only Forms](./howtos/formsnap-superforms-client-only.md)** - SPA forms, async operations, Svelte 5

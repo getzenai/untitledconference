@@ -1,7 +1,10 @@
+import { createLogger } from '../../src/lib/server/logger';
 import { AuthActions } from '../actions/auth.actions';
 import { OrganizationActions } from '../actions/organization.actions';
 import { expect, test } from '../fixtures/test';
 import { testUserManager } from '../test-user-manager';
+
+const logger = createLogger('OrganizationLifecycleTest');
 
 /**
  * Critical Organization Lifecycle Test
@@ -35,7 +38,7 @@ test.describe.serial('Critical Organization Lifecycle', () => {
 		const memberAuthActions = new AuthActions(memberPage);
 		const memberOrgActions = new OrganizationActions(memberPage);
 
-		console.log('=== STEP 1: Owner Creates Organization ===');
+		logger.debug('STEP 1: Owner Creates Organization');
 		// Owner creates account and logs in
 		await ownerAuthActions.createAndLogin(ownerEmail, password);
 		await ownerOrgActions.navigateToOrganizationPage();
@@ -46,7 +49,7 @@ test.describe.serial('Critical Organization Lifecycle', () => {
 		// Verify organization was created with correct name
 		await ownerOrgActions.verifyOrganizationName(organizationName);
 
-		console.log('=== STEP 2: Owner Invites Member ===');
+		logger.debug('STEP 2: Owner Invites Member');
 		// Create the member account first (simulating they already have an account)
 		await testUserManager.createTestUser({
 			email: memberEmail,
@@ -70,9 +73,9 @@ test.describe.serial('Critical Organization Lifecycle', () => {
 		}
 
 		const invitationLink = `/invite/${invitationInput}`;
-		console.log('Invitation link:', invitationLink);
+		logger.debug('Invitation link', { invitationLink });
 
-		console.log('=== STEP 3: Member Accepts Invitation ===');
+		logger.debug('STEP 3: Member Accepts Invitation');
 		// Member logs in first
 		await memberAuthActions.login(memberEmail, password);
 
@@ -93,7 +96,7 @@ test.describe.serial('Critical Organization Lifecycle', () => {
 		await memberOrgActions.navigateToOrganizationPage();
 		await memberOrgActions.verifyOrganizationMembership(organizationName);
 
-		console.log('=== STEP 4: Transfer Ownership (Owner → Member) ===');
+		logger.debug('STEP 4: Transfer Ownership (Owner → Member)');
 		// Back to owner context to transfer ownership
 		await ownerOrgActions.navigateToOrganizationPage();
 
@@ -115,23 +118,24 @@ test.describe.serial('Critical Organization Lifecycle', () => {
 		await ownerPage.waitForSelector('table', { timeout: 5000 });
 
 		// Debug: Check if we can see both users in the table
-		console.log(`Checking roles after transfer...`);
+		logger.debug('Checking roles after transfer');
 		const ownerEmailVisible = await ownerPage
 			.locator(`table td:has-text("${ownerEmail}")`)
 			.isVisible();
 		const memberEmailVisible = await ownerPage
 			.locator(`table td:has-text("${memberEmail}")`)
 			.isVisible();
-		console.log(
-			`Owner email visible in table: ${ownerEmailVisible}, Member email visible in table: ${memberEmailVisible}`
-		);
+		logger.debug('User visibility in table', {
+			ownerEmailVisible,
+			memberEmailVisible
+		});
 
 		// After ownership transfer, the previous owner becomes admin
 		// They can't see their own role in the members table (you see yourself differently)
 		// So let's verify the new owner has ownership instead
 		await ownerOrgActions.verifyUserRole(memberEmail, 'owner');
 
-		console.log('=== STEP 5: Original Owner Leaves Organization ===');
+		logger.debug('STEP 5: Original Owner Leaves Organization');
 		// Original owner (now admin) leaves the organization
 		await ownerOrgActions.leaveOrganization();
 
@@ -144,14 +148,14 @@ test.describe.serial('Critical Organization Lifecycle', () => {
 		const currentUrl = ownerPage.url();
 		expect(currentUrl).not.toContain('/settings/organization');
 
-		console.log('=== STEP 6: Verify New Owner Has Control ===');
+		logger.debug('STEP 6: Verify New Owner Has Control');
 		// Back to member context to verify they have ownership
 		await memberOrgActions.navigateToOrganizationPage();
 
 		// Verify new owner can access organization management
 		await memberOrgActions.verifyOrganizationOwnership();
 
-		console.log('✅ Complete organization lifecycle test passed successfully!');
+		logger.debug('Complete organization lifecycle test passed successfully');
 
 		// Cleanup contexts
 		await ownerContext.close();

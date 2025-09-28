@@ -1,5 +1,8 @@
 import { Locator, Page } from '@playwright/test';
+import { createLogger } from '../../src/lib/server/logger';
 import { BasePage } from './base.page';
+
+const logger = createLogger('OrganizationPage');
 
 export class OrganizationPage extends BasePage {
 	// RESTful routing implemented:
@@ -297,7 +300,7 @@ export class OrganizationPage extends BasePage {
 
 		// Debug: Check if member row is found
 		const rowVisible = await memberRow.isVisible();
-		console.log(`Member row for ${memberEmail} visible: ${rowVisible}`);
+		logger.debug('Member row visibility check', { memberEmail, rowVisible });
 
 		// First check if a transfer ownership button exists
 		const transferButton = memberRow.locator(
@@ -313,12 +316,12 @@ export class OrganizationPage extends BasePage {
 
 			// Debug: Check what selectors are available
 			const hasSelectTrigger = (await selectTrigger.count()) > 0;
-			console.log(`Has select trigger in row: ${hasSelectTrigger}`);
+			logger.debug('Select trigger check', { hasSelectTrigger });
 
 			// Also try button with class w-32 as fallback (the Select.Trigger has class="w-32")
 			const triggerByClass = memberRow.locator('button.w-32, [data-slot="select-trigger"]').first();
 			const hasTriggerByClass = (await triggerByClass.count()) > 0;
-			console.log(`Has trigger by class: ${hasTriggerByClass}`);
+			logger.debug('Trigger by class check', { hasTriggerByClass });
 
 			if (await selectTrigger.isVisible()) {
 				// Click the select trigger to open the dropdown
@@ -341,14 +344,13 @@ export class OrganizationPage extends BasePage {
 				try {
 					// Global timeout should apply here now
 					const pageContent = await this.page.locator('body').textContent();
-					console.error(
-						`Cannot find role selector for ${memberEmail}. Page contains: ${pageContent?.slice(0, 500)}`
-					);
-					// Also log the HTML structure of the member row
-					const rowHTML = await memberRow.innerHTML();
-					console.error(`Member row HTML: ${rowHTML?.slice(0, 500)}`);
+					logger.debug('Cannot find role selector', {
+						memberEmail,
+						pageContent: pageContent?.slice(0, 500),
+						rowHTML: (await memberRow.innerHTML())?.slice(0, 500)
+					});
 				} catch (_e) {
-					console.error(`Cannot find role selector for ${memberEmail}`);
+					logger.debug('Cannot find role selector', { memberEmail });
 				}
 				throw new Error(
 					`Cannot find transfer ownership option for ${memberEmail}. Make sure you are logged in as the owner.`

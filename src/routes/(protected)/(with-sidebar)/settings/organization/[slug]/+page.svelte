@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { run } from 'svelte/legacy';
-
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
@@ -26,14 +24,8 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Copy, Trash2, UserPlus, LogOut, AlertTriangle } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
-	import type { PageData, ActionData } from './$types';
 
-	interface Props {
-		data: PageData;
-		form: ActionData;
-	}
-
-	let { data, form }: Props = $props();
+	let { data, form } = $props();
 
 	let inviteEmail = $state('');
 	let inviteRole = $state('member');
@@ -47,9 +39,9 @@
 	let invitations = $derived(data.invitations || []);
 	let currentMember = $derived(data.currentMember);
 
-	run(() => {
+	$effect(() => {
 		if (form?.success && form?.invitationId) {
-			const invitationLink = `${$page.url.origin}/invite/${form.invitationId}`;
+			const invitationLink = `${page.url.origin}/invite/${form.invitationId}`;
 			navigator.clipboard.writeText(invitationLink);
 			toast.success('Invitation created and link copied to clipboard');
 			inviteEmail = '';
@@ -67,7 +59,7 @@
 	}
 
 	async function copyInvitationLink(invitationId: string) {
-		const invitationLink = `${$page.url.origin}/invite/${invitationId}`;
+		const invitationLink = `${page.url.origin}/invite/${invitationId}`;
 		await navigator.clipboard.writeText(invitationLink);
 		toast.success('Invitation link copied to clipboard');
 	}
@@ -165,7 +157,7 @@
 										</span>
 									</Select.Trigger>
 									<Select.Content>
-										{#each members.filter((m) => m.userId !== $page.data.user?.id) as member}
+										{#each members.filter((m) => m.userId !== data.user?.id) as member}
 											<Select.Item value={member.id}>
 												{member.user?.email}
 												{#if member.role === 'admin'}
@@ -333,12 +325,12 @@
 						<TableRow>
 							<TableCell>
 								{member.user?.email}
-								{#if member.userId === $page.data.user?.id}
+								{#if member.userId === data.user?.id}
 									<Badge variant="secondary" class="badge ml-2">You</Badge>
 								{/if}
 							</TableCell>
 							<TableCell>
-								{#if isAdmin(currentMember) && member.userId !== $page.data.user?.id && currentMember?.role === 'owner'}
+								{#if isAdmin(currentMember) && member.userId !== data.user?.id && currentMember?.role === 'owner'}
 									<form
 										id={`update-role-${member.id}`}
 										method="POST"
@@ -387,7 +379,7 @@
 							</TableCell>
 							{#if isAdmin(currentMember)}
 								<TableCell class="text-right">
-									{#if member.userId !== $page.data.user?.id && currentMember?.role === 'owner'}
+									{#if member.userId !== data.user?.id && currentMember?.role === 'owner'}
 										<form
 											method="POST"
 											action="?/removeMember"

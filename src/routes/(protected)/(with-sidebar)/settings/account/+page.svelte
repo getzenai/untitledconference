@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
 	import * as Form from '$lib/components/ui/form';
 	import {
 		Card,
@@ -14,21 +13,14 @@
 	import PasswordInput from '$lib/components/ui/password-input.svelte';
 	import { getPasswordRequirementsFromSchema } from '$lib/validators/password';
 	import { toast } from 'svelte-sonner';
-	import type { PageData } from './$types';
-	import { accountSettingsSchema } from './schema';
 	import { authClient } from '$lib/auth-client';
 
-	interface Props {
-		data: PageData;
-	}
-
-	let { data }: Props = $props();
+	let { data } = $props();
 
 	const passwordRequirements = getPasswordRequirementsFromSchema();
 	let successMessage = $state<string | null>(null);
 
 	const form = superForm(data.form, {
-		validators: zodClient(accountSettingsSchema),
 		SPA: true, // Prevent default form submission
 		onSubmit: async ({ formData: formValues, cancel }) => {
 			// Cancel the default form submission
@@ -126,6 +118,7 @@
 				</div>
 				{#if !data.user?.emailVerified}
 					<div class="mt-2">
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 						<a href="/verify-email" class="text-primary text-sm font-medium hover:underline">
 							Resend verification email
 						</a>
@@ -190,7 +183,7 @@
 				<div class="space-y-2">
 					<Label>Password requirements</Label>
 					<ul class="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
-						{#each passwordRequirements as requirement}
+						{#each passwordRequirements as requirement, i (i)}
 							<li>{requirement}</li>
 						{/each}
 						<li>Different from your current password</li>
@@ -204,7 +197,7 @@
 								<Checkbox
 									{...props}
 									id="revokeOtherSessions"
-									bind:checked={$formData.revokeOtherSessions}
+									bind:checked={$formData.revokeOtherSessions as boolean}
 									disabled={$submitting}
 								/>
 								<div class="space-y-1">
@@ -221,7 +214,7 @@
 
 				{#if $errors._errors}
 					<div role="alert" class="text-sm text-red-500">
-						{#each $errors._errors as error}
+						{#each $errors._errors as error, i (i)}
 							<p>{error}</p>
 						{/each}
 					</div>

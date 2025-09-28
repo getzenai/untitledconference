@@ -14,7 +14,6 @@ tags:
   - password-form
   - validation
   - zod
-  - zodClient
   - async
   - svelte-5
   - store-updates
@@ -30,6 +29,60 @@ tags:
 
 # Formsnap + Superforms Client-Only (SPA Mode) - AI Reference
 
+## ⚠️ CRITICAL: Zod v4 Configuration for SPA Forms
+
+**Two patterns for SPA forms with Zod v4:**
+
+### Pattern 1: With Server-Side Form Initialization (Recommended)
+```typescript
+// +page.server.ts
+import { zod4 } from 'sveltekit-superforms/adapters';
+import { superValidate } from 'sveltekit-superforms';
+import { schema } from './schema';
+
+export const load = async () => {
+  // @ts-expect-error - Zod v4 type incompatibility
+  const form = await superValidate(zod4(schema));
+  return { form };
+};
+
+// +page.svelte
+let { data } = $props(); // No type annotation
+const form = superForm(data.form, {
+  SPA: true,
+  onSubmit: async ({ formData, cancel }) => {
+    cancel();
+    // Handle submission
+  }
+});
+```
+
+### Pattern 2: Client-Only Initialization (Login/Register pages)
+```typescript
+// No +page.server.ts needed
+// +page.svelte
+import { superForm } from 'sveltekit-superforms';
+
+const form = superForm(
+  { email: '', password: '', rememberMe: true }, // Initial values
+  {
+    SPA: true,
+    onSubmit: async ({ formData, cancel }) => {
+      cancel();
+      // Handle submission
+    }
+  }
+);
+
+const { form: formData, enhance, submitting, errors } = form;
+```
+
+**Schema files always use zod/v4:**
+```typescript
+import { z } from 'zod/v4';
+export const loginSchema = z.object({...});
+```
+
 ## When to Use Client-Only
 
 - Authentication forms (login, register, password reset)
@@ -42,8 +95,8 @@ tags:
 
 ```typescript
 // ❌ NEVER
-defaults(zodClient(schema)) // TypeScript errors
-defaults(schema, zodClient) // Wrong signature
+defaults(zod4Client(schema)) // TypeScript errors
+defaults(schema, zod4Client) // Wrong signature
 $formData/$errors in async // state_referenced_locally error
 onSubmit without cancel() // Submits to server
 { setError } = form // Doesn't exist client-side
@@ -65,7 +118,7 @@ errors.set({ _errors: [] }) // Correct error setting
 // src/routes/(public)/login/+page.svelte
 <script lang="ts">
   import { superForm } from 'sveltekit-superforms';
-  import { zodClient } from 'sveltekit-superforms/adapters';
+  import { zod4Client } from 'sveltekit-superforms/adapters';
   import * as Form from '$lib/components/ui/form';
   import { Input } from '$lib/components/ui/input';
   import { Checkbox } from '$lib/components/ui/checkbox';
@@ -81,7 +134,8 @@ errors.set({ _errors: [] }) // Correct error setting
   const form = superForm(
     { email: '', password: '', rememberMe: true },
     {
-      validators: zodClient(loginSchema),
+      // @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+      validators: zod4Client(loginSchema),
       SPA: true, // CRITICAL: Prevents server submission
       onSubmit: async ({ formData: formValues, cancel }) => {
         // CRITICAL: Always cancel default submission
@@ -163,7 +217,7 @@ const token = $derived(page.url.searchParams.get('token') || '');
 const form = superForm(
 	{ password: '', token: '' },
 	{
-		validators: zodClient(resetPasswordSchema),
+		validators: zod4Client(resetPasswordSchema),
 		SPA: true,
 		onSubmit: async ({ formData: formValues, cancel }) => {
 			cancel();
@@ -276,7 +330,7 @@ export const load: PageServerLoad = async () => {
 
 // +page.svelte
 const form = superForm(data.form, {
-	validators: zodClient(schema),
+	validators: zod4Client(schema),
 	SPA: true, // Still use SPA mode
 	onSubmit: async ({ formData, cancel }) => {
 		cancel();

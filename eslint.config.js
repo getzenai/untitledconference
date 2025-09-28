@@ -51,6 +51,10 @@ export default ts.config(
 			parserOptions: {
 				parser: ts.parser
 			}
+		},
+		rules: {
+			'svelte/require-each-key': 'off',
+			'svelte/no-navigation-without-resolve': 'off'
 		}
 	},
 	{

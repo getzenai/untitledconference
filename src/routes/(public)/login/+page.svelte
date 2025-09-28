@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { superForm } from 'sveltekit-superforms';
-	import { zodClient } from 'sveltekit-superforms/adapters';
-	import * as Form from '$lib/components/ui/form';
-	import { Input } from '$lib/components/ui/input';
-	import { Checkbox } from '$lib/components/ui/checkbox';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { authClient } from '$lib/auth-client';
 	import {
 		Card,
 		CardContent,
@@ -11,15 +9,19 @@
 		CardHeader,
 		CardTitle
 	} from '$lib/components/ui/card';
-	import { authClient } from '$lib/auth-client';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/state';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as Form from '$lib/components/ui/form';
+	import { Input } from '$lib/components/ui/input';
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { superForm } from 'sveltekit-superforms';
+	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { loginSchema } from './schema';
 
 	const form = superForm(
 		{ email: '', password: '', rememberMe: true },
 		{
-			validators: zodClient(loginSchema),
+			// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+			validators: zod4Client(loginSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {
 				// Cancel the default form submission
@@ -40,7 +42,7 @@
 					if (signInError) {
 						// Handle email verification error
 						if (signInError.status === 403 && signInError.message?.includes('Email not verified')) {
-							const params = new URLSearchParams({ email });
+							const params = new SvelteURLSearchParams({ email });
 							const returnTo = page.url.searchParams.get('returnTo');
 							if (returnTo) params.set('returnTo', returnTo);
 							await goto(`/verify-email?${params}`);
@@ -55,7 +57,7 @@
 					if (sessionData?.user) {
 						// Check email verification
 						if (!sessionData.user.emailVerified) {
-							const params = new URLSearchParams({ email });
+							const params = new SvelteURLSearchParams({ email });
 							const returnTo = page.url.searchParams.get('returnTo');
 							if (returnTo) params.set('returnTo', returnTo);
 							await goto(`/verify-email?${params}`);

@@ -1,5 +1,8 @@
+import { createLogger } from '../../src/lib/server/logger';
 import { CrudActions } from '../actions/crud.actions';
 import { expect, test } from '../fixtures/test';
+
+const logger = createLogger('CrudLifecycleTest');
 
 /**
  * Critical CRUD Lifecycle Test
@@ -23,7 +26,7 @@ test.describe('Critical CRUD Lifecycle', () => {
 
 			const crudActions = new CrudActions(page);
 
-			console.log('=== STEP 1: CREATE - Multiple Items ===');
+			logger.debug('STEP 1: CREATE - Multiple Items');
 			await crudPage.goto();
 			await crudPage.waitForPageLoad();
 
@@ -35,7 +38,7 @@ test.describe('Critical CRUD Lifecycle', () => {
 			expect(await crudPage.isItemVisible(item1Name)).toBeTruthy();
 			expect(await crudPage.isItemVisible(item2Name)).toBeTruthy();
 
-			console.log('=== STEP 2: READ - Verify Details ===');
+			logger.debug('STEP 2: READ - Verify Details');
 			// Read and verify first item exists with correct details
 			await crudActions.verifyObjectExists(item1Name);
 			const item1Data = await crudActions.findExampleObjectByName(item1Name);
@@ -46,7 +49,7 @@ test.describe('Critical CRUD Lifecycle', () => {
 			const item2Data = await crudActions.findExampleObjectByName(item2Name);
 			expect(item2Data).toBeTruthy();
 
-			console.log('=== STEP 3: UPDATE - First Item Only ===');
+			logger.debug('STEP 3: UPDATE - First Item Only');
 			// Update only the first item
 			await crudActions.updateExampleObject(item1Name, updatedName, updatedDescription);
 
@@ -63,7 +66,7 @@ test.describe('Critical CRUD Lifecycle', () => {
 			expect(await crudPage.isItemVisible(item2Name)).toBeTruthy();
 			await crudActions.verifyObjectExists(item2Name);
 
-			console.log('=== STEP 4: DELETE - Both Items ===');
+			logger.debug('STEP 4: DELETE - Both Items');
 			// Delete both items
 			await crudActions.deleteObjectByName(updatedName);
 			await crudActions.deleteObjectByName(item2Name);
@@ -72,7 +75,7 @@ test.describe('Critical CRUD Lifecycle', () => {
 			expect(await crudPage.isItemVisible(updatedName)).toBeFalsy();
 			expect(await crudPage.isItemVisible(item2Name)).toBeFalsy();
 
-			console.log('✅ Complete CRUD operations with data integrity test passed successfully!');
+			logger.debug('Complete CRUD operations with data integrity test passed successfully');
 		}
 	);
 });

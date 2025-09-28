@@ -4,7 +4,7 @@ import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema
 import { fail, redirect, error as svelteKitError } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { superValidate } from 'sveltekit-superforms';
-import { zod } from 'sveltekit-superforms/adapters';
+import { zod4 } from 'sveltekit-superforms/adapters';
 import { exampleFormSchema } from '../schema';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -48,13 +48,13 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 		// For the form, we only need name and description
 		// The ID comes from the URL params, not from form input
-		const form = await superValidate(
-			{
-				name: exampleObject.name,
-				description: exampleObject.description || ''
-			},
-			zod(exampleFormSchema)
-		);
+		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+		const form = await superValidate(zod4(exampleFormSchema));
+
+		// Pre-fill the form with existing data
+		(form.data as { name: string; description?: string }).name = exampleObject.name;
+		(form.data as { name: string; description?: string }).description =
+			exampleObject.description || '';
 
 		return {
 			exampleObject,
@@ -91,13 +91,14 @@ export const actions: Actions = {
 			throw svelteKitError(400, { message: 'Invalid Example ID format.' });
 		}
 
-		const form = await superValidate(event, zod(exampleFormSchema));
+		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+		const form = await superValidate(event, zod4(exampleFormSchema));
 
 		if (!form.valid) {
 			return fail(400, { form });
 		}
 
-		const { name, description } = form.data;
+		const { name, description } = form.data as { name: string; description?: string };
 
 		try {
 			// Get user's active organization
@@ -130,8 +131,8 @@ export const actions: Actions = {
 			const [updatedObject] = await db
 				.update(exampleObjectsTable)
 				.set({
-					name,
-					description: description || ''
+					name: name as string,
+					description: (description as string | undefined) || ''
 				})
 				.where(whereConditions)
 				.returning();
@@ -140,6 +141,13 @@ export const actions: Actions = {
 				form.errors._errors = ['Failed to update example object.'];
 				return fail(500, { form });
 			}
+
+			// Update the form data with the actual values from database
+			// This ensures the form reflects the saved data
+			form.data = {
+				name: updatedObject.name,
+				description: updatedObject.description || ''
+			};
 
 			return { form, success: true };
 		} catch (dbError) {

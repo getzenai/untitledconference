@@ -4,7 +4,7 @@ import { exampleObjectsTable } from '$lib/server/db/examples/crud-example-schema
 import { fail, error as svelteKitError } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { superValidate } from 'sveltekit-superforms';
-import { zod } from 'sveltekit-superforms/adapters';
+import { zod4 } from 'sveltekit-superforms/adapters';
 import type { Actions, PageServerLoad } from './$types';
 import { exampleFormSchema } from './schema';
 
@@ -35,7 +35,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.where(whereConditions)
 			.orderBy(exampleObjectsTable.createdAt);
 
-		const form = await superValidate(zod(exampleFormSchema));
+		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+		const form = await superValidate(zod4(exampleFormSchema));
 
 		return {
 			examples,
@@ -61,7 +62,8 @@ export const actions: Actions = {
 	create: async (event) => {
 		const user = event.locals.user;
 
-		const form = await superValidate(event, zod(exampleFormSchema));
+		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
+		const form = await superValidate(event, zod4(exampleFormSchema));
 
 		if (!form.valid) {
 			return fail(400, { form });
@@ -79,11 +81,12 @@ export const actions: Actions = {
 
 			const organizationId = userMembership[0]?.organizationId || null;
 
+			const { name, description } = validData as { name: string; description?: string };
 			const [newExampleObject] = await db
 				.insert(exampleObjectsTable)
 				.values({
-					name: validData.name,
-					description: validData.description || '',
+					name,
+					description: description || '',
 					userId: user.id,
 					organizationId
 				})

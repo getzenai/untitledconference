@@ -4,7 +4,10 @@ import { eq, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from '../src/lib/server/db/auth-schema.ts';
+import { createLogger } from '../src/lib/server/logger';
 import { TEST_USER_EMAIL_PREFIX } from './globals';
+
+const logger = createLogger('DB');
 
 // Use TEST_DATABASE_URL for tests, with fallback to localhost test database (never dev database)
 const connectionString =
@@ -32,7 +35,7 @@ export async function cleanupDatabase() {
 		// await db.delete(schema.session);
 		// await db.delete(schema.account);
 	} catch (error) {
-		console.error('Error during database cleanup:', error);
+		logger.debug('Error during database cleanup', error);
 		// Optionally re-throw or handle if tests should not proceed
 	}
 }
@@ -62,7 +65,7 @@ export async function cleanupTestUsers() {
 		// Deleting users will cascade to their sessions and accounts due to ON DELETE CASCADE.
 		await db.delete(schema.user).where(like(schema.user.email, `${TEST_USER_EMAIL_PREFIX}%`));
 	} catch (error) {
-		console.error('[Cleanup] Error during test user cleanup:', error);
+		logger.debug('Error during test user cleanup', error);
 	}
 }
 

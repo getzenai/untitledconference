@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import type { AIProvider } from './types';
 import { TEXT_TRANSFORM_PROMPTS } from './types';
 
@@ -115,7 +115,7 @@ export class MockProvider implements AIProvider {
 		}
 
 		if (schema instanceof z.ZodString) {
-			const zodDef = schema._def as z.ZodStringDef & { description?: string };
+			const zodDef = schema.def as z.ZodString & { description?: string };
 			const description = zodDef.description || '';
 			return this.generateStringContent(description, context);
 		}
@@ -129,8 +129,8 @@ export class MockProvider implements AIProvider {
 		}
 
 		if (schema instanceof z.ZodArray) {
-			const arrayDef = schema._def as z.ZodArrayDef;
-			const itemSchema = arrayDef.type;
+			// In Zod v4, use .element to get the array item schema
+			const itemSchema = schema.element as z.ZodType;
 			return [this.generateMockData(itemSchema, context)];
 		}
 
@@ -139,7 +139,7 @@ export class MockProvider implements AIProvider {
 			const result: Record<string, unknown> = {};
 
 			for (const [key, fieldSchema] of Object.entries(shape)) {
-				const fieldDef = (fieldSchema as z.ZodType)._def as { description?: string };
+				const fieldDef = (fieldSchema as z.ZodType).def as { description?: string };
 				const fieldContext = fieldDef.description || context;
 				result[key] = this.generateMockData(fieldSchema as z.ZodType, fieldContext);
 			}
@@ -147,9 +147,12 @@ export class MockProvider implements AIProvider {
 			return result;
 		}
 
-		if (schema instanceof z.ZodEffects) {
-			const effectsDef = schema._def as z.ZodEffectsDef;
-			const innerSchema = effectsDef.schema;
+		// Check if this is a refined/transformed schema
+		if ('def' in schema && schema.def && 'schema' in schema.def) {
+			// Handle ZodEffects (refinements, transforms, etc)
+			// Accessing internal _def.schema for Zod v4
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const innerSchema = (schema.def as any).schema as z.ZodType;
 			return this.generateMockData(innerSchema, context);
 		}
 
