@@ -85,15 +85,22 @@ SECRETS_ARGS="database-url=keyvaultref:${KV_URL}/secrets/database-url,identityre
 SECRETS_ARGS="$SECRETS_ARGS better-auth-secret=keyvaultref:${KV_URL}/secrets/better-auth-secret,identityref:system"
 
 # Optional secrets — only wire if they exist in KV
-if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-api-key" &>/dev/null; then
-    SECRETS_ARGS="$SECRETS_ARGS sendgrid-api-key=keyvaultref:${KV_URL}/secrets/sendgrid-api-key,identityref:system"
-    echo -e "  ${GREEN}●${RESET} sendgrid-api-key found in KV"
-fi
+OPTIONAL_SECRETS=(
+    "github-client-id"
+    "github-client-secret"
+    "sendgrid-api-key"
+    "sendgrid-from"
+    "azure-openai-api-key"
+    "azure-resource-name"
+    "azure-openai-deployment-name"
+)
 
-if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-from" &>/dev/null; then
-    SECRETS_ARGS="$SECRETS_ARGS sendgrid-from=keyvaultref:${KV_URL}/secrets/sendgrid-from,identityref:system"
-    echo -e "  ${GREEN}●${RESET} sendgrid-from found in KV"
-fi
+for secret_name in "${OPTIONAL_SECRETS[@]}"; do
+    if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "$secret_name" &>/dev/null; then
+        SECRETS_ARGS="$SECRETS_ARGS ${secret_name}=keyvaultref:${KV_URL}/secrets/${secret_name},identityref:system"
+        echo -e "  ${GREEN}●${RESET} $secret_name found in KV"
+    fi
+done
 
 az containerapp secret set --name "$CONTAINER_APP_NAME" -g "$RESOURCE_GROUP" \
     --secrets $SECRETS_ARGS \
@@ -112,14 +119,30 @@ ENV_ARGS="DATABASE_URL=secretref:database-url"
 ENV_ARGS="$ENV_ARGS BETTER_AUTH_SECRET=secretref:better-auth-secret"
 ENV_ARGS="$ENV_ARGS BETTER_AUTH_URL=https://$APP_FQDN"
 
-# Wire optional SendGrid secrets if they were configured
+# Map optional secrets to env vars (same names as SECRET_MAP in dev-from-kv.sh)
+declare -A ENV_MAP=(
+    ["github-client-id"]="GITHUB_CLIENT_ID"
+    ["github-client-secret"]="GITHUB_CLIENT_SECRET"
+    ["sendgrid-api-key"]="SENDGRID_API_KEY"
+    ["sendgrid-from"]="SENDGRID_FROM"
+    ["azure-openai-api-key"]="AZURE_OPENAI_API_KEY"
+    ["azure-resource-name"]="AZURE_RESOURCE_NAME"
+    ["azure-openai-deployment-name"]="AZURE_OPENAI_DEPLOYMENT_NAME"
+)
+
+for secret_name in "${!ENV_MAP[@]}"; do
+    if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "$secret_name" &>/dev/null; then
+        ENV_ARGS="$ENV_ARGS ${ENV_MAP[$secret_name]}=secretref:$secret_name"
+    fi
+done
+
+# Derive feature flags from available secrets
 if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-api-key" &>/dev/null; then
-    ENV_ARGS="$ENV_ARGS SENDGRID_API_KEY=secretref:sendgrid-api-key"
     ENV_ARGS="$ENV_ARGS SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=true"
 fi
 
-if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-from" &>/dev/null; then
-    ENV_ARGS="$ENV_ARGS SENDGRID_FROM=secretref:sendgrid-from"
+if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "azure-openai-api-key" &>/dev/null; then
+    ENV_ARGS="$ENV_ARGS AI_PROVIDER=azure"
 fi
 
 az containerapp update --name "$CONTAINER_APP_NAME" -g "$RESOURCE_GROUP" \

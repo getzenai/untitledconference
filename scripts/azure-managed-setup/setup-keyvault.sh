@@ -80,37 +80,52 @@ else
 fi
 unset EXISTING_SECRET
 
+# Helper: prompt and store a secret in KV (skip on Enter)
+# Usage: prompt_secret "kv-name" "Prompt text" [--hidden]
+prompt_secret() {
+    local kv_name="$1"
+    local prompt_text="$2"
+    local hidden="${3:-}"
+    local read_flags="-r"
+    [ "$hidden" = "--hidden" ] && read_flags="-rs"
+
+    local value
+    read $read_flags -p "  $prompt_text (press Enter to skip): " value
+    [ "$hidden" = "--hidden" ] && echo ""
+
+    if [ -n "$value" ]; then
+        az keyvault secret set \
+            --vault-name "$KEYVAULT_NAME" \
+            --name "$kv_name" \
+            --value "$value" \
+            --output none
+        unset value
+        echo -e "  ${GREEN}●${RESET} $kv_name stored"
+    else
+        echo -e "  ${DIM}$kv_name skipped${RESET}"
+    fi
+}
+
 # Optional secrets — only prompt in interactive terminal
 if [ -t 0 ]; then
-    read -rsp "  SENDGRID_API_KEY (press Enter to skip): " SENDGRID_KEY
+    echo -e "  ${DIM}Press Enter to skip any optional secret${RESET}"
     echo ""
-    if [ -n "$SENDGRID_KEY" ]; then
-        az keyvault secret set \
-            --vault-name "$KEYVAULT_NAME" \
-            --name "sendgrid-api-key" \
-            --value "$SENDGRID_KEY" \
-            --output none
-        unset SENDGRID_KEY
-        echo -e "  ${GREEN}●${RESET} sendgrid-api-key stored"
-    else
-        echo -e "  ${DIM}sendgrid-api-key skipped${RESET}"
-    fi
 
-    read -rp "  SENDGRID_FROM email (press Enter to skip): " SENDGRID_FROM_VAL
-    if [ -n "$SENDGRID_FROM_VAL" ]; then
-        az keyvault secret set \
-            --vault-name "$KEYVAULT_NAME" \
-            --name "sendgrid-from" \
-            --value "$SENDGRID_FROM_VAL" \
-            --output none
-        unset SENDGRID_FROM_VAL
-        echo -e "  ${GREEN}●${RESET} sendgrid-from stored"
-    else
-        echo -e "  ${DIM}sendgrid-from skipped${RESET}"
-    fi
+    # GitHub OAuth
+    prompt_secret "github-client-id"     "GITHUB_CLIENT_ID"
+    prompt_secret "github-client-secret"  "GITHUB_CLIENT_SECRET" --hidden
+
+    # SendGrid
+    prompt_secret "sendgrid-api-key"      "SENDGRID_API_KEY" --hidden
+    prompt_secret "sendgrid-from"         "SENDGRID_FROM email"
+
+    # Azure OpenAI
+    prompt_secret "azure-openai-api-key"          "AZURE_OPENAI_API_KEY" --hidden
+    prompt_secret "azure-resource-name"            "AZURE_RESOURCE_NAME"
+    prompt_secret "azure-openai-deployment-name"   "AZURE_OPENAI_DEPLOYMENT_NAME"
 else
-    echo -e "  ${DIM}Non-interactive mode — skipping optional secrets (SendGrid)${RESET}"
-    echo -e "  ${DIM}Run interactively to set: sendgrid-api-key, sendgrid-from${RESET}"
+    echo -e "  ${DIM}Non-interactive mode — skipping optional secrets${RESET}"
+    echo -e "  ${DIM}Run interactively to set: github-client-*, sendgrid-*, azure-openai-*${RESET}"
 fi
 
 echo ""

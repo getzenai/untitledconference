@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive tooling. Uses Docker containers for dev/test databases.
+SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive tooling. Uses Azure Key Vault for all secrets — no `.env` files for credentials. Docker container for test database only.
 
 ## Routing: RESTful Pattern
 
@@ -14,20 +14,20 @@ SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive t
 ## Database Commands
 
 ```bash
-# Development database queries (safe for Claude Code)
-npm run psql:dev "SELECT * FROM users LIMIT 5;"
+# Development database (Azure PostgreSQL — requires KV secrets)
+npm run db:push:azure    # Push schema to Azure DB
+npm run db:studio:azure  # Open Drizzle Studio with Azure DB
+
+# Test database (local Docker)
 npm run psql:test "SELECT * FROM users LIMIT 5;"
 
-# Database operations
-npm run db:start     # Start containers
-npm run db:push      # Push schema changes
-npm run db:studio    # Open Drizzle Studio
-npm run db:migrate   # Run migrations
+# Docker operations (test DB only)
+npm run db:start     # Start test DB container
 ```
 
 **Connections:**
 
-- Dev: `postgres://root:mysecretpassword@localhost:5432/local`
+- Dev: Azure PostgreSQL (fetched from Key Vault via `dev-from-kv.sh`)
 - Test: `postgres://root:mysecretpassword@localhost:5433/test`
 
 ## Testing Commands
@@ -72,9 +72,19 @@ Tests use POM pattern. See `/e2e/CLAUDE.md` for details.
 
 ## Development
 
+All secrets are fetched from Azure Key Vault. No `.env` file needed for credentials.
+
 ```bash
-npm run dev    # Start dev server (port 5173)
-npm run build  # Build for production
+az login                                          # one-time Azure auth
+docker compose up -d                              # start test DB (for E2E/integration tests)
+./scripts/azure-managed-setup/dev-from-kv.sh      # fetch KV secrets + start dev server
+# or: npm run dev:azure
+```
+
+See `scripts/azure-managed-setup/CLAUDE.md` for full Azure setup instructions.
+
+```bash
+npm run build  # Build for production (no secrets needed — lazy Proxy pattern)
 ```
 
 ## Pre-commit Hook & CI Parity
@@ -122,8 +132,7 @@ Logger is configured via environment variables (see Environment Variables sectio
 ## Port Forwarding
 
 - 5173: SvelteKit dev server
-- 5432: PostgreSQL dev database
-- 5433: PostgreSQL test database
+- 5433: PostgreSQL test database (local Docker)
 - 5555: Drizzle Studio
 
 ## SvelteKit Server Actions Best Practices
