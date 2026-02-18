@@ -119,29 +119,49 @@ ENV_ARGS="DATABASE_URL=secretref:database-url"
 ENV_ARGS="$ENV_ARGS BETTER_AUTH_SECRET=secretref:better-auth-secret"
 ENV_ARGS="$ENV_ARGS BETTER_AUTH_URL=https://$APP_FQDN"
 
-# Map optional secrets to env vars (same names as SECRET_MAP in dev-from-kv.sh)
-declare -A ENV_MAP=(
-    ["github-client-id"]="GITHUB_CLIENT_ID"
-    ["github-client-secret"]="GITHUB_CLIENT_SECRET"
-    ["sendgrid-api-key"]="SENDGRID_API_KEY"
-    ["sendgrid-from"]="SENDGRID_FROM"
-    ["azure-openai-api-key"]="AZURE_OPENAI_API_KEY"
-    ["azure-resource-name"]="AZURE_RESOURCE_NAME"
-    ["azure-openai-deployment-name"]="AZURE_OPENAI_DEPLOYMENT_NAME"
+# Map optional secrets to env vars (parallel arrays for Bash 3.2 compatibility)
+OPT_KV_NAMES=(
+    "github-client-id"
+    "github-client-secret"
+    "sendgrid-api-key"
+    "sendgrid-from"
+    "azure-openai-api-key"
+    "azure-resource-name"
+    "azure-openai-deployment-name"
+)
+OPT_ENV_VARS=(
+    "GITHUB_CLIENT_ID"
+    "GITHUB_CLIENT_SECRET"
+    "SENDGRID_API_KEY"
+    "SENDGRID_FROM"
+    "AZURE_OPENAI_API_KEY"
+    "AZURE_RESOURCE_NAME"
+    "AZURE_OPENAI_DEPLOYMENT_NAME"
 )
 
-for secret_name in "${!ENV_MAP[@]}"; do
-    if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "$secret_name" &>/dev/null; then
-        ENV_ARGS="$ENV_ARGS ${ENV_MAP[$secret_name]}=secretref:$secret_name"
+for i in "${!OPT_KV_NAMES[@]}"; do
+    if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "${OPT_KV_NAMES[$i]}" &>/dev/null; then
+        ENV_ARGS="$ENV_ARGS ${OPT_ENV_VARS[$i]}=secretref:${OPT_KV_NAMES[$i]}"
     fi
 done
 
-# Derive feature flags from available secrets
-if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-api-key" &>/dev/null; then
+# Derive feature flags from available secrets (require all needed secrets)
+HAS_SENDGRID_KEY=false
+HAS_SENDGRID_FROM=false
+HAS_AOAI_KEY=false
+HAS_AOAI_RESOURCE=false
+HAS_AOAI_DEPLOYMENT=false
+az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-api-key" &>/dev/null && HAS_SENDGRID_KEY=true
+az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "sendgrid-from" &>/dev/null && HAS_SENDGRID_FROM=true
+az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "azure-openai-api-key" &>/dev/null && HAS_AOAI_KEY=true
+az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "azure-resource-name" &>/dev/null && HAS_AOAI_RESOURCE=true
+az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "azure-openai-deployment-name" &>/dev/null && HAS_AOAI_DEPLOYMENT=true
+
+if [ "$HAS_SENDGRID_KEY" = true ] && [ "$HAS_SENDGRID_FROM" = true ]; then
     ENV_ARGS="$ENV_ARGS SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=true"
 fi
 
-if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "azure-openai-api-key" &>/dev/null; then
+if [ "$HAS_AOAI_KEY" = true ] && [ "$HAS_AOAI_RESOURCE" = true ] && [ "$HAS_AOAI_DEPLOYMENT" = true ]; then
     ENV_ARGS="$ENV_ARGS AI_PROVIDER=azure"
 fi
 

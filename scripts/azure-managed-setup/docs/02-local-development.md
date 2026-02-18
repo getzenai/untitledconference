@@ -76,7 +76,7 @@ These values are set directly by the script (not from KV). Override via env vars
 The script automatically derives feature flags from available secrets:
 
 - **`SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG`** — set to `true` if both `SENDGRID_API_KEY` and `SENDGRID_FROM` exist in KV, otherwise `false`
-- **`AI_PROVIDER`** — set to `azure` if `AZURE_OPENAI_API_KEY` exists in KV, otherwise `mock`
+- **`AI_PROVIDER`** — set to `azure` if all three Azure OpenAI secrets exist (`AZURE_OPENAI_API_KEY`, `AZURE_RESOURCE_NAME`, `AZURE_OPENAI_DEPLOYMENT_NAME`), otherwise `mock`. Warns if only partial config is found
 
 Override manually if needed: `AI_PROVIDER=mock npm run dev:azure`
 
