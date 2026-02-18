@@ -17,7 +17,6 @@ export const load: PageServerLoad = async ({ url }) => {
 		tokenLength: token.length
 	});
 
-	// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms zod4 adapter
 	const form = await superValidate(zod4(completeRegistrationSchema));
 
 	// Pre-fill the token in the form

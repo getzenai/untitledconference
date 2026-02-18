@@ -35,7 +35,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 			.where(whereConditions)
 			.orderBy(exampleObjectsTable.createdAt);
 
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		const form = await superValidate(zod4(exampleFormSchema));
 
 		return {
@@ -62,7 +61,6 @@ export const actions: Actions = {
 	create: async (event) => {
 		const user = event.locals.user;
 
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		const form = await superValidate(event, zod4(exampleFormSchema));
 
 		if (!form.valid) {

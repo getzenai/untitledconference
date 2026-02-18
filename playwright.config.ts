@@ -8,11 +8,12 @@ export default defineConfig({
 	workers: 4, // Increase worker count for faster test execution
 	fullyParallel: true, // Run all tests in parallel for maximum speed
 	webServer: {
-		command: 'npm run build && npm run preview -- --port 5174',
-		// important: do not change this, we want a seperated dev server for E2E tests that uses its own database
-		// if the dev server is used it will lead to test failures
-		port: 5174, // E2E tests use their own port
-		reuseExistingServer: false, // Always use fresh server for tests
+		command: process.env.CI
+			? 'npm run preview -- --port 5174'
+			: 'npm run build && npm run preview -- --port 5174',
+		port: 5174,
+		reuseExistingServer: false,
+		timeout: 120_000,
 		env: {
 			BETTER_AUTH_URL: 'http://localhost:5174',
 			NODE_ENV: 'test',

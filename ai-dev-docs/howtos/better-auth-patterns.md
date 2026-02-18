@@ -109,7 +109,7 @@ if (signUpData.user && !signUpData.user.emailVerified) {
 
 ```typescript
 // Forgot password - src/routes/(public)/forgot-password/+page.svelte
-const { error: requestError } = await authClient.forgetPassword({
+const { error: requestError } = await authClient.requestPasswordReset({
 	email,
 	redirectTo: `${origin}/reset-password`
 });

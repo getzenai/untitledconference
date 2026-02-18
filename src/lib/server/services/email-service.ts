@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
 import sgMail from '@sendgrid/mail';
+import { config } from '../config';
 import {
 	generatePasswordResetEmailContent,
 	generateVerificationEmailTemplate
@@ -16,9 +16,7 @@ interface EmailData {
 }
 
 export async function sendEmail({ to, subject, text, html }: EmailData): Promise<void> {
-	const shouldSendEmail = env.SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG === 'true';
-
-	if (!shouldSendEmail) {
+	if (!config.sendEmails) {
 		logger.info('Email (console mode)', {
 			to,
 			subject,
@@ -28,23 +26,20 @@ export async function sendEmail({ to, subject, text, html }: EmailData): Promise
 		return;
 	}
 
-	const apiKey = env.SENDGRID_API_KEY;
-	const fromAddress = env.SENDGRID_FROM;
-
-	if (!apiKey) {
+	if (!config.sendgridApiKey) {
 		throw new Error('SENDGRID_API_KEY is not set.');
 	}
 
-	if (!fromAddress) {
+	if (!config.sendgridFrom) {
 		throw new Error('SENDGRID_FROM is not set.');
 	}
 
-	sgMail.setApiKey(apiKey);
+	sgMail.setApiKey(config.sendgridApiKey);
 
 	try {
 		await sgMail.send({
 			to,
-			from: fromAddress,
+			from: config.sendgridFrom,
 			subject,
 			text,
 			html

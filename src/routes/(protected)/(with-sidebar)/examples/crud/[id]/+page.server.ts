@@ -48,7 +48,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 		// For the form, we only need name and description
 		// The ID comes from the URL params, not from form input
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		const form = await superValidate(zod4(exampleFormSchema));
 
 		// Pre-fill the form with existing data
@@ -91,7 +90,6 @@ export const actions: Actions = {
 			throw svelteKitError(400, { message: 'Invalid Example ID format.' });
 		}
 
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		const form = await superValidate(event, zod4(exampleFormSchema));
 
 		if (!form.valid) {

@@ -16,7 +16,6 @@
 	let { data } = $props();
 
 	const form = superForm(data.form, {
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		validators: zod4Client(exampleFormSchema)
 	});
 

@@ -34,6 +34,7 @@ src/lib/paraglide
 e2e/.auth
 playwright-report
 test-report-for-coding-agents
+.playwright-mcp
 
 # Feedback files
 playwright-coding-reporter-feedback-update.md

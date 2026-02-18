@@ -77,6 +77,23 @@ npm run dev    # Start dev server (port 5173)
 npm run build  # Build for production
 ```
 
+## Pre-commit Hook & CI Parity
+
+The pre-commit hook (`.husky/pre-commit`) mirrors the GitHub CI pipeline so errors are caught locally before push:
+
+| Check                  | Pre-commit     | CI             | Notes                                       |
+| ---------------------- | -------------- | -------------- | ------------------------------------------- |
+| `npm run format`       | Yes (auto-fix) | `format:check` | Pre-commit writes fixes, CI only checks     |
+| `npm run lint`         | Yes            | Yes            | Prettier + ESLint (max 60 warnings)         |
+| `npm run check:unused` | Yes            | -              | Knip dead code detection (local-only extra) |
+| `npm run check`        | Yes            | Yes            | Paraglide compile + svelte-check types      |
+| `npm run build`        | Yes            | Yes            | Catches build-time errors (e.g. lazy init)  |
+| `npm run test:unit`    | Yes            | Yes            | Unit tests (no DB needed)                   |
+| `test:integration`     | -              | Yes            | Needs running database                      |
+| `test:e2e`             | -              | Yes            | Needs DB + browser                          |
+
+**Important**: Server-side code must not eagerly evaluate env vars at module scope — `vite build` runs without `.env`. Use lazy patterns (Proxy, getter functions) for any code that reads `$env/dynamic/private`. See `src/lib/server/config.ts` for the pattern.
+
 ## Logging
 
 Use Winston logger for structured logging:

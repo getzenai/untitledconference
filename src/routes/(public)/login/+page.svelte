@@ -20,7 +20,6 @@
 	const form = superForm(
 		{ email: '', password: '', rememberMe: true },
 		{
-			// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 			validators: zod4Client(loginSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {

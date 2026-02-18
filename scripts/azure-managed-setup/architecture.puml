@@ -1,0 +1,63 @@
+@startuml
+left to right direction
+skinparam componentStyle rectangle
+
+skinparam node {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  BorderThickness 2
+}
+
+skinparam cloud {
+  BackgroundColor #E8F5E9
+  BorderColor #2E7D32
+  BorderThickness 2
+}
+
+rectangle "Azure (germanywestcentral / Frankfurt)\nrg-vibe-starter-dev" as HOST {
+
+  rectangle "Container Apps Environment\n(Consumption Plan)" as ACA #F5F5F5 {
+
+    node "Docker Container\nSvelteKit App" as APP <<container>> {
+      component "SvelteKit Node.js :3000\n(SSR + API + Static Assets)" as SVELTEKIT
+    }
+
+    component "HTTPS Ingress\n(auto TLS)" as INGRESS
+  }
+
+  database "PostgreSQL Flexible Server\n(PG 16 | Burstable B1ms)" as DB
+  storage "Azure Key Vault\n(RBAC-enabled)" as KV
+  storage "Azure Container Registry\n(Basic)" as ACR
+  storage "Azure Blob Storage\n(optional)" as BLOB
+
+  INGRESS --> SVELTEKIT
+  SVELTEKIT --> DB : SQL
+  SVELTEKIT ..> KV : Managed Identity\n(Secrets Read)
+  SVELTEKIT --> BLOB : Blob R/W
+  APP ..> ACR : ACR Pull
+}
+
+rectangle "External Systems" as EXT {
+  component "SendGrid\n(Email)" as SENDGRID
+}
+
+SVELTEKIT ..> SENDGRID
+
+actor "Users /\nBrowser" as USER
+USER --> INGRESS : HTTPS
+
+rectangle "Developer\nLaptop" as DEV {
+  component "deploy.sh" as DEPLOY
+}
+
+DEV ..> ACR : az acr build\n(server-side)
+
+legend right
+  |= Symbol |= Meaning |
+  | <#E3F2FD> Node | Docker Container |
+  | <#FFFFFF> Component | Managed Service / External |
+  | --> | Synchronous call |
+  | ..> | Async / External call |
+endlegend
+
+@enduml

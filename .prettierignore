@@ -8,3 +8,6 @@ src/lib/components/ui/
 .vitepress/
 
 ai-dev-docs/
+
+# Inlang (managed by paraglide)
+project.inlang/

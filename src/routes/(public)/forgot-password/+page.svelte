@@ -22,7 +22,6 @@
 	const form = superForm(
 		{ email: '' },
 		{
-			// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 			validators: zod4Client(forgotPasswordSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {
@@ -36,7 +35,7 @@
 					const redirectTo = `${origin}/reset-password`;
 
 					// Use Better Auth client to request password reset
-					await authClient.forgetPassword({
+					await authClient.requestPasswordReset({
 						email,
 						redirectTo
 					});

@@ -108,6 +108,7 @@ jobs:
           path: |
             .svelte-kit
             build
+          include-hidden-files: true
           retention-days: 1
 
   # Unit tests - no database required

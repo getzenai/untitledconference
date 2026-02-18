@@ -1,0 +1,27 @@
+{
+	"$schema": "https://unpkg.com/knip@5/schema.json",
+	"entry": ["src/**/*.ts", "src/**/*.svelte"],
+	"project": ["src/**/*.ts", "src/**/*.svelte"],
+	"ignore": ["src/lib/paraglide/**", "src/lib/components/ui/**", "src/app.d.ts", "docs/**"],
+	"ignoreDependencies": [
+		"@ai-sdk/svelte",
+		"@inlang/plugin-message-format",
+		"@inlang/plugin-m-function-matcher",
+		"@inlang/paraglide-sveltekit",
+		"@tailwindcss/forms",
+		"@tailwindcss/typography",
+		"@tiptap/extension-bubble-menu",
+		"@tiptap/extension-history",
+		"@tiptap/extension-list-keymap",
+		"@tiptap/extension-task-item",
+		"@tiptap/extension-task-list",
+		"@types/winston",
+		"@zenai/playwright-coding-agent-reporter",
+		"autoprefixer",
+		"patch-package",
+		"tw-animate-css"
+	],
+	"drizzle": false,
+	"vitepress": false,
+	"playwright": false
+}

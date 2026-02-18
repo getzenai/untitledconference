@@ -17,7 +17,7 @@ const logger = createLogger('AdminUsers');
 // Helper function to trigger password reset and poll for link
 async function triggerInvitationLink(email: string, invitationId: string, headers: Headers) {
 	// Trigger password reset with invitation-specific callback
-	await auth.api.forgetPassword({
+	await auth.api.requestPasswordReset({
 		body: {
 			email,
 			redirectTo: '/complete-registration'

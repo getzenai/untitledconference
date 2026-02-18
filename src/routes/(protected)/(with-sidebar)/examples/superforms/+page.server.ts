@@ -6,14 +6,12 @@ import { formSchema } from './schema';
 
 export const load: PageServerLoad = async () => {
 	return {
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		form: await superValidate(zod4(formSchema))
 	};
 };
 
 export const actions: Actions = {
 	default: async (event) => {
-		// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms
 		const form = await superValidate(event, zod4(formSchema));
 		if (!form.valid) {
 			return fail(400, {

@@ -16,7 +16,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		userAgent: locals.userAgent
 	});
 
-	// @ts-expect-error - Zod v4 type incompatibility with sveltekit-superforms zod4 adapter
 	const form = await superValidate(zod4(accountSettingsSchema));
 	return { form };
 };
