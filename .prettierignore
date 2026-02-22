@@ -11,3 +11,6 @@ ai-dev-docs/
 
 # Inlang (managed by paraglide)
 project.inlang/
+
+# Conductor workspace (managed externally)
+.context/

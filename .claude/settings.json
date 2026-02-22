@@ -15,8 +15,6 @@
 			"Bash(npm run format:*)",
 			"Bash(npm run lint:*)",
 			"Bash(npm run lint)",
-			"Bash(npm run psql:dev:*)",
-			"Bash(npm run psql:test:*)",
 			"Bash(npm run test:*)",
 			"Bash(npm run test)",
 			"Bash(npm test:*)",
@@ -54,6 +52,55 @@
 	},
 	"enabledMcpjsonServers": ["playwright", "github"],
 	"hooks": {
+		"PreToolUse": [
+			{
+				"matcher": "Bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": ".claude/hooks/block-destructive.sh",
+						"timeout": 5
+					}
+				]
+			},
+			{
+				"matcher": "Write|Edit|MultiEdit",
+				"hooks": [
+					{
+						"type": "command",
+						"command": ".claude/hooks/protect-files.sh",
+						"timeout": 5
+					},
+					{
+						"type": "command",
+						"command": ".claude/hooks/enforce-spec-first.sh",
+						"timeout": 5
+					}
+				]
+			}
+		],
+		"Stop": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": ".claude/hooks/verify-tests.sh",
+						"timeout": 120
+					}
+				]
+			}
+		],
+		"SessionStart": [
+			{
+				"hooks": [
+					{
+						"type": "command",
+						"command": ".claude/hooks/on-session-start.sh",
+						"timeout": 10
+					}
+				]
+			}
+		],
 		"PostToolUse": [
 			{
 				"matcher": "Write|Edit|MultiEdit",
@@ -65,6 +112,16 @@
 					{
 						"type": "command",
 						"command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|js|svelte)$'; then npx eslint \"$file_path\" 1>&2 || exit 2; fi; }"
+					}
+				]
+			},
+			{
+				"matcher": "Bash",
+				"hooks": [
+					{
+						"type": "command",
+						"command": ".claude/hooks/check-doc-validation.sh",
+						"timeout": 10
 					}
 				]
 			}

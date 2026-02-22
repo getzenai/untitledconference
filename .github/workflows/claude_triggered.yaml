@@ -36,4 +36,4 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           timeout_minutes: '60'
           claude_env: 'NODE_VERSION=22'
-          allowed_tools: 'Bash(npm install),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),Bash(npm run build),Bash(npm run db:*),Bash(npm run psql:*)'
+          allowed_tools: 'Bash(npm install),Bash(npm run test:*),Bash(npm run lint:*),Bash(npm run format:*),Bash(npm run build),Bash(npm run db:*)'

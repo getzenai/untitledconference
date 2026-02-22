@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-# Creates Azure PostgreSQL Flexible Server and stores DATABASE_URL in Key Vault.
+# Creates Azure PostgreSQL Flexible Server and stores DATABASE_URL + TEST_DATABASE_URL in Key Vault.
 # Prerequisite: setup-keyvault.sh (Key Vault must exist first)
 #
 # Usage: ./scripts/azure-managed-setup/setup-db.sh [--rotate-password]
@@ -55,9 +55,13 @@ fi
 if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "database-url" > /dev/null 2>&1; then
     SECRET_EXISTS=true
 fi
+TEST_SECRET_EXISTS=false
+if az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "test-database-url" > /dev/null 2>&1; then
+    TEST_SECRET_EXISTS=true
+fi
 
 NEEDS_CREDENTIALS=true
-if [ "$SERVER_EXISTS" = true ] && [ "$SECRET_EXISTS" = true ] && [ "$ROTATE_PASSWORD" = false ]; then
+if [ "$SERVER_EXISTS" = true ] && [ "$SECRET_EXISTS" = true ] && [ "$TEST_SECRET_EXISTS" = true ] && [ "$ROTATE_PASSWORD" = false ]; then
     NEEDS_CREDENTIALS=false
 fi
 
@@ -73,6 +77,17 @@ if [ "$SERVER_EXISTS" = true ]; then
             --name "$DB_SERVER_NAME" \
             --admin-password "$ADMIN_PASSWORD" \
             --output none
+    elif [ "$NEEDS_CREDENTIALS" = true ] && [ "$SECRET_EXISTS" = true ]; then
+        # Server and database-url exist, but test-database-url is missing.
+        # Extract password from existing KV secret to build the test URL.
+        EXISTING_URL=$(az keyvault secret show --vault-name "$KEYVAULT_NAME" --name "database-url" --query "value" -o tsv)
+        ADMIN_PASSWORD=$(echo "$EXISTING_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+        unset EXISTING_URL
+        echo -e "  ${DIM}Extracted credentials from existing database-url secret${RESET}"
+    elif [ "$NEEDS_CREDENTIALS" = true ] && [ "$SECRET_EXISTS" = false ]; then
+        echo -e "  ${RED}✗${RESET} Server exists but database-url secret is missing from Key Vault."
+        echo "  Cannot extract password. Re-run with --rotate-password to reset credentials."
+        exit 1
     fi
 else
     ADMIN_PASSWORD="$(openssl rand -base64 24 | tr -d '/+=' | head -c 20)Aa1!"
@@ -117,8 +132,8 @@ echo -e "  ${GREEN}●${RESET} AllowAzureServices"
 
 echo ""
 
-# [4/5] Create database
-echo -e "${BOLD}[4/5] Database${RESET}"
+# [4/5] Create databases (dev + test)
+echo -e "${BOLD}[4/5] Databases${RESET}"
 az postgres flexible-server db create \
     --resource-group "$RESOURCE_GROUP" \
     --server-name "$DB_SERVER_NAME" \
@@ -126,12 +141,21 @@ az postgres flexible-server db create \
     --output none 2>/dev/null || true
 echo -e "  ${GREEN}●${RESET} Database '$DB_NAME'"
 
+DB_TEST_NAME="${DB_NAME}_test"
+az postgres flexible-server db create \
+    --resource-group "$RESOURCE_GROUP" \
+    --server-name "$DB_SERVER_NAME" \
+    --database-name "$DB_TEST_NAME" \
+    --output none 2>/dev/null || true
+echo -e "  ${GREEN}●${RESET} Database '$DB_TEST_NAME'"
+
 echo ""
 
-# [5/5] Store DATABASE_URL in Key Vault
+# [5/5] Store credentials in Key Vault
 echo -e "${BOLD}[5/5] Store Credentials in Key Vault${RESET}"
 if [ "$NEEDS_CREDENTIALS" = true ]; then
     DATABASE_URL="postgresql://${DB_ADMIN_USER}:${ADMIN_PASSWORD}@${DB_SERVER_NAME}.postgres.database.azure.com:5432/${DB_NAME}?sslmode=require"
+    TEST_DATABASE_URL="postgresql://${DB_ADMIN_USER}:${ADMIN_PASSWORD}@${DB_SERVER_NAME}.postgres.database.azure.com:5432/${DB_TEST_NAME}?sslmode=require"
 
     az keyvault secret set \
         --vault-name "$KEYVAULT_NAME" \
@@ -139,13 +163,22 @@ if [ "$NEEDS_CREDENTIALS" = true ]; then
         --value "$DATABASE_URL" \
         --output none
 
+    az keyvault secret set \
+        --vault-name "$KEYVAULT_NAME" \
+        --name "test-database-url" \
+        --value "$TEST_DATABASE_URL" \
+        --output none
+
     # Clear sensitive variables immediately
     unset ADMIN_PASSWORD
     unset DATABASE_URL
+    unset TEST_DATABASE_URL
 
     echo -e "  ${GREEN}●${RESET} database-url stored in Key Vault"
+    echo -e "  ${GREEN}●${RESET} test-database-url stored in Key Vault"
 else
     echo -e "  ${GREEN}●${RESET} database-url already in Key Vault (skipped)"
+    echo -e "  ${GREEN}●${RESET} test-database-url already in Key Vault (skipped)"
     echo -e "  ${DIM}Use --rotate-password to force credential rotation${RESET}"
 fi
 
@@ -164,5 +197,5 @@ az role assignment create \
 echo ""
 echo -e "${BOLD}Done!${RESET}"
 echo -e "  Server: ${GREEN}${DB_SERVER_NAME}.postgres.database.azure.com${RESET}"
-echo -e "  Database: ${GREEN}${DB_NAME}${RESET}"
+echo -e "  Databases: ${GREEN}${DB_NAME}, ${DB_NAME}_test${RESET}"
 echo -e "  Credentials: ${GREEN}Stored in Key Vault ($KEYVAULT_NAME)${RESET}"

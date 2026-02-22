@@ -4,18 +4,26 @@ A production-ready SvelteKit starter template with PostgreSQL, authentication, a
 
 ## Quick Start
 
+### Prerequisites
+
+- Node.js 22+
+- Azure CLI (`az login` required for Key Vault secrets)
+- Docker (only for Local Docker mode)
+
+### Azure DB Mode (recommended)
+
 ```bash
-# Install dependencies
 npm install
+npm run dev          # fetches secrets from KV, starts dev server
+```
 
-# Start database
-npm run db:start
+### Local Docker Mode
 
-# Initialize database schema
-npm run db:push
-
-# Start development server
-npm run dev
+```bash
+npm install
+docker compose up -d           # start dev-db + test-db
+cp .env.example .env           # uncomment DATABASE_URL and TEST_DATABASE_URL
+npm run dev                    # .env DB URLs used, rest from KV
 ```
 
 Visit http://localhost:5173
@@ -27,25 +35,20 @@ Visit http://localhost:5173
 - **Better Auth** - Authentication with organizations
 - **Shadcn/ui** - Pre-configured UI components
 - **Testing** - Unit, integration, and E2E tests
-- **Docker** - Development containers
+- **Azure Key Vault** - All secrets managed securely
 - **TypeScript** - Full type safety
 
 ## Database
 
-PostgreSQL runs in Docker containers for development and testing:
-
 ```bash
-npm run db:start    # Start containers
-npm run db:push     # Push schema changes
-npm run db:migrate  # Run migrations
-npm run db:studio   # Open Drizzle Studio
+npm run db:push          # Push schema to dev database
+npm run db:push:test     # Push schema to test database
+npm run db:studio        # Open Drizzle Studio
 ```
 
-**Note:** Set DATABASE_URL in production environment.
+All database commands automatically get credentials from Key Vault (or .env for DB URLs).
 
 ## Testing
-
-Comprehensive test suite with Page Object Model:
 
 ```bash
 npm run test           # Run all tests
@@ -58,16 +61,11 @@ For E2E test development, see `/e2e/CLAUDE.md`.
 
 ## Authentication
 
-Uses [Better Auth](https://www.better-auth.com) with organization support. Features include:
-
-- User registration and login
-- Organization management
-- Role-based access control
-- Admin dashboard
+Uses [Better Auth](https://www.better-auth.com) with organization support.
 
 ## UI Components
 
-Pre-installed [shadcn/ui](https://ui.shadcn.com) components in `src/lib/components/ui/`. Includes buttons, forms, dialogs, tables, and more.
+Pre-installed [shadcn/ui](https://ui.shadcn.com) components in `src/lib/components/ui/`.
 
 ## Internationalization
 
@@ -84,7 +82,7 @@ npm run docs:dev   # Start docs server
 ## Building
 
 ```bash
-npm run build    # Production build
+npm run build    # Production build (no secrets needed — lazy Proxy pattern)
 npm run preview  # Preview production build
 ```
 
@@ -94,4 +92,4 @@ For Claude Code and other AI agents, see `/CLAUDE.md` for detailed codebase inst
 
 ## Deployment
 
-Configure an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+See `scripts/azure-managed-setup/` for Azure Container Apps deployment.

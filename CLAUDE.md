@@ -2,7 +2,11 @@
 
 ## Project Overview
 
-SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive tooling. Uses Azure Key Vault for all secrets — no `.env` files for credentials. Docker container for test database only.
+SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive tooling.
+
+**Credential rule**: All credentials (API keys, auth secrets) ALWAYS come from Azure Key Vault. Only local Docker DB connection strings may live in `.env`.
+
+See `docs/software-factory.md` for the full inventory of agent automation mechanisms.
 
 ## Routing: RESTful Pattern
 
@@ -11,24 +15,54 @@ SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive t
 - `/resource/[id]` - View/edit item
   Never show different content at same URL based on state.
 
+## Development Modes
+
+Two first-class modes, both requiring `az login` for Key Vault access:
+
+### Azure DB mode (default — no .env needed)
+
+```bash
+az login         # one-time Azure auth
+npm run dev      # fetches all secrets from KV, starts dev server
+```
+
+- DATABASE_URL from KV (Azure PostgreSQL)
+- TEST_DATABASE_URL from KV (Azure PostgreSQL test DB)
+- All other secrets from KV
+
+### Local Docker mode (.env with DB URLs only)
+
+```bash
+az login                  # one-time Azure auth
+docker compose up -d      # start dev-db (port 5432) + test-db (port 5433)
+cp .env.example .env      # uncomment DATABASE_URL and TEST_DATABASE_URL
+npm run dev               # .env DB URLs used, rest from KV
+```
+
+- DATABASE_URL from .env (local Docker on port 5432)
+- TEST_DATABASE_URL from .env (local Docker on port 5433)
+- All other secrets (BETTER_AUTH_SECRET, GitHub, SendGrid, OpenAI) from KV
+
+### How it works
+
+`npm run dev` calls `dev-from-kv.sh` which:
+
+1. Sources `.env` if present (picks up local DB URLs)
+2. For each KV secret: only fetches if env var is NOT already set
+3. Derives feature flags from available secrets
+4. Runs the dev server
+
 ## Database Commands
 
 ```bash
-# Development database (Azure PostgreSQL — requires KV secrets)
-npm run db:push:azure    # Push schema to Azure DB
-npm run db:studio:azure  # Open Drizzle Studio with Azure DB
-
-# Test database (local Docker)
-npm run psql:test "SELECT * FROM users LIMIT 5;"
-
-# Docker operations (test DB only)
-npm run db:start     # Start test DB container
+npm run db:push          # Push schema to dev database
+npm run db:push:force    # Push schema (force, no confirmation)
+npm run db:push:test     # Push schema to test database
+npm run db:studio        # Open Drizzle Studio
+npm run db:migrate       # Run migrations
 ```
 
-**Connections:**
-
-- Dev: Azure PostgreSQL (fetched from Key Vault via `dev-from-kv.sh`)
-- Test: `postgres://root:mysecretpassword@localhost:5433/test`
+All database commands go through `dev-from-kv.sh` — credentials are available in both modes.
 
 ## Testing Commands
 
@@ -72,35 +106,26 @@ Tests use POM pattern. See `/e2e/CLAUDE.md` for details.
 
 ## Development
 
-All secrets are fetched from Azure Key Vault. No `.env` file needed for credentials.
-
-```bash
-az login                                          # one-time Azure auth
-docker compose up -d                              # start test DB (for E2E/integration tests)
-./scripts/azure-managed-setup/dev-from-kv.sh      # fetch KV secrets + start dev server
-# or: npm run dev:azure
-```
-
-See `scripts/azure-managed-setup/CLAUDE.md` for full Azure setup instructions.
+See "Development Modes" above for setup. See `scripts/azure-managed-setup/CLAUDE.md` for full Azure infrastructure setup.
 
 ```bash
 npm run build  # Build for production (no secrets needed — lazy Proxy pattern)
 ```
 
-## Pre-commit Hook & CI Parity
+## Git Hooks & CI Parity
 
-The pre-commit hook (`.husky/pre-commit`) mirrors the GitHub CI pipeline so errors are caught locally before push:
+The pre-commit hook (`.husky/pre-commit`) and pre-push hook (`.husky/pre-push`) mirror the GitHub CI pipeline so errors are caught locally:
 
-| Check                  | Pre-commit     | CI             | Notes                                       |
-| ---------------------- | -------------- | -------------- | ------------------------------------------- |
-| `npm run format`       | Yes (auto-fix) | `format:check` | Pre-commit writes fixes, CI only checks     |
-| `npm run lint`         | Yes            | Yes            | Prettier + ESLint (max 60 warnings)         |
-| `npm run check:unused` | Yes            | -              | Knip dead code detection (local-only extra) |
-| `npm run check`        | Yes            | Yes            | Paraglide compile + svelte-check types      |
-| `npm run build`        | Yes            | Yes            | Catches build-time errors (e.g. lazy init)  |
-| `npm run test:unit`    | Yes            | Yes            | Unit tests (no DB needed)                   |
-| `test:integration`     | -              | Yes            | Needs running database                      |
-| `test:e2e`             | -              | Yes            | Needs DB + browser                          |
+| Check                  | Pre-commit     | Pre-push          | CI             | Notes                                       |
+| ---------------------- | -------------- | ----------------- | -------------- | ------------------------------------------- |
+| `npm run format`       | Yes (auto-fix) | -                 | `format:check` | Pre-commit writes fixes, CI only checks     |
+| `npm run lint`         | Yes            | -                 | Yes            | Prettier + ESLint (max 60 warnings)         |
+| `npm run check:unused` | Yes            | -                 | -              | Knip dead code detection (local-only extra) |
+| `npm run check`        | Yes            | -                 | Yes            | Paraglide compile + svelte-check types      |
+| `npm run build`        | Yes            | -                 | Yes            | Catches build-time errors (e.g. lazy init)  |
+| `npm run test:unit`    | Yes            | Yes               | Yes            | Unit tests (no DB needed)                   |
+| `test:integration`     | -              | If DB on 5433     | Yes            | Needs running database                      |
+| `test:e2e`             | -              | If server on 5173 | Yes            | Needs DB + browser                          |
 
 **Important**: Server-side code must not eagerly evaluate env vars at module scope — `vite build` runs without `.env`. Use lazy patterns (Proxy, getter functions) for any code that reads `$env/dynamic/private`. See `src/lib/server/config.ts` for the pattern.
 
@@ -132,7 +157,8 @@ Logger is configured via environment variables (see Environment Variables sectio
 ## Port Forwarding
 
 - 5173: SvelteKit dev server
-- 5433: PostgreSQL test database (local Docker)
+- 5432: PostgreSQL dev database (local Docker mode only)
+- 5433: PostgreSQL test database (local Docker mode only)
 - 5555: Drizzle Studio
 
 ## SvelteKit Server Actions Best Practices
@@ -291,6 +317,54 @@ After test failures:
 1. Check `./test-report-for-coding-agents/all-failures.md`
 2. Individual reports in subdirectories
 3. Use 3-minute timeout for full suite: `Bash(npm run test:e2e, timeout: 180000)`
+
+## Agent Hooks
+
+- **PreToolUse**: Blocks destructive commands (`rm -rf`, force push, `git reset --hard`), protects sensitive files (`.env*`, lock files, credentials), and advises spec-first workflow for screen-affecting edits
+- **PostToolUse**: Auto-formats `.ts`/`.js`/`.svelte`/`.md`/`.json` with Prettier; lints `.ts`/`.js`/`.svelte` with ESLint
+- **Stop**: Runs unit tests (+ integration if test DB available) before agent finishes; blocks if screen specs modified without observed behavior verification
+- **SessionStart**: Injects git state and service health on new sessions; re-injects reminders after compaction
+- **Pre-push** (Husky): Runs unit tests always; integration/E2E opportunistically when services are running
+
+## Architecture Documentation
+
+PlantUML diagrams in `docs/arc42/` provide agent-readable architecture documentation:
+
+- `docs/arc42/api-surface.puml` — All routes, methods, form actions, auth guards
+- `docs/arc42/service-architecture.puml` — Server services, DB, auth, AI, external systems
+
+Read these diagrams to understand the system before making changes.
+
+## Agent Workflows
+
+Reusable step-by-step instructions in `docs/agent-workflows/` for recurring tasks:
+
+- `docs/agent-workflows/validate-api-surface.md` — Validate and update the API surface map
+- `docs/agent-workflows/validate-service-architecture.md` — Validate and update the service architecture diagram
+- `docs/agent-workflows/verify-user-journey-visual.md` — Visual verification of user journey screens
+
+A PostToolUse hook detects `git commit` commands and advises which validation workflows
+to run based on changed files. Follow these advisories after your final commit before pushing.
+
+## Spec-First Workflow (Screen Behavior)
+
+When changing code that affects user journey screens, follow this order:
+
+1. **Before**: Update expected behavior in `docs/user-journey-verification/screen-{n}-*.md`
+2. **Implement**: Make the code changes
+3. **After**: Run `/verify_screen` to visually verify observed behavior via Playwright MCP
+
+| Source file pattern                                | Screen spec(s)          |
+| -------------------------------------------------- | ----------------------- |
+| `src/routes/(public)/login/*`                      | screen-1-login.md       |
+| `src/routes/(public)/register/*`                   | screen-2-register.md    |
+| `src/routes/(protected)/(with-sidebar)/home/*`     | screen-3-home.md        |
+| `src/routes/(protected)/documents/*`               | screen-4-documents.md   |
+| `src/routes/(protected)/(with-sidebar)/settings/*` | screen-5-settings.md    |
+| `src/routes/(admin)/admin/*`                       | screen-6-admin-users.md |
+
+Hooks enforce this: PreToolUse advisory reminds you to update specs. Stop hook blocks if
+specs were modified but Observed Behavior not filled in (requires dev server running).
 
 ## Important Reminders
 

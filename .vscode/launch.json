@@ -20,16 +20,6 @@
 		},
 
 		{
-			"name": "Start Database",
-			"request": "launch",
-			"runtimeArgs": ["run-script", "db:start"],
-			"runtimeExecutable": "npm",
-			"skipFiles": ["<node_internals>/**"],
-			"type": "node",
-			"console": "integratedTerminal"
-		},
-
-		{
 			"type": "node",
 			"request": "launch",
 			"name": "Debug Tests",
@@ -45,7 +35,7 @@
 	"compounds": [
 		{
 			"name": "Launch Full Stack",
-			"configurations": ["Start Database", "Launch server", "Launch browser"]
+			"configurations": ["Launch server", "Launch browser"]
 		}
 	]
 }

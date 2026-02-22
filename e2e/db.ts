@@ -9,9 +9,12 @@ import { TEST_USER_EMAIL_PREFIX } from './globals';
 
 const logger = createLogger('DB');
 
-// Use TEST_DATABASE_URL for tests, with fallback to localhost test database (never dev database)
-const connectionString =
-	process.env.TEST_DATABASE_URL || 'postgres://root:mysecretpassword@localhost:5433/test';
+const connectionString = process.env.TEST_DATABASE_URL;
+if (!connectionString) {
+	throw new Error(
+		'TEST_DATABASE_URL is not set. Set it in .env for local Docker mode, or run via dev-from-kv.sh for Azure mode.'
+	);
+}
 const client = postgres(connectionString);
 export const db = drizzle(client, { schema });
 

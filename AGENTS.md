@@ -9,10 +9,10 @@
 
 ## Build, Test, and Development Commands
 
-- `npm run dev` starts the app on http://localhost:5173; ensure `npm run db:start` is running first.
+- `npm run dev` starts the app on http://localhost:5173 (fetches secrets from Azure Key Vault; for local Docker DB mode, set DATABASE_URL in .env first).
 - `npm run build` + `npm run preview` validate production output; `npm run check` performs `svelte-check` plus sync.
 - Quality gates: `npm run lint` (ESLint + Prettier check) and `npm run format` (Prettier write).
-- Database utilities: `npm run db:push`, `npm run db:migrate`, `npm run db:studio`, with `npm run psql:dev "..."` / `npm run psql:test "..."` for queries against the local/test DSNs.
+- Database utilities: `npm run db:push`, `npm run db:migrate`, `npm run db:studio`. All commands fetch credentials from Key Vault automatically.
 
 ## Coding Style & Naming Conventions
 

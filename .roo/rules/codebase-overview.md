@@ -103,9 +103,9 @@
 - **Viewing Schema**: Use Drizzle Studio: `npm run db:studio`
 - **Key Tables**: `user`, `session`, `account`, `verification` (details in `auth-schema.ts`).
 - **Management Scripts**:
-  - `npm run db:start`: Start PostgreSQL Docker container.
-  - `npm run db:push`: Push schema changes (dev).
-  - `npm run db:migrate`: Create/apply migrations (prod).
+  - `npm run db:push`: Push schema changes (fetches credentials from KV).
+  - `npm run db:push:test`: Push schema to test database.
+  - `npm run db:migrate`: Create/apply migrations.
 
 ## 9. Testing Structure
 
@@ -121,11 +121,11 @@
 - **Preview Production Build**: `npm run preview`.
 - **SvelteKit Adapter**: `@sveltejs/adapter-node`.
 - **Development Server**: `npm run dev`.
-- **Docker**: `docker-compose.yml` for PostgreSQL (dev).
+- **Docker**: `docker-compose.yml` for local PostgreSQL (optional, for Local Docker mode).
 
 ## 11. Development Workflow
 
-- **Setup**: Clone, `npm install`, `docker-compose up -d` (for DB), `npm run db:push`, set up `.env`.
+- **Setup**: Clone, `npm install`, `az login`, `npm run dev` (Azure DB mode) or `docker compose up -d` + `.env` (Local Docker mode).
 - **Running Dev Server**: `npm run dev`.
 - **Database Management**: `npm run db:push` (dev), `npm run db:migrate` (prod), `npm run db:studio`.
 - **Internationalization**: Edit `messages/*.json`. ParaglideJS auto-compiles.

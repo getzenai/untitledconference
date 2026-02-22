@@ -65,9 +65,7 @@ If you add a new secret to Key Vault after the initial setup:
 Before deploying code that changes the database schema, push the schema first:
 
 ```bash
-./scripts/azure-managed-setup/dev-from-kv.sh npx drizzle-kit push
-# or
-npm run db:push:azure
+npm run db:push
 ```
 
 This runs Drizzle Kit with the Azure `DATABASE_URL` from Key Vault.

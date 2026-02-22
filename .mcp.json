@@ -1,9 +1,5 @@
 {
 	"mcpServers": {
-		"chrome-devtools": {
-			"command": "./scripts/chrome-devtools-wrapper.sh",
-			"args": []
-		},
 		"playwright": {
 			"command": "npx",
 			"args": ["@playwright/mcp@latest"]
