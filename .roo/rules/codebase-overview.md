@@ -103,7 +103,7 @@
 - **Viewing Schema**: Use Drizzle Studio: `npm run db:studio`
 - **Key Tables**: `user`, `session`, `account`, `verification` (details in `auth-schema.ts`).
 - **Management Scripts**:
-  - `npm run db:push`: Push schema changes (fetches credentials from KV).
+  - `npm run db:push`: Push schema changes (fetches credentials from Infisical).
   - `npm run db:push:test`: Push schema to test database.
   - `npm run db:migrate`: Create/apply migrations.
 
@@ -125,7 +125,7 @@
 
 ## 11. Development Workflow
 
-- **Setup**: Clone, `npm install`, `az login`, `npm run dev` (Azure DB mode) or `docker compose up -d` + `.env` (Local Docker mode).
+- **Setup**: Clone, `npm install`, `infisical login`, `npm run dev` (Cloud DB mode) or `docker compose up -d` + `.env` (Local Docker mode).
 - **Running Dev Server**: `npm run dev`.
 - **Database Management**: `npm run db:push` (dev), `npm run db:migrate` (prod), `npm run db:studio`.
 - **Internationalization**: Edit `messages/*.json`. ParaglideJS auto-compiles.

@@ -7,14 +7,14 @@ A production-ready SvelteKit starter template with PostgreSQL, authentication, a
 ### Prerequisites
 
 - Node.js 22+
-- Azure CLI (`az login` required for Key Vault secrets)
+- Infisical CLI (`infisical login` required for secret management)
 - Docker (only for Local Docker mode)
 
-### Azure DB Mode (recommended)
+### Cloud DB Mode (recommended)
 
 ```bash
 npm install
-npm run dev          # fetches secrets from KV, starts dev server
+npm run dev          # fetches secrets from Infisical, starts dev server
 ```
 
 ### Local Docker Mode
@@ -23,7 +23,7 @@ npm run dev          # fetches secrets from KV, starts dev server
 npm install
 docker compose up -d           # start dev-db + test-db
 cp .env.example .env           # uncomment DATABASE_URL and TEST_DATABASE_URL
-npm run dev                    # .env DB URLs used, rest from KV
+npm run dev                    # .env DB URLs used, rest from Infisical
 ```
 
 Visit http://localhost:5173
@@ -35,7 +35,7 @@ Visit http://localhost:5173
 - **Better Auth** - Authentication with organizations
 - **Shadcn/ui** - Pre-configured UI components
 - **Testing** - Unit, integration, and E2E tests
-- **Azure Key Vault** - All secrets managed securely
+- **Infisical Cloud** - All secrets managed securely
 - **TypeScript** - Full type safety
 
 ## Database
@@ -46,7 +46,7 @@ npm run db:push:test     # Push schema to test database
 npm run db:studio        # Open Drizzle Studio
 ```
 
-All database commands automatically get credentials from Key Vault (or .env for DB URLs).
+All database commands automatically get credentials from Infisical (or .env for DB URLs).
 
 ## Testing
 
@@ -92,4 +92,4 @@ For Claude Code and other AI agents, see `/CLAUDE.md` for detailed codebase inst
 
 ## Deployment
 
-See `scripts/azure-managed-setup/` for Azure Container Apps deployment.
+See `scripts/azure-managed-setup/` for Azure Container Apps deployment. Secret management uses Infisical Cloud (see `scripts/infisical/`).

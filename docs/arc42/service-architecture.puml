@@ -141,7 +141,7 @@ package "Data Layer" #FFF3E0 {
 }
 
 cloud "External Services" #F3E5F5 {
-  [Azure Key Vault] as kv
+  [Infisical Cloud] as kv
   note bottom of kv
     All secrets except
     local Docker DB URLs

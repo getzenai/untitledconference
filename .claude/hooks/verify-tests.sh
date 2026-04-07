@@ -47,7 +47,7 @@ fi
 # Opportunistic: integration tests if test DB is available
 if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
   echo "=== Stop hook: Integration tests (test DB detected) ===" >&2
-  if ! TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" npm run test:integration 2>&1 | tail -10 >&2; then
+  if ! TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-for-hooks}" npm run test:integration 2>&1 | tail -10 >&2; then
     FAILURES="${FAILURES}Integration tests failed. "
   fi
 fi

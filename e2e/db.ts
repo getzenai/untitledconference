@@ -12,7 +12,7 @@ const logger = createLogger('DB');
 const connectionString = process.env.TEST_DATABASE_URL;
 if (!connectionString) {
 	throw new Error(
-		'TEST_DATABASE_URL is not set. Set it in .env for local Docker mode, or run via dev-from-kv.sh for Azure mode.'
+		'TEST_DATABASE_URL is not set. Set it in .env for local Docker mode, or run via dev-from-infisical.sh.'
 	);
 }
 const client = postgres(connectionString);

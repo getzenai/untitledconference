@@ -25,20 +25,15 @@ else
     echo "Using Node.js version: $(node -v)"
 fi
 
-# Check Azure CLI login (required for Key Vault access)
-if ! command -v az &> /dev/null; then
-    echo "Error: Azure CLI (az) is not installed"
-    echo "Install it: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli"
+# Check Infisical CLI (required for secret management)
+if ! command -v infisical &> /dev/null; then
+    echo "Error: Infisical CLI is not installed"
+    echo "Install it: brew install infisical/get-cli/infisical"
+    echo "  or:       npm install -g @infisical/cli"
     exit 1
 fi
 
-if ! az account show > /dev/null 2>&1; then
-    echo "Error: Not logged in to Azure. Run 'az login' first."
-    echo "Key Vault access is required for secrets (auth, API keys)."
-    exit 1
-fi
-
-echo "Azure CLI: logged in as $(az ad signed-in-user show --query userPrincipalName -o tsv 2>/dev/null || echo 'unknown')"
+echo "Infisical CLI: installed"
 
 # Sync with remote
 echo "Syncing with remote..."
@@ -57,9 +52,9 @@ if [ -n "${CONDUCTOR_ROOT_PATH:-}" ] && [ -f "$CONDUCTOR_ROOT_PATH/.env" ]; then
         echo "Creating symlink to .env file from Conductor root..."
         ln -sf "$CONDUCTOR_ROOT_PATH/.env" .env
     fi
-    echo "Local Docker mode: DATABASE_URL from .env, secrets from Key Vault"
+    echo "Local Docker mode: DATABASE_URL from .env, secrets from Infisical"
 else
-    echo "Azure DB mode: all values from Key Vault (no .env needed)"
+    echo "Cloud DB mode: all values from Infisical (no .env needed)"
 fi
 
 # Install dependencies
@@ -69,11 +64,11 @@ npm install || {
     exit 1
 }
 
-# Push database schema via dev-from-kv.sh (works in both modes)
+# Push database schema via dev-from-infisical.sh (works in both modes)
 echo "Pushing database schema..."
-./scripts/azure-managed-setup/dev-from-kv.sh npx drizzle-kit push --force || {
+./scripts/infisical/dev-from-infisical.sh npx drizzle-kit push --force || {
     echo "Error: Failed to push database schema"
-    echo "Check Azure CLI login and Key Vault access."
+    echo "Check Infisical CLI login and project access."
     exit 1
 }
 

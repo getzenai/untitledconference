@@ -16,6 +16,7 @@ export default defineConfig({
 		timeout: 120_000,
 		env: {
 			BETTER_AUTH_URL: 'http://localhost:5174',
+			BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET || 'test-secret-for-playwright',
 			NODE_ENV: 'test',
 			PLAYWRIGHT_TEST: 'true',
 			DATABASE_URL: process.env.TEST_DATABASE_URL, // Use TEST_DATABASE_URL for tests, no fallback

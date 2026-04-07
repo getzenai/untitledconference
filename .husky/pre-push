@@ -10,7 +10,7 @@ npm run test:unit
 # Opportunistic: integration tests if test DB is available
 if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
   echo "=== Pre-push: Integration tests (test DB detected on port 5433) ==="
-  TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" npm run test:integration
+  TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-for-hooks}" npm run test:integration
 else
   echo "(Test DB not running on port 5433 — skipping integration tests)"
 fi
@@ -18,7 +18,7 @@ fi
 # Opportunistic: E2E tests if test DB is available (Playwright starts its own server on :5174)
 if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
   echo "=== Pre-push: E2E tests (test DB detected — Playwright starts its own server on :5174) ==="
-  TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" npm run test:e2e
+  TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-for-hooks}" npm run test:e2e
 else
   echo "(Test DB not running on port 5433 — skipping E2E tests)"
 fi

@@ -4,7 +4,7 @@
 
 SvelteKit starter with PostgreSQL, Drizzle ORM, Better Auth, and comprehensive tooling.
 
-**Credential rule**: All credentials (API keys, auth secrets) ALWAYS come from Azure Key Vault. Only local Docker DB connection strings may live in `.env`.
+**Credential rule**: All credentials (API keys, auth secrets) ALWAYS come from Infisical Cloud. Only local Docker DB connection strings may live in `.env`. Exception: test/CI environments use hardcoded test secrets when Infisical is not available.
 
 See `docs/software-factory.md` for the full inventory of agent automation mechanisms.
 
@@ -17,38 +17,38 @@ See `docs/software-factory.md` for the full inventory of agent automation mechan
 
 ## Development Modes
 
-Two first-class modes, both requiring `az login` for Key Vault access:
+Two first-class modes, both requiring `infisical login` for Infisical Cloud access:
 
-### Azure DB mode (default — no .env needed)
+### Cloud DB mode (default — no .env needed)
 
 ```bash
-az login         # one-time Azure auth
-npm run dev      # fetches all secrets from KV, starts dev server
+infisical login   # one-time Infisical auth
+npm run dev       # fetches all secrets from Infisical, starts dev server
 ```
 
-- DATABASE_URL from KV (Azure PostgreSQL)
-- TEST_DATABASE_URL from KV (Azure PostgreSQL test DB)
-- All other secrets from KV
+- DATABASE_URL from Infisical
+- TEST_DATABASE_URL from Infisical
+- All other secrets from Infisical
 
 ### Local Docker mode (.env with DB URLs only)
 
 ```bash
-az login                  # one-time Azure auth
+infisical login           # one-time Infisical auth
 docker compose up -d      # start dev-db (port 5432) + test-db (port 5433)
 cp .env.example .env      # uncomment DATABASE_URL and TEST_DATABASE_URL
-npm run dev               # .env DB URLs used, rest from KV
+npm run dev               # .env DB URLs used, rest from Infisical
 ```
 
 - DATABASE_URL from .env (local Docker on port 5432)
 - TEST_DATABASE_URL from .env (local Docker on port 5433)
-- All other secrets (BETTER_AUTH_SECRET, GitHub, SendGrid, OpenAI) from KV
+- All other secrets (BETTER_AUTH_SECRET, GitHub, SendGrid, OpenAI) from Infisical
 
 ### How it works
 
-`npm run dev` calls `dev-from-kv.sh` which:
+`npm run dev` calls `dev-from-infisical.sh` which:
 
 1. Sources `.env` if present (picks up local DB URLs)
-2. For each KV secret: only fetches if env var is NOT already set
+2. Fetches all secrets from Infisical via `infisical export`; skips if env var is already set
 3. Derives feature flags from available secrets
 4. Runs the dev server
 
@@ -62,7 +62,7 @@ npm run db:studio        # Open Drizzle Studio
 npm run db:migrate       # Run migrations
 ```
 
-All database commands go through `dev-from-kv.sh` — credentials are available in both modes.
+All database commands go through `dev-from-infisical.sh` — credentials are available in both modes.
 
 ## Testing Commands
 
@@ -106,7 +106,7 @@ Tests use POM pattern. See `/e2e/CLAUDE.md` for details.
 
 ## Development
 
-See "Development Modes" above for setup. See `scripts/azure-managed-setup/CLAUDE.md` for full Azure infrastructure setup.
+See "Development Modes" above for setup.
 
 ```bash
 npm run build  # Build for production (no secrets needed — lazy Proxy pattern)
