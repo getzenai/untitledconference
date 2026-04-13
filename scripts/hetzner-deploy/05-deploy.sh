@@ -46,6 +46,7 @@ sed \
 	-e "s|-f /opt/my-app/docker-compose.prod.yml|-f $REMOTE_DIR/docker-compose.prod.yml|g" \
 	-e "s|User=deploy|User=$VM_USER|g" \
 	-e "s|ExecStop=/usr/bin/docker compose -f /opt/my-app/|ExecStop=/usr/bin/docker compose -f $REMOTE_DIR/|g" \
+	-e "s|--env=prod|--env=$INFISICAL_ENV|g" \
 	"$SCRIPT_DIR/app.service" > "$TEMPLATED_SERVICE"
 scp "$TEMPLATED_SERVICE" "$REMOTE_TARGET:/tmp/$SYSTEMD_UNIT_NAME.service"
 
