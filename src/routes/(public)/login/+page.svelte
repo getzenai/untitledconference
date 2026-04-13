@@ -12,13 +12,19 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
+	import { dev } from '$app/environment';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { loginSchema } from './schema';
 
+	// Pre-fill from query params for quick dev login (?email=...&pw=...)
+	// Password pre-fill only in dev mode to avoid leaking credentials via URL
+	const prefillEmail = page.url.searchParams.get('email') ?? '';
+	const prefillPassword = dev ? (page.url.searchParams.get('pw') ?? '') : '';
+
 	const form = superForm(
-		{ email: '', password: '', rememberMe: true },
+		{ email: prefillEmail, password: prefillPassword, rememberMe: true },
 		{
 			validators: zod4Client(loginSchema),
 			SPA: true, // Prevent default form submission
@@ -64,7 +70,9 @@
 						}
 
 						// Redirect to home or returnTo URL
-						const returnTo = page.url.searchParams.get('returnTo') || '/home';
+						const rawReturnTo = page.url.searchParams.get('returnTo') || '/home';
+						const returnTo =
+							rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/home';
 						await goto(returnTo);
 					} else {
 						errors.set({ _errors: ['Login failed. Please try again.'] });

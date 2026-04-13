@@ -1,0 +1,62 @@
+services:
+  app:
+    build:
+      context: .
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3000:3000'
+    environment:
+      - DATABASE_URL
+      - BETTER_AUTH_SECRET
+      - BETTER_AUTH_URL
+      - BETTER_AUTH_TRUSTED_ORIGINS
+      - REQUIRE_EMAIL_VERIFICATION=false
+      - NODE_ENV=production
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:3000/api/v1/public/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      - DATABASE_URL
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    profiles:
+      - migrate
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-app} -d $${POSTGRES_DB:-app}']
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+volumes:
+  pgdata:
+
+networks:
+  internal:
+    driver: bridge
