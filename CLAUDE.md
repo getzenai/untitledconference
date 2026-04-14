@@ -366,6 +366,16 @@ When changing code that affects user journey screens, follow this order:
 Hooks enforce this: PreToolUse advisory reminds you to update specs. Stop hook blocks if
 specs were modified but Observed Behavior not filled in (requires dev server running).
 
+## Deep Review Verification
+
+**MANDATORY:** Every implementation plan MUST include `/deep-review` as a verification step. When creating plans (in plan mode), always list `/deep-review` in the verification/testing section.
+
+- Before pushing any code changes, run `/deep-review` to perform a multi-agent convergent review
+- The pre-push hook in `.claude/hooks/remind-deep-review.sh` will remind the agent to run `/deep-review` first
+- `/deep-review` runs 3-5 agents per cycle from different perspectives (security, architecture, correctness, performance, API)
+- Up to 3 cycles with early stopping when no critical/high findings remain
+- CRITICAL and HIGH findings are always fixed; MEDIUM and LOW are evaluated contextually
+
 ## Important Reminders
 
 - Do only what's asked, nothing more
