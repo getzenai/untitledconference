@@ -105,10 +105,13 @@ Focus areas:
 If no argument given:
 
 ```bash
-git diff main...HEAD --name-only
+git fetch origin main
+git diff origin/main...HEAD --name-only
 ```
 
-If the diff is empty (no changes vs main), ask the user what to review.
+Always diff against `origin/main` (not local `main`) to avoid false positives when the local main branch is behind the remote.
+
+If the diff is empty (no changes vs origin/main), ask the user what to review.
 
 If argument given, validate the paths before any shell commands:
 
