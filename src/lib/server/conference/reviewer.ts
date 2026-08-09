@@ -1,0 +1,556 @@
+/**
+ * The reviewer's side of the product: their queue, one submission, and their verdict.
+ *
+ * Three boundaries live here, and all three are queries rather than markup:
+ *
+ * - **Assignment.** A reviewer reads the submissions they were assigned and no others
+ *   (ABS-05). The queue is built FROM the `review` rows, not from the submissions with
+ *   a filter — the difference is what happens when the filter is forgotten.
+ * - **Visibility.** `blind_until_reviewed` leaves peers' scores and comments out of the
+ *   SELECT until this reviewer has filed their own. Blind that is enforced in the
+ *   template is not blind.
+ * - **Anonymity.** A round can hide the author from its reviewers (ABS-07); then the
+ *   speaker names never reach the page.
+ *
+ * And one thing that deliberately does NOT happen here: saving a review sends no mail.
+ * Deciding and telling people are separate acts, and a status that mails on its own
+ * takes that choice away from the organizer.
+ */
+import {
+	canSeePeerReviews,
+	sortQueue,
+	type QueueSort,
+	type ReviewVisibility
+} from '$lib/conference/review-visibility';
+import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
+import { db } from '$lib/server/db';
+import { user } from '$lib/server/db/auth-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	conferenceTable,
+	membershipTable,
+	sessionFormatTable,
+	speakerProfileTable,
+	trackTable,
+	type Conference
+} from '$lib/server/db/conference/conference-schema';
+import {
+	evaluationPlanTable,
+	reviewRoundTable,
+	reviewScoreTable,
+	reviewTable,
+	scorecardCriterionTable
+} from '$lib/server/db/conference/review-schema';
+import { error } from '@sveltejs/kit';
+import { and, asc, eq, inArray } from 'drizzle-orm';
+
+/** Every review round of a conference — the unit reviewer memberships are scoped to. */
+async function roundsOf(conferenceId: number): Promise<number[]> {
+	const rows = await db
+		.select({ id: reviewRoundTable.id })
+		.from(reviewRoundTable)
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.where(eq(evaluationPlanTable.conferenceId, conferenceId));
+
+	return rows.map((r) => r.id);
+}
+
+export type ReviewerContext = { conference: Conference; roundIds: number[] };
+
+/**
+ * Resolves the conference behind `slug` and asserts that `userId` reviews for it.
+ *
+ * 404 in both failure cases, exactly as `requireOrganizer` does: a reviewer who was
+ * never added must not learn from the status code that the conference exists.
+ */
+export async function requireReviewer(userId: string, slug: string): Promise<ReviewerContext> {
+	const [conference] = await db
+		.select()
+		.from(conferenceTable)
+		.where(eq(conferenceTable.slug, slug))
+		.limit(1);
+
+	if (!conference) throw error(404, 'Conference not found');
+
+	const roundIds = await roundsOf(conference.id);
+	const seats = await db
+		.select({ scopeType: membershipTable.scopeType, scopeId: membershipTable.scopeId })
+		.from(membershipTable)
+		.where(and(eq(membershipTable.userId, userId), eq(membershipTable.role, 'reviewer')));
+
+	const scoped = seats.filter(
+		(s) =>
+			(s.scopeType === 'conference' && s.scopeId === conference.id) ||
+			(s.scopeType === 'round' && roundIds.includes(s.scopeId))
+	);
+
+	if (scoped.length === 0) throw error(404, 'Conference not found');
+
+	return { conference, roundIds };
+}
+
+/** The conferences this user reviews for, for the picker. */
+export async function reviewedConferences(userId: string): Promise<Conference[]> {
+	const seats = await db
+		.select({ scopeType: membershipTable.scopeType, scopeId: membershipTable.scopeId })
+		.from(membershipTable)
+		.where(and(eq(membershipTable.userId, userId), eq(membershipTable.role, 'reviewer')));
+
+	if (seats.length === 0) return [];
+
+	const conferenceIds = seats.filter((s) => s.scopeType === 'conference').map((s) => s.scopeId);
+	const roundIds = seats.filter((s) => s.scopeType === 'round').map((s) => s.scopeId);
+
+	const viaRounds =
+		roundIds.length === 0
+			? []
+			: (
+					await db
+						.select({ conferenceId: evaluationPlanTable.conferenceId })
+						.from(reviewRoundTable)
+						.innerJoin(
+							evaluationPlanTable,
+							eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId)
+						)
+						.where(inArray(reviewRoundTable.id, roundIds))
+				).map((r) => r.conferenceId);
+
+	const ids = [...new Set([...conferenceIds, ...viaRounds])];
+	if (ids.length === 0) return [];
+
+	return db.select().from(conferenceTable).where(inArray(conferenceTable.id, ids));
+}
+
+/** Every review on these submissions, with its per-criterion scores folded in. */
+async function reviewsOn(conferenceId: number, submissionIds: number[]) {
+	if (submissionIds.length === 0) return [];
+
+	const rows = await db
+		.select({
+			id: reviewTable.id,
+			submissionId: reviewTable.submissionId,
+			reviewerUserId: reviewTable.reviewerUserId,
+			reviewerName: user.name,
+			anonymized: reviewRoundTable.anonymized,
+			status: reviewTable.status,
+			comment: reviewTable.comment,
+			submittedAt: reviewTable.submittedAt,
+			criterion: scorecardCriterionTable.label,
+			criterionId: scorecardCriterionTable.id,
+			value: reviewScoreTable.valueNumber,
+			valueText: reviewScoreTable.valueText,
+			weight: scorecardCriterionTable.weight,
+			scaleMax: scorecardCriterionTable.scaleMax,
+			position: scorecardCriterionTable.position
+		})
+		.from(reviewTable)
+		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
+		.leftJoin(reviewScoreTable, eq(reviewScoreTable.reviewId, reviewTable.id))
+		.leftJoin(
+			scorecardCriterionTable,
+			eq(scorecardCriterionTable.id, reviewScoreTable.scorecardCriterionId)
+		)
+		.where(
+			and(
+				eq(evaluationPlanTable.conferenceId, conferenceId),
+				inArray(reviewTable.submissionId, submissionIds)
+			)
+		)
+		.orderBy(asc(reviewTable.id), asc(scorecardCriterionTable.position));
+
+	return rows;
+}
+
+type ReviewRow = Awaited<ReturnType<typeof reviewsOn>>[number];
+
+export type PeerReview = {
+	id: number;
+	reviewer: string;
+	submitted: boolean;
+	comment: string | null;
+	submittedAt: Date | null;
+	scores: { criterion: string; value: number | null; valueText: string | null }[];
+	score: number | null;
+};
+
+/** Folds the flat join into one entry per review, with that reviewer's own average. */
+function groupReviews(
+	rows: ReviewRow[]
+): (PeerReview & { submissionId: number; userId: string })[] {
+	const byId = new Map<
+		number,
+		PeerReview & { submissionId: number; userId: string; raw: ReviewScores }
+	>();
+
+	for (const r of rows) {
+		let review = byId.get(r.id);
+		if (!review) {
+			review = {
+				id: r.id,
+				submissionId: r.submissionId,
+				userId: r.reviewerUserId,
+				// ABS-07: an anonymised round labels the row instead of dropping it — who
+				// has answered is not the same secret as who they are.
+				reviewer: r.anonymized ? `Reviewer ${r.id}` : (r.reviewerName ?? 'Reviewer'),
+				submitted: r.status === 'submitted',
+				comment: r.comment,
+				submittedAt: r.submittedAt,
+				scores: [],
+				score: null,
+				raw: { submitted: r.status === 'submitted', scores: [] }
+			};
+			byId.set(r.id, review);
+		}
+		if (!r.criterion) continue;
+
+		review.scores.push({
+			criterion: r.criterion,
+			value: r.value === null ? null : Number(r.value),
+			valueText: r.valueText
+		});
+		review.raw.scores.push({
+			value: r.value === null ? null : Number(r.value),
+			weight: r.weight === null ? 1 : Number(r.weight),
+			scaleMax: r.scaleMax
+		});
+	}
+
+	return [...byId.values()].map(({ raw, ...review }) => ({
+		...review,
+		score: submissionScore([raw])
+	}));
+}
+
+export type QueueEntry = {
+	submissionId: number;
+	title: string;
+	track: string | null;
+	sessionFormat: string | null;
+	reviewsSubmitted: number;
+	reviewsAssigned: number;
+	/** Null when the mode withholds it, or when nobody has scored yet. */
+	score: number | null;
+	ownReviewSubmitted: boolean;
+};
+
+/**
+ * The reviewer's working list.
+ *
+ * Built from their own `review` rows, so a submission they were not assigned cannot
+ * appear even if the sort or the filter is wrong. The number of reviews stays visible
+ * in every mode — it is the coverage signal the queue exists for, and "two people have
+ * answered" gives away no opinion. The score does not.
+ */
+export async function reviewQueue(
+	conference: Conference,
+	userId: string,
+	sort: QueueSort = 'coverage'
+): Promise<QueueEntry[]> {
+	const mine = await db
+		.select({
+			submissionId: reviewTable.submissionId,
+			status: reviewTable.status,
+			title: submissionTable.title,
+			track: trackTable.name,
+			sessionFormat: sessionFormatTable.name
+		})
+		.from(reviewTable)
+		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.innerJoin(submissionTable, eq(submissionTable.id, reviewTable.submissionId))
+		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
+		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
+		.where(
+			and(
+				eq(evaluationPlanTable.conferenceId, conference.id),
+				eq(reviewTable.reviewerUserId, userId)
+			)
+		);
+
+	const all = groupReviews(
+		await reviewsOn(
+			conference.id,
+			mine.map((m) => m.submissionId)
+		)
+	);
+	const mode = conference.reviewVisibility as ReviewVisibility;
+
+	const rows: QueueEntry[] = mine.map((row) => {
+		const on = all.filter((r) => r.submissionId === row.submissionId);
+		const ownSubmitted = row.status === 'submitted';
+		const visible = canSeePeerReviews(mode, ownSubmitted);
+
+		return {
+			submissionId: row.submissionId,
+			title: row.title,
+			track: row.track,
+			sessionFormat: row.sessionFormat,
+			reviewsSubmitted: on.filter((r) => r.submitted).length,
+			reviewsAssigned: on.length,
+			score: visible ? scoresFor(on) : null,
+			ownReviewSubmitted: ownSubmitted
+		};
+	});
+
+	return sortQueue(rows, sort);
+}
+
+/** The aggregate over a submission's reviews, rebuilt from the grouped rows. */
+function scoresFor(reviews: (PeerReview & { submissionId: number })[]): number | null {
+	const values = reviews.filter((r) => r.submitted && r.score !== null).map((r) => r.score!);
+	if (values.length === 0) return null;
+	return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+export type ReviewerSubmission = {
+	id: number;
+	title: string;
+	abstract: string | null;
+	keyTakeaway: string | null;
+	audienceLevel: string | null;
+	track: string | null;
+	sessionFormat: string | null;
+	/** Empty when the round is anonymised — the identity never leaves the database. */
+	speakers: string[];
+	anonymized: boolean;
+	own: {
+		reviewId: number;
+		status: string;
+		comment: string | null;
+	};
+	criteria: {
+		id: number;
+		label: string;
+		kind: string;
+		scaleMax: number | null;
+		options: string | null;
+		value: number | null;
+		valueText: string | null;
+	}[];
+	/** Empty in `blind_until_reviewed` until the own review is submitted. */
+	peers: PeerReview[];
+	peersWithheld: boolean;
+};
+
+/**
+ * One assigned submission, with this reviewer's own answers and — if the mode allows
+ * it — everybody else's.
+ *
+ * A submission this user was not assigned is a 404, not an empty page: the queue and
+ * the detail must answer the same question about who may read what.
+ */
+export async function reviewerSubmission(
+	conference: Conference,
+	userId: string,
+	submissionId: number
+): Promise<ReviewerSubmission | null> {
+	const own = await ownReview(conference.id, userId, submissionId);
+	if (!own) return null;
+
+	const submission = await submissionFor(conference.id, submissionId);
+	if (!submission) return null;
+
+	const [criteria, speakers, everyReview] = await Promise.all([
+		criteriaWithOwnAnswers(own.roundId, own.reviewId),
+		own.anonymized ? Promise.resolve([]) : speakersOn(submissionId),
+		reviewsOn(conference.id, [submissionId])
+	]);
+
+	const visible = canSeePeerReviews(
+		conference.reviewVisibility as ReviewVisibility,
+		own.status === 'submitted'
+	);
+	const peers = groupReviews(everyReview).filter((r) => r.userId !== userId);
+
+	return {
+		...submission,
+		speakers,
+		anonymized: own.anonymized,
+		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },
+		criteria,
+		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
+		peersWithheld: !visible && peers.length > 0
+	};
+}
+
+/**
+ * This reviewer's own row on this submission — and the assignment check in one.
+ *
+ * Everything else on the page hangs off it: no row means not assigned, which is a 404
+ * rather than an empty page.
+ */
+async function ownReview(conferenceId: number, userId: string, submissionId: number) {
+	const [own] = await db
+		.select({
+			reviewId: reviewTable.id,
+			status: reviewTable.status,
+			comment: reviewTable.comment,
+			roundId: reviewRoundTable.id,
+			anonymized: reviewRoundTable.anonymized
+		})
+		.from(reviewTable)
+		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.where(
+			and(
+				eq(evaluationPlanTable.conferenceId, conferenceId),
+				eq(reviewTable.reviewerUserId, userId),
+				eq(reviewTable.submissionId, submissionId)
+			)
+		)
+		.limit(1);
+
+	return own ?? null;
+}
+
+/** The proposal itself, scoped by conference so an id from the URL cannot travel. */
+async function submissionFor(conferenceId: number, submissionId: number) {
+	const [submission] = await db
+		.select({
+			id: submissionTable.id,
+			title: submissionTable.title,
+			abstract: submissionTable.abstract,
+			keyTakeaway: submissionTable.keyTakeaway,
+			audienceLevel: submissionTable.audienceLevel,
+			track: trackTable.name,
+			sessionFormat: sessionFormatTable.name
+		})
+		.from(submissionTable)
+		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
+		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
+		.where(
+			and(eq(submissionTable.id, submissionId), eq(submissionTable.conferenceId, conferenceId))
+		)
+		.limit(1);
+
+	return submission ?? null;
+}
+
+async function speakersOn(submissionId: number): Promise<string[]> {
+	const rows = await db
+		.select({ name: speakerProfileTable.name })
+		.from(submissionSpeakerTable)
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+		)
+		.where(eq(submissionSpeakerTable.submissionId, submissionId))
+		.orderBy(asc(submissionSpeakerTable.position));
+
+	return rows.map((r) => r.name);
+}
+
+/** The round's scorecard with whatever this reviewer has already entered. */
+async function criteriaWithOwnAnswers(roundId: number, reviewId: number) {
+	const rows = await db
+		.select({
+			id: scorecardCriterionTable.id,
+			label: scorecardCriterionTable.label,
+			kind: scorecardCriterionTable.kind,
+			scaleMax: scorecardCriterionTable.scaleMax,
+			options: scorecardCriterionTable.options,
+			value: reviewScoreTable.valueNumber,
+			valueText: reviewScoreTable.valueText
+		})
+		.from(scorecardCriterionTable)
+		.leftJoin(
+			reviewScoreTable,
+			and(
+				eq(reviewScoreTable.scorecardCriterionId, scorecardCriterionTable.id),
+				eq(reviewScoreTable.reviewId, reviewId)
+			)
+		)
+		.where(eq(scorecardCriterionTable.reviewRoundId, roundId))
+		.orderBy(asc(scorecardCriterionTable.position), asc(scorecardCriterionTable.id));
+
+	return rows.map((r) => ({ ...r, value: r.value === null ? null : Number(r.value) }));
+}
+
+export type ReviewDraft = {
+	/** Criterion id -> what the reviewer entered. */
+	answers: Record<number, string>;
+	comment: string;
+	/** `false` saves progress without unlocking peers or counting towards coverage. */
+	submit: boolean;
+};
+
+/**
+ * Saves this reviewer's answers.
+ *
+ * One transaction, and no notification of any kind: a review changing state is not an
+ * event anybody should be mailed about automatically. The organizer decides when
+ * people are told.
+ */
+export async function saveReview(
+	conference: Conference,
+	userId: string,
+	submissionId: number,
+	draft: ReviewDraft
+): Promise<boolean> {
+	// The same query the page used to decide whether this reviewer may be here at all:
+	// the assignment is the permission.
+	const own = await ownReview(conference.id, userId, submissionId);
+	if (!own) return false;
+
+	const criteria = await db
+		.select({
+			id: scorecardCriterionTable.id,
+			kind: scorecardCriterionTable.kind,
+			scaleMax: scorecardCriterionTable.scaleMax
+		})
+		.from(scorecardCriterionTable)
+		.where(eq(scorecardCriterionTable.reviewRoundId, own.roundId));
+
+	await db.transaction(async (tx) => {
+		for (const criterion of criteria) {
+			await writeScore(tx, own.reviewId, criterion, draft.answers[criterion.id] ?? '');
+		}
+
+		await tx
+			.update(reviewTable)
+			.set({
+				comment: draft.comment.trim() || null,
+				status: draft.submit ? 'submitted' : 'assigned',
+				submittedAt: draft.submit ? new Date() : null
+			})
+			.where(eq(reviewTable.id, own.reviewId));
+	});
+
+	return true;
+}
+
+type Criterion = { id: number; kind: string; scaleMax: number | null };
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** One answer, written where the reviewer's previous one was. */
+function writeScore(tx: Tx, reviewId: number, criterion: Criterion, answer: string) {
+	const raw = answer.trim();
+	const columns = {
+		valueNumber: ratingValue(raw, criterion),
+		valueText: criterion.kind === 'rating' ? null : raw || null
+	};
+
+	return tx
+		.insert(reviewScoreTable)
+		.values({ reviewId, scorecardCriterionId: criterion.id, ...columns })
+		.onConflictDoUpdate({
+			target: [reviewScoreTable.reviewId, reviewScoreTable.scorecardCriterionId],
+			set: columns
+		});
+}
+
+/**
+ * A rating outside its own scale is dropped rather than clamped.
+ *
+ * Clamping would silently turn a mistyped 50 into a 5 and count it as an opinion the
+ * reviewer never held; a blank criterion is honestly "not answered".
+ */
+function ratingValue(raw: string, criterion: { kind: string; scaleMax: number | null }) {
+	if (criterion.kind !== 'rating' || raw === '') return null;
+	const value = Number(raw);
+	if (!Number.isFinite(value) || value < 0) return null;
+	if (criterion.scaleMax && value > criterion.scaleMax) return null;
+	return String(value);
+}
