@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { EventNames, identifyUser, trackEvent } from '$lib/analytics/posthog';
 	import { authClient } from '$lib/auth-client';
 	import {
 		Card,
@@ -60,6 +61,11 @@
 					}
 
 					if (sessionData?.user) {
+						// Sign-in happens client-side via Better Auth, so the server
+						// never sees it — capture it here. No-op without a PostHog key.
+						identifyUser(sessionData.user.id, { email: sessionData.user.email });
+						trackEvent(EventNames.USER_SIGNED_IN);
+
 						// Check email verification
 						if (!sessionData.user.emailVerified) {
 							const params = new SvelteURLSearchParams({ email });

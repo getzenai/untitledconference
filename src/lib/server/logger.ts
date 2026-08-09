@@ -1,6 +1,7 @@
 import winston from 'winston';
+import { initOtelLogs, isOtelLogsEnabled, OtelLogsTransport } from './otel-logs';
 
-const { combine, timestamp, json, printf, colorize, errors } = winston.format;
+const { combine, timestamp, json, printf, colorize, uncolorize, errors } = winston.format;
 
 type LogLevel = 'error' | 'warn' | 'info' | 'debug';
 type LogFormat = 'human' | 'json';
@@ -66,10 +67,27 @@ const format =
 				humanFormat
 			);
 
+// No-op unless an OTLP endpoint or PostHog logs token is configured.
+initOtelLogs();
+
+function buildTransports(): winston.transport[] {
+	if (building) return [];
+
+	const transports: winston.transport[] = [new winston.transports.Console()];
+
+	if (isOtelLogsEnabled()) {
+		// The console format colorizes `level`, which would break severity
+		// mapping and ship ANSI escapes, so strip it for this transport.
+		transports.push(new OtelLogsTransport({ format: combine(uncolorize(), json()) }));
+	}
+
+	return transports;
+}
+
 const logger = winston.createLogger({
 	level: getLogLevel(),
 	format,
-	transports: building ? [] : [new winston.transports.Console()],
+	transports: buildTransports(),
 	silent: building
 });
 

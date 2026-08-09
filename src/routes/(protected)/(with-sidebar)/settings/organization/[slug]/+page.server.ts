@@ -1,7 +1,13 @@
+import { EventNames } from '$lib/analytics/event-names';
 import { auth } from '$lib/auth';
+import { createLogger } from '$lib/server/logger';
+import { captureEvent } from '$lib/server/posthog';
 import { transferOwnershipSafely } from '$lib/server/utils/organization-transfer';
+import { renameOrganizationSchema } from '$lib/validators/organization';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+
+const logger = createLogger('OrganizationSettings');
 
 export const load: PageServerLoad = async ({ locals, request, params }) => {
 	if (!locals.user) {
@@ -78,6 +84,45 @@ export const load: PageServerLoad = async ({ locals, request, params }) => {
 };
 
 export const actions: Actions = {
+	renameOrganization: async ({ request, locals }) => {
+		if (!locals.user) {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const parsed = renameOrganizationSchema.safeParse({
+			organizationId: formData.get('organizationId'),
+			name: formData.get('name')
+		});
+
+		if (!parsed.success) {
+			return fail(400, {
+				error: parsed.error.issues[0]?.message ?? 'Invalid organization name'
+			});
+		}
+
+		const { organizationId, name } = parsed.data;
+
+		try {
+			await auth.api.updateOrganization({
+				headers: request.headers,
+				body: { organizationId, data: { name } }
+			});
+
+			captureEvent(
+				locals.user.id,
+				EventNames.ORGANIZATION_RENAMED,
+				{ organizationId },
+				{ organization: organizationId }
+			);
+
+			return { success: true, renamed: true };
+		} catch (error) {
+			logger.error('Failed to rename organization', error, { organizationId });
+			return fail(500, { error: 'Failed to rename organization' });
+		}
+	},
+
 	inviteMember: async ({ request, locals }) => {
 		if (!locals.user) {
 			return fail(401, { error: 'Unauthorized' });

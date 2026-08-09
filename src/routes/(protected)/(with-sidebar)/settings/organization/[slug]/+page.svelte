@@ -33,6 +33,7 @@
 	let showLeaveDialog = $state(false);
 	let selectedNewOwner = $state('');
 	let isLeavingOrg = $state(false);
+	let isRenaming = $state(false);
 
 	let organization = $derived(data.organization);
 	let members = $derived(data.members || []);
@@ -40,7 +41,9 @@
 	let currentMember = $derived(data.currentMember);
 
 	$effect(() => {
-		if (form?.success && form?.invitationId) {
+		if (form?.success && (form as Record<string, unknown>).renamed) {
+			toast.success('Organization renamed');
+		} else if (form?.success && form?.invitationId) {
 			const invitationLink = `${page.url.origin}/invite/${form.invitationId}`;
 			navigator.clipboard.writeText(invitationLink);
 			toast.success('Invitation created and link copied to clipboard');
@@ -75,10 +78,45 @@
 			<CardDescription>Manage your organization information</CardDescription>
 		</CardHeader>
 		<CardContent class="space-y-4">
-			<div>
-				<Label>Organization Name</Label>
-				<p class="text-lg font-medium">{organization?.name}</p>
-			</div>
+			{#if isAdmin(currentMember)}
+				<form
+					method="POST"
+					action="?/renameOrganization"
+					use:enhance={() => {
+						isRenaming = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							await invalidateAll();
+							isRenaming = false;
+						};
+					}}
+					class="space-y-2"
+				>
+					<Label for="organization-name">Organization Name</Label>
+					<input type="hidden" name="organizationId" value={organization?.id} />
+					<div class="flex gap-2">
+						<!-- Uncontrolled: the current name seeds the field, and the value is
+						     submitted with the form, so no local state is needed. -->
+						{#key organization?.id}
+							<Input
+								id="organization-name"
+								name="name"
+								value={organization?.name ?? ''}
+								required
+								class="max-w-sm"
+							/>
+						{/key}
+						<Button type="submit" variant="outline" disabled={isRenaming}>
+							{isRenaming ? 'Saving...' : 'Save'}
+						</Button>
+					</div>
+				</form>
+			{:else}
+				<div>
+					<Label>Organization Name</Label>
+					<p class="text-lg font-medium">{organization?.name}</p>
+				</div>
+			{/if}
 			{#if organization?.slug}
 				<div>
 					<Label>Organization Slug</Label>

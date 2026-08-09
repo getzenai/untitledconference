@@ -1,8 +1,9 @@
+import { registrationEmailSchema } from '$lib/validators/email';
 import { newPasswordSchema } from '$lib/validators/password';
 import { z } from 'zod/v4';
 
 export const registerSchema = z.object({
-	email: z.string().email('Please enter a valid email address'),
+	email: registrationEmailSchema,
 	password: newPasswordSchema,
 	invitationCode: z.string().optional()
 });

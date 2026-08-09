@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resetUser } from '$lib/analytics/posthog';
 	import { authClient } from '$lib/auth-client';
 	import BuildingIcon from '@lucide/svelte/icons/building';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
@@ -24,6 +25,9 @@
 			await authClient.signOut({
 				fetchOptions: {
 					onSuccess: () => {
+						// Drop the analytics identity so the next user on this
+						// browser is not attributed to the one signing out.
+						resetUser();
 						// The svelteKitHandler should clear the session cookie.
 						// The useSession hook will react, and route guards should redirect.
 						// Explicit redirect as a fallback or primary action.

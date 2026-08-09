@@ -203,6 +203,56 @@ Logger is configured via environment variables (see Environment Variables sectio
 - `LOG_LEVEL` - Logging level: error, warn, info, debug (default: warn)
 - `LOG_FORMAT` - Logging format: human, json (default: human)
 
+### Observability (all optional, off by default)
+
+Every variable below is optional. When unset, the corresponding feature is a
+no-op — `npm run build` and local dev work without any of them.
+
+- `PUBLIC_POSTHOG_API_KEY` - Enables browser analytics, server-side event capture and error tracking
+- `PUBLIC_POSTHOG_HOST` - PostHog ingestion host (default: `https://eu.i.posthog.com`)
+- `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` - Ship Winston logs to a generic OTLP/HTTP collector
+- `OTEL_EXPORTER_OTLP_LOGS_HEADERS` - Headers for that collector, `key=value,key=value`
+- `POSTHOG_LOGS_TOKEN` - Alternative to the above: ship logs to PostHog (falls back to `PUBLIC_POSTHOG_API_KEY`)
+- `POSTHOG_HOST` - Host for PostHog log ingestion (default: `https://eu.i.posthog.com`)
+- `OTEL_SERVICE_NAME` / `OTEL_SERVICE_VERSION` / `DEPLOYMENT_ENVIRONMENT` - Resource attributes on exported logs
+
+## Observability
+
+### Analytics
+
+```javascript
+// Server-side (src/lib/server/posthog.ts)
+import { captureEvent } from '$lib/server/posthog';
+import { EventNames } from '$lib/analytics/event-names';
+
+captureEvent(
+	userId,
+	EventNames.ORGANIZATION_CREATED,
+	{ organizationId },
+	{ organization: organizationId }
+);
+
+// Client-side (src/lib/analytics/posthog.ts)
+import { trackEvent, EventNames } from '$lib/analytics/posthog';
+
+trackEvent(EventNames.ONBOARDING_COMPLETED);
+```
+
+Add new event names to `src/lib/analytics/event-names.ts` rather than passing raw
+strings. That module is client-agnostic so both sides share it.
+
+### Error tracking
+
+`handleError` in `src/hooks.server.ts` reports 5xx failures, and
+`src/hooks.client.ts` reports non-404 client errors. Both no-op without a key.
+
+### Log export
+
+`src/lib/server/otel-logs.ts` attaches an OpenTelemetry transport to Winston when
+an OTLP endpoint or PostHog logs token is configured. Log attributes whose key
+names a credential (`password`, `token`, `apiKey`, `authorization`, ...) are
+redacted before export.
+
 ## Port Forwarding
 
 - 5173: SvelteKit dev server

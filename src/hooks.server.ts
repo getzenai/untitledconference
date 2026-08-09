@@ -2,8 +2,10 @@ import { auth } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
 import { createLogger } from '$lib/server/logger';
+import { captureException } from '$lib/server/posthog';
 import { applySecurityHeaders } from '$lib/server/security-headers';
-import { type Handle } from '@sveltejs/kit';
+import '$lib/server/startup';
+import { type Handle, type HandleServerError } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
@@ -183,6 +185,31 @@ const paraglideHandle: Handle = ({ event, resolve }) =>
 			}
 		});
 	});
+
+/**
+ * Reports unexpected server errors to PostHog error tracking.
+ *
+ * Only 5xx-class failures are treated as errors: 4xx statuses are routine
+ * (404s, rejected input) and would drown out real incidents. A no-op when
+ * PostHog is not configured.
+ */
+export const handleError: HandleServerError = ({ error, status, message, event }) => {
+	if (status >= 500) {
+		logger.error('Unhandled server error', error, { pathname: event.url.pathname, status });
+		captureException(
+			error instanceof Error ? error : new Error(String(error)),
+			event.locals.user?.id,
+			{
+				pathname: event.url.pathname,
+				status
+			}
+		);
+	} else {
+		logger.debug('Client error', { pathname: event.url.pathname, status });
+	}
+
+	return { message };
+};
 
 // Sequence of handlers: Security headers, Bot detection, Better Auth,
 // API Protection, Paraglide

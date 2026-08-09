@@ -1,19 +1,39 @@
 <script lang="ts">
 	import { Toaster } from '$lib/components/ui/sonner';
 	import ImpersonationBanner from '$lib/components/impersonation-banner.svelte';
+	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
+	import { capturePageview, identifyUser, initAnalytics } from '$lib/analytics/posthog';
 	import { locales, localizeHref } from '$lib/paraglide/runtime';
 	import { onMount } from 'svelte';
 	import '../app.css';
 
-	let { children } = $props();
+	let { children, data } = $props();
 
 	// Hydration marker for E2E tests. Cypress types into forms as soon as the
 	// SSR markup is on screen; submitting before Svelte has hydrated hits the
 	// plain <form> and triggers a native navigation instead of the SPA handler.
-	// Specs wait for `body[data-hydrated="true"]` before interacting.
-	onMount(() => {
+	// Specs wait for `body[data-hydrated="true"]` before interacting, so set it
+	// before awaiting anything.
+	//
+	// The analytics calls are no-ops unless PUBLIC_POSTHOG_API_KEY is set.
+	onMount(async () => {
 		document.body.dataset.hydrated = 'true';
+		await initAnalytics(data.analytics);
+		capturePageview(window.location.href);
+	});
+
+	// SvelteKit navigations do not reload the page, so pageviews are captured
+	// per navigation. The initial load is captured in onMount above.
+	afterNavigate(({ from }) => {
+		if (from) capturePageview(window.location.href);
+	});
+
+	$effect(() => {
+		const user = page.data.user;
+		if (user?.id) {
+			identifyUser(user.id, { email: user.email });
+		}
 	});
 
 	// Push sidebar down when impersonating by injecting padding-top style

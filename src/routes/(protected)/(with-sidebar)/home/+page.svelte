@@ -11,6 +11,14 @@
 	} from '$lib/components/ui/card';
 	import { authClient } from '$lib/auth-client';
 	import { goto } from '$app/navigation';
+	import type { PageData } from './$types';
+
+	interface Props {
+		data: PageData;
+	}
+
+	let { data }: Props = $props();
+
 	const sessionState = authClient.useSession();
 	// $sessionState will have properties like .data, .isPending, .error
 	// .data itself is likely the store containing the actual session object { user, session } or null
@@ -34,7 +42,40 @@
 	}
 </script>
 
-<div class="container py-8">
+<div class="container space-y-4 py-8">
+	{#if data.onboarding}
+		<Card>
+			<CardHeader>
+				<CardTitle>
+					{#if data.onboarding.pendingInvitationCount > 0}
+						You have {data.onboarding.pendingInvitationCount} pending invitation{data.onboarding
+							.pendingInvitationCount === 1
+							? ''
+							: 's'}
+					{:else}
+						Finish setting up your account
+					{/if}
+				</CardTitle>
+				<CardDescription>
+					{#if data.onboarding.pendingInvitationCount > 0}
+						Join an organization you have been invited to.
+					{:else}
+						Create an organization to start collaborating.
+					{/if}
+				</CardDescription>
+			</CardHeader>
+			<CardContent>
+				<a href={data.onboarding.href}>
+					<Button>
+						{data.onboarding.pendingInvitationCount > 0
+							? 'Review invitations'
+							: 'Create organization'}
+					</Button>
+				</a>
+			</CardContent>
+		</Card>
+	{/if}
+
 	<Card>
 		<CardHeader>
 			<CardTitle>Protected Dashboard</CardTitle>

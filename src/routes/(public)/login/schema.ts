@@ -1,8 +1,9 @@
+import { emailSchema } from '$lib/validators/email';
 import { passwordSchema } from '$lib/validators/password';
 import { z } from 'zod/v4';
 
 export const loginSchema = z.object({
-	email: z.string().email('Please enter a valid email address'),
+	email: emailSchema,
 	password: passwordSchema,
 	rememberMe: z.boolean().default(true)
 });
