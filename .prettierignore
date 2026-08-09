@@ -14,3 +14,5 @@ project.inlang/
 
 # Conductor workspace (managed externally)
 .context/
+# Local design-hook cache, not source
+.impeccable/

@@ -46,6 +46,10 @@ Two things it may never do:
 
 - **carry white text.** White on `--act` is 2.03:1. The label is always ink-black
   (`--act-foreground`, 9.79:1). Do not darken the yellow to make white work; invert the text.
+- **be a foreground colour itself.** `text-act` on the page background is 2.02:1 — below
+  even the 3:1 floor for icons, so a `text-act` star is a star nobody can see. It is a
+  surface: `bg-act text-act-foreground`. For an indicator, `--status-warn` is the usual
+  answer. Checked by `src/lib/design/act-usage.unit.test.ts`.
 - **stand next to a filled `--primary` button.** It _replaces_ the primary on that screen, so
   R1 still holds — one filled button, it is simply the warm one.
 
@@ -208,6 +212,7 @@ A rule that only exists as prose is a wish. This section is the honest ledger; k
 | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Token values, both modes       | `design/tokens.json` → `npm run tokens` → generated block in `src/app.css`                                                                                        |
 | Contrast (≥4.5:1, ring ≥3)     | `src/lib/design/tokens.unit.test.ts`, every pair the token file declares                                                                                          |
+| `--act` never a foreground     | `src/lib/design/act-usage.unit.test.ts` — the pair list cannot catch this, because the bad combination is one we never declare                                    |
 | No hand edits to the CSS       | same test: it regenerates `app.css` and compares                                                                                                                  |
 | Seeing what a change did       | `/styleguide` — every token in both modes, rendered by the real components                                                                                        |
 | R4 status is a word            | `StatusBadge` — the only place a status becomes a colour                                                                                                          |
