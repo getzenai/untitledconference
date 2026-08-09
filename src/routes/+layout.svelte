@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Toaster } from '$lib/components/ui/sonner';
+	import { ModeWatcher } from 'mode-watcher';
 	import ImpersonationBanner from '$lib/components/impersonation-banner.svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/state';
@@ -53,6 +54,10 @@
 		}
 	});
 </script>
+
+<!-- Without this nothing can ever set the `dark` class, and the entire dark
+     palette in app.css is unreachable. -->
+<ModeWatcher defaultMode="light" track={false} />
 
 <Toaster />
 {#if page.data.impersonating}

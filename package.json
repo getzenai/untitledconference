@@ -14,6 +14,7 @@
 		"check:watch": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy localStorage url preferredLanguage baseLocale --silent && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"tokens": "tsx scripts/build-tokens.ts",
 		"lint": "prettier --check . && eslint . --max-warnings 60",
 		"lint:format": "prettier --write . && eslint . --max-warnings 60",
 		"test": "npm run test:unit && npm run test:integration && npm run test:e2e",

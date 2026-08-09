@@ -2,6 +2,8 @@
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import ShowMore from '$lib/components/app/conference/show-more.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { buildView, formatFullStamp } from '$lib/conference/public-view';
@@ -49,9 +51,11 @@
 </p>
 
 {#if visible.length === 0}
-	<p class="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-sm">
-		Nobody by that name.
-	</p>
+	<EmptyState title="Nobody by that name.">
+		<Button variant="outline" size="sm" class="mt-1" onclick={() => (query = '')}>
+			Clear the search
+		</Button>
+	</EmptyState>
 {/if}
 
 <ul class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-4">
