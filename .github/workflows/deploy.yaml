@@ -82,7 +82,7 @@ jobs:
           missing=0
           for var in NEON_CONNECTION_STRING CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BETTER_AUTH_SECRET; do
             if [ -z "${!var}" ]; then
-              echo "::error::$var is missing from Infisical (project kill-saas-challenge, env prod)"
+              echo "::error::$var is missing from Infisical (project untitled-conference, env prod)"
               missing=1
             fi
           done
