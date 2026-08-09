@@ -15,6 +15,21 @@ infrastructure, no extra env vars.
 Job handlers use the app's normal `$lib/server/db` connection and read configuration
 through `serverEnv()` in `$lib/server/env`. There is no jobs-specific database module.
 
+## This layer runs in Node, not on the Worker
+
+`boss` is a process-wide singleton holding its own connection pool. That is correct
+for `worker.ts`, which is a long-lived Node process — and it is exactly the shape
+that fails on Cloudflare Workers, where a socket opened by one request may not be
+touched by another. `$lib/server/db` hit this and now scopes its connection per
+request; pg-boss has the same pattern and no such guard.
+
+Nothing calls `enqueue()` from a route today (checked across `src`, outside this
+directory). **Before the first one does**, decide how the job is queued from the
+Worker — through a request-scoped connection, or by not queueing from the Worker at
+all. Calling `enqueue()` from a route as things stand will work on the first request
+an isolate serves and fail on the ones after it, which is the hardest version of
+this bug to recognise.
+
 ## Adding a job
 
 1. Create `definitions/my-job.ts`:
