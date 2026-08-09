@@ -18,6 +18,15 @@
 	"observability": {
 		"enabled": true
 	},
+	// The real domain. `custom_domain` makes Cloudflare create and manage the DNS
+	// record and the certificate for us, so there is nothing to set by hand.
+	// The workers.dev URL keeps working alongside it.
+	"routes": [
+		{
+			"pattern": "untitledconference.com",
+			"custom_domain": true
+		}
+	],
 	// Hyperdrive is the supported way to reach a Postgres server from a Worker.
 	// `id` is only used by `wrangler deploy`, never by `wrangler dev`, which uses
 	// `localConnectionString` and connects directly.
