@@ -1,8 +1,8 @@
-import { passwordSchema } from '$lib/validators/password';
+import { newPasswordSchema } from '$lib/validators/password';
 import { z } from 'zod/v4';
 
 export const resetPasswordSchema = z.object({
-	password: passwordSchema,
+	password: newPasswordSchema,
 	token: z.string().min(1, 'Reset token is required')
 });
 

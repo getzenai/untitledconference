@@ -11,6 +11,7 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
+	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
 	import { authClient } from '$lib/auth-client';
@@ -120,6 +121,7 @@
 								disabled={$submitting}
 								required
 							/>
+							<PasswordStrength password={$formData.password} userInputs={[data.email]} />
 						{/snippet}
 					</Form.Control>
 					<Form.FieldErrors />

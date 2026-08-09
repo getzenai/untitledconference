@@ -1,10 +1,15 @@
+import { oauthProvider } from '@better-auth/oauth-provider';
+import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
+import { jwt } from 'better-auth/plugins/jwt';
 import { organization } from 'better-auth/plugins/organization';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { INVITATION_EXPIRY_SECONDS } from './constants';
+import { organizationAccessControl, organizationRoles } from './auth/permissions';
+import { buildRateLimitConfig } from './auth/rate-limit-config';
+import { INVITATION_EXPIRY_SECONDS, SESSION_FRESH_AGE_SECONDS } from './constants';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
 import { serverEnv } from './server/env';
@@ -92,6 +97,65 @@ function logUserCreationWithRole(user: { email: string; role?: string }) {
 	logger.info('User created successfully', { email: user.email, role: user.role });
 }
 
+const DEFAULT_TRUSTED_ORIGINS = [
+	'http://127.0.0.1:5173',
+	'http://localhost:5173',
+	'http://127.0.0.1:5174',
+	'http://localhost:5174'
+];
+
+function resolveTrustedOrigins(configured: string | undefined): string[] {
+	if (!configured) return DEFAULT_TRUSTED_ORIGINS;
+	const origins = configured
+		.split(',')
+		.map((origin) => origin.trim())
+		.filter(Boolean);
+	return origins.length > 0 ? origins : DEFAULT_TRUSTED_ORIGINS;
+}
+
+/**
+ * Registrable domain for WebAuthn. Derived from the configured base URL
+ * (stripping "www."); override with BETTER_AUTH_PASSKEY_RP_ID on deeper
+ * subdomain deployments, where the derived value would bind passkeys to that
+ * subdomain only. NOTE: changing rpID invalidates all registered passkeys.
+ */
+function resolvePasskeyRpId(origin: string, override: string | undefined): string {
+	const configured = override?.trim();
+	if (configured) return configured;
+	try {
+		return new URL(origin).hostname.replace(/^www\./, '');
+	} catch {
+		logger.warn('Could not derive passkey rpID from base URL, falling back to localhost', {
+			origin
+		});
+		return 'localhost';
+	}
+}
+
+/**
+ * Reduce configured origins to canonical `scheme://host[:port]` form for
+ * WebAuthn's exact-match origin comparison, dropping unparseable entries.
+ * Returns undefined when nothing is usable, which makes the passkey plugin fall
+ * back to the request's Origin header (local dev).
+ */
+function canonicalizeOrigins(origins: string[]): string[] | undefined {
+	const canonical = origins.flatMap((value) => {
+		try {
+			return [new URL(value).origin];
+		} catch {
+			logger.warn('Ignoring unparseable trusted origin for passkey verification', { value });
+			return [];
+		}
+	});
+	return canonical.length > 0 ? canonical : undefined;
+}
+
+/**
+ * Scopes the OAuth provider can issue. Kept in one place so the plugin config
+ * and the consent screen cannot drift apart.
+ */
+export const OAUTH_SCOPES = ['openid', 'profile', 'email', 'offline_access'];
+
 type Auth = ReturnType<typeof createAuth>;
 let _auth: Auth | undefined;
 
@@ -99,6 +163,8 @@ function createAuth() {
 	// Lazy by construction: `auth` below is a Proxy, so the environment is only
 	// read (and validated) on first use — never during `vite build`.
 	const env = serverEnv();
+	const trustedOrigins = resolveTrustedOrigins(env.BETTER_AUTH_TRUSTED_ORIGINS);
+	const serverOrigin = env.BETTER_AUTH_URL;
 
 	return betterAuth({
 		database: drizzleAdapter(db, {
@@ -107,15 +173,26 @@ function createAuth() {
 
 		appName: 'SvelteKitVibeStarter',
 		secret: env.BETTER_AUTH_SECRET,
-		baseURL: env.BETTER_AUTH_URL,
-		trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS
-			? env.BETTER_AUTH_TRUSTED_ORIGINS.split(',').map((origin) => origin.trim())
-			: [
-					'http://127.0.0.1:5173',
-					'http://localhost:5173',
-					'http://127.0.0.1:5174',
-					'http://localhost:5174'
-				],
+		baseURL: serverOrigin,
+		trustedOrigins,
+
+		// The jwt plugin's /token endpoint would let any session-cookie holder mint
+		// a signed JWT outside the OAuth consent flow. Access tokens must only be
+		// issued through /oauth2/token (PKCE + consent).
+		disabledPaths: ['/token'],
+
+		// Undefined (Better Auth defaults) unless RELAX_AUTH_RATE_LIMIT is set,
+		// which only E2E runs do. See buildRateLimitConfig for the rationale.
+		rateLimit: buildRateLimitConfig({ RELAX_AUTH_RATE_LIMIT: env.RELAX_AUTH_RATE_LIMIT }),
+
+		// Make the session "freshness" window explicit (Better Auth's default is
+		// the same 24h). Sensitive operations such as passkey registration require
+		// a session created within this window; the UI reads the same constant via
+		// isSessionFresh() to prompt for re-authentication up front instead of
+		// failing the ceremony.
+		session: {
+			freshAge: SESSION_FRESH_AGE_SECONDS
+		},
 
 		emailAndPassword: {
 			enabled: true,
@@ -201,7 +278,22 @@ function createAuth() {
 		plugins: [
 			organization({
 				allowUserToCreateOrganization: true,
-				allowOrganizationDelete: true,
+				// Organization deletion is enabled by Better Auth's default; the knob
+				// to turn it off is `disableOrganizationDeletion: true`.
+				//
+				// Set explicitly rather than left undefined. When undefined, Better
+				// Auth derives it: reading or accepting an invitation requires a
+				// verified email unless invitation IDs are the built-in opaque ones
+				// (no `advanced.generateId`, and `advanced.database.generateId` unset
+				// or 'uuid'). We take that exemption today, so the derived value is
+				// already false — but it ties an auth rule to an unrelated
+				// ID-generation setting, and a fork that later sets
+				// `advanced.generateId` would silently start demanding verified
+				// emails with nothing in its diff to explain it. Requiring
+				// verification is a product decision; make it deliberately.
+				requireEmailVerificationOnInvitation: false,
+				ac: organizationAccessControl,
+				roles: organizationRoles,
 				async sendInvitationEmail(data) {
 					logger.info('Invitation created', { email: data.email, id: data.id });
 				}
@@ -210,6 +302,45 @@ function createAuth() {
 				defaultRole: 'user',
 				adminRoles: ['admin'],
 				bannedUserMessage: 'Your account has been suspended. Please contact support.'
+			}),
+			passkey({
+				rpID: resolvePasskeyRpId(serverOrigin, env.BETTER_AUTH_PASSKEY_RP_ID),
+				rpName: 'SvelteKitVibeStarter',
+				// Pin expected WebAuthn origins to our trusted origins. WebAuthn
+				// compares origins by exact string match, so canonicalize them.
+				origin: canonicalizeOrigins(trustedOrigins)
+			}),
+			// Signs OAuth access/id tokens and serves the JWKS (/api/auth/jwks).
+			// Required by the oauth-provider plugin.
+			jwt({
+				jwt: {
+					// Issue tokens with the bare origin as `iss` (not the /api/auth
+					// basePath) so RFC 8414 discovery lives at the server root
+					// (src/routes/.well-known/*) where OAuth clients look for it.
+					issuer: serverOrigin
+				},
+				// Don't attach session JWTs to responses via the set-auth-jwt header;
+				// tokens are only issued through the OAuth token endpoint.
+				disableSettingJwtHeader: true
+			}),
+			// OAuth 2.1 authorization server (authorization code + PKCE + consent).
+			oauthProvider({
+				loginPage: '/login',
+				consentPage: '/oauth/consent',
+				scopes: OAUTH_SCOPES,
+				accessTokenExpiresIn: 60 * 60, // 1 hour
+				refreshTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
+				// Off by default: RFC 7591 self-registration lets anyone create a
+				// client, which is only appropriate for deployments that need it
+				// (e.g. MCP clients). Opt in with OAUTH_ALLOW_DYNAMIC_CLIENT_REGISTRATION.
+				allowDynamicClientRegistration: env.OAUTH_ALLOW_DYNAMIC_CLIENT_REGISTRATION,
+				allowUnauthenticatedClientRegistration: env.OAUTH_ALLOW_DYNAMIC_CLIENT_REGISTRATION,
+				// The root well-known routes exist (src/routes/.well-known), so the
+				// boot-time reminders to create them are noise.
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true
+				}
 			})
 		]
 	});

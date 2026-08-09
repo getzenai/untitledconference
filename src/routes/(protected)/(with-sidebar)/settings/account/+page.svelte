@@ -11,6 +11,7 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Label } from '$lib/components/ui/label';
 	import PasswordInput from '$lib/components/ui/password-input.svelte';
+	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { getPasswordRequirementsFromSchema } from '$lib/validators/password';
 	import { toast } from 'svelte-sonner';
 	import { authClient } from '$lib/auth-client';
@@ -174,6 +175,7 @@
 									disabled={$submitting}
 									required
 								/>
+								<PasswordStrength password={$formData.newPassword} />
 							{/snippet}
 						</Form.Control>
 						<Form.FieldErrors />

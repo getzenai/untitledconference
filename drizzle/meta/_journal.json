@@ -15,6 +15,13 @@
 			"when": 1786320000000,
 			"tag": "0001_documents_content_markdown",
 			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1786235250444,
+			"tag": "0002_add-passkey-oauth-jwks",
+			"breakpoints": true
 		}
 	]
 }

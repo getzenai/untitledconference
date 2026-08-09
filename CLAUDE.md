@@ -59,8 +59,15 @@ npm run db:push          # Push schema to dev database
 npm run db:push:force    # Push schema (force, no confirmation)
 npm run db:push:test     # Push schema to test database
 npm run db:studio        # Open Drizzle Studio
+npm run db:generate      # Generate a migration from schema changes
 npm run db:migrate       # Run migrations
+npm run db:baseline      # One-time: adopt migrations on a db:push-provisioned database
 ```
+
+`db:push` does not record migration history, so `db:migrate` against a database
+that was built with `db:push` would try to replay the baseline migration and
+fail. Run `db:baseline` once on such a database first; it is a no-op everywhere
+else.
 
 All database commands go through `dev-from-infisical.sh` — credentials are available in both modes.
 

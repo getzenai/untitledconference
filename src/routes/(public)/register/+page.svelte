@@ -12,6 +12,7 @@
 	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
 	import PasswordInput from '$lib/components/ui/password-input.svelte';
+	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '$lib/validators/password';
 	import { onMount } from 'svelte';
 	import { superForm } from 'sveltekit-superforms';
@@ -173,6 +174,7 @@
 										minlength={PASSWORD_MIN_LENGTH}
 										maxlength={PASSWORD_MAX_LENGTH}
 									/>
+									<PasswordStrength password={$formData.password} userInputs={[$formData.email]} />
 								{/snippet}
 							</Form.Control>
 							<Form.FieldErrors />

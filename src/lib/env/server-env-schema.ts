@@ -41,8 +41,24 @@ export const serverEnvSchema = z
 		BETTER_AUTH_TRUSTED_ORIGINS: optionalStr(),
 		/** Require a verified email before sign-in is allowed. */
 		REQUIRE_EMAIL_VERIFICATION: boolWithDefault(true),
+		/**
+		 * WebAuthn relying-party ID for passkeys. Derived from BETTER_AUTH_URL's
+		 * hostname (minus "www.") when unset. Changing it invalidates every
+		 * passkey already registered.
+		 */
+		BETTER_AUTH_PASSKEY_RP_ID: optionalStr(),
+		/**
+		 * E2E-only escape hatch that relaxes Better Auth's 3-per-10s limit on
+		 * /sign-in* and /sign-up*. Never set this in a deployed environment.
+		 */
+		RELAX_AUTH_RATE_LIMIT: optionalStr(),
 
 		// --- OAuth providers ----------------------------------------------------
+		/**
+		 * Allow OAuth clients to self-register (RFC 7591). Off by default: it lets
+		 * unauthenticated callers create clients.
+		 */
+		OAUTH_ALLOW_DYNAMIC_CLIENT_REGISTRATION: boolWithDefault(false),
 		/** GitHub OAuth client ID. Both GitHub vars are needed to enable the provider. */
 		GITHUB_CLIENT_ID: optionalStr(),
 		/** GitHub OAuth client secret. */

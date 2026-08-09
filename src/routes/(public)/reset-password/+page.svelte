@@ -12,6 +12,7 @@
 	} from '$lib/components/ui/card';
 	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
+	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { getPasswordRequirementsFromSchema } from '$lib/validators/password';
 	import { Eye, EyeOff } from 'lucide-svelte';
 	import { superForm } from 'sveltekit-superforms';
@@ -151,6 +152,7 @@
 												{/if}
 											</Button>
 										</div>
+										<PasswordStrength password={$formData.password} />
 									{/snippet}
 								</Form.Control>
 								<Form.FieldErrors />

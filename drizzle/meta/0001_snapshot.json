@@ -1,6 +1,6 @@
 {
-	"id": "e2f007d5-0f24-494d-987f-3055bc37b0b7",
-	"prevId": "00000000-0000-0000-0000-000000000000",
+	"id": "1b3a5c7e-0d1f-4a2b-9c8d-6e5f4a3b2c10",
+	"prevId": "e2f007d5-0f24-494d-987f-3055bc37b0b7",
 	"version": "7",
 	"dialect": "postgresql",
 	"tables": {
@@ -614,7 +614,7 @@
 				},
 				"content": {
 					"name": "content",
-					"type": "jsonb",
+					"type": "text",
 					"primaryKey": false,
 					"notNull": true
 				},
