@@ -1,48 +1,48 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1747601178582,
-      "tag": "0000_merged_initial_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1786230000000,
-      "tag": "0001_documents_content_markdown",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1786235250444,
-      "tag": "0002_add-passkey-oauth-jwks",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1786291017198,
-      "tag": "0003_conference_domain",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1786292045486,
-      "tag": "0004_speaker_sort_name",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1786305963018,
-      "tag": "0005_glamorous_xorn",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1747601178582,
+			"tag": "0000_merged_initial_schema",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1786230000000,
+			"tag": "0001_documents_content_markdown",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1786235250444,
+			"tag": "0002_add-passkey-oauth-jwks",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1786291017198,
+			"tag": "0003_conference_domain",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1786292045486,
+			"tag": "0004_speaker_sort_name",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1786305963018,
+			"tag": "0005_glamorous_xorn",
+			"breakpoints": true
+		}
+	]
 }
