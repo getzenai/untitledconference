@@ -17,6 +17,8 @@ That file is the source of truth. `src/app.css` is generated from it by `npm run
 unit test regenerates and compares, so editing the CSS by hand fails CI instead of quietly
 becoming a second palette. See §4.
 
+**To look at it, run the app and open `/styleguide`.** That page reads the same token file and renders the real components, so it cannot show you something the product does not do.
+
 ---
 
 ## 1. Foundations
@@ -207,6 +209,7 @@ A rule that only exists as prose is a wish. This section is the honest ledger; k
 | Token values, both modes       | `design/tokens.json` → `npm run tokens` → generated block in `src/app.css`                                                                                        |
 | Contrast (≥4.5:1, ring ≥3)     | `src/lib/design/tokens.unit.test.ts`, every pair the token file declares                                                                                          |
 | No hand edits to the CSS       | same test: it regenerates `app.css` and compares                                                                                                                  |
+| Seeing what a change did       | `/styleguide` — every token in both modes, rendered by the real components                                                                                        |
 | R4 status is a word            | `StatusBadge` — the only place a status becomes a colour                                                                                                          |
 | R5 empty states have a way out | `EmptyState` — omitting `action` is a deliberate act, not an oversight                                                                                            |
 | R6 nothing internal leaks      | one layout loader for all five public surfaces; the internal fields are absent from `PublicConference` itself, so a template cannot render what it never received |
