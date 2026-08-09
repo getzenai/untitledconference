@@ -22,6 +22,7 @@ import {
 	type FieldDefinition
 } from '$lib/conference/form-definition';
 import { db } from '$lib/server/db';
+import { user } from '$lib/server/db/auth-schema';
 import {
 	cfpFormTable,
 	submissionAnswerTable,
@@ -244,6 +245,29 @@ function validateForSubmit(input: SubmissionInput, fields: FieldDefinition[]) {
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /**
+ * Only the profile columns the submitter actually filled in.
+ *
+ * A draft is allowed to carry nothing but a title (CFP-07), so a blank "About
+ * you" on the second draft-save must not wipe the name, company and bio the
+ * first one recorded — the organizer would be looking at a nameless speaker with
+ * no way to know why.
+ */
+function statedProfileFields(speaker: SpeakerInput): Record<string, string> {
+	const stated: Record<string, string> = {};
+	const name = speaker.name.trim();
+	const sortName = speaker.sortName.trim();
+
+	if (name) stated.name = name;
+	if (sortName || name) stated.sortName = sortName || guessSortName(name);
+	if (speaker.email.trim()) stated.email = speaker.email.trim();
+	if (speaker.jobTitle) stated.jobTitle = speaker.jobTitle;
+	if (speaker.company) stated.company = speaker.company;
+	if (speaker.bio) stated.bio = speaker.bio;
+
+	return stated;
+}
+
+/**
  * The submitter's own speaker profile in the conference's organization.
  *
  * Looked up by user rather than by email so that changing your address does not
@@ -257,14 +281,7 @@ async function upsertOwnProfile(
 	userId: string,
 	speaker: SpeakerInput
 ): Promise<number> {
-	const values = {
-		name: speaker.name.trim(),
-		sortName: (speaker.sortName.trim() || guessSortName(speaker.name)).trim(),
-		email: speaker.email.trim() || null,
-		jobTitle: speaker.jobTitle,
-		company: speaker.company,
-		bio: speaker.bio
-	};
+	const stated = statedProfileFields(speaker);
 
 	const [existing] = await tx
 		.select({ id: speakerProfileTable.id })
@@ -278,13 +295,35 @@ async function upsertOwnProfile(
 		.limit(1);
 
 	if (existing) {
-		await tx.update(speakerProfileTable).set(values).where(eq(speakerProfileTable.id, existing.id));
+		if (Object.keys(stated).length > 0) {
+			await tx
+				.update(speakerProfileTable)
+				.set(stated)
+				.where(eq(speakerProfileTable.id, existing.id));
+		}
 		return existing.id;
 	}
 
+	// `name` and `sortName` are NOT NULL, so a first profile needs something even
+	// when the form was left empty. The account is the honest fallback: it is who
+	// this person already told us they are.
+	const [account] = await tx
+		.select({ name: user.name, email: user.email })
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+	const fallbackName = account?.name?.trim() || account?.email || 'Unnamed speaker';
+
 	const [created] = await tx
 		.insert(speakerProfileTable)
-		.values({ organizationId, userId, ...values })
+		.values({
+			organizationId,
+			userId,
+			name: fallbackName,
+			sortName: guessSortName(fallbackName),
+			email: account?.email ?? null,
+			...stated
+		})
 		.returning({ id: speakerProfileTable.id });
 	return created.id;
 }
@@ -408,8 +447,12 @@ async function queueReceipt(
 		.from(speakerProfileTable)
 		.where(inArray(speakerProfileTable.id, profileIds));
 
-	const rows = recipients
-		.filter((r): r is { email: string } => Boolean(r.email))
+	// Two profiles can carry the same address — someone who submits and also adds
+	// themselves as a co-presenter. One proposal, one receipt.
+	const addresses = [...new Set(recipients.map((r) => r.email).filter((e): e is string => !!e))];
+
+	const rows = addresses
+		.map((email) => ({ email }))
 		.map((r) => ({
 			conferenceId: call.conference.id,
 			toEmail: r.email,
@@ -457,8 +500,15 @@ async function refuseSave(
 	if (options.submissionId !== undefined) {
 		// Owning a session proves who you are, not which submission is yours — and a
 		// submitted proposal is no longer the submitter's to rewrite.
+		//
+		// The conference check is the third condition and the least obvious: without
+		// it, a draft belonging to conference A could be POSTed to B's call with its
+		// id, and `persist` would rewrite `conferenceId` and `cfpFormId` — moving a
+		// proposal between tenants. No UI does that; the exported API allows it, and
+		// the API is what the tests legitimise.
 		const owned = await ownedSubmission(userId, options.submissionId);
-		if (!owned || owned.status !== 'draft') return { ok: false, reason: 'forbidden' };
+		const editable = owned && owned.status === 'draft' && owned.conferenceId === call.conference.id;
+		if (!editable) return { ok: false, reason: 'forbidden' };
 	}
 
 	return null;

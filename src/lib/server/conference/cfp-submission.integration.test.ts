@@ -29,10 +29,13 @@ import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { guessSortName, openCall, saveSubmission, type SubmissionInput } from './cfp-submission';
+import { editableDraft } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
 const slug = `conf-${suffix}`;
+/** A second conference, to prove a draft cannot be moved between tenants. */
+const otherSlug = `other-${suffix}`;
 const submitterId = `user-${suffix}`;
 const strangerId = `stranger-${suffix}`;
 
@@ -116,6 +119,21 @@ beforeAll(async () => {
 
 	alwaysFieldId = always.id;
 	workshopFieldId = workshopOnly.id;
+
+	const [other] = await db
+		.insert(conferenceTable)
+		.values({
+			organizationId,
+			name: 'Other Conf',
+			slug: otherSlug,
+			startsOn: '2027-09-01',
+			endsOn: '2027-09-01',
+			status: 'published'
+		})
+		.returning();
+	await db
+		.insert(cfpFormTable)
+		.values({ conferenceId: other.id, title: 'Other proposals', status: 'published' });
 });
 
 afterAll(async () => {
@@ -364,5 +382,121 @@ describe('saveSubmission, once the call is closed (CFP-16)', () => {
 				.set({ status: 'published' })
 				.where(eq(cfpFormTable.id, form.id));
 		}
+	});
+});
+
+describe('finishing a draft (CFP-07, the resume half)', () => {
+	it('loads a saved draft back in the shape the form fills from', async () => {
+		const saved = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Half written',
+				abstract: 'Started this on the train.',
+				coSpeakers: [{ name: 'Zoe Adler', email: null, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false }
+		);
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		const editable = await editableDraft(submitterId, saved.submissionId);
+		expect(editable).not.toBeNull();
+		expect(editable!.conferenceSlug).toBe(slug);
+		expect(editable!.draft.title).toBe('Half written');
+		expect(editable!.draft.abstract).toBe('Started this on the train.');
+		// Answers come back keyed by field id, which is what `answer:<id>` needs.
+		expect(editable!.draft.answers[alwaysFieldId]).toBe('Because I have done it');
+		// The submitter is not in their own co-presenter list.
+		expect(editable!.draft.coSpeakers).toEqual([
+			{ name: 'Zoe Adler', email: '', roleLabel: 'Co-presenter' }
+		]);
+		expect(editable!.draft.speaker.sortName).toBe('Ng, Wei Ling');
+	});
+
+	it('turns the same draft into a submission instead of a second one', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Will finish' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		const finished = await saveSubmission(
+			submitterId,
+			slug,
+			input({ title: 'Will finish', abstract: 'Now complete.' }),
+			{ submit: true, submissionId: saved.submissionId }
+		);
+		if (!finished.ok) throw new Error('expected the draft to be submitted');
+
+		// The whole point: one proposal, not two. Before the edit route existed,
+		// finishing a draft created a duplicate.
+		expect(finished.submissionId).toBe(saved.submissionId);
+		expect(finished.status).toBe('submitted');
+
+		const rows = await db
+			.select({ id: submissionTable.id, status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+		expect(rows[0].status).toBe('submitted');
+	});
+
+	it('stops offering a draft for editing once it has been submitted', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'One way' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		await saveSubmission(submitterId, slug, input({ title: 'One way' }), {
+			submit: true,
+			submissionId: saved.submissionId
+		});
+
+		expect(await editableDraft(submitterId, saved.submissionId)).toBeNull();
+	});
+
+	it('does not hand a draft to anyone but its author', async () => {
+		const saved = await saveSubmission(submitterId, slug, input(), { submit: false });
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		expect(await editableDraft(strangerId, saved.submissionId)).toBeNull();
+	});
+
+	it('refuses to move a draft to another conference', async () => {
+		const saved = await saveSubmission(submitterId, slug, input(), { submit: false });
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		// The UI cannot do this; the exported API could, and the API is what these
+		// tests legitimise. `persist` overwrites conferenceId, so without the check
+		// this would move a proposal between tenants.
+		const result = await saveSubmission(submitterId, otherSlug, input(), {
+			submit: false,
+			submissionId: saved.submissionId
+		});
+
+		expect(result).toEqual({ ok: false, reason: 'forbidden' });
+	});
+
+	it('keeps the profile a draft-save left blank', async () => {
+		// Fill the profile, then save a draft with an empty "About you" — which is
+		// exactly what a title-only draft posts.
+		await saveSubmission(submitterId, slug, input(), { submit: false });
+		await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Only a title',
+				speaker: { name: '', sortName: '', email: '', jobTitle: null, company: null, bio: null }
+			}),
+			{ submit: false }
+		);
+
+		const [profile] = await db
+			.select({ name: speakerProfileTable.name, company: speakerProfileTable.company })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.userId, submitterId));
+
+		// A nameless speaker in the organizer's list, with nothing to explain it,
+		// is what this prevents.
+		expect(profile.name).toBe('Ng Wei Ling');
+		expect(profile.company).toBe('Acme');
 	});
 });

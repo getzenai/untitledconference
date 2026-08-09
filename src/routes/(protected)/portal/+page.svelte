@@ -124,9 +124,16 @@
 									>co-presenting{/if}
 							</p>
 						</div>
-						<Badge variant={statusTone[submission.status] ?? 'secondary'}>
-							{statusLabel[submission.status] ?? submission.status}
-						</Badge>
+						<div class="flex items-center gap-3">
+							{#if submission.status === 'draft'}
+								<a class="text-sm underline" href="/portal/submissions/{submission.id}/edit">
+									Finish it
+								</a>
+							{/if}
+							<Badge variant={statusTone[submission.status] ?? 'secondary'}>
+								{statusLabel[submission.status] ?? submission.status}
+							</Badge>
+						</div>
 					</li>
 				{/each}
 			</ul>

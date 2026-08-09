@@ -69,9 +69,11 @@
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">This is still a draft.</p>
 			<p class="text-muted-foreground mt-1">
-				Nobody has seen it yet. Finish it from the call for papers before the call closes.
+				Nobody has seen it yet. Pick it up where you left off, any time before the call closes.
 			</p>
-			<Button href="/c/{s.conferenceSlug}/cfp" size="sm" class="mt-3">Go to the call</Button>
+			<Button href="/portal/submissions/{s.id}/edit" size="sm" class="mt-3">
+				Finish this proposal
+			</Button>
 		</div>
 	{:else if s.status === 'accepted'}
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
@@ -124,7 +126,7 @@
 			{s.speakers.length === 1 ? 'Speaker' : 'Speakers'}
 		</h2>
 		<ul class="mt-2 space-y-1 text-sm">
-			{#each s.speakers as speaker (speaker.name)}
+			{#each s.speakers as speaker, i (i)}
 				<li>
 					{speaker.name}{#if speaker.isPrimary}<span class="text-muted-foreground">
 							— presenting</span
@@ -140,7 +142,7 @@
 		<section class="mt-8">
 			<h2 class="text-sm font-medium">Your answers</h2>
 			<dl class="mt-2 space-y-3 text-sm">
-				{#each s.answers as answer (answer.label)}
+				{#each s.answers as answer, i (i)}
 					<div>
 						<dt class="text-muted-foreground text-xs">{answer.label}</dt>
 						<dd class="mt-0.5 whitespace-pre-line">{answer.value}</dd>

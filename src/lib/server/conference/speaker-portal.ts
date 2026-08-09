@@ -8,6 +8,7 @@
  * where the wrong row exists in memory and something downstream has to remember
  * to drop it.
  */
+import type { ProposalDraft } from '$lib/conference/proposal-draft';
 import { db } from '$lib/server/db';
 import {
 	formFieldTable,
@@ -175,4 +176,120 @@ export async function mySubmission(userId: string, submissionId: number) {
 	]);
 
 	return { ...row, answers, speakers };
+}
+
+/** The draft's own columns, only if this user may still edit it. */
+async function draftRow(userId: string, submissionId: number) {
+	const [row] = await db
+		.select({
+			title: submissionTable.title,
+			abstract: submissionTable.abstract,
+			keyTakeaway: submissionTable.keyTakeaway,
+			audienceLevel: submissionTable.audienceLevel,
+			sessionFormatId: submissionTable.sessionFormatId,
+			trackId: submissionTable.trackId,
+			status: submissionTable.status,
+			conferenceSlug: conferenceTable.slug
+		})
+		.from(submissionTable)
+		.innerJoin(conferenceTable, eq(conferenceTable.id, submissionTable.conferenceId))
+		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+		)
+		.where(and(eq(submissionTable.id, submissionId), eq(speakerProfileTable.userId, userId)))
+		.limit(1);
+
+	// A submitted proposal is no longer the submitter's to rewrite, so it is not a
+	// draft for this purpose even though the row exists.
+	return row && row.status === 'draft' ? row : null;
+}
+
+/** Answers keyed by field id, which is what the form's `answer:<id>` inputs need. */
+async function draftAnswers(submissionId: number): Promise<Record<number, string>> {
+	const rows = await db
+		.select({ formFieldId: submissionAnswerTable.formFieldId, value: submissionAnswerTable.value })
+		.from(submissionAnswerTable)
+		.where(eq(submissionAnswerTable.submissionId, submissionId));
+	return Object.fromEntries(rows.map((a) => [a.formFieldId, a.value ?? '']));
+}
+
+async function draftSpeakers(submissionId: number) {
+	return db
+		.select({
+			name: speakerProfileTable.name,
+			email: speakerProfileTable.email,
+			roleLabel: submissionSpeakerTable.roleLabel,
+			isPrimary: submissionSpeakerTable.isPrimary
+		})
+		.from(submissionSpeakerTable)
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+		)
+		.where(eq(submissionSpeakerTable.submissionId, submissionId))
+		.orderBy(asc(submissionSpeakerTable.position));
+}
+
+/** The submitter's own profile, as blank strings rather than nulls — inputs take strings. */
+async function ownProfile(userId: string): Promise<ProposalDraft['speaker']> {
+	const [own] = await db
+		.select({
+			name: speakerProfileTable.name,
+			sortName: speakerProfileTable.sortName,
+			email: speakerProfileTable.email,
+			jobTitle: speakerProfileTable.jobTitle,
+			company: speakerProfileTable.company,
+			bio: speakerProfileTable.bio
+		})
+		.from(speakerProfileTable)
+		.where(eq(speakerProfileTable.userId, userId))
+		.limit(1);
+
+	const blank = { name: '', sortName: '', email: '', jobTitle: '', company: '', bio: '' };
+	if (!own) return blank;
+
+	// `name` and `sortName` are NOT NULL; the rest are nullable and become ''.
+	return Object.fromEntries(
+		Object.entries(own).map(([key, value]) => [key, value ?? ''])
+	) as ProposalDraft['speaker'];
+}
+
+/**
+ * A draft in the shape the proposal form fills from, or null if this user may
+ * not edit it.
+ *
+ * "May not edit" folds together three refusals — no such submission, not yours,
+ * no longer a draft — and answers null to all of them, so the route can return
+ * one 404 rather than telling a stranger which of the three applied.
+ */
+export async function editableDraft(
+	userId: string,
+	submissionId: number
+): Promise<{ draft: ProposalDraft; conferenceSlug: string } | null> {
+	const row = await draftRow(userId, submissionId);
+	if (!row) return null;
+
+	const [answers, speakers, own] = await Promise.all([
+		draftAnswers(submissionId),
+		draftSpeakers(submissionId),
+		ownProfile(userId)
+	]);
+
+	const draft: ProposalDraft = {
+		title: row.title,
+		abstract: row.abstract ?? '',
+		keyTakeaway: row.keyTakeaway ?? '',
+		audienceLevel: row.audienceLevel ?? '',
+		sessionFormatId: row.sessionFormatId,
+		trackId: row.trackId,
+		answers,
+		speaker: own,
+		coSpeakers: speakers
+			.filter((sp) => !sp.isPrimary)
+			.map((sp) => ({ name: sp.name, email: sp.email ?? '', roleLabel: sp.roleLabel ?? '' }))
+	};
+
+	return { draft, conferenceSlug: row.conferenceSlug };
 }
