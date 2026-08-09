@@ -26,7 +26,18 @@ import {
 	reviewRoundTable,
 	reviewTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, count, eq, inArray, isNotNull, lt, ne, sql } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	count,
+	eq,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	sql,
+	type SQLWrapper
+} from 'drizzle-orm';
 
 /** How many examples a section shows before it defers to the full list behind it. */
 export const MAX_ITEMS = 5;
@@ -79,7 +90,7 @@ export type InconsistencyItem = {
 	id: number;
 	title: string;
 	status: Submission['status'];
-	kind: 'confirmed_placement' | 'open_tasks';
+	kind: 'confirmed_placement' | 'handed_in_work' | 'open_tasks';
 	detail: string;
 };
 
@@ -354,9 +365,10 @@ async function mailQueue(conferenceId: number): Promise<DashboardSnapshot['mail'
  * this talk as if it were happening, when the decision says it is not?
  */
 async function leftovers(conferenceId: number): Promise<DashboardSnapshot['inconsistencies']> {
-	const [stuckSessions, stuckTasks] = await Promise.all([
+	const [stuckSessions, handedIn, manual] = await Promise.all([
 		confirmedButNotAccepted(conferenceId),
-		openTasksOnDecidedTalks(conferenceId)
+		handedInWorkOnDecidedTalks(conferenceId),
+		manualTasksOnDecidedTalks(conferenceId)
 	]);
 
 	const items: InconsistencyItem[] = [
@@ -365,17 +377,27 @@ async function leftovers(conferenceId: number): Promise<DashboardSnapshot['incon
 			kind: 'confirmed_placement' as const,
 			detail: 'still holds a confirmed slot in the agenda'
 		})),
-		...stuckTasks.map((s) => ({
+		...handedIn.map((s) => ({
+			id: s.id,
+			title: s.title,
+			status: s.status,
+			kind: 'handed_in_work' as const,
+			detail: `still holds ${plural(s.tasks, 'hand-in')} from the speaker`
+		})),
+		...manual.map((s) => ({
 			id: s.id,
 			title: s.title,
 			status: s.status,
 			kind: 'open_tasks' as const,
-			detail: `still has ${Number(s.open)} open speaker task${Number(s.open) === 1 ? '' : 's'}`
+			detail: `still asks the speaker for ${plural(s.tasks, 'task')} an organizer added by hand`
 		}))
 	];
 
 	return { count: items.length, items: items.slice(0, MAX_ITEMS) };
 }
+
+const plural = (n: number | string, word: string) =>
+	`${Number(n)} ${word}${Number(n) === 1 ? '' : 's'}`;
 
 /** The talk is not in the programme, but the grid still holds a slot for it. */
 function confirmedButNotAccepted(conferenceId: number) {
@@ -391,31 +413,62 @@ function confirmedButNotAccepted(conferenceId: number) {
 			and(
 				eq(placementTable.conferenceId, conferenceId),
 				eq(placementTable.status, 'confirmed'),
-				notAccepted(conferenceId)
+				decidedAgainst(conferenceId)
 			)
 		);
 }
 
-/** The talk is not happening, but the speaker's portal still asks for work on it. */
-function openTasksOnDecidedTalks(conferenceId: number) {
+/**
+ * Work the speaker already handed in for a talk that is no longer happening.
+ *
+ * This is the half that a `status = 'open'` filter would never find, and finding it is
+ * the entire promise of the strip: taking an acceptance back DELETES the open template
+ * tasks, so what survives is by definition what the speaker has touched. `submitted`
+ * only — a `done` deliverable on a declined talk is archive, not a to-do, and putting
+ * it here would turn a list of things to fix into a list of things that happened.
+ */
+function handedInWorkOnDecidedTalks(conferenceId: number) {
+	return decidedTalkTasks(conferenceId, [
+		eq(taskTable.status, 'submitted'),
+		isNotNull(taskTable.templateId)
+	]);
+}
+
+/**
+ * Tasks an organizer typed by hand, which acceptance never generated and taking it
+ * back therefore never removed. Separate from the hand-ins because the fix is
+ * different: this one is somebody's own text to withdraw.
+ */
+function manualTasksOnDecidedTalks(conferenceId: number) {
+	return decidedTalkTasks(conferenceId, [
+		eq(taskTable.status, 'open'),
+		isNull(taskTable.templateId)
+	]);
+}
+
+function decidedTalkTasks(conferenceId: number, extra: SQLWrapper[]) {
 	return db
 		.select({
 			id: submissionTable.id,
 			title: submissionTable.title,
 			status: submissionTable.status,
-			open: count()
+			tasks: count()
 		})
 		.from(taskTable)
 		.innerJoin(submissionTable, eq(submissionTable.id, taskTable.submissionId))
-		.where(
-			and(
-				eq(taskTable.conferenceId, conferenceId),
-				eq(taskTable.status, 'open'),
-				notAccepted(conferenceId)
-			)
-		)
+		.where(and(eq(taskTable.conferenceId, conferenceId), decidedAgainst(conferenceId), ...extra))
 		.groupBy(submissionTable.id, submissionTable.title, submissionTable.status);
 }
 
-const notAccepted = (conferenceId: number) =>
-	and(eq(submissionTable.conferenceId, conferenceId), ne(submissionTable.status, 'accepted'));
+/**
+ * Talks that have been decided against.
+ *
+ * Named statuses rather than `!= 'accepted'`: a draft or an undecided submission is
+ * not "wrong" to have no answer yet, and listing one under leftovers would send the
+ * organizer looking for a mistake that has not been made.
+ */
+const decidedAgainst = (conferenceId: number) =>
+	and(
+		eq(submissionTable.conferenceId, conferenceId),
+		inArray(submissionTable.status, ['rejected', 'waitlisted', 'withdrawn'])
+	);

@@ -9,13 +9,13 @@
  */
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
-import { taskTable } from '$lib/server/db/conference/content-schema';
+import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import {
@@ -23,9 +23,10 @@ import {
 	reviewRoundTable,
 	reviewTable
 } from '$lib/server/db/conference/review-schema';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { conferenceDashboard, MAX_ITEMS } from './dashboard';
+import { decideSubmissions } from './decisions';
 
 const suffix = `dash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -102,6 +103,13 @@ beforeAll(async () => {
 		.returning();
 	speakerProfileId = speakers[0].id;
 	otherSpeakerProfileId = speakers[1].id;
+
+	// Acceptance generates the speaker's tasks from these, and the generated tasks are
+	// the ones the leftovers strip is about.
+	await db.insert(taskTemplateTable).values([
+		{ conferenceId: conference.id, title: 'Upload slides', kind: 'file_request', dueOffsetDays: 7 },
+		{ conferenceId: conference.id, title: 'Complete bio', kind: 'action', dueOffsetDays: 14 }
+	]);
 
 	for (const target of [conference, other]) {
 		const [plan] = await db
@@ -321,26 +329,65 @@ describe('what a taken-back acceptance leaves behind', () => {
 		});
 	});
 
-	it('surfaces open speaker tasks on a talk that is no longer happening', async () => {
+	/**
+	 * The test that had to go through `decideSubmissions` instead of inserting rows.
+	 *
+	 * Inserting an open task on a declined talk tests a state the product never
+	 * produces: taking the acceptance back DELETES exactly those. What survives an
+	 * un-accept is what the speaker touched — so a strip that filters on `open` finds
+	 * nothing after a real decline while promising the opposite in its own copy.
+	 */
+	it('surfaces the hand-ins that survive a real un-accept', async () => {
+		const id = await addSubmission(conference, 'Accepted then declined', 'submitted');
+		await db
+			.insert(submissionSpeakerTable)
+			.values({ submissionId: id, speakerProfileId, isPrimary: true, position: 0 });
+
+		await decideSubmissions(conference, [id], 'accepted');
+
+		// The speaker hands one of the generated tasks in; the other stays open.
+		const generated = await db
+			.select({ id: taskTable.id })
+			.from(taskTable)
+			.where(eq(taskTable.submissionId, id))
+			.orderBy(asc(taskTable.id));
+		expect(generated.length).toBeGreaterThan(1);
+		await db
+			.update(taskTable)
+			.set({ status: 'submitted' })
+			.where(eq(taskTable.id, generated[0].id));
+
+		const undone = await decideSubmissions(conference, [id], 'rejected');
+		expect(undone.tasksRemoved).toBe(generated.length - 1);
+
+		const { inconsistencies } = await conferenceDashboard(conference.id, NOW);
+
+		expect(inconsistencies.count).toBe(1);
+		expect(inconsistencies.items[0]).toMatchObject({ id, kind: 'handed_in_work' });
+		expect(inconsistencies.items[0].detail).toContain('1 hand-in');
+	});
+
+	it('keeps hand-typed tasks as their own case, because the fix is different', async () => {
 		const declined = await addSubmission(conference, 'Declined with homework', 'rejected');
 		await db.insert(taskTable).values([
 			{
 				conferenceId: conference.id,
 				speakerProfileId,
 				submissionId: declined,
-				title: 'Upload slides'
+				title: 'Call the sponsor'
 			},
 			{
 				conferenceId: conference.id,
 				speakerProfileId,
 				submissionId: declined,
-				title: 'Complete bio'
+				title: 'Return the badge'
 			},
+			// Finished work on a talk that is not happening is archive, not a to-do.
 			{
 				conferenceId: conference.id,
 				speakerProfileId,
 				submissionId: declined,
-				title: 'Handed in already',
+				title: 'Handed in and approved',
 				status: 'done'
 			}
 		]);
@@ -349,7 +396,20 @@ describe('what a taken-back acceptance leaves behind', () => {
 
 		expect(inconsistencies.count).toBe(1);
 		expect(inconsistencies.items[0]).toMatchObject({ id: declined, kind: 'open_tasks' });
-		expect(inconsistencies.items[0].detail).toContain('2 open speaker tasks');
+		expect(inconsistencies.items[0].detail).toContain('2 tasks an organizer added by hand');
+	});
+
+	it('says nothing about a submission nobody has decided yet', async () => {
+		// `!= accepted` would list this as a leftover and send the organizer looking
+		// for a mistake that has not been made.
+		const waiting = await addSubmission(conference, 'Still in the queue', 'submitted');
+		await db
+			.insert(placementTable)
+			.values({ conferenceId: conference.id, submissionId: waiting, status: 'confirmed' });
+
+		const { inconsistencies } = await conferenceDashboard(conference.id, NOW);
+
+		expect(inconsistencies).toMatchObject({ count: 0, items: [] });
 	});
 
 	it('stays quiet when the programme agrees with the decisions', async () => {

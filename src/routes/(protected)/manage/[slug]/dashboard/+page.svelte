@@ -75,12 +75,14 @@
 			data-testid="dashboard-inconsistencies"
 		>
 			<h2 class="text-sm font-semibold">
-				{d.inconsistencies.count} decided talk{d.inconsistencies.count === 1 ? '' : 's'} still held in
-				the programme
+				{d.inconsistencies.count} leftover{d.inconsistencies.count === 1 ? '' : 's'} from talks you decided
+				against
 			</h2>
 			<p class="mt-0.5 text-xs">
-				Declining a talk leaves a confirmed slot and any task the speaker already touched in place,
-				so nothing disappears behind your back. Resolve these by hand.
+				Taking an acceptance back clears the agenda tray and the untouched tasks, and deliberately
+				leaves the rest: a confirmed slot somebody may have announced, work the speaker already
+				handed in, and tasks an organizer typed by hand. Nothing disappears behind your back — so
+				these need a human.
 			</p>
 			<ul class="mt-2 space-y-1 text-sm">
 				{#each d.inconsistencies.items as item (`${item.kind}-${item.id}`)}
