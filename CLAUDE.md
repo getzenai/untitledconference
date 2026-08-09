@@ -64,6 +64,49 @@ npm run db:migrate       # Run migrations
 
 All database commands go through `dev-from-infisical.sh` — credentials are available in both modes.
 
+## Testing Conventions
+
+Vitest is configured with two **projects** (`vitest.config.ts`), selected by filename suffix —
+there is no separate config file per test type, just a glob per project:
+
+| Project       | File pattern                   | Environment | DB / network                                                                                               |
+| ------------- | ------------------------------ | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `unit`        | `src/**/*.unit.test.ts`        | node        | None — no `globalSetup`, everything mocked                                                                 |
+| `integration` | `src/**/*.integration.test.ts` | node        | Real Postgres via `TEST_DATABASE_URL`, `globalSetup`/`setupFiles` wire it up, `ENABLE_TEST_ENDPOINTS=true` |
+
+Both kinds of test are **co-located with the code they test** (e.g.
+`src/routes/api/v1/public/health/server.integration.test.ts` next to that route's `+server.ts`,
+`src/routes/(protected)/(with-sidebar)/examples/crud/crud.unit.test.ts` next to the CRUD example
+route). There is no separate `tests/` or `__tests__/` tree for unit/integration coverage.
+
+A test file only gets collected if its name matches one of the two globs above exactly — a stray
+`*.test.ts` file (missing the `.unit.` or `.integration.` infix) is silently skipped by both
+projects, so double-check the filename when adding a new test.
+
+**What belongs where:**
+
+- **Unit** — pure logic with no I/O: validation helpers, request-routing/auth logic with `auth`,
+  the logger, and SvelteKit hooks mocked out (see `src/routes/api/v1/api-routing-*.unit.test.ts`
+  for the pattern used to test `hooks.server.ts` itself), component/module-level logic that doesn't
+  touch the database.
+- **Integration** — anything that needs a real database: server actions, `db/` operations, API
+  route handlers exercised end-to-end at the function level (calling the exported `GET`/`POST`
+  directly, not over HTTP).
+- **E2E** — full browser flows through critical user journeys (login, registration, core CRUD).
+  These live in the top-level `e2e/` directory; see `e2e/CLAUDE.md` for the current framework and
+  patterns in that directory, since it may not match whatever is described further down in this
+  file if that suite is mid-migration.
+
+**How to run each:**
+
+```bash
+npm run test:unit          # vitest --project unit — no DB needed
+npm run test:integration   # vitest --project integration — needs TEST_DATABASE_URL (docker compose up -d gives one on :5433)
+npm run test:e2e           # full E2E suite — see e2e/CLAUDE.md
+npm run test               # unit, then integration, then e2e, in that order
+npm run test:all           # ./scripts/test-all.sh — the comprehensive local runner
+```
+
 ## Testing Commands
 
 ```bash
@@ -375,6 +418,24 @@ specs were modified but Observed Behavior not filled in (requires dev server run
 - `/deep-review` runs 3-5 agents per cycle from different perspectives (security, architecture, correctness, performance, API)
 - Up to 3 cycles with early stopping when no critical/high findings remain
 - CRITICAL and HIGH findings are always fixed; MEDIUM and LOW are evaluated contextually
+
+## Subfolder CLAUDE.md Files
+
+Detailed, area-specific conventions live in subfolder `CLAUDE.md` files rather than in this root
+file. Check the closest one to whatever you're editing before assuming a convention from here
+applies:
+
+- `src/lib/server/CLAUDE.md` - Config/env access, logging, AI provider factory, documents
+  operations, external-integration services
+- `src/lib/server/db/CLAUDE.md` - Drizzle schema conventions, migration workflow, db client, test
+  utilities
+- `src/routes/api/v1/CLAUDE.md` - API route tiers, auth enforcement, endpoint patterns
+- `src/lib/components/CLAUDE.md` - Svelte 5 runes, shadcn-svelte/bits-ui, forms, i18n status
+- `e2e/CLAUDE.md` - E2E testing patterns (check this rather than assuming Playwright specifics
+  described elsewhere in this file, since that suite may be mid-migration)
+- `ai-dev-docs/CLAUDE.md` - Format for the dense, AI-optimized howto docs under `ai-dev-docs/`
+- `scripts/azure-managed-setup/CLAUDE.md` - Azure Container Apps deployment scripts and credential
+  handling
 
 ## Important Reminders
 
