@@ -193,10 +193,15 @@ async function main() {
 		})}`;
 	}
 
+	// The call must be OPEN when someone looks at it. `opens_at` was 2026-11-01,
+	// which is in the future — the public form correctly answered "this call has
+	// not opened yet", so the whole submitter path was unreachable on the demo
+	// tenant. A fixed past date keeps the story (a 2027 conference taking
+	// proposals now) without making the seed depend on when it is run.
 	const [cfpForm] = await sql`INSERT INTO cfp_form ${sql({
 		conference_id: conferenceId,
 		title: 'DevFlow Conf 2027 — Call for Papers',
-		opens_at: new Date('2026-11-01T09:00:00Z'),
+		opens_at: new Date('2026-06-01T09:00:00Z'),
 		closes_at: new Date('2027-02-15T23:59:00Z'),
 		status: 'published'
 	})} RETURNING id`;
