@@ -126,6 +126,15 @@ export const speakerProfileTable = pgTable('speaker_profile', {
 		.references(() => organization.id, { onDelete: 'cascade' }),
 	userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
 	name: text('name').notNull(),
+	/**
+	 * Sort key for the alphabetical-by-surname ordering EMB-04 and EMB-12 require.
+	 *
+	 * A stored column rather than something derived from `name` at read time: "van der
+	 * Berg" and "Ng Wei Ling" defeat every rule that splits a display name on spaces,
+	 * and the same person must sort identically on all five public surfaces. Whoever
+	 * writes the profile decides the sort key; nothing downstream guesses.
+	 */
+	sortName: text('sort_name').notNull(),
 	email: text('email'),
 	headshotUrl: text('headshot_url'),
 	jobTitle: text('job_title'),

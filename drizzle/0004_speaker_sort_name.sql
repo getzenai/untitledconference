@@ -1,0 +1,1 @@
+ALTER TABLE "speaker_profile" ADD COLUMN "sort_name" text NOT NULL;
