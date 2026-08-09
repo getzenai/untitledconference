@@ -129,7 +129,8 @@ function selectPublishedPlacements(conferenceId: number) {
 			endsAt: placementTable.endsAt,
 			roomId: placementTable.roomId,
 			trackId: submissionTable.trackId,
-			formatId: submissionTable.sessionFormatId
+			formatId: submissionTable.sessionFormatId,
+			recordingUrl: placementTable.recordingUrl
 		})
 		.from(placementTable)
 		.innerJoin(submissionTable, eq(placementTable.submissionId, submissionTable.id))
@@ -199,7 +200,8 @@ function assembleProgramme(placements: PlacementRow[], speakerRows: SpeakerRow[]
 		roomId: optionalId(row.roomId),
 		trackId: optionalId(row.trackId),
 		formatId: optionalId(row.formatId),
-		speakerIds: (bySubmission.get(row.submissionId) ?? []).map((s) => String(s.speakerId))
+		speakerIds: (bySubmission.get(row.submissionId) ?? []).map((s) => String(s.speakerId)),
+		recordingUrl: row.recordingUrl
 	}));
 
 	const speakersById = new Map<number, PublicSpeaker>();

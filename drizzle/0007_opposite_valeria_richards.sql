@@ -1,0 +1,1 @@
+ALTER TABLE "placement" ADD COLUMN "recording_url" text;

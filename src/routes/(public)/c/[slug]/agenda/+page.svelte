@@ -88,6 +88,14 @@
 			{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span>{session.room}{/if}
 		</p>
 
+		{#if session.recordingUrl}
+			<!-- Above the abstract on purpose: after the conference this is what the page
+			     is for. Before it, the block does not exist at all. -->
+			<p class="mt-5">
+				<Button href={session.recordingUrl} rel="noopener" target="_blank">Watch recording</Button>
+			</p>
+		{/if}
+
 		<p class="mt-5 max-w-2xl text-sm leading-relaxed">{session.description}</p>
 
 		<ul class="mt-6 flex flex-wrap gap-x-6 gap-y-3">
