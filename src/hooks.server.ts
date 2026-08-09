@@ -1,6 +1,7 @@
 import { auth } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
+import { needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
 import { createLogger } from '$lib/server/logger';
 import { captureException } from '$lib/server/posthog';
 import { applySecurityHeaders } from '$lib/server/security-headers';
@@ -27,6 +28,27 @@ const API_V1_PREFIX = '/api/v1';
 // non-HTML API response.
 const securityHeadersHandler: Handle = async ({ event, resolve }) =>
 	applySecurityHeaders(await resolve(event));
+
+// Gives the request its own database connection, on the platforms that require
+// one. A Cloudflare Worker cannot use a socket opened by an earlier request, so
+// a shared client makes every request after the first on a given isolate fail
+// instantly — see the comment in `$lib/server/db`. Everywhere else this is a
+// pass-through and the process-wide client stands.
+//
+// It runs second, immediately inside the security headers, because everything
+// after it queries: Better Auth resolves the session, and the API guard reads
+// keys. Nothing between here and the loads may open a connection of its own.
+const databaseScopeHandler: Handle = ({ event, resolve }) => {
+	const ctx = event.platform?.ctx;
+	if (!needsRequestScopedDb(event.platform) || !ctx) return resolve(event);
+
+	// Closing is deferred with `waitUntil` so the socket teardown happens after
+	// the response has been handed back, not in front of it.
+	return withRequestScopedDb(
+		async () => resolve(event),
+		(closing) => ctx.waitUntil(closing)
+	);
+};
 
 // Bot detection is applied to the public auth/API surface only. Known AI
 // crawlers legitimately GET public pages (that is what indexing is), but they
@@ -194,6 +216,41 @@ const paraglideHandle: Handle = ({ event, resolve }) =>
 	});
 
 /**
+ * Flattens an error's `cause` chain into something a log line can carry.
+ *
+ * Winston serialises an Error to its message and stack, and both stop at the
+ * outermost error. Drizzle wraps every driver failure as `Failed query: <sql>`
+ * and hangs the real one — the Postgres `code`, `severity` and `constraint_name`,
+ * or the socket error underneath them — on `cause`. Without this, a production
+ * 500 tells us which statement died and nothing whatsoever about why.
+ *
+ * Depth is capped because a cause chain can be cyclic.
+ */
+function causeChain(error: unknown): Record<string, unknown>[] {
+	const chain: Record<string, unknown>[] = [];
+	let current: unknown = error instanceof Error ? error.cause : undefined;
+
+	for (let depth = 0; current && depth < 5; depth += 1) {
+		if (current instanceof Error) {
+			const extra = current as Error & { code?: unknown; severity?: unknown; routine?: unknown };
+			chain.push({
+				name: extra.name,
+				message: extra.message,
+				code: extra.code,
+				severity: extra.severity,
+				routine: extra.routine
+			});
+			current = extra.cause;
+		} else {
+			chain.push({ value: String(current) });
+			current = undefined;
+		}
+	}
+
+	return chain;
+}
+
+/**
  * Reports unexpected server errors to PostHog error tracking.
  *
  * Only 5xx-class failures are treated as errors: 4xx statuses are routine
@@ -202,7 +259,11 @@ const paraglideHandle: Handle = ({ event, resolve }) =>
  */
 export const handleError: HandleServerError = ({ error, status, message, event }) => {
 	if (status >= 500) {
-		logger.error('Unhandled server error', error, { pathname: event.url.pathname, status });
+		logger.error('Unhandled server error', error, {
+			pathname: event.url.pathname,
+			status,
+			causes: causeChain(error)
+		});
 		captureException(
 			error instanceof Error ? error : new Error(String(error)),
 			event.locals.user?.id,
@@ -222,6 +283,7 @@ export const handleError: HandleServerError = ({ error, status, message, event }
 // API Protection, Paraglide
 export const handle: Handle = sequence(
 	securityHeadersHandler, // Outermost, so every response below carries the headers
+	databaseScopeHandler, // Before anything that queries — auth does, on every request
 	botDetectionHandler, // Reject crawlers before any auth/session work
 	populateLocalsUserHandler, // Run this first to ensure locals.user is set
 	({ event, resolve }) => svelteKitHandler({ auth, event, resolve, building: false }),
