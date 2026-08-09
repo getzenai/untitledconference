@@ -26,10 +26,10 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { guessSortName, openCall, saveSubmission, type SubmissionInput } from './cfp-submission';
-import { editableDraft } from './speaker-portal';
+import { draftForConference, editableDraft } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -498,5 +498,116 @@ describe('finishing a draft (CFP-07, the resume half)', () => {
 		// is what this prevents.
 		expect(profile.name).toBe('Ng Wei Ling');
 		expect(profile.company).toBe('Acme');
+	});
+});
+
+describe('what the receipt promises', () => {
+	it('does not offer an edit that the code forbids', async () => {
+		const result = await saveSubmission(submitterId, slug, input(), { submit: true });
+		if (!result.ok) throw new Error('expected a saved submission');
+
+		const [mail] = await db
+			.select({ body: emailLogTable.bodyPreview })
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, result.submissionId));
+
+		// A submitted proposal is locked — `draft` is required to edit and there is
+		// no unsubmit path. This assertion exists because the same copy-ahead-of-
+		// code defect has now appeared twice, in two different strings.
+		expect(mail.body?.toLowerCase()).not.toContain('edit');
+		expect(mail.body).toContain('speaker portal');
+	});
+});
+
+describe('the speaker profile behind a proposal', () => {
+	it('prefills from the right organization, not an arbitrary one', async () => {
+		// The same person, speaking at a second organization with a different bio.
+		const otherOrgId = `org2-${suffix}`;
+		await db.insert(organization).values({
+			id: otherOrgId,
+			name: 'Second Org',
+			slug: otherOrgId,
+			createdAt: new Date()
+		});
+		await db.insert(speakerProfileTable).values({
+			organizationId: otherOrgId,
+			userId: submitterId,
+			name: 'Ng Wei Ling',
+			sortName: 'Ng, Wei Ling',
+			company: 'A DIFFERENT COMPANY'
+		});
+
+		try {
+			const saved = await saveSubmission(submitterId, slug, input(), { submit: false });
+			if (!saved.ok) throw new Error('expected a saved draft');
+
+			const editable = await editableDraft(submitterId, saved.submissionId);
+			// Without an org-scoped read, whichever profile the database returned
+			// first would be prefilled — and saving would carry it into this org.
+			expect(editable!.draft.speaker.company).toBe('Acme');
+		} finally {
+			await db.delete(organization).where(eq(organization.id, otherOrgId));
+		}
+	});
+
+	it('clears a field the submitter deliberately emptied on submit', async () => {
+		await saveSubmission(submitterId, slug, input(), { submit: true });
+
+		await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				speaker: {
+					name: 'Ng Wei Ling',
+					sortName: 'Ng, Wei Ling',
+					email: `${submitterId}@example.test`,
+					jobTitle: 'Engineer',
+					company: null,
+					bio: null
+				}
+			}),
+			{ submit: true }
+		);
+
+		const [profile] = await db
+			.select({ company: speakerProfileTable.company })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.userId, submitterId),
+					eq(speakerProfileTable.organizationId, organizationId)
+				)
+			);
+
+		// Emptying a field on a full submit is a decision. Only a draft-save treats
+		// an empty field as "not finished yet".
+		expect(profile.company).toBeNull();
+	});
+});
+
+describe('draftForConference', () => {
+	it('finds the unfinished proposal so the public form can point at it', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Unfinished' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+
+		const found = await draftForConference(submitterId, conference.id);
+		expect(found?.id).toBe(saved.submissionId);
+		expect(found?.title).toBe('Unfinished');
+	});
+
+	it("does not point a stranger at someone else's draft", async () => {
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+
+		expect(await draftForConference(strangerId, conference.id)).toBeNull();
 	});
 });

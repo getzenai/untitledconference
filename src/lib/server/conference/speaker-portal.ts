@@ -189,7 +189,8 @@ async function draftRow(userId: string, submissionId: number) {
 			sessionFormatId: submissionTable.sessionFormatId,
 			trackId: submissionTable.trackId,
 			status: submissionTable.status,
-			conferenceSlug: conferenceTable.slug
+			conferenceSlug: conferenceTable.slug,
+			organizationId: conferenceTable.organizationId
 		})
 		.from(submissionTable)
 		.innerJoin(conferenceTable, eq(conferenceTable.id, submissionTable.conferenceId))
@@ -232,8 +233,18 @@ async function draftSpeakers(submissionId: number) {
 		.orderBy(asc(submissionSpeakerTable.position));
 }
 
-/** The submitter's own profile, as blank strings rather than nulls — inputs take strings. */
-async function ownProfile(userId: string): Promise<ProposalDraft['speaker']> {
+/**
+ * The submitter's own profile in ONE organization, as blank strings rather than
+ * nulls — inputs take strings.
+ *
+ * Scoped by organization to match the write. Without it, someone who speaks at
+ * two organizations gets an arbitrary one of their profiles prefilled into this
+ * form, and saving carries the bio and company of org A quietly into org B.
+ */
+async function ownProfile(
+	userId: string,
+	organizationId: string
+): Promise<ProposalDraft['speaker']> {
 	const [own] = await db
 		.select({
 			name: speakerProfileTable.name,
@@ -244,7 +255,12 @@ async function ownProfile(userId: string): Promise<ProposalDraft['speaker']> {
 			bio: speakerProfileTable.bio
 		})
 		.from(speakerProfileTable)
-		.where(eq(speakerProfileTable.userId, userId))
+		.where(
+			and(
+				eq(speakerProfileTable.userId, userId),
+				eq(speakerProfileTable.organizationId, organizationId)
+			)
+		)
 		.limit(1);
 
 	const blank = { name: '', sortName: '', email: '', jobTitle: '', company: '', bio: '' };
@@ -274,7 +290,7 @@ export async function editableDraft(
 	const [answers, speakers, own] = await Promise.all([
 		draftAnswers(submissionId),
 		draftSpeakers(submissionId),
-		ownProfile(userId)
+		ownProfile(userId, row.organizationId)
 	]);
 
 	const draft: ProposalDraft = {
@@ -292,4 +308,33 @@ export async function editableDraft(
 	};
 
 	return { draft, conferenceSlug: row.conferenceSlug };
+}
+
+/**
+ * This user's unfinished draft for a conference, if there is one.
+ *
+ * The public call renders a blank form, so without this a submitter who already
+ * started something sees no sign of it and a second save creates a second
+ * proposal. Deliberately only the id and title: this is a signpost, not a load.
+ */
+export async function draftForConference(userId: string, conferenceId: number) {
+	const [row] = await db
+		.select({ id: submissionTable.id, title: submissionTable.title })
+		.from(submissionTable)
+		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+		)
+		.where(
+			and(
+				eq(submissionTable.conferenceId, conferenceId),
+				eq(speakerProfileTable.userId, userId),
+				eq(submissionTable.status, 'draft')
+			)
+		)
+		.orderBy(desc(submissionTable.updatedAt))
+		.limit(1);
+
+	return row ?? null;
 }

@@ -252,17 +252,25 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * first one recorded — the organizer would be looking at a nameless speaker with
  * no way to know why.
  */
-function statedProfileFields(speaker: SpeakerInput): Record<string, string> {
-	const stated: Record<string, string> = {};
+function statedProfileFields(speaker: SpeakerInput, submitting: boolean) {
+	const stated: Record<string, string | null> = {};
 	const name = speaker.name.trim();
 	const sortName = speaker.sortName.trim();
 
 	if (name) stated.name = name;
 	if (sortName || name) stated.sortName = sortName || guessSortName(name);
 	if (speaker.email.trim()) stated.email = speaker.email.trim();
-	if (speaker.jobTitle) stated.jobTitle = speaker.jobTitle;
-	if (speaker.company) stated.company = speaker.company;
-	if (speaker.bio) stated.bio = speaker.bio;
+
+	// On a submit, an empty optional field is a decision: someone cleared their
+	// company and meant it. On a draft-save it is just an unfinished form, and
+	// treating it as a decision would erase what the previous save recorded.
+	// `name`, `sortName` and `email` are never cleared — they are required to
+	// submit at all, so empty there is a form error, not an intention.
+	for (const key of ['jobTitle', 'company', 'bio'] as const) {
+		const value = speaker[key];
+		if (value) stated[key] = value;
+		else if (submitting) stated[key] = null;
+	}
 
 	return stated;
 }
@@ -279,9 +287,10 @@ async function upsertOwnProfile(
 	tx: Tx,
 	organizationId: string,
 	userId: string,
-	speaker: SpeakerInput
+	speaker: SpeakerInput,
+	submitting: boolean
 ): Promise<number> {
-	const stated = statedProfileFields(speaker);
+	const stated = statedProfileFields(speaker, submitting);
 
 	const [existing] = await tx
 		.select({ id: speakerProfileTable.id })
@@ -458,9 +467,12 @@ async function queueReceipt(
 			toEmail: r.email,
 			template: 'submission_received',
 			subject: `We received your proposal for ${call.conference.name}`,
+			// Says only what is true. A submitted proposal is locked — `refuseSave`
+			// requires `draft`, and there is no unsubmit path — so promising an edit
+			// here would be the same copy-ahead-of-code defect twice over.
 			bodyPreview:
-				`Thanks — "${title}" is in. You can edit it from your speaker portal until ` +
-				`the call closes, and we will email you when a decision is made.`,
+				`Thanks — "${title}" is in. You can view it in your speaker portal, and we ` +
+				`will email you when a decision is made.`,
 			relatedType: 'submission',
 			relatedId: submissionId
 		}));
@@ -542,7 +554,8 @@ async function persist(
 		tx,
 		call.conference.organizationId,
 		userId,
-		input.speaker
+		input.speaker,
+		options.submit
 	);
 
 	const values = submissionValues(call, input, options.submit);

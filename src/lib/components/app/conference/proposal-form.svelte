@@ -21,25 +21,7 @@
 		type AnswerContext,
 		type FieldDefinition
 	} from '$lib/conference/form-definition';
-
-	export type ProposalDraft = {
-		title: string;
-		abstract: string;
-		keyTakeaway: string;
-		audienceLevel: string;
-		sessionFormatId: number | null;
-		trackId: number | null;
-		answers: Record<number, string>;
-		speaker: {
-			name: string;
-			sortName: string;
-			email: string;
-			jobTitle: string;
-			company: string;
-			bio: string;
-		};
-		coSpeakers: { name: string; email: string; roleLabel: string }[];
-	};
+	import type { ProposalDraft } from '$lib/conference/proposal-draft';
 
 	type Props = {
 		fields: FieldDefinition[];

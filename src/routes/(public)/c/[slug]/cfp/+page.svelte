@@ -42,6 +42,15 @@
 			<p class="text-muted-foreground mt-1 text-sm">Proposals close on {closesLabel}.</p>
 		{/if}
 
+		{#if data.existingDraft}
+			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
+				You already have an unfinished proposal here —
+				<a class="underline" href="/portal/submissions/{data.existingDraft.id}/edit">
+					{data.existingDraft.title}
+				</a>. Filling this form in again would create a second one.
+			</p>
+		{/if}
+
 		{#if !signedIn}
 			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
 				You can read the whole form without an account. To submit — and to come back and edit it

@@ -9,17 +9,25 @@
  */
 import { openCall, saveSubmission } from '$lib/server/conference/cfp-submission';
 import { readProposal } from '$lib/server/conference/proposal-input';
+import { draftForConference } from '$lib/server/conference/speaker-portal';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ params }) => {
+export const load: PageServerLoad = async ({ params, locals }) => {
 	const call = await openCall(params.slug);
 	if (!call) error(404, 'This conference is not accepting proposals');
+
+	// Someone who already started a proposal here would otherwise be shown a
+	// blank form with no sign of it, and a second save would make a second
+	// proposal. One extra query, only for signed-in visitors.
+	const existingDraft = locals.user
+		? await draftForConference(locals.user.id, call.conference.id)
+		: null;
 
 	// The organization id is on the call for the write path; it has no business
 	// reaching the browser.
 	const { organizationId: _organizationId, ...conference } = call.conference;
-	return { call: { ...call, conference } };
+	return { call: { ...call, conference }, existingDraft };
 };
 
 async function save(
