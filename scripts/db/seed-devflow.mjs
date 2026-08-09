@@ -226,6 +226,13 @@ async function main() {
 	 * observed without the judge first having to create the state, and the golden path
 	 * still shows a full agenda.
 	 */
+	/**
+	 * One real video for every seeded recording, on purpose: an invented YouTube id
+	 * renders "video unavailable" in a demo, which looks like the feature is broken
+	 * rather than like sample data.
+	 */
+	const RECORDING = 'https://www.youtube.com/watch?v=oE49MdbPNYw';
+
 	const SUBMISSIONS = [
 		{
 			key: 'inference',
@@ -240,7 +247,8 @@ async function main() {
 			day: 0,
 			room: 'Main Stage',
 			start: '09:30',
-			end: '10:15'
+			end: '10:15',
+			recording: RECORDING
 		},
 		{
 			key: 'buildtimes',
@@ -255,7 +263,8 @@ async function main() {
 			day: 0,
 			room: 'Room 2A',
 			start: '11:00',
-			end: '11:30'
+			end: '11:30',
+			recording: RECORDING
 		},
 		{
 			key: 'docs',
@@ -301,7 +310,10 @@ async function main() {
 			day: 2,
 			room: 'Workshop Lab',
 			start: '10:00',
-			end: '12:00'
+			end: '12:00',
+			// Deliberate: the withheld talk has a recording too. CNT-12 has to hold
+			// anyway — a link on an unapproved session must not put it on the agenda.
+			recording: RECORDING
 		},
 		{
 			key: 'lightning',
@@ -367,7 +379,8 @@ async function main() {
 				conference_day_id: dayIds[s.day],
 				starts_at: new Date(`${DAYS[s.day]}T${s.start}:00Z`),
 				ends_at: new Date(`${DAYS[s.day]}T${s.end}:00Z`),
-				room_id: roomIds[s.room]
+				room_id: roomIds[s.room],
+				recording_url: s.recording ?? null
 			})}`;
 		}
 	}
