@@ -49,6 +49,28 @@
 		else selected.add(id);
 	};
 
+	const filtered = $derived(
+		Boolean(
+			data.filters.q ||
+			data.filters.trackId ||
+			data.filters.sessionFormatId ||
+			data.filters.status?.length
+		)
+	);
+
+	const DECIDED: string[] = ['accepted', 'rejected', 'waitlisted', 'withdrawn'];
+
+	/**
+	 * How many of the selected rows already carry a decision.
+	 *
+	 * Re-deciding is legitimate — waitlisted becomes accepted all the time — so the
+	 * buttons stay live. What must not happen is a bulk click that quietly takes a
+	 * talk back out of the programme, so the bar says it out loud first (R3).
+	 */
+	const selectedDecided = $derived(
+		data.submissions.filter((s) => selected.has(s.id) && DECIDED.includes(s.status)).length
+	);
+
 	const STATUSES = [
 		'draft',
 		'submitted',
@@ -78,6 +100,9 @@
 			<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
 				{data.counts.total} total · {data.counts.undecided} awaiting a decision · {data.counts
 					.unreviewed} unreviewed
+				{#if filtered}
+					<span class="text-foreground">· {data.submissions.length} shown</span>
+				{/if}
 			</p>
 		</div>
 		<Button href="/c/{data.conference.slug}" variant="outline">View the public site</Button>
@@ -122,12 +147,18 @@
 			{/each}
 		</select>
 
+		<!-- Multiple on purpose: "undecided" is `submitted` OR `in_review`, and that pair
+		     is the single most useful view on this screen. The server has read the
+		     status parameter as a list since day one — this is the control catching up
+		     with it, rather than the plumbing being torn out. -->
 		<select
 			name="status"
-			aria-label="Status"
-			class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+			multiple
+			size={3}
+			aria-label="Status (pick several with ⌘ or Ctrl)"
+			title="Pick several with ⌘ or Ctrl"
+			class="border-input bg-background focus-visible:ring-ring w-40 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
 		>
-			<option value="">All statuses</option>
 			{#each STATUSES as status (status)}
 				<option value={status} selected={data.filters.status?.includes(status)}>
 					{status.replace(/_/g, ' ')}
@@ -136,7 +167,7 @@
 		</select>
 
 		<Button type="submit" variant="outline" size="sm">Filter</Button>
-		{#if data.filters.q || data.filters.trackId || data.filters.sessionFormatId || data.filters.status?.length}
+		{#if filtered}
 			<a
 				href="{base}/submissions"
 				class="text-muted-foreground hover:text-foreground text-sm underline underline-offset-4"
@@ -164,16 +195,8 @@
 
 	{#if data.submissions.length === 0}
 		<EmptyState
-			title={data.filters.q ||
-			data.filters.trackId ||
-			data.filters.sessionFormatId ||
-			data.filters.status?.length
-				? 'No submission matches these filters'
-				: 'No submissions yet'}
-			description={data.filters.q ||
-			data.filters.trackId ||
-			data.filters.sessionFormatId ||
-			data.filters.status?.length
+			title={filtered ? 'No submission matches these filters' : 'No submissions yet'}
+			description={filtered
 				? 'Widen the filters, or clear them to see the whole pile again.'
 				: 'Nothing has come in through the call for papers. Share the link and the table fills itself.'}
 			action={{ href: `/c/${data.conference.slug}`, label: 'Open the public conference page' }}
@@ -208,6 +231,14 @@
 						also creates the session in the agenda tray, the speaker's tasks and the decision email.
 					{/if}
 				</p>
+				{#if selectedDecided > 0}
+					<p class="text-status-warn w-full text-sm" role="status">
+						<span class="font-medium tabular-nums">{selectedDecided}</span>
+						of them {selectedDecided === 1 ? 'is' : 'are'} already decided. Deciding again the same way
+						changes nothing; deciding differently takes the talk back out of the agenda tray and withdraws
+						the speaker tasks nobody has touched yet.
+					</p>
+				{/if}
 				<div class="flex gap-2">
 					<Button
 						type="submit"
