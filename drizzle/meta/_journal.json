@@ -22,6 +22,13 @@
 			"when": 1786235250444,
 			"tag": "0002_add-passkey-oauth-jwks",
 			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1786291017198,
+			"tag": "0003_conference_domain",
+			"breakpoints": true
 		}
 	]
 }
