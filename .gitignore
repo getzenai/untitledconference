@@ -40,3 +40,6 @@ cypress/downloads
 
 # Local editor/tool caches — absolute paths from one machine, never shared.
 .impeccable/
+
+# Agent scratch worktrees
+.claude/worktrees/

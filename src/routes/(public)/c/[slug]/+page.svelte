@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withEmbed } from '$lib/conference/embed';
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import ShowMore from '$lib/components/app/conference/show-more.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -168,7 +169,10 @@
 								<SpeakerAvatar {speaker} size="sm" />
 								<span class="text-sm leading-tight">
 									<a
-										href="/c/{view.conference.slug}/speakers/{speaker.id}"
+										href={withEmbed(
+											`/c/${view.conference.slug}/speakers/${speaker.id}`,
+											data.embed
+										)}
 										class="font-medium hover:underline">{speaker.name}</a
 									>
 									{#if speaker.jobTitle || speaker.company}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withEmbed } from '$lib/conference/embed';
 	import { page } from '$app/state';
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -17,7 +18,7 @@
 </svelte:head>
 
 <a
-	href="/c/{view.conference.slug}/speakers"
+	href={withEmbed(`/c/${view.conference.slug}/speakers`, data.embed)}
 	class="text-muted-foreground hover:text-foreground mb-6 inline-block text-sm">← All speakers</a
 >
 

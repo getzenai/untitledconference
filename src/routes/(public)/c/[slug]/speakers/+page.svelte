@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { withEmbed } from '$lib/conference/embed';
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -49,7 +50,7 @@
 	{#each visible as speaker (speaker.id)}
 		<li>
 			<a
-				href="/c/{view.conference.slug}/speakers/{speaker.id}"
+				href={withEmbed(`/c/${view.conference.slug}/speakers/${speaker.id}`, data.embed)}
 				class="hover:bg-muted/50 -mx-3 flex items-center gap-4 rounded-md px-3 py-4 transition-colors"
 			>
 				<SpeakerAvatar {speaker} />

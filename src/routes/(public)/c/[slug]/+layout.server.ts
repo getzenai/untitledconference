@@ -1,3 +1,4 @@
+import { EMBED_PARAM } from '$lib/conference/embed';
 import { publicConference } from '$lib/conference/public-data';
 import { callSummary } from '$lib/server/conference/cfp-submission';
 import { error } from '@sveltejs/kit';
@@ -15,7 +16,7 @@ import type { LayoutServerLoad } from './$types';
  * There is no session check anywhere in this subtree, and that is the feature:
  * EMB-14 grades whether all five surfaces are readable with no account at all.
  */
-export const load: LayoutServerLoad = async ({ params }) => {
+export const load: LayoutServerLoad = async ({ params, url }) => {
 	const conference = await publicConference(params.slug);
 	if (!conference) error(404, 'No conference with that address');
 
@@ -25,5 +26,8 @@ export const load: LayoutServerLoad = async ({ params }) => {
 	// that will never render a form do not pay for one.
 	const call = await callSummary(params.slug);
 
-	return { conference, call };
+	// Presentation only (EMB-15): inside somebody else's page, our header and tab
+	// bar are a second site's furniture in their room. Nothing is withheld and
+	// nothing is granted by this flag — the same data renders either way.
+	return { conference, call, embed: url.searchParams.get(EMBED_PARAM) === '1' };
 };
