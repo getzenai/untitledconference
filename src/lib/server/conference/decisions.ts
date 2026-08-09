@@ -20,7 +20,7 @@ import {
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 
 export type Decision = 'accepted' | 'rejected' | 'waitlisted';
 
@@ -32,9 +32,24 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export type DecisionResult = {
 	decided: number;
+	/** Rows that already carried this decision, so nothing was written for them. */
+	unchanged: number;
 	sessionsCreated: number;
 	tasksCreated: number;
+	/** Undone by taking an acceptance back — see `withdrawFromProgramme`. */
+	sessionsRemoved: number;
+	tasksRemoved: number;
 	emailsQueued: number;
+};
+
+const NOTHING_HAPPENED: DecisionResult = {
+	decided: 0,
+	unchanged: 0,
+	sessionsCreated: 0,
+	tasksCreated: 0,
+	sessionsRemoved: 0,
+	tasksRemoved: 0,
+	emailsQueued: 0
 };
 
 const EMAIL_TEMPLATE: Record<Decision, string> = {
@@ -71,17 +86,16 @@ export async function decideSubmissions(
 	submissionIds: number[],
 	decision: Decision
 ): Promise<DecisionResult> {
-	const result: DecisionResult = {
-		decided: 0,
-		sessionsCreated: 0,
-		tasksCreated: 0,
-		emailsQueued: 0
-	};
+	const result: DecisionResult = { ...NOTHING_HAPPENED };
 	if (submissionIds.length === 0) return result;
 
 	await db.transaction(async (tx) => {
-		const targets = await tx
-			.select({ id: submissionTable.id, title: submissionTable.title })
+		const selected = await tx
+			.select({
+				id: submissionTable.id,
+				title: submissionTable.title,
+				status: submissionTable.status
+			})
 			.from(submissionTable)
 			.where(
 				and(
@@ -89,6 +103,13 @@ export async function decideSubmissions(
 					inArray(submissionTable.id, submissionIds)
 				)
 			);
+
+		// A row that already carries this decision is left alone entirely. Without
+		// this the second click on Accept writes a second acceptance mail — and the
+		// send log is the evidence that the decision went out, so a duplicate there
+		// reads as "we mailed them twice", which is what would have happened.
+		const targets = selected.filter((s) => s.status !== decision);
+		result.unchanged = selected.length - targets.length;
 		if (targets.length === 0) return;
 
 		const ids = targets.map((t) => t.id);
@@ -106,6 +127,10 @@ export async function decideSubmissions(
 			result.sessionsCreated = await putInAgendaTray(tx, conference, ids);
 			await confirmSpeakers(tx, conference, speakers);
 			result.tasksCreated = await createSpeakerTasks(tx, conference, speakers, ids, now);
+		} else {
+			const undone = await withdrawFromProgramme(tx, ids);
+			result.sessionsRemoved = undone.sessions;
+			result.tasksRemoved = undone.tasks;
 		}
 
 		result.emailsQueued = await queueDecisionMails(tx, conference, decision, speakers, targets);
@@ -159,6 +184,41 @@ async function putInAgendaTray(tx: Tx, conference: Conference, ids: number[]): P
 	if (fresh.length === 0) return 0;
 	await tx.insert(placementTable).values(fresh);
 	return fresh.length;
+}
+
+/**
+ * Taking an acceptance back has to undo what accepting did — otherwise a declined
+ * talk keeps sitting in the agenda tray as a planable session and the speaker keeps
+ * a portal full of tasks for a talk that is not happening.
+ *
+ * Two things are deliberately NOT undone:
+ *
+ * - a **confirmed** placement. That is a slot an organizer picked by hand and may
+ *   have told people about; a bulk click on Decline must not silently empty the
+ *   grid. It stays, visibly wrong, for a human to resolve.
+ * - a task the speaker has already **touched** (submitted or done). Deleting it
+ *   would take their uploaded slides with it.
+ */
+async function withdrawFromProgramme(tx: Tx, ids: number[]) {
+	const sessions = await tx
+		.delete(placementTable)
+		.where(and(inArray(placementTable.submissionId, ids), eq(placementTable.status, 'tentative')))
+		.returning({ id: placementTable.id });
+
+	const tasks = await tx
+		.delete(taskTable)
+		.where(
+			and(
+				inArray(taskTable.submissionId, ids),
+				eq(taskTable.status, 'open'),
+				// Only the ones acceptance generated. A task an organizer typed by hand
+				// for this talk is theirs to withdraw, not ours.
+				isNotNull(taskTable.templateId)
+			)
+		)
+		.returning({ id: taskTable.id });
+
+	return { sessions: sessions.length, tasks: tasks.length };
 }
 
 /**

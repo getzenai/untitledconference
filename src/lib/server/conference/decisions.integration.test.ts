@@ -152,12 +152,19 @@ describe('decideSubmissions — accepting', () => {
 		expect(emails[0]).toMatchObject({ template: 'decision_accepted', status: 'queued' });
 	});
 
-	it('does not duplicate the session or the tasks when accepted twice', async () => {
+	it('writes nothing at all the second time — including no second mail', async () => {
 		await decideSubmissions(conference, [submissionId], 'accepted');
 		const second = await decideSubmissions(conference, [submissionId], 'accepted');
 
-		expect(second.sessionsCreated).toBe(0);
-		expect(second.tasksCreated).toBe(0);
+		// The send log is the evidence that the decision went out. A duplicate row
+		// there reads as "we mailed the speaker twice", because we would have.
+		expect(second).toMatchObject({
+			decided: 0,
+			unchanged: 1,
+			sessionsCreated: 0,
+			tasksCreated: 0,
+			emailsQueued: 0
+		});
 
 		const placements = await db
 			.select()
@@ -167,6 +174,74 @@ describe('decideSubmissions — accepting', () => {
 
 		const tasks = await db.select().from(taskTable).where(eq(taskTable.submissionId, submissionId));
 		expect(tasks).toHaveLength(2);
+
+		const emails = await db
+			.select()
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, submissionId));
+		expect(emails).toHaveLength(1);
+	});
+});
+
+describe('decideSubmissions — taking an acceptance back', () => {
+	it('clears the agenda tray and the untouched tasks', async () => {
+		await decideSubmissions(conference, [submissionId], 'accepted');
+		const result = await decideSubmissions(conference, [submissionId], 'rejected');
+
+		expect(result).toMatchObject({ decided: 1, sessionsRemoved: 1, tasksRemoved: 2 });
+
+		const placements = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, submissionId));
+		expect(placements).toHaveLength(0);
+
+		const tasks = await db.select().from(taskTable).where(eq(taskTable.submissionId, submissionId));
+		expect(tasks).toHaveLength(0);
+	});
+
+	it('leaves a confirmed slot and a task the speaker already worked on alone', async () => {
+		await decideSubmissions(conference, [submissionId], 'accepted');
+
+		// The organizer scheduled it by hand, and the speaker uploaded something.
+		await db
+			.update(placementTable)
+			.set({ status: 'confirmed' })
+			.where(eq(placementTable.submissionId, submissionId));
+		const [firstTask] = await db
+			.select()
+			.from(taskTable)
+			.where(eq(taskTable.submissionId, submissionId));
+		await db.update(taskTable).set({ status: 'submitted' }).where(eq(taskTable.id, firstTask.id));
+
+		const result = await decideSubmissions(conference, [submissionId], 'rejected');
+
+		// A bulk click must not silently empty a slot people were told about, nor
+		// delete an upload. Both stay, visibly wrong, for a human to resolve.
+		expect(result).toMatchObject({ sessionsRemoved: 0, tasksRemoved: 1 });
+
+		const placements = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, submissionId));
+		expect(placements).toHaveLength(1);
+		expect(placements[0].status).toBe('confirmed');
+
+		const tasks = await db.select().from(taskTable).where(eq(taskTable.submissionId, submissionId));
+		expect(tasks.map((t) => t.id)).toEqual([firstTask.id]);
+	});
+
+	it('re-accepting after a decline puts it back and mails again', async () => {
+		await decideSubmissions(conference, [submissionId], 'accepted');
+		await decideSubmissions(conference, [submissionId], 'rejected');
+		const again = await decideSubmissions(conference, [submissionId], 'accepted');
+
+		expect(again).toMatchObject({
+			decided: 1,
+			sessionsCreated: 1,
+			tasksCreated: 2,
+			emailsQueued: 1
+		});
 	});
 });
 
@@ -214,6 +289,14 @@ describe('decideSubmissions — scoping', () => {
 
 	it('does nothing at all for an empty selection', async () => {
 		const result = await decideSubmissions(conference, [], 'accepted');
-		expect(result).toEqual({ decided: 0, sessionsCreated: 0, tasksCreated: 0, emailsQueued: 0 });
+		expect(result).toEqual({
+			decided: 0,
+			unchanged: 0,
+			sessionsCreated: 0,
+			tasksCreated: 0,
+			sessionsRemoved: 0,
+			tasksRemoved: 0,
+			emailsQueued: 0
+		});
 	});
 });

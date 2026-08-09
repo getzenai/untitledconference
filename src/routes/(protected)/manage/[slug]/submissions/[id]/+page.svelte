@@ -10,6 +10,7 @@
 	 * and what the button is about to set off (R3).
 	 */
 	import { enhance } from '$app/forms';
+	import { describeDecision } from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -80,9 +81,14 @@
 			class="flex shrink-0 gap-2"
 			use:enhance={() => {
 				busy = true;
+				// `finally`, not a trailing line: a dropped connection would otherwise
+				// leave every button disabled with no way back except a reload.
 				return async ({ update }) => {
-					await update();
-					busy = false;
+					try {
+						await update();
+					} finally {
+						busy = false;
+					}
 				};
 			}}
 		>
@@ -98,10 +104,7 @@
 
 	{#if form?.result}
 		<p class="text-status-good mt-3 text-sm" role="status">
-			Marked {form.decision}.
-			{#if form.result.sessionsCreated}Session added to the agenda tray.{/if}
-			{#if form.result.tasksCreated}{form.result.tasksCreated} speaker tasks created.{/if}
-			{#if form.result.emailsQueued}{form.result.emailsQueued} email queued.{/if}
+			{describeDecision(form.decision, form.result)}
 		</p>
 	{:else if form?.message}
 		<p class="text-status-bad mt-3 text-sm" role="alert">{form.message}</p>
@@ -249,6 +252,11 @@
 				<li>· create their tasks from the conference's task template</li>
 				<li>· queue the decision email to every speaker</li>
 			</ul>
+			<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
+				Declining or waitlisting an accepted talk takes the session back out of the tray and
+				withdraws the tasks nobody has started. A slot you already confirmed stays — that one is
+				yours to move.
+			</p>
 			{#if inTray}
 				<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
 					Already in the programme as

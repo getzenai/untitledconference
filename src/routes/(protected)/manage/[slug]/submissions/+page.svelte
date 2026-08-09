@@ -9,6 +9,7 @@
 	 * ROLES_AND_JOURNEYS moves.
 	 */
 	import { enhance } from '$app/forms';
+	import { describeDecision } from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -150,18 +151,7 @@
 			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
 			role="status"
 		>
-			{form.result.decided}
-			{form.result.decided === 1 ? 'submission' : 'submissions'}
-			{form.decision}.
-			{#if form.result.sessionsCreated}
-				{form.result.sessionsCreated} added to the agenda tray.
-			{/if}
-			{#if form.result.tasksCreated}
-				{form.result.tasksCreated} speaker tasks created.
-			{/if}
-			{#if form.result.emailsQueued}
-				{form.result.emailsQueued} emails queued.
-			{/if}
+			{describeDecision(form.decision, form.result)}
 		</p>
 	{:else if form?.message}
 		<p
@@ -194,9 +184,14 @@
 			action="?/decide"
 			use:enhance={() => {
 				busy = true;
+				// `finally`, not a trailing line: a dropped connection would otherwise
+				// leave every button disabled with no way back except a reload.
 				return async ({ update }) => {
-					await update();
-					busy = false;
+					try {
+						await update();
+					} finally {
+						busy = false;
+					}
 				};
 			}}
 		>
