@@ -1,4 +1,5 @@
 import { publicConference } from '$lib/conference/public-data';
+import { callSummary } from '$lib/server/conference/cfp-submission';
 import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
@@ -17,5 +18,12 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ params }) => {
 	const conference = await publicConference(params.slug);
 	if (!conference) error(404, 'No conference with that address');
-	return { conference };
+
+	// One extra query, and it buys discoverability: a speaker who lands on the
+	// agenda has no other way to learn that the call is open. `callSummary` reads
+	// only the form row rather than the whole definition, so the four surfaces
+	// that will never render a form do not pay for one.
+	const call = await callSummary(params.slug);
+
+	return { conference, call };
 };

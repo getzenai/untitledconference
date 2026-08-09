@@ -8,13 +8,18 @@
 	const conference = $derived(data.conference);
 	const base = $derived(`/c/${conference.slug}`);
 
-	const surfaces = [
+	// The call is a tab only when there is one to open. A permanently visible tab
+	// that 404s for most conferences would be worse than no tab at all — and a
+	// closed call still gets one, because "we are not taking proposals right now"
+	// is an answer a speaker came here for.
+	const surfaces = $derived([
 		{ href: '', label: 'Sessions' },
 		{ href: '/agenda', label: 'Agenda' },
 		{ href: '/itinerary', label: 'Itinerary' },
 		{ href: '/speakers', label: 'Speakers' },
-		{ href: '/gallery', label: 'Gallery' }
-	];
+		{ href: '/gallery', label: 'Gallery' },
+		...(data.call ? [{ href: '/cfp', label: 'Call for papers' }] : [])
+	]);
 
 	// Prefix match, not equality: the speaker detail page lives under /speakers
 	// and should keep its tab lit. The empty href is the index and must be exact,
