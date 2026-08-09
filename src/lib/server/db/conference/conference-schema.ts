@@ -22,6 +22,19 @@ import { organization, user } from '../auth-schema';
 
 export const conferenceStatus = pgEnum('conference_status', ['draft', 'published', 'archived']);
 
+/**
+ * How much of each other's work reviewers see.
+ *
+ * `open` is the default and the state the product already had: a programme committee
+ * argues, and arguing needs to see the argument. `blind_until_reviewed` withholds
+ * peers' scores and comments until the reviewer has filed their own, which removes the
+ * anchoring effect without removing the discussion afterwards.
+ *
+ * Two modes, deliberately. The spectrum of blindness in the literature is real and a
+ * settings screen with six radio buttons is a research project, not a product.
+ */
+export const reviewVisibility = pgEnum('review_visibility', ['open', 'blind_until_reviewed']);
+
 /** Scoped roles beyond Better Auth's org-wide owner/admin/member. */
 export const membershipRole = pgEnum('membership_role', ['organizer', 'reviewer']);
 
@@ -52,6 +65,8 @@ export const conferenceTable = pgTable('conference', {
 	/** Free text shown above the public submission form (CFP-03). */
 	cfpIntro: text('cfp_intro'),
 	status: conferenceStatus('status').notNull().default('draft'),
+	/** ABS-07's setting, per conference — see `reviewVisibility`. */
+	reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true })
 		.notNull()

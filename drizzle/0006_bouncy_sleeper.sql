@@ -1,0 +1,2 @@
+CREATE TYPE "public"."review_visibility" AS ENUM('open', 'blind_until_reviewed');--> statement-breakpoint
+ALTER TABLE "conference" ADD COLUMN "review_visibility" "review_visibility" DEFAULT 'open' NOT NULL;
