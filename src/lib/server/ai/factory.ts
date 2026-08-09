@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { serverEnv } from '../env';
 import { AzureOpenAIProvider } from './azure-openai-provider';
 import { MockProvider } from './mock-provider';
 import type { AIProvider } from './types';
@@ -8,7 +8,8 @@ import type { AIProvider } from './types';
  */
 export class AIProviderFactory {
 	static create(): AIProvider {
-		const providerType = config.aiProvider;
+		const env = serverEnv();
+		const providerType = env.AI_PROVIDER;
 
 		if (providerType === 'mock') {
 			return new MockProvider();
@@ -19,7 +20,7 @@ export class AIProviderFactory {
 		}
 
 		const hasAzureConfig =
-			config.azureOpenaiApiKey && config.azureResourceName && config.azureOpenaiDeploymentName;
+			env.AZURE_OPENAI_API_KEY && env.AZURE_RESOURCE_NAME && env.AZURE_OPENAI_DEPLOYMENT_NAME;
 
 		if (hasAzureConfig) {
 			return new AzureOpenAIProvider();

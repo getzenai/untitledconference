@@ -1,7 +1,7 @@
 import { createAzure } from '@ai-sdk/azure';
 import { generateObject, generateText } from 'ai';
 import { z } from 'zod/v4';
-import { config } from '../config';
+import { serverEnv } from '../env';
 import { AIServiceError, TEXT_TRANSFORM_PROMPTS, type AIProvider } from './types';
 
 /**
@@ -13,10 +13,12 @@ export class AzureOpenAIProvider implements AIProvider {
 	private model;
 
 	constructor() {
+		const env = serverEnv();
+
 		if (
-			!config.azureOpenaiApiKey ||
-			!config.azureResourceName ||
-			!config.azureOpenaiDeploymentName
+			!env.AZURE_OPENAI_API_KEY ||
+			!env.AZURE_RESOURCE_NAME ||
+			!env.AZURE_OPENAI_DEPLOYMENT_NAME
 		) {
 			throw new AIServiceError(
 				'Azure OpenAI configuration missing. Please set AZURE_OPENAI_API_KEY, AZURE_RESOURCE_NAME, and AZURE_OPENAI_DEPLOYMENT_NAME',
@@ -25,11 +27,11 @@ export class AzureOpenAIProvider implements AIProvider {
 		}
 
 		this.client = createAzure({
-			resourceName: config.azureResourceName,
-			apiKey: config.azureOpenaiApiKey
+			resourceName: env.AZURE_RESOURCE_NAME,
+			apiKey: env.AZURE_OPENAI_API_KEY
 		});
 
-		this.model = this.client(config.azureOpenaiDeploymentName);
+		this.model = this.client(env.AZURE_OPENAI_DEPLOYMENT_NAME);
 	}
 
 	async generateStructuredOutput<T extends z.ZodType>(

@@ -43,7 +43,7 @@ SvelteKit with `adapter-node` is a single Node.js server (SSR + API + static ass
 - **Managed Identity for auth** — no credentials stored on the Container App. RBAC roles grant access to KV, ACR, and Blob Storage.
 - **Server-side Docker builds** — `deploy.sh` uses `az acr build` (builds on Azure, not locally). No local Docker daemon required.
 - **Least privilege RBAC** — setup user gets temporary write access during setup, then downgraded to read-only.
-- **Infrastructure-agnostic app** — the SvelteKit app reads secrets from `process.env` via a centralized config module (`$lib/server/config.ts`). It has zero awareness of Azure, KV, or any cloud provider. The infrastructure layer (these scripts) injects secrets as env vars.
+- **Infrastructure-agnostic app** — the SvelteKit app reads secrets from `process.env` via a centralized environment module (`$lib/server/env.ts`). It has zero awareness of Azure, KV, or any cloud provider. The infrastructure layer (these scripts) injects secrets as env vars.
 
 ## Credential Security
 
@@ -75,11 +75,12 @@ SvelteKit with `adapter-node` is a single Node.js server (SSR + API + static ass
 - `SENDGRID_API_KEY`
 - Any Key Vault secret values
 
-### App Config Module
+### App Environment Module
 
-The app centralizes all env var access in `src/lib/server/config.ts`:
+The app centralizes env var access in `src/lib/env/server-env-schema.ts` (the declarative
+inventory) and `src/lib/server/env.ts` (the runtime wiring):
 
-- Declares all required and optional env vars with types
-- Validates required vars eagerly at server startup (fail fast)
-- All server modules import from `config` instead of `$env/dynamic/private` directly
+- Declares every required and optional env var with its type, default and description
+- `serverEnv()` validates on first use and reports every problem in one aggregated error
+- Server modules read configuration through `serverEnv()` instead of `$env/dynamic/private`
 - 100% infrastructure-agnostic — works with any platform that injects env vars

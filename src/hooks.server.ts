@@ -1,11 +1,56 @@
 import { auth } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
+import { detectAiCrawler } from '$lib/server/bot-detection';
 import { createLogger } from '$lib/server/logger';
-import { type Handle } from '@sveltejs/kit'; // Removed ResolveOptions
+import { applySecurityHeaders } from '$lib/server/security-headers';
+import { type Handle } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 
 const logger = createLogger('Hooks');
+
+const API_V1_PUBLIC_PREFIX = '/api/v1/public';
+const API_V1_TEST_PREFIX = '/api/v1/test';
+const API_V1_PREFIX = '/api/v1';
+
+// Outermost handler: security headers apply per-response, so they must also
+// cover the short-circuit responses produced further down (401/403) and every
+// non-HTML API response.
+const securityHeadersHandler: Handle = async ({ event, resolve }) =>
+	applySecurityHeaders(await resolve(event));
+
+// Bot detection is applied to the public auth/API surface only. Known AI
+// crawlers legitimately GET public pages (that is what indexing is), but they
+// have no business submitting logins, registrations or invitations, so
+// state-changing requests carrying a crawler User-Agent are rejected. This
+// keeps crawler traffic out of the auth rate limits and the signup funnel.
+// The User-Agent is self-declared and therefore spoofable: treat this as noise
+// reduction, not as an access control — nothing else relies on it.
+const BOT_GUARDED_PREFIXES = ['/api/auth', API_V1_PUBLIC_PREFIX];
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+const botDetectionHandler: Handle = async ({ event, resolve }) => {
+	const isGuarded = BOT_GUARDED_PREFIXES.some((prefix) => event.url.pathname.startsWith(prefix));
+
+	if (isGuarded && !SAFE_METHODS.has(event.request.method)) {
+		const crawler = detectAiCrawler(event.request.headers.get('user-agent'));
+		if (crawler) {
+			logger.warn('Rejected AI crawler on public endpoint', {
+				crawler: crawler.name,
+				operator: crawler.operator,
+				category: crawler.category,
+				method: event.request.method,
+				path: event.url.pathname
+			});
+			return new Response(JSON.stringify({ message: 'Automated clients are not allowed here.' }), {
+				status: 403,
+				headers: { 'Content-Type': 'application/json' }
+			});
+		}
+	}
+
+	return resolve(event);
+};
 
 // This new handler will attempt to populate event.locals.user and organization on every request.
 const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
@@ -76,10 +121,6 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-const API_V1_PUBLIC_PREFIX = '/api/v1/public';
-const API_V1_TEST_PREFIX = '/api/v1/test';
-const API_V1_PREFIX = '/api/v1';
-
 // This handler protects non-public API v1 routes.
 // It uses auth.api.getSession() to check for an authenticated user
 // and populates event.locals.user if successful.
@@ -143,8 +184,11 @@ const paraglideHandle: Handle = ({ event, resolve }) =>
 		});
 	});
 
-// Sequence of handlers: Better Auth, API Protection, Paraglide
+// Sequence of handlers: Security headers, Bot detection, Better Auth,
+// API Protection, Paraglide
 export const handle: Handle = sequence(
+	securityHeadersHandler, // Outermost, so every response below carries the headers
+	botDetectionHandler, // Reject crawlers before any auth/session work
 	populateLocalsUserHandler, // Run this first to ensure locals.user is set
 	({ event, resolve }) => svelteKitHandler({ auth, event, resolve, building: false }),
 	apiProtectionHandler,

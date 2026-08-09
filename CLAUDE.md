@@ -169,7 +169,7 @@ The pre-commit hook (`.husky/pre-commit`) and pre-push hook (`.husky/pre-push`) 
 | `test:integration`     | -              | If DB on 5433 | Yes            | Needs running database                      |
 | `test:e2e`             | -              | If DB on 5433 | Yes            | Needs DB + Cypress binary                   |
 
-**Important**: Server-side code must not eagerly evaluate env vars at module scope — `vite build` runs without `.env`. Use lazy patterns (Proxy, getter functions) for any code that reads `$env/dynamic/private`. See `src/lib/server/config.ts` for the pattern.
+**Important**: Server-side code must not eagerly evaluate env vars at module scope — `vite build` runs without `.env`. Use lazy patterns (Proxy, getter functions) for any code that reads `$env/dynamic/private`. Read configuration through `serverEnv()` in `src/lib/server/env.ts`, called from inside a function — see `src/lib/auth.ts` for the pattern.
 
 ## Logging
 

@@ -1,9 +1,9 @@
 import sgMail from '@sendgrid/mail';
-import { config } from '../config';
 import {
 	generatePasswordResetEmailContent,
 	generateVerificationEmailTemplate
 } from '../email-templates';
+import { serverEnv } from '../env';
 import { createLogger } from '../logger';
 
 const logger = createLogger('EmailService');
@@ -16,7 +16,9 @@ interface EmailData {
 }
 
 export async function sendEmail({ to, subject, text, html }: EmailData): Promise<void> {
-	if (!config.sendEmails) {
+	const env = serverEnv();
+
+	if (!env.SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG) {
 		logger.info('Email (console mode)', {
 			to,
 			subject,
@@ -26,20 +28,20 @@ export async function sendEmail({ to, subject, text, html }: EmailData): Promise
 		return;
 	}
 
-	if (!config.sendgridApiKey) {
+	if (!env.SENDGRID_API_KEY) {
 		throw new Error('SENDGRID_API_KEY is not set.');
 	}
 
-	if (!config.sendgridFrom) {
+	if (!env.SENDGRID_FROM) {
 		throw new Error('SENDGRID_FROM is not set.');
 	}
 
-	sgMail.setApiKey(config.sendgridApiKey);
+	sgMail.setApiKey(env.SENDGRID_API_KEY);
 
 	try {
 		await sgMail.send({
 			to,
-			from: config.sendgridFrom,
+			from: env.SENDGRID_FROM,
 			subject,
 			text,
 			html

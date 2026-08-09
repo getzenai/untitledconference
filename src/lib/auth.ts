@@ -5,9 +5,9 @@ import { organization } from 'better-auth/plugins/organization';
 import { and, count, eq, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { INVITATION_EXPIRY_SECONDS } from './constants';
-import { config } from './server/config';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
+import { serverEnv } from './server/env';
 import { createLogger } from './server/logger';
 import {
 	generatePasswordResetEmailContent,
@@ -96,16 +96,20 @@ type Auth = ReturnType<typeof createAuth>;
 let _auth: Auth | undefined;
 
 function createAuth() {
+	// Lazy by construction: `auth` below is a Proxy, so the environment is only
+	// read (and validated) on first use — never during `vite build`.
+	const env = serverEnv();
+
 	return betterAuth({
 		database: drizzleAdapter(db, {
 			provider: 'pg'
 		}),
 
 		appName: 'SvelteKitVibeStarter',
-		secret: config.betterAuthSecret,
-		baseURL: config.betterAuthUrl,
-		trustedOrigins: config.betterAuthTrustedOrigins
-			? config.betterAuthTrustedOrigins.split(',').map((origin) => origin.trim())
+		secret: env.BETTER_AUTH_SECRET,
+		baseURL: env.BETTER_AUTH_URL,
+		trustedOrigins: env.BETTER_AUTH_TRUSTED_ORIGINS
+			? env.BETTER_AUTH_TRUSTED_ORIGINS.split(',').map((origin) => origin.trim())
 			: [
 					'http://127.0.0.1:5173',
 					'http://localhost:5173',
@@ -115,7 +119,7 @@ function createAuth() {
 
 		emailAndPassword: {
 			enabled: true,
-			requireEmailVerification: config.requireEmailVerification,
+			requireEmailVerification: env.REQUIRE_EMAIL_VERIFICATION,
 			autoSignIn: true,
 			resetPasswordTokenExpiresIn: INVITATION_EXPIRY_SECONDS,
 			sendResetPassword: async ({ user, url }) => {
@@ -132,7 +136,7 @@ function createAuth() {
 		},
 
 		emailVerification: {
-			sendOnSignUp: config.requireEmailVerification,
+			sendOnSignUp: env.REQUIRE_EMAIL_VERIFICATION,
 			autoSignInAfterVerification: true,
 			sendVerificationEmail: async ({ user, url }) => {
 				const verificationUrl = new URL(url);
