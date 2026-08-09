@@ -94,7 +94,13 @@
 					score anchors yours; everything opens up the moment you submit.
 				</p>
 			{:else if s.peers.length === 0}
-				<p class="text-muted-foreground mt-2 text-sm">Nobody else has been assigned this one.</p>
+				<p class="text-muted-foreground mt-2 text-sm">
+					{s.peersPending === 0
+						? 'Nobody else has been assigned this one.'
+						: s.peersPending === 1
+							? 'One other reviewer has this one and has not filed yet.'
+							: `${s.peersPending} other reviewers have this one and have not filed yet.`}
+				</p>
 			{:else}
 				<ul class="mt-2 space-y-3">
 					{#each s.peers as peer (peer.id)}
@@ -103,10 +109,8 @@
 								<span class="text-sm font-medium">{peer.reviewer}</span>
 								<span class="flex items-center gap-2">
 									<span class="text-sm tabular-nums">{formatScore(peer.score)}</span>
-									<StatusBadge
-										status={peer.submitted ? 'submitted' : 'assigned'}
-										label={peer.submitted ? `Reviewed ${stamp(peer.submittedAt)}` : 'Not yet'}
-									/>
+									<!-- Only submitted peers reach this list; an unfiled one is a count above. -->
+									<StatusBadge status="submitted" label={`Reviewed ${stamp(peer.submittedAt)}`} />
 								</span>
 							</div>
 							{#if peer.comment}
@@ -125,6 +129,13 @@
 						</li>
 					{/each}
 				</ul>
+				{#if s.peersPending > 0}
+					<p class="text-muted-foreground mt-2 text-sm">
+						{s.peersPending === 1
+							? 'One more reviewer has not filed yet.'
+							: `${s.peersPending} more reviewers have not filed yet.`}
+					</p>
+				{/if}
 			{/if}
 		</section>
 	</article>

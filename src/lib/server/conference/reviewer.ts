@@ -329,8 +329,13 @@ export type ReviewerSubmission = {
 		value: number | null;
 		valueText: string | null;
 	}[];
-	/** Empty in `blind_until_reviewed` until the own review is submitted. */
+	/**
+	 * Only the peers who have SUBMITTED, and empty in `blind_until_reviewed` until the
+	 * own review is submitted. A draft never leaves the server.
+	 */
 	peers: PeerReview[];
+	/** Assigned peers who have not filed yet — a count, never their answers. */
+	peersPending: number;
 	peersWithheld: boolean;
 };
 
@@ -362,7 +367,14 @@ export async function reviewerSubmission(
 		conference.reviewVisibility as ReviewVisibility,
 		own.status === 'submitted'
 	);
-	const peers = groupReviews(everyReview).filter((r) => r.userId !== userId);
+	// Only SUBMITTED peers carry their answers to the client. An assigned-but-unfiled
+	// review is somebody's half-finished draft: nulling its aggregate while shipping the
+	// raw criterion values and the comment would defeat the blind mode at exactly the
+	// moment it matters. What survives of an unfiled peer is a count — how many people
+	// still owe an answer is coverage, not opinion.
+	const others = groupReviews(everyReview).filter((r) => r.userId !== userId);
+	const peers = others.filter((r) => r.submitted);
+	const peersPending = others.length - peers.length;
 
 	return {
 		...submission,
@@ -371,6 +383,7 @@ export async function reviewerSubmission(
 		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },
 		criteria,
 		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
+		peersPending,
 		peersWithheld: !visible && peers.length > 0
 	};
 }

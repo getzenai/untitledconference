@@ -267,6 +267,51 @@ describe('blind until reviewed', () => {
 	});
 });
 
+describe('a peer’s unfiled draft', () => {
+	/** Somebody else's half-written review: values and a comment, never submitted. */
+	async function peerDraft(submissionId: number) {
+		const [review] = await db
+			.insert(reviewTable)
+			.values({
+				reviewRoundId: roundId,
+				submissionId,
+				reviewerUserId: STRANGER,
+				status: 'assigned',
+				comment: 'Leaning reject, need to reread'
+			})
+			.returning();
+		await db
+			.insert(reviewScoreTable)
+			.values({ reviewId: review.id, scorecardCriterionId: criterionId, valueNumber: '1' });
+		return review.id;
+	}
+
+	it('never reaches the client, not even in the open mode', async () => {
+		const open = await setMode('open');
+		await peerDraft(mine);
+
+		const detail = await reviewerSubmission(open, ME, mine);
+
+		// The mode is open, so nothing is withheld — and there is still nothing to show,
+		// because the only other reviewer has not filed. What the page gets is a count.
+		expect(detail?.peers).toEqual([]);
+		expect(detail?.peersWithheld).toBe(false);
+		expect(detail?.peersPending).toBe(1);
+		expect(JSON.stringify(detail)).not.toContain('Leaning reject');
+	});
+
+	it('is counted next to the peers who did file', async () => {
+		const open = await setMode('open');
+		await peerReviews(mine, '5');
+		await peerDraft(mine);
+
+		const detail = await reviewerSubmission(open, ME, mine);
+		expect(detail?.peers).toHaveLength(1);
+		expect(detail?.peers[0].submitted).toBe(true);
+		expect(detail?.peersPending).toBe(1);
+	});
+});
+
 describe('one submission', () => {
 	it('is a null for a submission nobody assigned to me', async () => {
 		expect(await reviewerSubmission(await conferenceNow(), ME, notMine)).toBeNull();
