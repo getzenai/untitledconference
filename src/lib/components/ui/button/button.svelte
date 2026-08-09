@@ -8,6 +8,12 @@
 		variants: {
 			variant: {
 				default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
+				// The goose's bill. Reserved for the action that creates something —
+				// new conference, publish the call for papers, submit a talk — and it
+				// replaces the default variant on that screen rather than joining it,
+				// so R1 still holds. Ink-black label, never white: white on this
+				// yellow is 2.03:1.
+				act: "bg-act text-act-foreground shadow-xs hover:bg-act/90",
 				destructive:
 					"bg-destructive shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 text-white",
 				outline:

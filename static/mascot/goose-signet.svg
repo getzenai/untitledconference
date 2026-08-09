@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none"
+     stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"
+     role="img" aria-label="Goose">
+  <circle cx="50" cy="50" r="46"/>
+  <path d="M38 88C38 60 40 34 56 30" stroke-width="9"/>
+  <circle cx="60" cy="30" r="13" fill="currentColor" stroke="none"/>
+  <path d="M72 25 92 30 72 35Z" fill="var(--act, #E3AE28)" stroke="none"/>
+  <circle cx="63" cy="27" r="2.8" fill="var(--background, #fff)" stroke="none"/>
+</svg>

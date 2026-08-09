@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		buildView,
@@ -144,9 +145,11 @@
 	</div>
 
 	{#if !bounds}
-		<p class="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-sm">
-			Nothing is scheduled on this day yet.
-		</p>
+		<EmptyState
+			title="Nothing is scheduled on this day yet."
+			description="The programme is still being built. The session list already has everything that has been accepted."
+			action={{ href: `/c/${view.conference.slug}`, label: 'Browse all sessions →' }}
+		/>
 	{:else}
 		<div class="overflow-x-auto">
 			<div class="min-w-3xl">
