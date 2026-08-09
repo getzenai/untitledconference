@@ -3,7 +3,7 @@
 	// Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
 	//       https://svelte.dev/docs/kit/adapter-cloudflare
 	"$schema": "./node_modules/wrangler/config-schema.json",
-	"name": "kill-my-saas",
+	"name": "untitledconference",
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	// workerd bundled with wrangler 4.120 is 1.20260801.x -> do not set a later date
 	"compatibility_date": "2026-08-01",
