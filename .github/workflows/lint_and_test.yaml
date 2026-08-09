@@ -193,12 +193,18 @@ jobs:
             exit 1
           fi
 
-  # Needs a database, so it is kept off the pull-request path to keep PRs fast.
+  # Runs on pull requests. It was gated off them to keep PRs under three minutes,
+  # and that gate cost us: two merges shipped with 60+ integration tests that had
+  # only ever run on a contributor's laptop, and the class of bug they cover —
+  # a query that returns the right answer for the wrong reason, a permission
+  # boundary that stops enforcing — is invisible to lint, types and unit tests.
+  #
+  # It does not depend on code-quality, so it starts at once and the pull request
+  # costs max(quality, integration) rather than their sum. A lint failure wasting
+  # this job's minutes is the cheaper mistake.
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    needs: [code-quality]
-    if: github.event_name != 'pull_request'
 
     services:
       postgres:
