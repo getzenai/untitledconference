@@ -249,10 +249,40 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 	return bySubmission;
 }
 
+/**
+ * How many rows one page of the table carries.
+ *
+ * A cap rather than a preference: without one, the loader fans out into the speaker
+ * and review queries for every submission the conference has ever had, and the screen
+ * that has to stay usable at 800 submissions is the one that stops being usable first.
+ */
+export const PAGE_SIZE = 50;
+
+export type SubmissionPage = {
+	rows: SubmissionRow[];
+	/** How many rows the filter matches — not how many are on this page. */
+	matching: number;
+	/** The page actually served, which is not always the page that was asked for. */
+	page: number;
+	pageSize: number;
+	pageCount: number;
+};
+
 export async function listSubmissions(
 	conferenceId: number,
-	filters: SubmissionFilters = {}
-): Promise<SubmissionRow[]> {
+	filters: SubmissionFilters = {},
+	requestedPage = 1
+): Promise<SubmissionPage> {
+	const where = submissionWhere(conferenceId, filters);
+
+	const [matched] = await db.select({ matching: count() }).from(submissionTable).where(where);
+	const matching = Number(matched?.matching ?? 0);
+
+	// Clamped rather than trusted: `?page=9000` is one keystroke away, and an empty
+	// table under a filter that plainly matches something reads as data loss.
+	const pageCount = Math.max(1, Math.ceil(matching / PAGE_SIZE));
+	const page = Math.min(Math.max(requestedPage, 1), pageCount);
+
 	const rows = await db
 		.select({
 			id: submissionTable.id,
@@ -268,22 +298,33 @@ export async function listSubmissions(
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
-		.where(submissionWhere(conferenceId, filters))
-		.orderBy(desc(submissionTable.submittedAt), asc(submissionTable.id));
+		.where(where)
+		// The id is not decoration: `submittedAt` is null for every draft, so without a
+		// tiebreaker two pages of the same table could show the same row twice and skip
+		// another one entirely.
+		.orderBy(desc(submissionTable.submittedAt), asc(submissionTable.id))
+		.limit(PAGE_SIZE)
+		.offset((page - 1) * PAGE_SIZE);
 
 	const ids = rows.map((r) => r.id);
 	const [speakers, reviews] = await Promise.all([speakersFor(ids), reviewsFor(conferenceId, ids)]);
 
-	return rows.map((row) => {
-		const rowReviews = reviews.get(row.id) ?? [];
-		return {
-			...row,
-			speakers: speakers.get(row.id) ?? [],
-			score: submissionScore(rowReviews),
-			reviewsSubmitted: rowReviews.filter((r) => r.submitted).length,
-			reviewsAssigned: rowReviews.length
-		};
-	});
+	return {
+		rows: rows.map((row) => {
+			const rowReviews = reviews.get(row.id) ?? [];
+			return {
+				...row,
+				speakers: speakers.get(row.id) ?? [],
+				score: submissionScore(rowReviews),
+				reviewsSubmitted: rowReviews.filter((r) => r.submitted).length,
+				reviewsAssigned: rowReviews.length
+			};
+		}),
+		matching,
+		page,
+		pageSize: PAGE_SIZE,
+		pageCount
+	};
 }
 
 /**

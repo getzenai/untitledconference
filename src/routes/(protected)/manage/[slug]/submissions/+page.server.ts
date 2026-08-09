@@ -30,18 +30,30 @@ function parseFilters(url: URL) {
 	};
 }
 
+/** The page number lives in the URL for the same reason the filters do. */
+function parsePage(url: URL) {
+	const value = Number(url.searchParams.get('page'));
+	return Number.isInteger(value) && value > 0 ? value : 1;
+}
+
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 	const filters = parseFilters(url);
 
-	const [submissions, facets, counts] = await Promise.all([
-		listSubmissions(conference.id, filters),
+	const [page, facets, counts] = await Promise.all([
+		listSubmissions(conference.id, filters, parsePage(url)),
 		submissionFacets(conference.id),
 		submissionTotals(conference.id)
 	]);
 
 	return {
-		submissions,
+		submissions: page.rows,
+		pagination: {
+			matching: page.matching,
+			page: page.page,
+			pageSize: page.pageSize,
+			pageCount: page.pageCount
+		},
 		facets,
 		filters,
 		counts
