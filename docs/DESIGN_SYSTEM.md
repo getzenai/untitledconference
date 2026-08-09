@@ -11,6 +11,12 @@ Two halves, and the second one is the important one:
 > The product speaks **English**. This document is the only place where a design decision is
 > written down; if a screen contradicts it, the screen is wrong.
 
+**The values live in [`design/tokens.json`](../design/tokens.json)**, in the W3C Design Tokens
+(DTCG) format — the format Figma, Penpot, Sketch, Tokens Studio and Style Dictionary all read.
+That file is the source of truth. `src/app.css` is generated from it by `npm run tokens`, and a
+unit test regenerates and compares, so editing the CSS by hand fails CI instead of quietly
+becoming a second palette. See §4.
+
 ---
 
 ## 1. Foundations
@@ -23,9 +29,23 @@ hours, and the only things that may shout are status and the primary action.
 ```
 --background   near-white          --foreground   near-black ink
 --muted        surface for rails, table headers, disabled areas
---primary      near-black — the one action colour
+--primary      near-black — the action colour
+--act          goose yellow — see below
 --border       hairline, never a box shadow where a border does
 ```
+
+**`--act` is the one warm surface in the product, and it is rationed.** It marks the action
+that _creates_ something — new conference, publish the call for papers, submit a talk — and the
+dot that says "new, you have not seen this". On a screen it appears at most once. The rule
+comes from the mascot: on a goose the bill is a small part of the bird, and that is the
+proportion we allow it on a page.
+
+Two things it may never do:
+
+- **carry white text.** White on `--act` is 2.03:1. The label is always ink-black
+  (`--act-foreground`, 9.79:1). Do not darken the yellow to make white work; invert the text.
+- **stand next to a filled `--primary` button.** It _replaces_ the primary on that screen, so
+  R1 still holds — one filled button, it is simply the warm one.
 
 **Status colours are semantic tokens, not Tailwind classes picked per screen.** There are
 exactly six, and each one means one thing everywhere:
@@ -42,17 +62,33 @@ exactly six, and each one means one thing everywhere:
 `--status-internal` is not decoration. Everything wearing it is excluded from every public
 surface and from the reviewer's view. One colour, one rule, checked in one place.
 
+Two neighbours that are deliberately different colours: **`--status-warn` is orange and means
+warning, `--act` is yellow and means act.** Warn was moved from hue 75 to 55 so the two cannot
+be confused at a glance. **`--status-bad` and `--destructive` are red** and stay red — losing
+something is not the same as being warned about it.
+
+The `--chart-*` tokens are a data-series ramp, not status. They carry no meaning of their own
+and must never be used to say "this is bad" — that is what the status tokens are for.
+
+Every foreground/background pair above is asserted at ≥4.5:1 and the focus ring at ≥3:1, in
+both light and dark, by `src/lib/design/tokens.unit.test.ts`. A colour that fails is a failing
+test.
+
 ### Type
 
 One family (the system stack), four sizes. A conference tool is a reading tool; more sizes
 means more decisions and no more clarity.
 
-| Role           | Size            | Weight     |
-| -------------- | --------------- | ---------- |
-| Page title     | `text-lg`       | 600        |
-| Section title  | `text-sm`       | 600        |
-| Body / table   | `text-[13.5px]` | 400        |
-| Meta, captions | `text-xs`       | 400, muted |
+| Role           | Size      | Weight     |
+| -------------- | --------- | ---------- |
+| Page title     | `text-lg` | 600        |
+| Section title  | `text-sm` | 600        |
+| Body / table   | `text-sm` | 400        |
+| Meta, captions | `text-xs` | 400, muted |
+
+> This table used to specify `text-[13.5px]` for body text. No screen ever used it — the
+> product has always been `text-sm`. The doc now says what the code does; a scale nobody
+> follows is not a scale.
 
 Numbers in tables are `tabular-nums`. A column of counts that jitters is unreadable.
 
@@ -107,11 +143,21 @@ are too many to guess, and a product that surprises you once gets checked twice 
 Every status badge carries its label. Colour is the second channel, never the only one —
 for colour-blind users it is no channel at all.
 
+Use `<StatusBadge status="in_review" />`
+([`src/lib/components/status-badge.svelte`](../src/lib/components/status-badge.svelte)). It maps
+every domain status from the pgEnums to a tone and always renders the word. **Never write
+`bg-green-500` for a status**: that is how the same meaning ends up with five different greens.
+
 ### R5 · Empty states carry the next step
 
 An empty screen names what is missing **and** links to the action that fills it. "No
 submissions yet" is a dead end; "No submissions yet — share your call for papers" is a path.
 This is where the original product loses people, on camera.
+
+Use `<EmptyState title=… action={{ href, label }} />`
+([`src/lib/components/empty-state.svelte`](../src/lib/components/empty-state.svelte)). The
+component makes the way out a required thought rather than a remembered one: if there genuinely
+is none, you have to say so by leaving `action` off. It carries the goose by default.
 
 ### R6 · Nothing internal leaks
 
@@ -149,3 +195,44 @@ means swapping function bodies, not rewriting screens.
 **The five public surfaces share one loader.** Sessions list, speakers list, agenda,
 itinerary and gallery are five renderings of one query — that is both why they are cheap and
 the condition under which they stay consistent.
+
+---
+
+## 4. What checks what
+
+A rule that only exists as prose is a wish. This section is the honest ledger; keep it honest.
+
+| Rule                           | Enforced by                                                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Token values, both modes       | `design/tokens.json` → `npm run tokens` → generated block in `src/app.css`                                                                                        |
+| Contrast (≥4.5:1, ring ≥3)     | `src/lib/design/tokens.unit.test.ts`, every pair the token file declares                                                                                          |
+| No hand edits to the CSS       | same test: it regenerates `app.css` and compares                                                                                                                  |
+| R4 status is a word            | `StatusBadge` — the only place a status becomes a colour                                                                                                          |
+| R5 empty states have a way out | `EmptyState` — omitting `action` is a deliberate act, not an oversight                                                                                            |
+| R6 nothing internal leaks      | one layout loader for all five public surfaces; the internal fields are absent from `PublicConference` itself, so a template cannot render what it never received |
+
+**Still only prose, and known to be:** R1 (shadcn's `Button` defaults to filled, so a forgotten
+`variant` silently breaks it), R2, R3, R7, R8, and the type scale. The admin surfaces still
+carry raw palette classes for statuses. Each of those wants either a component or a lint rule
+before it can be called a rule.
+
+---
+
+## 5. The goose
+
+The mascot is a line drawing: [`static/mascot/goose.svg`](../static/mascot/goose.svg), and
+holding a quill, [`goose-quill.svg`](../static/mascot/goose-quill.svg). The quill is the joke
+and the meaning at once — it is the tool you submit with.
+
+- **Where she belongs:** empty states, the marketing page, 404, the README.
+- **Where she does not:** the submissions table, the reviewer queue, the agenda grid. Those
+  screens are judged on how many rows fit on one screen.
+- **Ink, not illustration.** Everything but the bill and the feet is `currentColor`, so she
+  needs no dark-mode variant. The bill is `--act`, and it is the same yellow as the create
+  button on purpose.
+- **She is ours.** Drawn by hand as SVG paths, not generated and not traced from anyone's
+  artwork. That provenance is the point: a mascot is a trademark eventually, and "where did
+  this drawing come from" is a question with an answer.
+- **Small sizes:** below roughly 24px the drawing collapses into a blob. Use
+  [`goose-signet.svg`](../static/mascot/goose-signet.svg) there — head and neck in a circle,
+  which still reads at 16px.

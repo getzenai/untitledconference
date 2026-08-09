@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { buildIcs, PersonalSchedule } from '$lib/conference/personal-schedule.svelte';
@@ -72,11 +73,13 @@
 </div>
 
 {#if sessions.length === 0}
-	<p class="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-sm">
-		{mineOnly
-			? 'Nothing starred on this day yet. Star a session to build your schedule.'
-			: 'Nothing is scheduled on this day yet.'}
-	</p>
+	<EmptyState
+		title={mineOnly ? 'Nothing starred on this day yet.' : 'Nothing is scheduled on this day yet.'}
+		description={mineOnly
+			? 'Star a session and it lands here, ready to export to your calendar.'
+			: 'The programme for this day is still being built.'}
+		action={{ href: `/c/${view.conference.slug}/agenda`, label: 'Open the agenda →' }}
+	/>
 {/if}
 
 <ol class="space-y-4">
@@ -105,7 +108,7 @@
 					class="hover:bg-muted focus-visible:ring-ring shrink-0 rounded-md px-2 py-1 text-lg leading-none transition-colors focus-visible:ring-2 focus-visible:outline-none {starred.has(
 						session.id
 					)
-						? 'text-status-warn'
+						? 'text-act'
 						: 'text-muted-foreground'}"
 				>
 					{starred.has(session.id) ? '★' : '☆'}

@@ -2,6 +2,8 @@
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import ShowMore from '$lib/components/app/conference/show-more.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -117,9 +119,16 @@
 		</p>
 
 		{#if visible.length === 0}
-			<p class="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-sm">
-				No session matches that. Try a shorter search, or clear a filter.
-			</p>
+			<EmptyState
+				title="No session matches that."
+				description="Try a shorter search, or drop one of the filters."
+			>
+				{#if filtered}
+					<Button variant="outline" size="sm" class="mt-1" onclick={clearAll}>
+						Clear all filters
+					</Button>
+				{/if}
+			</EmptyState>
 		{/if}
 
 		<ul class="space-y-4">

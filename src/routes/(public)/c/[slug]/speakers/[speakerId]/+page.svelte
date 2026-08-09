@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import { buildView, formatFullStamp } from '$lib/conference/public-view';
 
 	let { data } = $props();
@@ -21,9 +22,11 @@
 >
 
 {#if !speaker}
-	<p class="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-sm">
-		No speaker with that address.
-	</p>
+	<EmptyState
+		title="No speaker with that address."
+		description="The link may be old, or the profile is no longer public."
+		action={{ href: `/c/${view.conference.slug}/speakers`, label: 'All speakers →' }}
+	/>
 {:else}
 	<article class="max-w-2xl">
 		<div class="flex items-start gap-5">

@@ -1,6 +1,8 @@
 <script lang="ts">
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
+	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import EmptyState from '$lib/components/empty-state.svelte';
 	import { buildView } from '$lib/conference/public-view';
 
 	let { data } = $props();
@@ -34,9 +36,11 @@
 </p>
 
 {#if visible.length === 0}
-	<p class="border-border text-muted-foreground rounded-lg border border-dashed p-8 text-sm">
-		Nobody by that name.
-	</p>
+	<EmptyState title="Nobody by that name.">
+		<Button variant="outline" size="sm" class="mt-1" onclick={() => (query = '')}>
+			Clear the search
+		</Button>
+	</EmptyState>
 {/if}
 
 <!-- Ordered by surname, as the directory convention expects — the sort happens
