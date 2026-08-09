@@ -1,0 +1,97 @@
+<script lang="ts">
+	/**
+	 * The organizer's shell: one rail, always the same, with the conference at the top.
+	 *
+	 * The rail is the answer to the diagnosis in DESIGN_STANCE — the original has the
+	 * features and loses the owner inside them. Six destinations, no nesting, and the
+	 * ones that are not built yet are visibly not links rather than 404s.
+	 */
+	import { page } from '$app/state';
+	import ModeToggle from '$lib/components/mode-toggle.svelte';
+
+	let { data, children } = $props();
+
+	const base = $derived(`/manage/${data.conference.slug}`);
+
+	const nav = $derived([
+		{ href: `${base}/submissions`, label: 'Submissions', ready: true },
+		{ href: `${base}/dashboard`, label: 'Dashboard', ready: false },
+		{ href: `${base}/cfp`, label: 'Call for papers', ready: false },
+		{ href: `${base}/agenda`, label: 'Agenda', ready: false },
+		{ href: `${base}/people`, label: 'Team & reviewers', ready: false },
+		{ href: `${base}/settings`, label: 'Settings', ready: false }
+	]);
+
+	const isCurrent = (href: string) => page.url.pathname.startsWith(href);
+
+	const dateRange = $derived.by(() => {
+		const { startsOn, endsOn, venue } = data.conference;
+		const parts: string[] = [];
+		if (startsOn) {
+			const start = new Date(startsOn);
+			const end = endsOn ? new Date(endsOn) : null;
+			parts.push(
+				end
+					? `${start.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })}`
+					: start.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' })
+			);
+		}
+		if (venue) parts.push(venue);
+		return parts.join(' · ');
+	});
+</script>
+
+<div class="bg-background text-foreground flex min-h-svh">
+	<aside class="border-border bg-card hidden w-60 shrink-0 border-r p-4 md:block">
+		<a
+			href="/manage"
+			class="hover:bg-muted focus-visible:ring-ring -mx-2 mb-4 block rounded-md px-2 py-1.5 focus-visible:ring-[3px] focus-visible:outline-none"
+		>
+			<div class="text-sm font-semibold">{data.conference.name}</div>
+			{#if dateRange}
+				<div class="text-muted-foreground text-xs">{dateRange}</div>
+			{/if}
+			<div class="text-muted-foreground mt-1 text-xs">Switch conference</div>
+		</a>
+
+		<nav class="space-y-0.5 text-sm">
+			{#each nav as item (item.href)}
+				{#if item.ready}
+					<a
+						href={item.href}
+						aria-current={isCurrent(item.href) ? 'page' : undefined}
+						class="focus-visible:ring-ring block rounded-md px-3 py-1.5 focus-visible:ring-[3px] focus-visible:outline-none {isCurrent(
+							item.href
+						)
+							? 'bg-primary text-primary-foreground font-medium'
+							: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+					>
+						{item.label}
+					</a>
+				{:else}
+					<span
+						class="text-muted-foreground/60 flex items-center justify-between rounded-md px-3 py-1.5"
+						title="Not built yet"
+					>
+						{item.label}
+						<span class="text-[10px] tracking-wide uppercase">soon</span>
+					</span>
+				{/if}
+			{/each}
+		</nav>
+
+		<div class="border-border mt-8 border-t pt-4">
+			<a
+				href="/c/{data.conference.slug}"
+				class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+			>
+				View the public site
+			</a>
+			<div class="mt-3"><ModeToggle /></div>
+		</div>
+	</aside>
+
+	<main class="min-w-0 flex-1">
+		{@render children()}
+	</main>
+</div>

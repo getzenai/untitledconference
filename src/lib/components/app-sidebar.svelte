@@ -1,5 +1,6 @@
 <script lang="ts" module>
 	import BotIcon from '@lucide/svelte/icons/bot';
+	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import FrameIcon from '@lucide/svelte/icons/frame';
 	import LifeBuoyIcon from '@lucide/svelte/icons/life-buoy';
 	import SendIcon from '@lucide/svelte/icons/send';
@@ -7,6 +8,20 @@
 
 	const data = {
 		navMain: [
+			{
+				// The way into the product. Without this the organizer area exists but
+				// nobody who logs in can reach it.
+				title: 'Conferences',
+				url: '/manage',
+				icon: CalendarIcon,
+				isActive: false,
+				items: [
+					{
+						title: 'My conferences',
+						url: '/manage'
+					}
+				]
+			},
 			{
 				title: 'Examples',
 				url: '#',
