@@ -4,13 +4,13 @@
 	 * submitter sees the questions they left, not a second version of them.
 	 */
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
-	import { formatDayLong } from '$lib/conference/public-view';
+	import { formatDayLong, isoDay } from '$lib/conference/public-view';
 
 	let { data, form } = $props();
 
 	const call = $derived(data.call);
 	const closesLabel = $derived(
-		call.form.closesAt ? formatDayLong(String(call.form.closesAt).slice(0, 10)) : null
+		call.form.closesAt ? formatDayLong(isoDay(call.form.closesAt)) : null
 	);
 </script>
 

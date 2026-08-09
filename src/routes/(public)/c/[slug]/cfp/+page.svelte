@@ -7,7 +7,7 @@
 	 */
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
 	import { emptyProposal } from '$lib/conference/proposal-draft';
-	import { formatDayLong } from '$lib/conference/public-view';
+	import { formatDayLong, isoDay } from '$lib/conference/public-view';
 
 	let { data, form } = $props();
 
@@ -16,7 +16,7 @@
 	const signInHref = $derived(`/login?returnTo=/c/${call.conference.slug}/cfp`);
 
 	const closesLabel = $derived(
-		call.form.closesAt ? formatDayLong(String(call.form.closesAt).slice(0, 10)) : null
+		call.form.closesAt ? formatDayLong(isoDay(call.form.closesAt)) : null
 	);
 </script>
 

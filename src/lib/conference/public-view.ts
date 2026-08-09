@@ -47,6 +47,16 @@ const HHMM = new Intl.DateTimeFormat('en-GB', {
 
 export const formatTime = (at: string | Date) => HHMM.format(new Date(at));
 
+/**
+ * The date part of a timestamp, as an ISO day.
+ *
+ * `String(someDate).slice(0, 10)` looks like it does this and does not: it
+ * yields "Mon Feb 15", which `new Date()` then reads as the year 2001. That
+ * shipped — the live call page announced a 2027 deadline as 15 February 2001.
+ */
+export const isoDay = (value: Date | string) =>
+	(value instanceof Date ? value : new Date(value)).toISOString().slice(0, 10);
+
 export const formatDayLong = (iso: string) =>
 	new Intl.DateTimeFormat('en-GB', {
 		weekday: 'long',
