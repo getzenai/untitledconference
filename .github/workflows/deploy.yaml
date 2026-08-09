@@ -71,7 +71,7 @@ jobs:
         with:
           method: oidc
           identity-id: e8e7dc26-6908-4548-bf57-32edd043e944
-          project-slug: kill-saas-challenge-jy-cj
+          project-slug: untitled-conference
           env-slug: prod
           domain: https://eu.infisical.com
 
