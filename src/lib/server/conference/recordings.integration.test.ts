@@ -21,11 +21,16 @@ let conference: Conference;
 let other: Conference;
 let placementId: number;
 let otherPlacementId: number;
+let tentativePlacementId: number;
 
-async function addPlacement(target: Conference, title: string) {
+async function addPlacement(
+	target: Conference,
+	title: string,
+	status: 'confirmed' | 'tentative' = 'confirmed'
+) {
 	const [row] = await db
 		.insert(placementTable)
-		.values({ conferenceId: target.id, kind: 'block', status: 'confirmed', title })
+		.values({ conferenceId: target.id, kind: 'block', status, title })
 		.returning();
 	return row.id;
 }
@@ -57,6 +62,7 @@ beforeAll(async () => {
 
 	placementId = await addPlacement(conference, 'Keynote');
 	otherPlacementId = await addPlacement(other, 'Their keynote');
+	tentativePlacementId = await addPlacement(conference, 'Maybe Friday', 'tentative');
 });
 
 afterAll(async () => {
@@ -82,6 +88,16 @@ describe('setting a recording link', () => {
 			false
 		);
 		expect(await recordingOf(otherPlacementId)).toBeNull();
+	});
+
+	it('refuses a tentative placement, which the UI never offers', async () => {
+		// The id comes from a form field, so "the UI does not show the field there" is
+		// not a rule. A draft parked on three tentative slots has no answer to which of
+		// them was recorded.
+		expect(
+			await setRecordingUrl(conference.id, tentativePlacementId, 'https://example.com/d')
+		).toBe(false);
+		expect(await recordingOf(tentativePlacementId)).toBeNull();
 	});
 
 	it('reports failure for a placement that does not exist', async () => {

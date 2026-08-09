@@ -16,6 +16,11 @@ import { and, eq } from 'drizzle-orm';
  * an organizer of conference A must not reach conference B's programme by editing a
  * hidden field. Returns false when nothing matched, so the caller can answer 404
  * rather than reporting a success that never happened.
+ *
+ * `confirmed` is in the WHERE clause for the same reason the field only appears on a
+ * confirmed placement in the UI: a draft parked on three tentative slots has no answer
+ * to "which of these was recorded". The UI not offering it is not a guarantee — the
+ * placement id arrives in a form field, so the rule belongs where the write happens.
  */
 export async function setRecordingUrl(
 	conferenceId: number,
@@ -25,7 +30,13 @@ export async function setRecordingUrl(
 	const updated = await db
 		.update(placementTable)
 		.set({ recordingUrl: url })
-		.where(and(eq(placementTable.id, placementId), eq(placementTable.conferenceId, conferenceId)))
+		.where(
+			and(
+				eq(placementTable.id, placementId),
+				eq(placementTable.conferenceId, conferenceId),
+				eq(placementTable.status, 'confirmed')
+			)
+		)
 		.returning({ id: placementTable.id });
 
 	return updated.length > 0;
