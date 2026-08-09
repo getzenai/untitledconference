@@ -13,6 +13,13 @@ const logger = createLogger('Hooks');
 
 const API_V1_PUBLIC_PREFIX = '/api/v1/public';
 const API_V1_TEST_PREFIX = '/api/v1/test';
+// The MCP endpoint authenticates with OAuth bearer tokens, not session cookies,
+// and does the verification itself. It must bypass the cookie guard below:
+// that guard's bare 401 carries no WWW-Authenticate header, which is precisely
+// the header an MCP client needs in order to discover the authorization server
+// and start the OAuth flow. Guarding it here would make the endpoint
+// undiscoverable rather than more secure.
+const API_V1_MCP_PREFIX = '/api/v1/mcp';
 const API_V1_PREFIX = '/api/v1';
 
 // Outermost handler: security headers apply per-response, so they must also
@@ -137,7 +144,7 @@ const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 
 	if (pathname.startsWith(API_V1_PREFIX)) {
-		if (pathname.startsWith(API_V1_PUBLIC_PREFIX)) {
+		if (pathname.startsWith(API_V1_PUBLIC_PREFIX) || pathname.startsWith(API_V1_MCP_PREFIX)) {
 			return resolve(event);
 		} else if (pathname.startsWith(API_V1_TEST_PREFIX)) {
 			if (!isTestEnvironment()) {

@@ -151,10 +151,38 @@ function canonicalizeOrigins(origins: string[]): string[] | undefined {
 }
 
 /**
- * Scopes the OAuth provider can issue. Kept in one place so the plugin config
- * and the consent screen cannot drift apart.
+ * Scopes the OAuth provider can issue. Kept in one place so the plugin config,
+ * the consent screen and the RFC 9728 protected-resource metadata
+ * (`scopes_supported`) cannot drift apart.
+ *
+ * `mcp:tools` gates the MCP endpoint: /api/v1/mcp requires it on the access
+ * token, so an identity-only token (openid/profile/email) cannot call tools.
  */
-export const OAUTH_SCOPES = ['openid', 'profile', 'email', 'offline_access'];
+export const OAUTH_SCOPES = ['openid', 'profile', 'email', 'offline_access', 'mcp:tools'];
+
+/**
+ * Origin this auth server is reachable at, and the `iss` of every token it signs.
+ *
+ * A function, not a constant: `serverEnv()` resolves (and throws on) required
+ * env vars on first call, while `vite build` runs without an environment.
+ * Anything at module scope would break the build.
+ */
+export function getServerOrigin(): string {
+	return serverEnv().BETTER_AUTH_URL;
+}
+
+/**
+ * Audience / resource identifier of the MCP endpoint. OAuth access tokens are
+ * issued bound to this audience (RFC 8707 `resource` parameter) and verified
+ * against it by the /api/v1/mcp route, so a token minted for another resource
+ * cannot be replayed against the MCP server. Also the `resource` value of the
+ * RFC 9728 /.well-known/oauth-protected-resource metadata.
+ *
+ * Lazy for the same reason as getServerOrigin().
+ */
+export function getMcpResource(): string {
+	return `${getServerOrigin()}/api/v1/mcp`;
+}
 
 type Auth = ReturnType<typeof createAuth>;
 let _auth: Auth | undefined;
@@ -164,7 +192,7 @@ function createAuth() {
 	// read (and validated) on first use — never during `vite build`.
 	const env = serverEnv();
 	const trustedOrigins = resolveTrustedOrigins(env.BETTER_AUTH_TRUSTED_ORIGINS);
-	const serverOrigin = env.BETTER_AUTH_URL;
+	const serverOrigin = getServerOrigin();
 
 	return betterAuth({
 		database: drizzleAdapter(db, {
@@ -328,6 +356,10 @@ function createAuth() {
 				loginPage: '/login',
 				consentPage: '/oauth/consent',
 				scopes: OAUTH_SCOPES,
+				// Access tokens are JWTs bound to the MCP endpoint's audience. Without
+				// this the plugin would reject the `resource` parameter MCP clients
+				// send, and tokens would carry no `aud` for /api/v1/mcp to check.
+				validAudiences: [getMcpResource()],
 				accessTokenExpiresIn: 60 * 60, // 1 hour
 				refreshTokenExpiresIn: 60 * 60 * 24 * 30, // 30 days
 				// Off by default: RFC 7591 self-registration lets anyone create a

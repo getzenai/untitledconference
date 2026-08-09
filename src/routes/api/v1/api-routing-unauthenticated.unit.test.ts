@@ -180,6 +180,25 @@ describe('API Routing - Unauthenticated Access', () => {
 		expect(mockResolve).not.toHaveBeenCalled();
 	});
 
+	it('should not apply the session-cookie guard to the MCP endpoint', async () => {
+		// MCP clients authenticate with an OAuth bearer token, and /api/v1/mcp
+		// verifies it itself so it can answer 401 with the WWW-Authenticate
+		// challenge that drives discovery. A bare 401 from this guard would strip
+		// that header and leave the client with no way to start the OAuth flow.
+		const event = createMockEvent('/api/v1/mcp', 'POST');
+		(mockAuth.api.getSession as any).mockResolvedValue(null);
+
+		const response = await handle({ event: event as any, resolve: mockResolve });
+
+		expect(response.status).not.toBe(401);
+		expect(mockResolve).toHaveBeenCalledWith(
+			event,
+			expect.objectContaining({
+				transformPageChunk: expect.any(Function)
+			})
+		);
+	});
+
 	it('should allow access to test endpoints only in test environment', async () => {
 		// Arrange
 		const event = createMockEvent('/api/v1/test/register', 'POST');
