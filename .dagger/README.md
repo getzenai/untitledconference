@@ -45,7 +45,7 @@ dagger call postgres-with-migrations --source . --db-name "test"
 # Create base Node.js environment with dependencies
 dagger call build-env --source .
 
-# Create test environment with Playwright browsers
+# Create test environment with the Cypress binary
 dagger call build-test-env --source .
 
 # Build application container
@@ -70,7 +70,7 @@ This will execute all steps in sequence:
 
 ### Container Optimization
 
-- **Smart Caching**: Uses Dagger cache volumes for npm packages and Playwright browsers
+- **Smart Caching**: Uses Dagger cache volumes for npm packages and the Cypress binary
 - **Container Reuse**: Base containers are built once and reused across pipeline steps
 - **Efficient Builds**: The `ci` function reuses built containers to avoid redundant work
 
@@ -148,7 +148,7 @@ The pipeline is implemented in Go with these key dependencies:
 
 - **Base Image**: `node:22-slim`
 - **Package Manager**: npm with `npm ci` for reproducible installs
-- **Test Browser**: Playwright with Chromium
+- **Test Browser**: Cypress with Electron/Chromium
 
 ### PostgreSQL Setup
 
@@ -171,7 +171,7 @@ ls -la drizzle.config.ts
 dagger call postgres-with-migrations --source . --db-name "debug"
 ```
 
-**"Playwright browsers not found"**
+**"Cypress binary not found"**
 
 ```bash
 # Ensure test environment builds properly

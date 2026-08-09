@@ -233,36 +233,30 @@ jobs:
           echo 'BETTER_AUTH_URL="http://localhost:5173"' >> .env
           echo 'ENABLE_TEST_ENDPOINTS="true"' >> .env
 
-      - name: Cache Playwright browsers
+      - name: Cache Cypress binary
         uses: actions/cache@v4
-        id: playwright-cache
         with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json') }}
+          path: ~/.cache/Cypress
+          key: ${{ runner.os }}-cypress-${{ hashFiles('**/package-lock.json') }}
 
-      - name: Install Playwright browsers and dependencies
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps
+      - name: Install Cypress binary
+        run: npx cypress install
 
-      - name: Install Playwright system dependencies only
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps
+      - name: Verify Cypress
+        run: npx cypress verify
 
+      # The build artifact was downloaded above, so the E2E script does not
+      # need to rebuild the app.
       - name: Run E2E tests
         run: npm run test:e2e
+        env:
+          SKIP_BUILD: 'true'
 
-      - name: Upload Playwright test report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: playwright-report
-          path: playwright-report/
-          retention-days: 30
-
-      - name: Upload E2E failure report for debugging
+      - name: Upload Cypress screenshots
         uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: e2e-failure-report
-          path: test-report-for-coding-agents/
+          name: cypress-screenshots
+          path: cypress/screenshots/
           retention-days: 7
+          if-no-files-found: ignore

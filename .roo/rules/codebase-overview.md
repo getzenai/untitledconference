@@ -13,7 +13,7 @@
   - **Authentication**: Better Auth (`better-auth`)
   - **Internationalization (i18n)**: ParaglideJS (`@inlang/paraglide-sveltekit`)
   - **Linting/Formatting**: ESLint (`eslint`), Prettier (`prettier`)
-  - **Testing**: Playwright (`@playwright/test`) for E2E, Vitest (`vitest`) for unit
+  - **Testing**: Cypress (`cypress`) for E2E, Vitest (`vitest`) for unit
   - **Build Tool**: Vite (`vite`)
   - **Documentation**: VitePress (`vitepress`)
 - **Key Features**:
@@ -35,8 +35,8 @@
 ## 3. High-Level File Tree
 
 - **`drizzle/`**: Database migration files.
-- **`e2e/`**: Playwright E2E tests.
-  - `playwright.config.ts`: E2E test configuration.
+- **`cypress/`**: Cypress E2E tests.
+  - `cypress.config.ts`: E2E test configuration.
 - **`messages/`**: ParaglideJS translation files (e.g., `en.json`, `de.json`).
 - **`project.inlang/`**: ParaglideJS configuration.
 - **`src/`**: Core application source.
@@ -72,7 +72,7 @@
 ## 5. Dependencies Analysis
 
 - **Key Dependencies**: `@sveltejs/kit`, `svelte`, `vite`, `drizzle-orm`, `better-auth`, `@inlang/paraglide-sveltekit`, `tailwindcss`, `bits-ui`, `lucide-svelte`, `zod`.
-- **Dev Dependencies**: `@playwright/test`, `vitest`, `drizzle-kit`, `eslint`, `prettier`, `typescript`.
+- **Dev Dependencies**: `cypress`, `vitest`, `drizzle-kit`, `eslint`, `prettier`, `typescript`.
 - **Internal Relationships**: Routes use `src/lib`. Auth logic (`src/lib/auth.ts`) used by hooks/layouts. DB schema (`src/lib/server/db/auth-schema.ts`) used by Drizzle.
 
 ## 6. Configuration Details
@@ -110,7 +110,7 @@
 ## 9. Testing Structure
 
 - **Unit Testing**: Vitest. Config in `vite.config.ts`. Tests in `src/`. Run: `npm run test:unit`.
-- **E2E Testing**: Playwright. Config `playwright.config.ts`. Tests in `e2e/`. Run: `npm run test:e2e`.
+- **E2E Testing**: Cypress. Config `cypress.config.ts`. Tests in `cypress/e2e/`. Run: `npm run test:e2e`.
 - **Overall Test Command**: `npm run test`.
 - **Linting/Formatting Checks**: `npm run check`, `npm run format:check`, `npm run lint`.
 

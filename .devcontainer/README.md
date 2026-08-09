@@ -122,7 +122,6 @@ You can create multiple Codespaces for parallel development:
 - Svelte language support
 - Prettier & ESLint
 - Tailwind CSS IntelliSense
-- Playwright Test Runner
 - Vitest Test Explorer
 
 ### Automatic Setup
@@ -133,7 +132,7 @@ When you create a new Codespace, it automatically:
 2. Sets up PostgreSQL databases
 3. Creates `.env` files from examples
 4. Runs database migrations
-5. Installs Playwright browsers
+5. Installs the Cypress binary
 6. Installs Claude Code CLI
 7. Configures Git settings
 

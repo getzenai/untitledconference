@@ -111,41 +111,40 @@ npm run test:all           # ./scripts/test-all.sh — the comprehensive local r
 
 ```bash
 npm run test              # All tests
-npm run test:e2e          # E2E tests only
-npm run test:e2e -- --grep "name"  # Specific test
+npm run test:e2e          # E2E tests only (Cypress, headless)
+npm run test:e2e:open     # Interactive Cypress runner
+npm run test:e2e:spec -- cypress/e2e/critical-paths/login-workflow.cy.ts  # One spec
 npm run lint              # Check code quality
 npm run format            # Format code
 ```
 
+`npm run test:e2e` runs `scripts/run-e2e.sh`: push schema to `TEST_DATABASE_URL`,
+build, start `vite preview` on port 5174, run Cypress. Set `SKIP_BUILD=true` to
+reuse an existing build. No Infisical secrets are needed for E2E.
+
 ### E2E Test Debugging
 
-1. Run single failing test: `npm run test:e2e -- --grep "exact name"`
-2. Check `./test-report-for-coding-agents/all-failures.md` for summaries
-3. Create todo per failing test, mark complete after fix or 10 attempts
-4. Add logging to understand actual vs expected behavior
+1. Run the single failing spec: `npm run test:e2e:spec -- cypress/e2e/.../thing.cy.ts`
+2. Failure screenshots land in `cypress/screenshots/` (gitignored)
+3. Create a todo per failing test, mark complete only after a passing run
+4. A timeout almost always means the selector is wrong - fix the selector, not the timeout
 
-### E2E Timeouts (playwright.config.ts)
+### E2E Timeouts (cypress.config.ts)
 
-- Actions: 1000ms (click, fill, type)
-- Assertions: 1000ms (toBeVisible, etc.)
-- Navigation: 5000ms
-- Overall test: 30000ms
+- `defaultCommandTimeout`: 8000ms - Cypress retries a command until it passes,
+  so this is the budget for "the element appears", not for a single attempt
+- `pageLoadTimeout`: 60000ms
+- `requestTimeout`: 10000ms / `responseTimeout`: 30000ms
 
-**Allowed exceptions only:**
-
-- `waitForLoadState('networkidle', { timeout: 5000 })`
-- `waitForURL(..., { timeout: 5000 })`
-- `waitForResponse(..., { timeout: 5000 })`
-
-Never add timeouts to UI operations. Playwright auto-waits.
+Never add `cy.wait(ms)` to UI operations. Cypress retries assertions.
 
 ### Page Object Model
 
-Tests use POM pattern. See `/e2e/CLAUDE.md` for details.
+Tests use the POM pattern. See `/cypress/CLAUDE.md` for details.
 
-- Pages in `/e2e/pages/`
-- Actions in `/e2e/actions/`
-- Tests in `/e2e/critical-paths/`
+- Pages in `/cypress/support/pages/`
+- Actions in `/cypress/support/actions/`
+- Specs in `/cypress/e2e/critical-paths/` and `/cypress/e2e/unauthenticated/`
 
 ## Development
 
@@ -159,16 +158,16 @@ npm run build  # Build for production (no secrets needed — lazy Proxy pattern)
 
 The pre-commit hook (`.husky/pre-commit`) and pre-push hook (`.husky/pre-push`) mirror the GitHub CI pipeline so errors are caught locally:
 
-| Check                  | Pre-commit     | Pre-push          | CI             | Notes                                       |
-| ---------------------- | -------------- | ----------------- | -------------- | ------------------------------------------- |
-| `npm run format`       | Yes (auto-fix) | -                 | `format:check` | Pre-commit writes fixes, CI only checks     |
-| `npm run lint`         | Yes            | -                 | Yes            | Prettier + ESLint (max 60 warnings)         |
-| `npm run check:unused` | Yes            | -                 | -              | Knip dead code detection (local-only extra) |
-| `npm run check`        | Yes            | -                 | Yes            | Paraglide compile + svelte-check types      |
-| `npm run build`        | Yes            | -                 | Yes            | Catches build-time errors (e.g. lazy init)  |
-| `npm run test:unit`    | Yes            | Yes               | Yes            | Unit tests (no DB needed)                   |
-| `test:integration`     | -              | If DB on 5433     | Yes            | Needs running database                      |
-| `test:e2e`             | -              | If server on 5173 | Yes            | Needs DB + browser                          |
+| Check                  | Pre-commit     | Pre-push      | CI             | Notes                                       |
+| ---------------------- | -------------- | ------------- | -------------- | ------------------------------------------- |
+| `npm run format`       | Yes (auto-fix) | -             | `format:check` | Pre-commit writes fixes, CI only checks     |
+| `npm run lint`         | Yes            | -             | Yes            | Prettier + ESLint (max 60 warnings)         |
+| `npm run check:unused` | Yes            | -             | -              | Knip dead code detection (local-only extra) |
+| `npm run check`        | Yes            | -             | Yes            | Paraglide compile + svelte-check types      |
+| `npm run build`        | Yes            | -             | Yes            | Catches build-time errors (e.g. lazy init)  |
+| `npm run test:unit`    | Yes            | Yes           | Yes            | Unit tests (no DB needed)                   |
+| `test:integration`     | -              | If DB on 5433 | Yes            | Needs running database                      |
+| `test:e2e`             | -              | If DB on 5433 | Yes            | Needs DB + Cypress binary                   |
 
 **Important**: Server-side code must not eagerly evaluate env vars at module scope — `vite build` runs without `.env`. Use lazy patterns (Proxy, getter functions) for any code that reads `$env/dynamic/private`. See `src/lib/server/config.ts` for the pattern.
 
@@ -359,15 +358,14 @@ Act as expert software engineer. Make decisions based on:
 - Ship fast and reliable
   Argue for these decisions.
 
-## Playwright Coding Agent Reporter
-
-Uses `@zenai/playwright-coding-agent-reporter` for AI-optimized failure reporting.
+## E2E Failure Triage
 
 After test failures:
 
-1. Check `./test-report-for-coding-agents/all-failures.md`
-2. Individual reports in subdirectories
-3. Use 3-minute timeout for full suite: `Bash(npm run test:e2e, timeout: 180000)`
+1. Read the Cypress output - it names the failed assertion and the selector it looked for
+2. Screenshots of failures are written to `cypress/screenshots/`
+3. Re-run only the failing spec while iterating, then the full suite before finishing
+4. Use a 10-minute timeout for the full suite: `Bash(npm run test:e2e, timeout: 600000)`
 
 ## Agent Hooks
 

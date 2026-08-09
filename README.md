@@ -57,7 +57,7 @@ npm run lint           # Code quality check
 npm run format         # Format code
 ```
 
-For E2E test development, see `/e2e/CLAUDE.md`.
+For E2E test development, see `/cypress/CLAUDE.md`.
 
 ## Authentication
 

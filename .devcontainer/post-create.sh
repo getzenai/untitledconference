@@ -36,9 +36,9 @@ fi
 echo "🗄️ Setting up database..."
 npm run db:push:force
 
-# Install Playwright browsers if needed
-echo "🎭 Installing Playwright browsers..."
-npx playwright install chromium --with-deps
+# Install the Cypress binary if needed
+echo "🌲 Installing Cypress binary..."
+npx cypress install
 
 # Check environment configuration status
 echo ""

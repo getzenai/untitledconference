@@ -30,11 +30,7 @@ vite.config.ts.timestamp-*
 # Paraglide
 src/lib/paraglide
 
-# Playwright
-e2e/.auth
-playwright-report
-test-report-for-coding-agents
-.playwright-mcp
-
-# Feedback files
-playwright-coding-reporter-feedback-update.md
+# Cypress
+cypress/screenshots
+cypress/videos
+cypress/downloads

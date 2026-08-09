@@ -5,7 +5,7 @@ Run the comprehensive test suite using `npm run test:all` (which calls `scripts/
 3. Build
 4. Unit tests
 5. Integration tests
-6. E2E tests (Playwright)
+6. E2E tests (Cypress)
 
 Use `Bash(npm run test:all, timeout: 300000)` to run with a 5-minute timeout.
 

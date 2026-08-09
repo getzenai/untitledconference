@@ -28,18 +28,18 @@ func (m *DaggerCiPipeline) BuildEnv(
 		WithExec([]string{"npm", "ci"})
 }
 
-// BuildTestEnv creates a container with all test dependencies including Playwright
+// BuildTestEnv creates a container with all test dependencies including the Cypress binary
 func (m *DaggerCiPipeline) BuildTestEnv(
 	// +defaultPath="/"
 	source *dagger.Directory,
 ) *dagger.Container {
-	playwrightCache := dag.CacheVolume("playwright")
+	cypressCache := dag.CacheVolume("cypress")
 	
 	return m.BuildEnv(source).
-		// Mount Playwright cache
-		WithMountedCache("/root/.cache/ms-playwright", playwrightCache).
-		// Install Playwright browsers
-		WithExec([]string{"npx", "playwright", "install", "--with-deps"})
+		// Mount the Cypress binary cache
+		WithMountedCache("/root/.cache/Cypress", cypressCache).
+		// Download the Cypress binary
+		WithExec([]string{"npx", "cypress", "install"})
 }
 
 // BuildApp creates a container with the application built
@@ -151,8 +151,12 @@ func (m *DaggerCiPipeline) E2e(
 		WithEnvVariable("CI", "true").
 		// Connect to PostgreSQL service (already has migrations applied)
 		WithServiceBinding("postgres", postgres).
-		// Run E2E tests
-		WithExec([]string{"npx", "playwright", "test", "--reporter=list"})
+		WithEnvVariable("TEST_DATABASE_URL", "postgres://root:mysecretpassword@postgres:5432/test").
+		WithEnvVariable("ENABLE_TEST_ENDPOINTS", "true").
+		WithEnvVariable("REQUIRE_EMAIL_VERIFICATION", "false").
+		// Run E2E tests (the app is already built, so skip the rebuild)
+		WithEnvVariable("SKIP_BUILD", "true").
+		WithExec([]string{"npm", "run", "test:e2e"})
 	
 	return e2eContainer.Stdout(ctx)
 }
@@ -182,7 +186,7 @@ func (m *DaggerCiPipeline) Ci(
 		return "", fmt.Errorf("unit tests failed: %w", testErr)
 	}
 	
-	// Build the application once (this includes Playwright installation)
+	// Build the application once (this includes the Cypress binary download)
 	builtApp := m.BuildApp(source)
 	_, buildErr := builtApp.Stdout(ctx)
 	if buildErr != nil {

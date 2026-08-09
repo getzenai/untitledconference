@@ -3,9 +3,18 @@
 	import ImpersonationBanner from '$lib/components/impersonation-banner.svelte';
 	import { page } from '$app/state';
 	import { locales, localizeHref } from '$lib/paraglide/runtime';
+	import { onMount } from 'svelte';
 	import '../app.css';
 
 	let { children } = $props();
+
+	// Hydration marker for E2E tests. Cypress types into forms as soon as the
+	// SSR markup is on screen; submitting before Svelte has hydrated hits the
+	// plain <form> and triggers a native navigation instead of the SPA handler.
+	// Specs wait for `body[data-hydrated="true"]` before interacting.
+	onMount(() => {
+		document.body.dataset.hydrated = 'true';
+	});
 
 	// Push sidebar down when impersonating by injecting padding-top style
 	$effect(() => {

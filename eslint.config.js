@@ -58,7 +58,16 @@ export default ts.config(
 		}
 	},
 	{
-		files: ['e2e/**/*.ts', '**/*.test.ts', '**/*.spec.ts'],
+		files: ['cypress/**/*.ts', 'cypress.config.ts', '**/*.test.ts', '**/*.spec.ts'],
+		languageOptions: {
+			globals: {
+				...globals.mocha,
+				cy: 'readonly',
+				Cypress: 'readonly',
+				expect: 'readonly',
+				assert: 'readonly'
+			}
+		},
 		rules: {
 			'max-lines': 'off',
 			'max-lines-per-function': 'off',

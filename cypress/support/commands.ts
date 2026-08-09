@@ -1,0 +1,161 @@
+/// <reference types="cypress" />
+
+/**
+ * Custom Cypress commands.
+ *
+ * These replace the Playwright `TestUserManager` (e2e/test-user-manager.ts):
+ * user creation goes through the same `/api/v1/test/register` endpoint, and
+ * cleanup happens through the `cleanupTestUsers` Node task in cypress.config.ts.
+ */
+import { DEFAULT_TEST_PASSWORD, generateTestUserEmail, type TestUser } from './globals';
+
+export interface CreateUserOptions {
+	email?: string;
+	password?: string;
+	organizationName?: string;
+}
+
+declare global {
+	// eslint-disable-next-line @typescript-eslint/no-namespace
+	namespace Cypress {
+		interface Chainable {
+			/** Register a user through `/api/v1/test/register` (email pre-verified, org created). */
+			createTestUser(options?: CreateUserOptions): Chainable<TestUser>;
+			/** Establish a session through Better Auth's sign-in endpoint, cached with `cy.session()`. */
+			login(email: string, password: string): Chainable<void>;
+			/** Establish a session by filling in the real login form. Not cached. */
+			loginViaUi(email: string, password: string): Chainable<void>;
+			/** Create a user and log them in (API) in one call. */
+			createAndLogin(options?: CreateUserOptions): Chainable<TestUser>;
+			/** Register through the real registration form. */
+			registerViaUi(email: string, password: string): Chainable<void>;
+			/** Log out through the dashboard button and land back on /login. */
+			logout(): Chainable<void>;
+			/** Point the current session at an organization (by name, default: the first). */
+			setActiveOrganization(name?: string): Chainable<string>;
+			/** Wait until Svelte has hydrated the page before interacting with it. */
+			waitForHydration(): Chainable<void>;
+		}
+	}
+}
+
+const baseUrl = (): string => Cypress.config('baseUrl') || 'http://localhost:5174';
+
+Cypress.Commands.add('waitForHydration', () => {
+	cy.get('body[data-hydrated="true"]', { timeout: 30000 }).should('exist');
+});
+
+Cypress.Commands.add('createTestUser', (options: CreateUserOptions = {}) => {
+	const email = options.email || generateTestUserEmail();
+	const password = options.password || DEFAULT_TEST_PASSWORD;
+	const organizationName = options.organizationName;
+
+	return cy
+		.request({
+			method: 'POST',
+			url: `${baseUrl()}/api/v1/test/register`,
+			body: { email, password, organizationName },
+			failOnStatusCode: false
+		})
+		.then((response) => {
+			if (response.status !== 200) {
+				throw new Error(
+					`createTestUser failed (${response.status}): ${JSON.stringify(response.body)}`
+				);
+			}
+			const user: TestUser = {
+				id: response.body.user.id,
+				email: response.body.user.email,
+				password
+			};
+			return cy.wrap(user, { log: false });
+		});
+});
+
+Cypress.Commands.add('login', (email: string, password: string) => {
+	cy.session(
+		['api-login', email, password],
+		() => {
+			// Better Auth's own sign-in endpoint - the one the browser client calls.
+			// `/api/v1/public/login` cannot be used here: `auth.api.signInEmail()`
+			// returns no headers for server-side calls, so that route never emits a
+			// Set-Cookie and the browser would end up without a session.
+			cy.request({
+				method: 'POST',
+				url: `${baseUrl()}/api/auth/sign-in/email`,
+				body: { email, password, rememberMe: true }
+			})
+				.its('status')
+				.should('eq', 200);
+		},
+		{
+			cacheAcrossSpecs: false,
+			validate: () => {
+				cy.getCookie('better-auth.session_token').should('exist');
+			}
+		}
+	);
+});
+
+Cypress.Commands.add('loginViaUi', (email: string, password: string) => {
+	cy.visit('/login');
+	cy.waitForHydration();
+	cy.get('input[name="email"]').clear().type(email);
+	cy.get('input[name="password"]').clear().type(password, { log: false });
+	cy.contains('button[type="submit"]', /^Login$/).click();
+	cy.url({ timeout: 20000 }).should('include', '/home');
+});
+
+Cypress.Commands.add('createAndLogin', (options: CreateUserOptions = {}) => {
+	return cy.createTestUser(options).then((user) => {
+		cy.login(user.email, user.password);
+		return cy.wrap(user, { log: false });
+	});
+});
+
+Cypress.Commands.add('registerViaUi', (email: string, password: string) => {
+	cy.visit('/register');
+	cy.waitForHydration();
+	cy.get('input[name="email"]').clear().type(email);
+	cy.get('input[name="password"]').clear().type(password, { log: false });
+	cy.contains('button[type="submit"]', /^Register$/).click();
+});
+
+/**
+ * Nothing in the app sets `session.activeOrganizationId` (no
+ * `databaseHooks.session.create` hook, no `setActiveOrganization()` call), so a
+ * freshly logged-in user has no active organization and the organization
+ * settings pages cannot resolve one. This calls Better Auth's own
+ * `organization/set-active` endpoint - the call the app is missing - so
+ * organization specs can exercise the actual lifecycle.
+ */
+Cypress.Commands.add('setActiveOrganization', (name?: string) => {
+	return cy
+		.request({ method: 'GET', url: `${baseUrl()}/api/auth/organization/list` })
+		.then((listResponse) => {
+			const organizations = listResponse.body as Array<{ id: string; name: string }>;
+			const match = name ? organizations?.find((org) => org.name === name) : organizations?.[0];
+			if (!match) {
+				throw new Error(
+					`setActiveOrganization: no organization${name ? ` named "${name}"` : ''} for this user`
+				);
+			}
+			const organizationId = match.id;
+			return cy
+				.request({
+					method: 'POST',
+					url: `${baseUrl()}/api/auth/organization/set-active`,
+					body: { organizationId }
+				})
+				.then(() => cy.wrap(organizationId, { log: false }));
+		});
+});
+
+Cypress.Commands.add('logout', () => {
+	cy.visit('/home');
+	cy.waitForHydration();
+	cy.contains('button', /^Logout$/).click();
+	cy.url({ timeout: 20000 }).should('include', '/login');
+});
+
+export {};

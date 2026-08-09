@@ -179,19 +179,16 @@ export const actions: Actions = {
 ## Testing Redirects
 
 ```typescript
-// In tests, expect redirects to throw
-import { expect } from '@playwright/test';
+// cypress/e2e/critical-paths/items.cy.ts
+it('deletes item and redirects', () => {
+	cy.visit('/items/123');
+	cy.waitForHydration();
 
-test('deletes item and redirects', async ({ page }) => {
-	// Navigate to item page
-	await page.goto('/items/123');
+	cy.get('button[name="delete"]').click();
 
-	// Click delete and expect redirect
-	await page.click('button[name="delete"]');
-	await page.waitForURL('/items');
-
-	// Verify item is gone
-	await expect(page.locator('text=Item deleted')).toBeVisible();
+	// The action redirects back to the list
+	cy.url().should('include', '/items');
+	cy.contains('Item deleted').should('be.visible');
 });
 ```
 

@@ -5,7 +5,8 @@ build
 .env.*
 .devcontainer
 e2e
-playwright-report
+cypress/screenshots
+cypress/videos
 test-results
 test-report-for-coding-agents
 .git

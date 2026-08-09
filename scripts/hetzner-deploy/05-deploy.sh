@@ -23,7 +23,8 @@ rsync -az --delete \
 	--exclude .claude \
 	--exclude .svelte-kit \
 	--exclude build \
-	--exclude playwright-report \
+	--exclude cypress/screenshots \
+	--exclude cypress/videos \
 	--exclude test-results \
 	--exclude test-report-for-coding-agents \
 	--exclude scripts \

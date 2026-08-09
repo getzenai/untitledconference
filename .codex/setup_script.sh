@@ -128,6 +128,6 @@ npm install >/dev/null
 echo "Synchronizing database schema..."
 npm run db:push:force
 
-npx playwright install chromium --with-deps >/dev/null
+npx cypress install >/dev/null && npx cypress verify >/dev/null
 
 echo "Setup complete."

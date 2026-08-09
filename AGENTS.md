@@ -5,7 +5,7 @@
 - `src/routes` holds SvelteKit pages, API endpoints, and layouts; follow the RESTful pattern (`/resource`, `/resource/new`, `/resource/[id]`) so URLs map predictably to features.
 - Shared logic lives in `src/lib` (`components`, `hooks`, `server`, `validation`, `test` utilities) with i18n layers under `paraglide/`.
 - Database artifacts sit in `drizzle/` with `drizzle.config.ts`; run schema changes through the provided scripts so Docker-managed instances stay in sync.
-- Playwright assets live in `e2e/` (`pages/`, `actions/`, `critical-paths/`); VitePress docs are under `docs/`, and static assets under `static/`.
+- Cypress assets live in `cypress/` (`e2e/`, `support/pages/`, `support/actions/`); VitePress docs are under `docs/`, and static assets under `static/`.
 
 ## Build, Test, and Development Commands
 
@@ -23,7 +23,7 @@
 ## Testing Guidelines
 
 - Vitest suites: `npm run test:unit`, `npm run test:integration` (requires `TEST_DATABASE_URL`), `npm run test` for the full stack.
-- Playwright: `npm run test:e2e`, or target a spec with `npm run test:e2e -- --grep "name"`; inspect `test-report-for-coding-agents/all-failures.md` when debugging.
+- Cypress: `npm run test:e2e`, or target one spec with `npm run test:e2e:spec -- cypress/e2e/critical-paths/login-workflow.cy.ts`; failure screenshots land in `cypress/screenshots/`.
 - Keep page objects in `/e2e/pages`, actions in `/e2e/actions`; rely on built-in waits—only use the documented 5s exceptions (`waitForLoadState`, `waitForURL`, `waitForResponse`).
 
 ## Security & Operational Notes
