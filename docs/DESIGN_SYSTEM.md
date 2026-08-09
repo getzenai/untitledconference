@@ -214,6 +214,10 @@ A rule that only exists as prose is a wish. This section is the honest ledger; k
 | R5 empty states have a way out | `EmptyState` — omitting `action` is a deliberate act, not an oversight                                                                                            |
 | R6 nothing internal leaks      | one layout loader for all five public surfaces; the internal fields are absent from `PublicConference` itself, so a template cannot render what it never received |
 
+**Dark mode is reachable.** `<ModeWatcher />` sits in the root layout and `ModeToggle` in the
+public conference header and on `/styleguide`. Both palettes are now real, which is why the
+contrast test asserts both.
+
 **Still only prose, and known to be:** R1 (shadcn's `Button` defaults to filled, so a forgotten
 `variant` silently breaks it), R2, R3, R7, R8, and the type scale. The admin surfaces still
 carry raw palette classes for statuses. Each of those wants either a component or a lint rule

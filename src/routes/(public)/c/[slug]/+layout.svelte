@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import ModeToggle from '$lib/components/mode-toggle.svelte';
 	import { formatDayLong } from '$lib/conference/public-view';
 
 	let { children, data } = $props();
@@ -30,11 +31,14 @@
 
 <div class="bg-background text-foreground min-h-screen">
 	<header class="border-border border-b">
-		<div class="mx-auto max-w-6xl px-6 py-8">
-			<h1 class="text-2xl font-semibold tracking-tight">{conference.name}</h1>
-			<p class="text-muted-foreground mt-1 text-sm">
-				{dateRange}{#if conference.venue}<span class="px-1.5">·</span>{conference.venue}{/if}
-			</p>
+		<div class="mx-auto flex max-w-6xl items-start justify-between gap-4 px-6 py-8">
+			<div>
+				<h1 class="text-2xl font-semibold tracking-tight">{conference.name}</h1>
+				<p class="text-muted-foreground mt-1 text-sm">
+					{dateRange}{#if conference.venue}<span class="px-1.5">·</span>{conference.venue}{/if}
+				</p>
+			</div>
+			<ModeToggle class="-mr-2" />
 		</div>
 
 		<nav aria-label="Conference sections" class="mx-auto max-w-6xl px-6">
