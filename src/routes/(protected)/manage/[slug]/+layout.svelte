@@ -14,8 +14,8 @@
 	const base = $derived(`/manage/${data.conference.slug}`);
 
 	const nav = $derived([
+		{ href: `${base}/dashboard`, label: 'Dashboard', ready: true },
 		{ href: `${base}/submissions`, label: 'Submissions', ready: true },
-		{ href: `${base}/dashboard`, label: 'Dashboard', ready: false },
 		{ href: `${base}/cfp`, label: 'Call for papers', ready: false },
 		{ href: `${base}/agenda`, label: 'Agenda', ready: false },
 		{ href: `${base}/people`, label: 'Team & reviewers', ready: false },

@@ -2,8 +2,8 @@ import { requireOrganizer } from '$lib/server/conference/access';
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
 import {
 	listSubmissions,
-	submissionCounts,
-	submissionFacets
+	submissionFacets,
+	submissionTotals
 } from '$lib/server/conference/organizer-submissions';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -34,16 +34,17 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 	const filters = parseFilters(url);
 
-	const [submissions, facets] = await Promise.all([
+	const [submissions, facets, counts] = await Promise.all([
 		listSubmissions(conference.id, filters),
-		submissionFacets(conference.id)
+		submissionFacets(conference.id),
+		submissionTotals(conference.id)
 	]);
 
 	return {
 		submissions,
 		facets,
 		filters,
-		counts: submissionCounts(submissions)
+		counts
 	};
 };
 

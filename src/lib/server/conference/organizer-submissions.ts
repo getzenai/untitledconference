@@ -33,7 +33,20 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, desc, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	exists,
+	ilike,
+	inArray,
+	ne,
+	notExists,
+	or,
+	sql
+} from 'drizzle-orm';
 
 export type SubmissionFilters = {
 	q?: string;
@@ -273,12 +286,48 @@ export async function listSubmissions(
 	});
 }
 
-/** Counts for the page header — the two numbers that say how much work is left. */
-export function submissionCounts(rows: SubmissionRow[]) {
+/**
+ * Counts for the page header — how much work is left in the CONFERENCE.
+ *
+ * Deliberately not derived from the rows on screen. Counting the filtered set makes
+ * the header agree with the filter and disagree with reality: search for one talk and
+ * the page announces "1 total", which reads as "the pile is empty" at a glance. The
+ * header answers "how much is there", the table answers "what am I looking at".
+ */
+export async function submissionTotals(conferenceId: number) {
+	const undecided = inArray(submissionTable.status, ['submitted', 'in_review']);
+
+	// Built with the query builder rather than as raw SQL inside the `filter`: written
+	// by hand, the join conditions come out with unqualified column names and Postgres
+	// rejects the statement with "column reference id is ambiguous".
+	const hasNoReview = notExists(
+		db
+			.select({ one: sql`1` })
+			.from(reviewTable)
+			.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+			.where(
+				and(
+					eq(reviewTable.submissionId, submissionTable.id),
+					eq(reviewTable.status, 'submitted'),
+					eq(evaluationPlanTable.conferenceId, conferenceId)
+				)
+			)
+	);
+
+	const [row] = await db
+		.select({
+			total: count(),
+			undecided: sql<number>`count(*) filter (where ${undecided})`,
+			unreviewed: sql<number>`count(*) filter (where ${and(ne(submissionTable.status, 'draft'), hasNoReview)})`
+		})
+		.from(submissionTable)
+		.where(eq(submissionTable.conferenceId, conferenceId));
+
 	return {
-		total: rows.length,
-		undecided: rows.filter((r) => r.status === 'submitted' || r.status === 'in_review').length,
-		unreviewed: rows.filter((r) => r.reviewsSubmitted === 0 && r.status !== 'draft').length
+		total: Number(row?.total ?? 0),
+		undecided: Number(row?.undecided ?? 0),
+		unreviewed: Number(row?.unreviewed ?? 0)
 	};
 }
 
