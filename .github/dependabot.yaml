@@ -1,0 +1,39 @@
+version: 2
+
+# List of dependencies to maintain
+updates:
+  # Configuration for npm (Node.js) packages
+  - package-ecosystem: 'npm'
+    # Location of package.json
+    directory: '/'
+    # How often to check for updates
+    schedule:
+      interval: 'weekly'
+
+    # How to handle version updates
+    # 'auto' means it will maintain the same version format the package already uses
+    versioning-strategy: auto
+
+    # Maximum number of open pull requests Dependabot can create at once
+    # This prevents overwhelming your repository with updates
+    open-pull-requests-limit: 5
+
+    # Group all dependencies into a single pull request
+    # This reduces noise in your repository by combining updates
+    groups:
+      dependencies:
+        patterns:
+          - '*' # The "*" means "match everything"
+
+    # Specify which updates to ignore
+    ignore:
+      # Ignore major version updates for all packages
+      # Major versions often contain breaking changes
+      # Example: ignores update from 1.x.x to 2.x.x
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+
+    # Labels that will be assigned to the created pull requests
+    # Useful for filtering and automation
+    labels:
+      - 'dependencies'

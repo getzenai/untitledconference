@@ -1,0 +1,32 @@
+#!/bin/sh
+# Pre-push hook: unit tests always, integration + E2E when services detected.
+# Pre-commit already handles lint/format/build — this hook focuses on tests.
+#
+# husky 9 always runs this script via `sh -e "$script"` (see .husky/_/h), never
+# by executing it directly — so the shebang above is documentation only, and
+# the script must be POSIX `sh` (dash on Debian/Ubuntu), not bash. `pipefail`
+# is a bash-only option; dash aborts on `set -o pipefail` itself, which meant
+# this hook failed before running a single test, regardless of test outcome.
+# No command here relies on a pipe's exit status, so dropping pipefail is a
+# no-op for behavior. `-e` (abort on first failing command) is kept — that's
+# what actually stops the hook on a failing test run.
+set -eu
+
+echo "=== Pre-push: Unit tests ==="
+npm run test:unit
+
+# Opportunistic: integration tests if test DB is available
+if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
+  echo "=== Pre-push: Integration tests (test DB detected on port 5433) ==="
+  TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-for-hooks}" npm run test:integration
+else
+  echo "(Test DB not running on port 5433 — skipping integration tests)"
+fi
+
+# Opportunistic: E2E tests if test DB is available (run-e2e.sh starts its own preview server on :5174)
+if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
+  echo "=== Pre-push: E2E tests (test DB detected — preview server starts on :5174) ==="
+  TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-for-hooks}" npm run test:e2e
+else
+  echo "(Test DB not running on port 5433 — skipping E2E tests)"
+fi

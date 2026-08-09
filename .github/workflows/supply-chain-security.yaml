@@ -1,0 +1,39 @@
+name: Supply Chain Security
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths:
+      - 'package-lock.json'
+      - 'package.json'
+  pull_request:
+    branches:
+      - 'main'
+    paths:
+      - 'package-lock.json'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-packages:
+    name: Verify Package Integrity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify registry signatures
+        run: npm audit signatures

@@ -1,0 +1,24 @@
+# Generic systemd unit for SvelteKit + Postgres on Hetzner.
+# Rename this file to ${APP_NAME}.service before deploying.
+# Update WorkingDirectory, EnvironmentFile, and --path to match your app.
+
+[Unit]
+Description=SvelteKit App
+Wants=network-online.target
+After=network-online.target docker.service cloudflared.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=deploy
+WorkingDirectory=/opt/my-app
+Environment=INFISICAL_DISABLE_UPDATE_CHECK=true
+EnvironmentFile=/etc/my-app.env
+TimeoutStartSec=0
+ExecStartPre=/bin/bash -lc 'export INFISICAL_TOKEN=$(/usr/bin/infisical login --domain="$INFISICAL_API_URL" --method=universal-auth --client-id="$INFISICAL_CLIENT_ID" --client-secret="$INFISICAL_CLIENT_SECRET" --plain --silent); exec /usr/bin/infisical run --silent --domain="$INFISICAL_API_URL" --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --env=prod --path=/dev-app-my-app -- /usr/bin/docker compose -f docker-compose.prod.yml --profile migrate run --rm --build migrate'
+ExecStart=/bin/bash -lc 'export INFISICAL_TOKEN=$(/usr/bin/infisical login --domain="$INFISICAL_API_URL" --method=universal-auth --client-id="$INFISICAL_CLIENT_ID" --client-secret="$INFISICAL_CLIENT_SECRET" --plain --silent); exec /usr/bin/infisical run --silent --domain="$INFISICAL_API_URL" --token="$INFISICAL_TOKEN" --projectId="$INFISICAL_PROJECT_ID" --env=prod --path=/dev-app-my-app -- /usr/bin/docker compose -f docker-compose.prod.yml up -d --build'
+ExecStop=/usr/bin/docker compose -f /opt/my-app/docker-compose.prod.yml down
+
+[Install]
+WantedBy=multi-user.target

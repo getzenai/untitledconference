@@ -1,0 +1,50 @@
+{
+	// Cloudflare Workers configuration for the SvelteKit app (spike/cloudflare).
+	// Docs: https://developers.cloudflare.com/workers/wrangler/configuration/
+	//       https://svelte.dev/docs/kit/adapter-cloudflare
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "kill-my-saas",
+	"main": ".svelte-kit/cloudflare/_worker.js",
+	// workerd bundled with wrangler 4.120 is 1.20260801.x -> do not set a later date
+	"compatibility_date": "2026-08-01",
+	// nodejs_compat (v2 semantics because compatibility_date >= 2024-09-23) is REQUIRED:
+	// better-auth, drizzle-orm and postgres.js all import node:crypto / node:buffer /
+	// node:events / node:async_hooks.
+	"compatibility_flags": ["nodejs_compat"],
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".svelte-kit/cloudflare"
+	},
+	"observability": {
+		"enabled": true
+	},
+	// Hyperdrive is the supported way to reach a Postgres server from a Worker.
+	// `id` is only used by `wrangler deploy`, never by `wrangler dev`, which uses
+	// `localConnectionString` and connects directly.
+	// This is the real config "kill-my-saas-neon", pointing at the Neon project's
+	// DIRECT endpoint - not the `-pooler` host. Hyperdrive does its own pooling,
+	// so stacking it on Neon's PgBouncer is both redundant and unsupported.
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "c9ca2bbdd9db4bf19b9e02a19e08a4fa",
+			// AP10 spike DB (own database so other agents' `dev` DB is untouched).
+			// NOTE: under `wrangler dev` this string is handed to the Worker verbatim
+			// as env.HYPERDRIVE.connectionString - local dev connects DIRECTLY to
+			// Postgres and does NOT proxy through Hyperdrive (no pooling, no caching).
+			// https://developers.cloudflare.com/hyperdrive/configuration/local-development/
+			"localConnectionString": "postgres://root:mysecretpassword@localhost:5432/hyperdrive_spike"
+		}
+	],
+	// Non-secret configuration. Secrets (BETTER_AUTH_SECRET, SENDGRID_API_KEY, ...)
+	// must be set with `wrangler secret put <NAME>` and NOT be listed here.
+	// For local `wrangler dev` they are read from `.dev.vars` (git-ignored).
+	"vars": {
+		"BETTER_AUTH_URL": "http://localhost:8787",
+		"BETTER_AUTH_TRUSTED_ORIGINS": "http://localhost:8787,http://127.0.0.1:8787",
+		"REQUIRE_EMAIL_VERIFICATION": "false",
+		"SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG": "false",
+		"LOG_LEVEL": "info",
+		"LOG_FORMAT": "human"
+	}
+}

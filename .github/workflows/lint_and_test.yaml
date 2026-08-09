@@ -1,0 +1,262 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 'main'
+    paths-ignore:
+      # Documentation
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
+      # Development environment
+      - '.devcontainer/**'
+      - '.vscode/**'
+      - '.idea/**'
+      - '.claude/**'
+      - '.dagger/**'
+      - '.roo/**'
+      # Git files
+      - '.gitignore'
+      - '.gitattributes'
+      # Translation cache
+      - 'project.inlang/cache/**'
+  pull_request:
+    branches:
+      - 'main'
+    paths-ignore:
+      # Documentation
+      - 'docs/**'
+      - '*.md'
+      - 'LICENSE'
+      # Development environment
+      - '.devcontainer/**'
+      - '.vscode/**'
+      - '.idea/**'
+      - '.claude/**'
+      - '.dagger/**'
+      - '.roo/**'
+      # Git files
+      - '.gitignore'
+      - '.gitattributes'
+      # Translation cache
+      - 'project.inlang/cache/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # Code quality checks - format, lint, and type checking
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate i18n translations
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Check code formatting
+        run: npm run format:check
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run type checking
+        run: npm run check
+
+  # Build the application
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate i18n translations
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Build SvelteKit application
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            .svelte-kit
+            build
+          include-hidden-files: true
+          retention-days: 1
+
+  # Unit tests - no database required
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate i18n translations
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+  # Integration tests - requires database
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: mysecretpassword
+          POSTGRES_DB: test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate i18n translations
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Configure test environment
+        run: |
+          echo 'DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"' > .env
+          echo 'TEST_DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"' >> .env
+          echo 'BETTER_AUTH_SECRET="test-secret-for-github-actions"' >> .env
+          echo 'BETTER_AUTH_URL="http://localhost:5173"' >> .env
+          echo 'ENABLE_TEST_ENDPOINTS="true"' >> .env
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  # E2E tests - requires built app and database
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    needs: [build, unit-tests, integration-tests]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: mysecretpassword
+          POSTGRES_DB: test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+
+      - name: Generate i18n translations
+        run: npx @inlang/paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      - name: Configure test environment
+        run: |
+          echo 'DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/local"' > .env
+          echo 'TEST_DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"' >> .env
+          echo 'BETTER_AUTH_SECRET="test-secret-for-github-actions"' >> .env
+          echo 'BETTER_AUTH_URL="http://localhost:5173"' >> .env
+          echo 'ENABLE_TEST_ENDPOINTS="true"' >> .env
+
+      - name: Cache Cypress binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: ${{ runner.os }}-cypress-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Cypress binary
+        run: npx cypress install
+
+      - name: Verify Cypress
+        run: npx cypress verify
+
+      # The build artifact was downloaded above, so the E2E script does not
+      # need to rebuild the app.
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          SKIP_BUILD: 'true'
+
+      - name: Upload Cypress screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots/
+          retention-days: 7
+          if-no-files-found: ignore

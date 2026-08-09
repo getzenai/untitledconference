@@ -1,0 +1,39 @@
+test-results
+node_modules
+
+.roo/mcp.json
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+/docs/.vitepress/cache
+/docs/.vitepress/dist
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.devcontainer/.env.devcontainer
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Paraglide
+src/lib/paraglide
+
+# Cypress
+cypress/screenshots
+cypress/videos
+cypress/downloads
+# Cloudflare local secrets
+.dev.vars
+.wrangler/
