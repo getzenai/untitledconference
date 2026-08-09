@@ -28,7 +28,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 
 /** "Thursday, 17 September" — the day-tab label the agenda and itinerary show. */
 function dayLabel(date: string): string {
@@ -147,23 +147,30 @@ function selectPublishedPlacements(conferenceId: number) {
 /** Speakers of the given submissions, primary presenter first within each. */
 function selectSpeakersFor(submissionIds: number[]) {
 	if (submissionIds.length === 0) return Promise.resolve([]);
-	return db
-		.select({
-			submissionId: submissionSpeakerTable.submissionId,
-			speakerId: speakerProfileTable.id,
-			name: speakerProfileTable.name,
-			sortName: speakerProfileTable.sortName,
-			jobTitle: speakerProfileTable.jobTitle,
-			company: speakerProfileTable.company,
-			headshotUrl: speakerProfileTable.headshotUrl,
-			bio: speakerProfileTable.bio
-		})
-		.from(submissionSpeakerTable)
-		.innerJoin(
-			speakerProfileTable,
-			eq(submissionSpeakerTable.speakerProfileId, speakerProfileTable.id)
-		)
-		.orderBy(asc(submissionSpeakerTable.position));
+	return (
+		db
+			.select({
+				submissionId: submissionSpeakerTable.submissionId,
+				speakerId: speakerProfileTable.id,
+				name: speakerProfileTable.name,
+				sortName: speakerProfileTable.sortName,
+				jobTitle: speakerProfileTable.jobTitle,
+				company: speakerProfileTable.company,
+				headshotUrl: speakerProfileTable.headshotUrl,
+				bio: speakerProfileTable.bio
+			})
+			.from(submissionSpeakerTable)
+			.innerJoin(
+				speakerProfileTable,
+				eq(submissionSpeakerTable.speakerProfileId, speakerProfileTable.id)
+			)
+			// Restricting here is the point, not an optimisation: without it the join
+			// reads every speaker of every submission in every conference — including
+			// bios and headshots of people whose talks were rejected — and correctness
+			// depends on discarding them afterwards. Not selected beats not rendered.
+			.where(inArray(submissionSpeakerTable.submissionId, submissionIds))
+			.orderBy(asc(submissionSpeakerTable.position))
+	);
 }
 
 type PlacementRow = Awaited<ReturnType<typeof selectPublishedPlacements>>[number];
