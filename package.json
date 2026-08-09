@@ -1,5 +1,5 @@
 {
-	"name": "sveltekit-vibe-starter",
+	"name": "kill-my-saas",
 	"private": true,
 	"version": "0.0.1",
 	"type": "module",
@@ -36,9 +36,12 @@
 		"check:unused": "knip",
 		"docs:dev": "vitepress dev docs",
 		"docs:build": "vitepress build docs",
-		"docs:preview": "vitepress preview docs"
+		"docs:preview": "vitepress preview docs",
+		"dev:cf": "wrangler dev",
+		"build:cf": "vite build"
 	},
 	"devDependencies": {
+		"@cloudflare/workers-types": "^5.20260809.1",
 		"@eslint/compat": "^1.4.1",
 		"@eslint/js": "^9.39.2",
 		"@inlang/paraglide-js": "^2.4.0",
@@ -46,7 +49,7 @@
 		"@inlang/plugin-message-format": "^4.0.0",
 		"@internationalized/date": "^3.9.0",
 		"@lucide/svelte": "^0.574.0",
-		"@sveltejs/adapter-node": "^5.3.2",
+		"@sveltejs/adapter-cloudflare": "^7.2.9",
 		"@sveltejs/kit": "^2.43.5",
 		"@sveltejs/vite-plugin-svelte": "^6.2.1",
 		"@tailwindcss/forms": "^0.5.10",
@@ -91,7 +94,8 @@
 		"vaul-svelte": "^1.0.0-next.7",
 		"vite": "^7.1.7",
 		"vitepress": "^1.6.4",
-		"vitest": "^4.0.18"
+		"vitest": "^4.0.18",
+		"wrangler": "^4.120.0"
 	},
 	"dependencies": {
 		"@ai-sdk/azure": "^3.0.30",

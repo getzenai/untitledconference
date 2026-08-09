@@ -34,3 +34,6 @@ src/lib/paraglide
 cypress/screenshots
 cypress/videos
 cypress/downloads
+# Cloudflare local secrets
+.dev.vars
+.wrangler/
