@@ -36,6 +36,11 @@ export default defineConfig({
 					name: 'integration',
 					include: ['src/**/*.integration.test.ts'],
 					environment: 'node',
+					// Every integration file shares the one physical TEST_DATABASE_URL, and
+					// `cleanupTestDatabase()` empties whole tables rather than only its own
+					// rows. Run the files one at a time — in parallel, one file's cleanup
+					// deletes another file's fixtures mid-test.
+					fileParallelism: false,
 					globalSetup: './vitest.integration.setup.ts',
 					setupFiles: ['./vitest.integration.env.ts'],
 					env: {

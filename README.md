@@ -48,6 +48,22 @@ npm run db:studio        # Open Drizzle Studio
 
 All database commands automatically get credentials from Infisical (or .env for DB URLs).
 
+## Background Jobs
+
+[pg-boss](https://github.com/timgit/pg-boss) job queue, stored in the same Postgres database.
+
+```bash
+npm run jobs:worker:dev   # run the worker locally (separate from `npm run dev`)
+npm run jobs:worker       # production: runs build/worker.js, emitted by `npm run build`
+```
+
+Enqueue from any server code with `await myJob.enqueue({ ... })`. In production the worker
+runs as a second container from the same image (see the `worker` service in
+`scripts/hetzner-deploy/docker-compose.prod.yml`).
+
+See `src/lib/server/jobs/CLAUDE.md` for how to add a job, schedule cron jobs, and how the
+worker is deployed.
+
 ## Testing
 
 ```bash

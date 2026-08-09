@@ -19,9 +19,23 @@
  * Server-only by virtue of living under `$lib/server`: never import it from
  * client code.
  */
-import { env as dynamicPrivateEnv } from '$env/dynamic/private';
 import { formatEnvIssues } from '$lib/env/format';
 import { serverEnvSchema, type ServerEnv } from '$lib/env/server-env-schema';
+
+/**
+ * Resolved dynamically so this module also loads outside SvelteKit: the job
+ * worker (`src/lib/server/jobs/worker.ts`) is bundled by esbuild into
+ * `build/worker.js` and runs as a plain Node process, where the virtual module
+ * `$env/dynamic/private` does not exist. Same fallback as `./logger.ts`.
+ */
+let rawEnv: Record<string, string | undefined> = process.env;
+
+try {
+	const envModule = await import('$env/dynamic/private');
+	rawEnv = envModule.env;
+} catch {
+	// Not in a SvelteKit environment, use process.env
+}
 
 export type { ServerEnv };
 
@@ -31,7 +45,7 @@ let cached: ServerEnv | null = null;
 export function serverEnv(): ServerEnv {
 	if (cached) return cached;
 
-	const result = serverEnvSchema.safeParse(dynamicPrivateEnv);
+	const result = serverEnvSchema.safeParse(rawEnv);
 	if (!result.success) {
 		throw new Error(
 			`${formatEnvIssues(result.error.issues, 'server environment')}\n\n` +

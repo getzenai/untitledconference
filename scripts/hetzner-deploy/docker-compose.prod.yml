@@ -23,6 +23,21 @@ services:
     networks:
       - internal
 
+  worker:
+    build:
+      context: .
+    command: ['node', 'build/worker.js']
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL
+      - BETTER_AUTH_SECRET
+      - NODE_ENV=production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
   migrate:
     build:
       context: .

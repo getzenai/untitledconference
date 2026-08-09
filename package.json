@@ -6,7 +6,8 @@
 	"scripts": {
 		"dev": "./scripts/infisical/dev-from-infisical.sh",
 		"dev:vite": "vite dev --host",
-		"build": "vite build",
+		"build": "vite build && npm run build:worker",
+		"build:worker": "esbuild src/lib/server/jobs/worker.ts --bundle --platform=node --format=esm --packages=external --outfile=build/worker.js",
 		"preview": "vite preview",
 		"prepare": "husky || true && (svelte-kit sync || echo '')",
 		"check": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy localStorage url preferredLanguage baseLocale --silent && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
@@ -27,6 +28,8 @@
 		"db:push:force": "./scripts/infisical/dev-from-infisical.sh npx drizzle-kit push --force",
 		"db:push:test": "./scripts/infisical/dev-from-infisical.sh bash -c 'DATABASE_URL=\"$TEST_DATABASE_URL\" npx drizzle-kit push --force'",
 		"db:migrate": "./scripts/infisical/dev-from-infisical.sh npx drizzle-kit migrate",
+		"jobs:worker:dev": "./scripts/infisical/dev-from-infisical.sh npx tsx watch src/lib/server/jobs/worker.ts",
+		"jobs:worker": "node build/worker.js",
 		"db:studio": "./scripts/infisical/dev-from-infisical.sh npx drizzle-kit studio",
 		"check:unused": "knip",
 		"docs:dev": "vitepress dev docs",
@@ -55,6 +58,7 @@
 		"cypress": "^15.19.0",
 		"dotenv": "^17.2.2",
 		"drizzle-kit": "^0.31.5",
+		"esbuild": "^0.25.12",
 		"eslint": "^9.39.2",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.12.4",
@@ -78,14 +82,14 @@
 		"tailwind-merge": "^3.3.1",
 		"tailwind-variants": "^3.1.1",
 		"tailwindcss": "^4.1.13",
+		"tsx": "^4.23.11",
 		"tw-animate-css": "^1.4.0",
 		"typescript": "^5.9.2",
 		"typescript-eslint": "^8.44.1",
 		"vaul-svelte": "^1.0.0-next.7",
 		"vite": "^7.1.7",
 		"vitepress": "^1.6.4",
-		"vitest": "^4.0.18",
-		"zod": "^4.1.11"
+		"vitest": "^4.0.18"
 	},
 	"dependencies": {
 		"@ai-sdk/azure": "^3.0.30",
@@ -100,12 +104,14 @@
 		"mammoth": "^1.11.0",
 		"nanoid": "^5.1.6",
 		"pdfjs-dist": "^5.4.149",
+		"pg-boss": "^12.27.0",
 		"postgres": "^3.4.7",
 		"remark-gfm": "^4.0.1",
 		"remark-parse": "^11.0.0",
 		"unified": "^11.0.5",
 		"winston": "^3.17.0",
-		"xlsx": "^0.18.5"
+		"xlsx": "^0.18.5",
+		"zod": "^4.1.11"
 	},
 	"overrides": {
 		"comment": "Override Zod v3 dependencies to use v4 to fix TypeScript conflicts between sveltekit-superforms (uses v3) and Better Auth (requires v4). See: https://github.com/ciscoheat/sveltekit-superforms/issues/630",
