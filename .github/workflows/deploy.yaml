@@ -88,14 +88,25 @@ jobs:
           done
           exit $missing
 
-      - name: Install postgresql-client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      # Neon runs Postgres 18; Ubuntu 24.04 ships client 16, and pg_dump refuses to
+      # dump a server newer than itself. The PGDG repo is the only way to get a
+      # matching major on the runner.
+      - name: Install a matching postgresql-client (18)
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          /usr/lib/postgresql/18/bin/pg_dump --version
 
       # The way back. Drizzle migrations are forward-only, so the rollback path is
       # this dump plus `psql < dump.sql`, not a down-migration. Kept as an artifact
       # because the runner is discarded.
       - name: Dump the database before migrating
-        run: pg_dump --no-owner --no-privileges --file=pre-migration.sql "$NEON_CONNECTION_STRING"
+        run: /usr/lib/postgresql/18/bin/pg_dump --no-owner --no-privileges --file=pre-migration.sql "$NEON_CONNECTION_STRING"
 
       - name: Upload pre-migration dump
         uses: actions/upload-artifact@v4
