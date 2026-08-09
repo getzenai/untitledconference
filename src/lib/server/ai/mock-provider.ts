@@ -12,18 +12,10 @@ export class MockProvider implements AIProvider {
 		systemPrompt: string,
 		userPrompt: string
 	): Promise<z.infer<T>> {
-		// For TipTap content, return a wrapped transformed response
-		if (userPrompt.includes('TipTap')) {
+		// For markdown editor content, return a wrapped transformed response
+		if (userPrompt.includes('markdown content according to this instruction')) {
 			const mockTransformed = {
-				content: {
-					type: 'paragraph',
-					content: [
-						{
-							type: 'text',
-							text: '[MOCK TRANSFORMED] Your text has been transformed successfully!'
-						}
-					]
-				}
+				content: '[MOCK TRANSFORMED] Your text has been transformed successfully!'
 			};
 			return mockTransformed as z.infer<T>;
 		}
@@ -80,40 +72,6 @@ export class MockProvider implements AIProvider {
 	}
 
 	private generateMockData(schema: z.ZodType, context: string): unknown {
-		// Check if context contains TipTap JSON content
-		if (context.includes('"type"') && context.includes('"content"')) {
-			try {
-				// Try to parse the context as it might contain the original TipTap content
-				const originalContent = JSON.parse(context.match(/\{.*\}/s)?.[0] || '{}');
-
-				// Return a transformed version of TipTap content
-				if (originalContent.type === 'text' && originalContent.text) {
-					return {
-						type: 'text',
-						text: `[TRANSFORMED] ${originalContent.text}`,
-						marks: originalContent.marks || []
-					};
-				} else if (originalContent.type && originalContent.content) {
-					// For nodes with content (paragraph, heading, etc.)
-					return {
-						...originalContent,
-						content: originalContent.content.map((node: unknown) => {
-							const typedNode = node as Record<string, unknown>;
-							if (typedNode.type === 'text') {
-								return {
-									...typedNode,
-									text: `[TRANSFORMED] ${typedNode.text || ''}`
-								};
-							}
-							return node;
-						})
-					};
-				}
-			} catch {
-				// If parsing fails, fall through to normal mock generation
-			}
-		}
-
 		if (schema instanceof z.ZodString) {
 			const zodDef = schema.def as z.ZodString & { description?: string };
 			const description = zodDef.description || '';
@@ -157,17 +115,7 @@ export class MockProvider implements AIProvider {
 		}
 
 		if (schema instanceof z.ZodLazy) {
-			// Handle lazy schemas (which TipTap schema uses)
-			// Return a simple transformed paragraph
-			return {
-				type: 'paragraph',
-				content: [
-					{
-						type: 'text',
-						text: '[MOCK TRANSFORMED] Your text has been transformed by AI'
-					}
-				]
-			};
+			return '[MOCK TRANSFORMED] Your text has been transformed by AI';
 		}
 
 		// Default fallback

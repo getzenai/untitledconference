@@ -1,22 +1,19 @@
 import { AIProviderFactory } from '$lib/server/ai/factory';
 import { AIServiceError } from '$lib/server/ai/types';
 import { z } from 'zod/v4';
-import { extractValidatedContent, validateTiptapContent } from './tiptap-validator';
-import { validateJsonDepth, validatePromptLength } from './validation-constants';
+import { validateMarkdownContent } from './markdown-validator';
+import { validateContentSize, validatePromptLength } from './validation-constants';
 
 // Schema that wraps the content to satisfy Azure OpenAI's requirement for object type
-const TiptapTransformSchema = z.object({
-	content: z.union([
-		z.object({}).passthrough(), // Single node
-		z.array(z.object({}).passthrough()) // Array of nodes
-	])
+const MarkdownTransformSchema = z.object({
+	content: z.string()
 });
 
 // Helper function to create system prompt
-function getTiptapSystemPrompt(): string {
-	return `You are an AI assistant that works with TipTap editor JSON format.
+function getMarkdownSystemPrompt(): string {
+	return `You are an AI assistant that works with markdown content in a rich text editor.
 
-CRITICAL: You must ONLY return valid JSON. No explanations, no "Here is your text", no code fences, no markdown. ONLY the JSON object.
+CRITICAL: You must ONLY return valid JSON. No explanations, no "Here is your text", no code fences around the JSON, no commentary. ONLY the JSON object.
 
 IMPORTANT: When transforming selected content:
 - ONLY transform what was explicitly selected
@@ -24,76 +21,41 @@ IMPORTANT: When transforming selected content:
 - The output will REPLACE the selection, so it must be EXACTLY what should replace it
 - Context is for understanding only - never include it in the output
 
-TipTap JSON Structure:
-- paragraph: Text paragraph with content array
-- heading: Heading with attrs.level (1-6)
-- text: Text node with optional marks array
-- blockquote: Quote block
-- bulletList/orderedList: List containers with listItem children
-- codeBlock: Code block with optional attrs.language
+Supported markdown syntax (CommonMark + GitHub Flavored Markdown):
+- Headings: # H1, ## H2, ### H3 (up to ######)
+- Paragraphs: plain text separated by a blank line
+- Bold: **text**
+- Italic: *text*
+- Strikethrough: ~~text~~
+- Inline code: \`code\`
+- Fenced code blocks: \`\`\`language ... \`\`\`
+- Blockquotes: > quoted text
+- Bullet lists: - item
+- Ordered lists: 1. item
+- Horizontal rules: ---
+- Links: [label](https://example.com)
+- Images: ![alt](https://example.com/image.png)
+- Tables: GitHub pipe tables
 
-CRITICAL MARK FORMAT - THIS IS WHERE ERRORS HAPPEN:
-Marks MUST be an array of objects. Each mark is an object with a "type" field.
+NOT SUPPORTED - never emit these:
+- Raw HTML tags (<div>, <br>, <span>, ...) - the editor cannot render them
+- Reference style links ([label][ref] with a separate [ref]: url definition)
+- Front matter (--- yaml blocks at the top)
 
-CORRECT mark format:
-"marks": [{"type": "bold"}, {"type": "italic"}]
-
-INCORRECT formats that will fail:
-"marks": ["bold", "italic"]  ❌ WRONG - strings not allowed
-"marks": "bold"  ❌ WRONG - must be array
-"marks": [{"bold": true}]  ❌ WRONG - must have "type" field
-
-Valid mark types:
-- {"type": "bold"} - Makes text bold
-- {"type": "italic"} - Makes text italic  
-- {"type": "strike"} - Strikethrough text
-- {"type": "code"} - Inline code formatting (CANNOT combine with other marks!)
-
-IMPORTANT LIMITATION: The "code" mark CANNOT be combined with bold, italic, or strike!
-- ✅ VALID: [{"type": "bold"}, {"type": "italic"}]
-- ✅ VALID: [{"type": "bold"}, {"type": "italic"}, {"type": "strike"}]
-- ✅ VALID: [{"type": "code"}] (code alone)
-- ❌ INVALID: [{"type": "code"}, {"type": "bold"}]
-- ❌ INVALID: [{"type": "code"}, {"type": "italic"}]
-
-Example with multiple marks (NO code):
-{
-  "type": "text",
-  "text": "bold and italic",
-  "marks": [{"type": "bold"}, {"type": "italic"}]
-}
-
-Example with code mark (MUST be alone):
-{
-  "type": "text",
-  "text": "console.log()",
-  "marks": [{"type": "code"}]
-}
-
-Example paragraph:
-{
-  "type": "paragraph",
-  "content": [
-    {"type": "text", "text": "Normal "},
-    {"type": "text", "text": "bold", "marks": [{"type": "bold"}]},
-    {"type": "text", "text": " and "},
-    {"type": "text", "text": "code", "marks": [{"type": "code"}]}
-  ]
-}
+FORMATTING RULES:
+1. If the selection is a single inline fragment (part of a sentence), return an inline
+   fragment - do NOT wrap it in a heading, list or blockquote.
+2. If the selection spans whole blocks, return whole blocks separated by blank lines.
+3. Preserve the structure of the selection unless the instruction asks to change it.
 
 RESPONSE RULES:
-1. Return ONLY a JSON object with a 'content' field
+1. Return ONLY a JSON object with a "content" field holding the markdown string
 2. NO explanatory text before or after the JSON
-3. NO markdown code fences (triple backticks)
+3. NO markdown code fences around the JSON object itself
 4. NO "Here is..." or "Certainly..." or any other text
-5. Marks are ALWAYS an array of objects with "type" field
-6. Each mark object MUST have format: {"type": "markname"}
-7. Arrays must contain ONLY objects, NEVER strings like ["paragraph", {...}]
-8. Every item in content arrays MUST be a complete object with "type" field
 
-COMMON MISTAKES TO AVOID:
-- ❌ WRONG: "content": [{"type":"paragraph",...}, "paragraph", {...}]
-- ✅ RIGHT: "content": [{"type":"paragraph",...}, {"type":"paragraph",...}]
+Example response:
+{"content": "## Summary\\n\\nThis text is **clear** and *concise*."}
 
 Your response must start with { and end with }`;
 }
@@ -106,7 +68,7 @@ async function generateWithRetry(
 	systemPrompt: string,
 	userPrompt: string,
 	maxRetries = 3
-): Promise<unknown> {
+): Promise<string> {
 	let lastError: string | undefined;
 
 	for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -119,7 +81,7 @@ async function generateWithRetry(
 		let result;
 		try {
 			result = await provider.generateStructuredOutput(
-				TiptapTransformSchema,
+				MarkdownTransformSchema,
 				systemPrompt,
 				promptWithError
 			);
@@ -127,11 +89,9 @@ async function generateWithRetry(
 			// Handle schema validation errors from the AI provider
 			const errorMsg = genError instanceof Error ? genError.message : 'Unknown error';
 
-			// Extract the malformed JSON if available for debugging
 			if (errorMsg.includes('response did not match schema')) {
-				// Log error for debugging without exposing to console in production
 				lastError =
-					'AI returned malformed JSON structure. Ensure all array items are objects, not strings.';
+					'AI returned a malformed response. Return a JSON object with a single "content" string field.';
 
 				// Don't retry on last attempt
 				if (attempt === maxRetries) {
@@ -147,17 +107,15 @@ async function generateWithRetry(
 			throw genError;
 		}
 
-		// Validate the generated content
-		const validation = validateTiptapContent(result.content);
+		// Validate the generated markdown against what the editor can represent
+		const validation = validateMarkdownContent(result.content);
 
-		if (validation.isValid) {
-			// Return the validated and extracted content
-			return extractValidatedContent(result.content);
+		if (validation.isValid && validation.markdown) {
+			return validation.markdown;
 		}
 
 		// Store error for next attempt
 		lastError = validation.details || validation.error;
-		// Log validation failure for debugging without exposing details to console
 
 		// Don't retry on last attempt
 		if (attempt === maxRetries) {
@@ -172,14 +130,14 @@ async function generateWithRetry(
 }
 
 /**
- * Transform TipTap content using AI
+ * Transform markdown content using AI
  */
-export async function transformTiptapContent(
+export async function transformMarkdownContent(
 	content: unknown,
 	prompt: string,
 	userId: string,
 	documentContext?: unknown
-): Promise<unknown> {
+): Promise<string> {
 	if (!userId) {
 		throw new AIServiceError('Unauthorized', 'VALIDATION_ERROR');
 	}
@@ -194,50 +152,53 @@ export async function transformTiptapContent(
 		throw new AIServiceError(promptValidation.error || 'Prompt too long', 'VALIDATION_ERROR');
 	}
 
-	const contentToTransform = content || null;
+	const contentToTransform = typeof content === 'string' && content.length > 0 ? content : null;
 
-	// Validate content depth if provided
+	// Validate content size if provided
 	if (contentToTransform) {
-		const depthValidation = validateJsonDepth(contentToTransform);
-		if (!depthValidation.isValid) {
-			throw new AIServiceError(depthValidation.error || 'Content too deep', 'VALIDATION_ERROR');
+		const sizeValidation = validateContentSize(contentToTransform);
+		if (!sizeValidation.isValid) {
+			throw new AIServiceError(sizeValidation.error || 'Content too large', 'VALIDATION_ERROR');
 		}
 	}
 
 	try {
 		const provider = AIProviderFactory.create();
-		const systemPrompt = getTiptapSystemPrompt();
+		const systemPrompt = getMarkdownSystemPrompt();
 
 		// Build user prompt
-		let userPrompt = `Transform the following TipTap content according to this instruction: "${prompt}"
+		let userPrompt = `Transform the following markdown content according to this instruction: "${prompt}"
 
 SELECTED CONTENT TO TRANSFORM (ONLY transform this - it will be replaced):
-${contentToTransform ? JSON.stringify(contentToTransform, null, 2) : 'No content selected - generate new content'}`;
+${contentToTransform ?? 'No content selected - generate new content'}`;
 
 		// Add context if provided
 		if (documentContext) {
 			const ctx = documentContext as {
 				surroundingContent?: unknown;
 				fullDocument?: unknown;
-				selectionInfo?: unknown;
 			};
-			if (ctx.surroundingContent) {
-				userPrompt += `\n\nCONTEXT ONLY (DO NOT include in output - for understanding only):\n${JSON.stringify(ctx.surroundingContent, null, 2)}`;
+			if (typeof ctx.surroundingContent === 'string' && ctx.surroundingContent.length > 0) {
+				userPrompt += `\n\nCONTEXT ONLY (DO NOT include in output - for understanding only):\n${ctx.surroundingContent}`;
 			}
-			if (ctx.fullDocument && ctx.fullDocument !== ctx.surroundingContent) {
-				userPrompt += `\n\nFULL DOCUMENT CONTEXT (DO NOT include in output - for reference only):\n${JSON.stringify(ctx.fullDocument, null, 2)}`;
+			if (
+				typeof ctx.fullDocument === 'string' &&
+				ctx.fullDocument.length > 0 &&
+				ctx.fullDocument !== ctx.surroundingContent
+			) {
+				userPrompt += `\n\nFULL DOCUMENT CONTEXT (DO NOT include in output - for reference only):\n${ctx.fullDocument}`;
 			}
 		}
 
 		userPrompt += `
 
-CRITICAL: 
+CRITICAL:
 - ONLY return the transformed version of the SELECTED CONTENT
 - DO NOT include surrounding paragraphs, headings, or any context
 - The output will REPLACE the selected content, so only include what was selected
 - Context is provided to help you understand the document, but should NOT appear in output
 
-Return a JSON object with a "content" field containing ONLY the transformed selected content.`;
+Return a JSON object with a "content" field containing ONLY the transformed markdown.`;
 
 		// Generate and validate with retry
 		return await generateWithRetry(provider, systemPrompt, userPrompt);

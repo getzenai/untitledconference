@@ -1,10 +1,13 @@
-import { jsonb, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 import { organization, user } from './auth-schema';
 
 export const documentsTable = pgTable('documents', {
 	id: serial('id').primaryKey(),
 	title: text('title').notNull(),
-	content: jsonb('content').notNull(), // Tiptap JSON content
+	// Markdown (CommonMark + GFM) as produced by the Milkdown editor.
+	// Rows written before the Milkdown migration still contain ProseMirror JSON —
+	// read them through `toMarkdown()` from $lib/server/documents/content-format.
+	content: text('content').notNull(),
 	plainText: text('plain_text'), // For search and preview
 	userId: text('user_id')
 		.notNull()

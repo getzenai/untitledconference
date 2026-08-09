@@ -2,14 +2,13 @@ import { AIProviderFactory } from '$lib/server/ai/factory';
 import { db } from '$lib/server/db';
 import { documentsTable, type NewDocument } from '$lib/server/db/documents-schema';
 import { fail } from '@sveltejs/kit';
-import type { JSONContent } from '@tiptap/core';
 import { and, eq } from 'drizzle-orm';
+import { toMarkdown } from './content-format';
 import {
 	MAX_PLAIN_TEXT_LENGTH,
 	MAX_TITLE_LENGTH,
 	VALIDATION_ERRORS,
-	validateContentSize,
-	validateJsonDepth
+	validateContentSize
 } from './validation-constants';
 
 /**
@@ -61,17 +60,7 @@ export async function updateDocument(
 				return fail(413, { error: sizeValidation.error });
 			}
 
-			try {
-				const parsedContent = JSON.parse(data.content);
-				// Validate JSON depth
-				const depthValidation = validateJsonDepth(parsedContent);
-				if (!depthValidation.isValid) {
-					return fail(400, { error: depthValidation.error });
-				}
-				updateData.content = parsedContent;
-			} catch {
-				return fail(400, { error: VALIDATION_ERRORS.INVALID_JSON });
-			}
+			updateData.content = data.content;
 		}
 		if (data.plainText !== undefined) {
 			if (data.plainText.length > MAX_PLAIN_TEXT_LENGTH) {
@@ -179,27 +168,16 @@ export async function transformDocumentText(text: string, action: string, userId
 export async function createDocument(
 	userId: string,
 	organizationId: string | null = null,
-	initialContent?: JSONContent
+	initialContent?: string
 ) {
 	if (!userId) {
 		return fail(401, { error: 'Unauthorized' });
 	}
 
-	// Default minimal content for new documents
-	const defaultContent: JSONContent = initialContent || {
-		type: 'doc',
-		content: [
-			{
-				type: 'paragraph',
-				content: []
-			}
-		]
-	};
-
 	try {
 		const newDocument: NewDocument = {
 			title: `New Document ${new Date().toLocaleDateString()}`,
-			content: defaultContent,
+			content: initialContent ?? '',
 			plainText: '',
 			userId,
 			organizationId
@@ -233,7 +211,12 @@ export async function loadDocument(documentId: number, userId: string) {
 			.from(documentsTable)
 			.where(and(eq(documentsTable.id, documentId), eq(documentsTable.userId, userId)));
 
-		return document || null;
+		if (!document) {
+			return null;
+		}
+
+		// Legacy rows still hold ProseMirror JSON — hand markdown to the editor
+		return { ...document, content: toMarkdown(document.content) };
 	} catch {
 		// Return null on error to handle gracefully in UI
 		return null;

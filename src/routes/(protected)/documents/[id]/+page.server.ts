@@ -1,4 +1,4 @@
-import { transformTiptapContent } from '$lib/server/documents/ai-transform';
+import { transformMarkdownContent } from '$lib/server/documents/ai-transform';
 import {
 	deleteDocument,
 	loadDocument,
@@ -93,8 +93,9 @@ export const actions: Actions = {
 		const documentContext = formData.get('documentContext') as string;
 		const prompt = formData.get('prompt') as string;
 
-		if (!content || !prompt) {
-			return fail(400, { error: 'Content and prompt are required' });
+		// An empty selection is allowed — the AI then generates new content
+		if (!prompt) {
+			return fail(400, { error: 'Prompt is required' });
 		}
 
 		try {
@@ -112,21 +113,15 @@ export const actions: Actions = {
 				}
 			}
 
-			// Parse the content and context JSON
-			const parsedContent = JSON.parse(content);
+			// The selection is markdown, only the surrounding context is JSON encoded
 			const parsedContext = documentContext ? JSON.parse(documentContext) : null;
 
 			// Transform the content using AI with document context
-			const transformed = await transformTiptapContent(
-				parsedContent,
-				prompt,
-				user.id,
-				parsedContext
-			);
+			const transformed = await transformMarkdownContent(content, prompt, user.id, parsedContext);
 
 			return {
 				success: true,
-				transformed: JSON.stringify(transformed)
+				transformed
 			};
 		} catch (error) {
 			if (error instanceof SyntaxError) {

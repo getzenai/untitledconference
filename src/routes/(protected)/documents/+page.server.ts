@@ -1,7 +1,6 @@
 import { db } from '$lib/server/db';
 import { documentsTable, type NewDocument } from '$lib/server/db/documents-schema';
 import { fail, redirect } from '@sveltejs/kit';
-import type { JSONContent } from '@tiptap/core';
 import { and, desc, eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -49,190 +48,55 @@ export const actions: Actions = {
 		}
 
 		// Sample content for new documents showcasing all formatting features
-		const sampleContent: JSONContent = {
-			type: 'doc',
-			content: [
-				{
-					type: 'heading',
-					attrs: { level: 1 },
-					content: [{ type: 'text', text: 'Document Editor Features' }]
-				},
-				{
-					type: 'paragraph',
-					content: [
-						{
-							type: 'text',
-							text: 'This document showcases all the formatting capabilities available in the editor.'
-						}
-					]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 2 },
-					content: [{ type: 'text', text: 'Text Formatting' }]
-				},
-				{
-					type: 'paragraph',
-					content: [
-						{ type: 'text', text: 'You can make text ' },
-						{ type: 'text', marks: [{ type: 'bold' }], text: 'bold' },
-						{ type: 'text', text: ', ' },
-						{ type: 'text', marks: [{ type: 'italic' }], text: 'italic' },
-						{ type: 'text', text: ', ' },
-						{ type: 'text', marks: [{ type: 'strike' }], text: 'strikethrough' },
-						{ type: 'text', text: ', ' },
-						{ type: 'text', marks: [{ type: 'code' }], text: 'inline code' },
-						{ type: 'text', text: ', or ' },
-						{
-							type: 'text',
-							marks: [{ type: 'bold' }, { type: 'italic' }],
-							text: 'combine multiple styles'
-						},
-						{ type: 'text', text: '.' }
-					]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 2 },
-					content: [{ type: 'text', text: 'Lists' }]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 3 },
-					content: [{ type: 'text', text: 'Bullet List' }]
-				},
-				{
-					type: 'bulletList',
-					content: [
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'First bullet point' }] }
-							]
-						},
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'Second bullet point' }] },
-								{
-									type: 'bulletList',
-									content: [
-										{
-											type: 'listItem',
-											content: [
-												{ type: 'paragraph', content: [{ type: 'text', text: 'Nested bullet' }] }
-											]
-										},
-										{
-											type: 'listItem',
-											content: [
-												{
-													type: 'paragraph',
-													content: [{ type: 'text', text: 'Another nested bullet' }]
-												}
-											]
-										}
-									]
-								}
-							]
-						},
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'Third bullet point' }] }
-							]
-						}
-					]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 3 },
-					content: [{ type: 'text', text: 'Numbered List' }]
-				},
-				{
-					type: 'orderedList',
-					attrs: { start: 1 },
-					content: [
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'First numbered item' }] }
-							]
-						},
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'Second numbered item' }] }
-							]
-						},
-						{
-							type: 'listItem',
-							content: [
-								{ type: 'paragraph', content: [{ type: 'text', text: 'Third numbered item' }] }
-							]
-						}
-					]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 2 },
-					content: [{ type: 'text', text: 'Code Blocks' }]
-				},
-				{
-					type: 'codeBlock',
-					attrs: { language: 'javascript' },
-					content: [
-						{
-							type: 'text',
-							text: '// JavaScript code example\nfunction greet(name) {\n  return `Hello, ${name}!`;\n}\n\nconsole.log(greet("World"));'
-						}
-					]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 2 },
-					content: [{ type: 'text', text: 'Blockquotes' }]
-				},
-				{
-					type: 'blockquote',
-					content: [
-						{
-							type: 'paragraph',
-							content: [
-								{
-									type: 'text',
-									text: '"The best way to predict the future is to invent it." - Alan Kay'
-								}
-							]
-						},
-						{
-							type: 'paragraph',
-							content: [
-								{ type: 'text', text: 'Blockquotes can contain ' },
-								{ type: 'text', marks: [{ type: 'bold' }], text: 'formatted text' },
-								{ type: 'text', text: ' and multiple paragraphs.' }
-							]
-						}
-					]
-				},
-				{
-					type: 'heading',
-					attrs: { level: 2 },
-					content: [{ type: 'text', text: 'Horizontal Rule' }]
-				},
-				{
-					type: 'paragraph',
-					content: [{ type: 'text', text: 'Use horizontal rules to separate content sections:' }]
-				},
-				{
-					type: 'horizontalRule'
-				},
-				{
-					type: 'paragraph',
-					content: [{ type: 'text', text: 'Start editing to explore all features!' }]
-				}
-			]
-		};
+		const sampleContent = `# Document Editor Features
+
+This document showcases all the formatting capabilities available in the editor.
+
+## Text Formatting
+
+You can make text **bold**, *italic*, ~~strikethrough~~, \`inline code\`, or ***combine multiple styles***.
+
+## Lists
+
+### Bullet List
+
+- First bullet point
+- Second bullet point
+  - Nested bullet
+  - Another nested bullet
+- Third bullet point
+
+### Numbered List
+
+1. First numbered item
+2. Second numbered item
+3. Third numbered item
+
+## Code Blocks
+
+\`\`\`javascript
+// JavaScript code example
+function greet(name) {
+  return \`Hello, \${name}!\`;
+}
+
+console.log(greet("World"));
+\`\`\`
+
+## Blockquotes
+
+> "The best way to predict the future is to invent it." - Alan Kay
+>
+> Blockquotes can contain **formatted text** and multiple paragraphs.
+
+## Horizontal Rule
+
+Use horizontal rules to separate content sections:
+
+---
+
+Start editing to explore all features!
+`;
 
 		let document;
 		try {

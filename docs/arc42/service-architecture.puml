@@ -58,11 +58,19 @@ package "Services & Operations" #E8F5E9 {
       transformDocumentText()
     end note
 
-    [Tiptap Validator] as tiptap
-    note right of tiptap
+    [Markdown Validator] as mdvalidator
+    note right of mdvalidator
       validateContentSize()
-      validateJsonDepth()
-      Content sanitization
+      validateMarkdownContent()
+      Rejects constructs the
+      editor cannot round-trip
+    end note
+
+    [Content Format] as contentformat
+    note right of contentformat
+      toMarkdown()
+      Converts legacy
+      ProseMirror JSON on read
     end note
   }
 
@@ -128,7 +136,7 @@ package "Data Layer" #FFF3E0 {
       note bottom of docschema
         documentsTable
         userId FK, organizationId FK
-        Tiptap JSON content
+        Markdown content (text)
       end note
 
       [crud-example-schema] as crudschema
@@ -183,7 +191,8 @@ middleware --> config : env vars
 
 docops --> drizzle : read/write documents
 docops --> aifactory : AI transforms
-docops --> tiptap : content validation
+docops --> mdvalidator : content validation
+docops --> contentformat : legacy content conversion
 docops --> logger
 
 aifactory --> azureoai : when azure config present

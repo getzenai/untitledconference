@@ -306,9 +306,17 @@ For detailed implementation patterns, see the AI-optimized howto guides:
 </Select.Root>
 ```
 
-## Tiptap Editor
+## Milkdown Editor
 
-- **Tiptap LLM Reference**: https://tiptap.dev/llms.txt
+Rich text editing uses [Milkdown](https://milkdown.dev) (ProseMirror based, markdown first).
+
+- Component: `src/lib/components/document-editor/MilkdownEditor.svelte` (CommonMark + GFM presets)
+- Storage format: markdown in a `text` column, not ProseMirror JSON
+- Legacy TipTap JSON rows are converted on read by `toMarkdown()` in
+  `src/lib/server/documents/content-format.ts`
+- AI generated markdown is validated against the constructs the editor can
+  round-trip in `src/lib/server/documents/markdown-validator.ts`
+- **Milkdown docs**: https://milkdown.dev/docs/guide/getting-started
 
 ## Better Auth Docs
 

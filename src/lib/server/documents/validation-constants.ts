@@ -4,7 +4,7 @@
  */
 
 /**
- * Maximum size for JSON content in bytes (10MB)
+ * Maximum size for markdown content in bytes (10MB)
  * This prevents memory exhaustion from extremely large documents
  */
 export const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB
@@ -16,10 +16,10 @@ export const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB
 export const MAX_PROMPT_LENGTH = 10000;
 
 /**
- * Maximum depth for nested JSON objects
+ * Maximum nesting depth for markdown constructs (lists inside quotes inside ...)
  * Prevents stack overflow from deeply nested structures
  */
-export const MAX_JSON_DEPTH = 20;
+export const MAX_CONTENT_NESTING_DEPTH = 20;
 
 /**
  * Maximum length for document title
@@ -37,34 +37,12 @@ export const MAX_PLAIN_TEXT_LENGTH = 1000000; // 1M characters
 export const VALIDATION_ERRORS = {
 	CONTENT_TOO_LARGE: `Content exceeds maximum size of ${MAX_CONTENT_SIZE / 1024 / 1024}MB`,
 	PROMPT_TOO_LONG: `Prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`,
-	JSON_TOO_DEEP: `JSON structure exceeds maximum depth of ${MAX_JSON_DEPTH}`,
+	CONTENT_TOO_DEEP: `Content exceeds maximum nesting depth of ${MAX_CONTENT_NESTING_DEPTH}`,
 	TITLE_TOO_LONG: `Title exceeds maximum length of ${MAX_TITLE_LENGTH} characters`,
 	INVALID_JSON: 'Invalid JSON format',
 	UNAUTHORIZED: 'Unauthorized access',
 	DOCUMENT_NOT_FOUND: 'Document not found'
 } as const;
-
-/**
- * Helper function to check JSON depth
- */
-export function getJsonDepth(obj: unknown, currentDepth = 0): number {
-	if (currentDepth > MAX_JSON_DEPTH) {
-		return currentDepth;
-	}
-
-	if (typeof obj !== 'object' || obj === null) {
-		return currentDepth;
-	}
-
-	if (Array.isArray(obj)) {
-		return Math.max(currentDepth, ...obj.map((item) => getJsonDepth(item, currentDepth + 1)));
-	}
-
-	return Math.max(
-		currentDepth,
-		...Object.values(obj).map((value) => getJsonDepth(value, currentDepth + 1))
-	);
-}
 
 /**
  * Validate content size
@@ -88,20 +66,6 @@ export function validatePromptLength(prompt: string): { isValid: boolean; error?
 		return {
 			isValid: false,
 			error: VALIDATION_ERRORS.PROMPT_TOO_LONG
-		};
-	}
-	return { isValid: true };
-}
-
-/**
- * Validate JSON depth
- */
-export function validateJsonDepth(obj: unknown): { isValid: boolean; error?: string } {
-	const depth = getJsonDepth(obj);
-	if (depth > MAX_JSON_DEPTH) {
-		return {
-			isValid: false,
-			error: VALIDATION_ERRORS.JSON_TOO_DEEP
 		};
 	}
 	return { isValid: true };

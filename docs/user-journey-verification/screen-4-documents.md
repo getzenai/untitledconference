@@ -72,7 +72,7 @@
   - POST `?/delete`: removes document
   - POST `?/transformText`: text transformation
   - POST `?/aiTransform`: AI-powered content transformation
-- **Expected:** full Tiptap editor with toolbar, save, delete, and AI features
+- **Expected:** full Milkdown markdown editor with toolbar, save, delete, and AI features
 
 ## Verification Steps (MCP)
 

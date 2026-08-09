@@ -5,8 +5,7 @@
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
-	import TiptapEditor from './TiptapEditor.svelte';
-	import type { JSONContent } from '@tiptap/core';
+	import MilkdownEditor from './MilkdownEditor.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import { Input } from '$lib/components/ui/input/index.js';
 	import { Badge } from '$lib/components/ui/badge/index.js';
@@ -14,17 +13,20 @@
 	import AlertCircleIcon from '@lucide/svelte/icons/alert-circle';
 	import TrashIcon from '@lucide/svelte/icons/trash';
 
+	interface EditedDocument {
+		id: number;
+		title: string;
+		/** Markdown (CommonMark + GFM). */
+		content: string;
+		plainText: string | null;
+	}
+
 	interface Props {
 		// Props
-		document: {
-			id: number;
-			title: string;
-			content: JSONContent | unknown;
-			plainText: string | null;
-		};
+		document: EditedDocument;
 		form?: {
 			success?: boolean;
-			document?: typeof document;
+			document?: EditedDocument;
 			error?: string;
 			transformed?: string;
 			mock?: boolean;
@@ -49,19 +51,19 @@
 
 	// State
 	let saveStatus: 'idle' | 'saving' | 'saved' | 'error' = $state('idle');
-	let editorComponent: TiptapEditor | null = $state(null);
+	let editorComponent: ReturnType<typeof MilkdownEditor> | null = $state(null);
 	let titleDebounceTimer: ReturnType<typeof setTimeout>;
 	let contentDebounceTimer: ReturnType<typeof setTimeout>;
 	let documentTitle = $state(document.title);
 	let lastSavedTitle = $state(document.title);
-	let lastSavedContent = $state(JSON.stringify(document.content));
+	let lastSavedContent = $state(document.content);
 
 	// Handle form response
 	run(() => {
 		if (form?.success && form.document) {
 			saveStatus = 'saved';
 			lastSavedTitle = form.document.title;
-			lastSavedContent = JSON.stringify(form.document.content);
+			lastSavedContent = form.document.content;
 			setTimeout(() => {
 				saveStatus = 'idle';
 			}, 2000);
@@ -73,13 +75,13 @@
 		}
 	});
 
-	async function saveDocument(content: JSONContent, plainText: string, immediate = false) {
+	async function saveDocument(content: string, plainText: string, immediate = false) {
 		// Clear existing timer
 		clearTimeout(contentDebounceTimer);
 
 		const save = async () => {
 			// Skip if nothing changed
-			const currentContent = JSON.stringify(content);
+			const currentContent = content;
 			if (lastSavedTitle === documentTitle && lastSavedContent === currentContent) {
 				return;
 			}
@@ -243,9 +245,9 @@
 
 	<!-- Editor -->
 	<div class="flex-1 overflow-hidden">
-		<TiptapEditor
+		<MilkdownEditor
 			bind:this={editorComponent}
-			content={document.content as JSONContent}
+			content={document.content}
 			onUpdate={saveDocument}
 			placeholder="Start writing your document..."
 			class="h-full"

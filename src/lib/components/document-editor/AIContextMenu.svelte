@@ -11,13 +11,19 @@
 	import { browser } from '$app/environment';
 	import { onDestroy, tick } from 'svelte';
 
+	interface DocumentContext {
+		surroundingContent: string;
+		fullDocument: string | null;
+	}
+
 	interface Props {
 		visible?: boolean;
 		x?: number;
 		y?: number;
-		selectedContent?: Record<string, unknown> | null;
-		documentContext?: Record<string, unknown> | null;
-		onTransform?: ((result: Record<string, unknown>) => void) | undefined;
+		/** The markdown the transformation replaces. */
+		selectedContent?: string | null;
+		documentContext?: DocumentContext | null;
+		onTransform?: ((markdown: string) => void) | undefined;
 		onClose?: (() => void) | undefined;
 	}
 
@@ -153,8 +159,8 @@
 							transformed?: unknown;
 							error?: string;
 						};
-						if (data?.transformed) {
-							onTransform?.(data.transformed as Record<string, unknown>);
+						if (typeof data?.transformed === 'string' && data.transformed.length > 0) {
+							onTransform?.(data.transformed);
 							handleClose();
 						} else {
 							errorMessage = data?.error || 'Failed to transform content';
@@ -179,8 +185,12 @@
 				};
 			}}
 		>
-			<input type="hidden" name="content" value={JSON.stringify(selectedContent)} />
-			<input type="hidden" name="documentContext" value={JSON.stringify(documentContext)} />
+			<input type="hidden" name="content" value={selectedContent ?? ''} />
+			<input
+				type="hidden"
+				name="documentContext"
+				value={documentContext ? JSON.stringify(documentContext) : ''}
+			/>
 			<input type="hidden" name="prompt" value={prompt} />
 
 			<div class="mb-3 flex items-center justify-between {isSubmitting ? 'ai-processing' : ''}">
@@ -264,12 +274,8 @@
 					<div class="text-muted-foreground text-xs">
 						{#if isSubmitting}
 							Transforming content...
-						{:else if selectedContent.type === 'text'}
-							Selected text
-						{:else if selectedContent.type}
-							Selected: {selectedContent.type}
 						{:else}
-							Multiple blocks selected
+							{selectedContent.length} selected characters will be replaced
 						{/if}
 					</div>
 				{/if}

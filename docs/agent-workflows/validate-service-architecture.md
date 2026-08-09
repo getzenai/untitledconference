@@ -18,7 +18,7 @@ Search `src/lib/server/` for all `.ts` files:
 - Compare DB schemas (`db/auth-schema.ts`, `db/documents-schema.ts`, `db/examples/crud-example-schema.ts`) against PUML Schemas
 - Compare AI provider files (`ai/factory.ts`, `ai/azure-openai-provider.ts`, `ai/mock-provider.ts`) against PUML AI Provider package
 - Compare service files (`services/email-service.ts`, `services/system-invitation.ts`) against PUML Communication package
-- Compare document operations (`documents/operations.ts`, `documents/tiptap-validator.ts`) against PUML Documents package
+- Compare document operations (`documents/operations.ts`, `documents/markdown-validator.ts`, `documents/content-format.ts`) against PUML Documents package
 - Compare utils (`utils/organization-transfer.ts`) against PUML Organization Utils
 - Check for new services or modules not in the diagram
 
