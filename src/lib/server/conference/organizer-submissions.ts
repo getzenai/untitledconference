@@ -124,6 +124,64 @@ async function speakersFor(submissionIds: number[]): Promise<Map<number, Speaker
 	return byId;
 }
 
+/**
+ * Adds one joined score row to its review.
+ *
+ * The left joins produce a row with null score columns for a review nobody has filled
+ * in yet — that review still counts as assigned, just not as scored, which is the
+ * difference between "3/4 reviewed" and a wrong average.
+ */
+function pushScore(
+	review: ReviewScores,
+	row: { value: string | null; weight: string | null; scaleMax: number | null }
+) {
+	if (row.value === null || row.weight === null) return;
+	review.scores.push({
+		value: Number(row.value),
+		weight: Number(row.weight),
+		scaleMax: row.scaleMax
+	});
+}
+
+/** The SQL predicate behind the filter bar. */
+function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
+	const where = [eq(submissionTable.conferenceId, conferenceId)];
+
+	if (filters.status?.length) {
+		where.push(inArray(submissionTable.status, filters.status as Submission['status'][]));
+	}
+	if (filters.trackId) where.push(eq(submissionTable.trackId, filters.trackId));
+	if (filters.sessionFormatId) {
+		where.push(eq(submissionTable.sessionFormatId, filters.sessionFormatId));
+	}
+	if (filters.q?.trim()) {
+		const needle = `%${filters.q.trim()}%`;
+		// Title or speaker: the organizer searches for whichever one they remember.
+		where.push(
+			or(
+				ilike(submissionTable.title, needle),
+				exists(
+					db
+						.select({ one: sql`1` })
+						.from(submissionSpeakerTable)
+						.innerJoin(
+							speakerProfileTable,
+							eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+						)
+						.where(
+							and(
+								eq(submissionSpeakerTable.submissionId, submissionTable.id),
+								ilike(speakerProfileTable.name, needle)
+							)
+						)
+				)
+			)!
+		);
+	}
+
+	return and(...where);
+}
+
 /** Review rows plus their per-criterion scores, grouped per submission. */
 async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 	const empty = new Map<number, (ReviewScores & { id: number })[]>();
@@ -165,15 +223,7 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 			};
 			byReview.set(row.reviewId, review);
 		}
-		// The left joins produce one row with null score columns for a review nobody
-		// has filled in yet. That review still counts as assigned, just not as scored.
-		if (row.value !== null && row.weight !== null) {
-			review.scores.push({
-				value: Number(row.value),
-				weight: Number(row.weight),
-				scaleMax: row.scaleMax
-			});
-		}
+		pushScore(review, row);
 	}
 
 	const bySubmission = empty;
@@ -190,40 +240,6 @@ export async function listSubmissions(
 	conferenceId: number,
 	filters: SubmissionFilters = {}
 ): Promise<SubmissionRow[]> {
-	const where = [eq(submissionTable.conferenceId, conferenceId)];
-
-	if (filters.status?.length) {
-		where.push(inArray(submissionTable.status, filters.status as Submission['status'][]));
-	}
-	if (filters.trackId) where.push(eq(submissionTable.trackId, filters.trackId));
-	if (filters.sessionFormatId) {
-		where.push(eq(submissionTable.sessionFormatId, filters.sessionFormatId));
-	}
-	if (filters.q?.trim()) {
-		const needle = `%${filters.q.trim()}%`;
-		// Title or speaker: the organizer searches for whichever one they remember.
-		where.push(
-			or(
-				ilike(submissionTable.title, needle),
-				exists(
-					db
-						.select({ one: sql`1` })
-						.from(submissionSpeakerTable)
-						.innerJoin(
-							speakerProfileTable,
-							eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
-						)
-						.where(
-							and(
-								eq(submissionSpeakerTable.submissionId, submissionTable.id),
-								ilike(speakerProfileTable.name, needle)
-							)
-						)
-				)
-			)!
-		);
-	}
-
 	const rows = await db
 		.select({
 			id: submissionTable.id,
@@ -239,7 +255,7 @@ export async function listSubmissions(
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
-		.where(and(...where))
+		.where(submissionWhere(conferenceId, filters))
 		.orderBy(desc(submissionTable.submittedAt), asc(submissionTable.id));
 
 	const ids = rows.map((r) => r.id);
@@ -268,13 +284,8 @@ export function submissionCounts(rows: SubmissionRow[]) {
 
 export type SubmissionDetail = NonNullable<Awaited<ReturnType<typeof submissionDetail>>>;
 
-/**
- * One submission with everything the decision needs on a single screen (Ü4).
- *
- * Scoped by `conferenceId` as well as by id: an organizer of conference A must not
- * reach a submission of conference B by editing the URL.
- */
-export async function submissionDetail(conferenceId: number, submissionId: number) {
+/** The submission's own columns plus the three lookups the header shows. */
+async function submissionHeader(conferenceId: number, submissionId: number) {
 	const [row] = await db
 		.select({
 			id: submissionTable.id,
@@ -296,160 +307,147 @@ export async function submissionDetail(conferenceId: number, submissionId: numbe
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
+		// Scoped by conference as well as by id: an organizer of conference A must not
+		// reach a submission of conference B by editing the URL.
 		.where(
 			and(eq(submissionTable.id, submissionId), eq(submissionTable.conferenceId, conferenceId))
 		)
 		.limit(1);
 
-	if (!row) return null;
+	return row ?? null;
+}
 
-	const [speakers, answers, reviewRows, placements] = await Promise.all([
-		speakersFor([submissionId]),
-		db
-			.select({
-				label: formFieldTable.label,
-				kind: formFieldTable.kind,
-				value: submissionAnswerTable.value
-			})
-			.from(submissionAnswerTable)
-			.innerJoin(formFieldTable, eq(formFieldTable.id, submissionAnswerTable.formFieldId))
-			.where(eq(submissionAnswerTable.submissionId, submissionId))
-			.orderBy(asc(formFieldTable.position)),
-		db
-			.select({
-				reviewId: reviewTable.id,
-				reviewerName: user.name,
-				round: reviewRoundTable.name,
-				anonymized: reviewRoundTable.anonymized,
-				status: reviewTable.status,
-				comment: reviewTable.comment,
-				submittedAt: reviewTable.submittedAt,
-				criterion: scorecardCriterionTable.label,
-				criterionKind: scorecardCriterionTable.kind,
-				value: reviewScoreTable.valueNumber,
-				valueText: reviewScoreTable.valueText,
-				weight: scorecardCriterionTable.weight,
-				scaleMax: scorecardCriterionTable.scaleMax,
-				position: scorecardCriterionTable.position
-			})
-			.from(reviewTable)
-			.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
-			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
-			.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
-			.leftJoin(reviewScoreTable, eq(reviewScoreTable.reviewId, reviewTable.id))
-			.leftJoin(
-				scorecardCriterionTable,
-				eq(scorecardCriterionTable.id, reviewScoreTable.scorecardCriterionId)
+/** Ü2 — the answers to the configurable fields, in the order the form asked them. */
+function answersFor(submissionId: number) {
+	return db
+		.select({
+			label: formFieldTable.label,
+			kind: formFieldTable.kind,
+			value: submissionAnswerTable.value
+		})
+		.from(submissionAnswerTable)
+		.innerJoin(formFieldTable, eq(formFieldTable.id, submissionAnswerTable.formFieldId))
+		.where(eq(submissionAnswerTable.submissionId, submissionId))
+		.orderBy(asc(formFieldTable.position));
+}
+
+/** One row per (review, criterion) — flat, because SQL has no other shape to offer. */
+function reviewRowsFor(conferenceId: number, submissionId: number) {
+	return db
+		.select({
+			reviewId: reviewTable.id,
+			reviewerName: user.name,
+			round: reviewRoundTable.name,
+			anonymized: reviewRoundTable.anonymized,
+			status: reviewTable.status,
+			comment: reviewTable.comment,
+			submittedAt: reviewTable.submittedAt,
+			criterion: scorecardCriterionTable.label,
+			value: reviewScoreTable.valueNumber,
+			valueText: reviewScoreTable.valueText,
+			weight: scorecardCriterionTable.weight,
+			scaleMax: scorecardCriterionTable.scaleMax
+		})
+		.from(reviewTable)
+		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
+		.leftJoin(reviewScoreTable, eq(reviewScoreTable.reviewId, reviewTable.id))
+		.leftJoin(
+			scorecardCriterionTable,
+			eq(scorecardCriterionTable.id, reviewScoreTable.scorecardCriterionId)
+		)
+		.where(
+			and(
+				eq(evaluationPlanTable.conferenceId, conferenceId),
+				eq(reviewTable.submissionId, submissionId)
 			)
-			.where(
-				and(
-					eq(evaluationPlanTable.conferenceId, conferenceId),
-					eq(reviewTable.submissionId, submissionId)
-				)
-			)
-			.orderBy(asc(reviewTable.id), asc(scorecardCriterionTable.position)),
-		db
-			.select({ id: placementTable.id, status: placementTable.status })
-			.from(placementTable)
-			.where(eq(placementTable.submissionId, submissionId))
-	]);
+		)
+		.orderBy(asc(reviewTable.id), asc(scorecardCriterionTable.position));
+}
 
-	const reviews = new Map<
-		number,
-		{
-			id: number;
-			reviewerName: string;
-			round: string;
-			status: string;
-			comment: string | null;
-			submittedAt: Date | null;
-			scores: {
-				criterion: string;
-				value: number | null;
-				valueText: string | null;
-				scaleMax: number | null;
-			}[];
-			score: number | null;
-		}
-	>();
+type ReviewRow = Awaited<ReturnType<typeof reviewRowsFor>>[number];
 
-	for (const r of reviewRows) {
-		let review = reviews.get(r.reviewId);
+/** Folds the flat join back into one entry per reviewer, with their own average. */
+function groupReviews(rows: ReviewRow[]) {
+	const byReview = new Map<number, ReturnType<typeof emptyReview>>();
+
+	for (const r of rows) {
+		let review = byReview.get(r.reviewId);
 		if (!review) {
-			review = {
-				id: r.reviewId,
-				// ABS-07: the round can hide the reviewer's identity from the reviewer's
-				// peers. The organizer still needs to know who has and has not answered,
-				// so anonymisation here labels the row rather than dropping it.
-				reviewerName: r.anonymized ? `Reviewer ${r.reviewId}` : (r.reviewerName ?? 'Reviewer'),
-				round: r.round,
-				status: r.status,
-				comment: r.comment,
-				submittedAt: r.submittedAt,
-				scores: [],
-				score: null
-			};
-			reviews.set(r.reviewId, review);
+			review = emptyReview(r);
+			byReview.set(r.reviewId, review);
 		}
 		if (r.criterion) {
 			review.scores.push({
 				criterion: r.criterion,
 				value: r.value === null ? null : Number(r.value),
 				valueText: r.valueText,
+				weight: r.weight === null ? 1 : Number(r.weight),
 				scaleMax: r.scaleMax
 			});
 		}
 	}
 
-	const reviewList = [...reviews.values()].map((review) => ({
+	return [...byReview.values()].map((review) => ({
 		...review,
-		score: submissionScore([
-			{
-				submitted: review.status === 'submitted',
-				scores: review.scores.map((s) => ({
-					value: s.value,
-					weight: 1,
-					scaleMax: s.scaleMax
-				}))
-			}
-		])
+		// The same weighting the table's aggregate uses — a reviewer's own average must
+		// not be computed by a second rule, or the two numbers disagree on one screen.
+		score: submissionScore([{ submitted: review.status === 'submitted', scores: review.scores }])
 	}));
+}
+
+function emptyReview(r: ReviewRow) {
+	return {
+		id: r.reviewId,
+		// ABS-07: the round can hide the reviewer's identity from their peers. The
+		// organizer still needs to know who has and has not answered, so anonymisation
+		// labels the row rather than dropping it.
+		reviewerName: r.anonymized ? `Reviewer ${r.reviewId}` : (r.reviewerName ?? 'Reviewer'),
+		round: r.round,
+		status: r.status,
+		comment: r.comment,
+		submittedAt: r.submittedAt,
+		scores: [] as {
+			criterion: string;
+			value: number | null;
+			valueText: string | null;
+			weight: number;
+			scaleMax: number | null;
+		}[]
+	};
+}
+
+/**
+ * One submission with everything the decision needs on a single screen (Ü4):
+ * the abstract, the custom answers, every review, and whether it is already in the
+ * programme.
+ */
+export async function submissionDetail(conferenceId: number, submissionId: number) {
+	const row = await submissionHeader(conferenceId, submissionId);
+	if (!row) return null;
+
+	const [speakers, answers, reviewRows, placements] = await Promise.all([
+		speakersFor([submissionId]),
+		answersFor(submissionId),
+		reviewRowsFor(conferenceId, submissionId),
+		db
+			.select({ id: placementTable.id, status: placementTable.status })
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, submissionId))
+	]);
+
+	const reviews = groupReviews(reviewRows);
 
 	return {
 		...row,
 		speakers: speakers.get(submissionId) ?? [],
 		answers,
-		reviews: reviewList,
-		score: submissionScore(reviewRowsToScores(reviewRows)),
+		reviews,
+		score: submissionScore(
+			reviews.map((r) => ({ submitted: r.status === 'submitted', scores: r.scores }))
+		),
 		/** Ü6: is this talk already sitting in the agenda, and how firmly? */
 		placements
 	};
-}
-
-/** Regroups the flat review/score join into the shape the aggregate expects. */
-function reviewRowsToScores(
-	rows: {
-		reviewId: number;
-		status: string;
-		value: string | null;
-		weight: string | null;
-		scaleMax: number | null;
-	}[]
-): ReviewScores[] {
-	const byReview = new Map<number, ReviewScores>();
-	for (const r of rows) {
-		let review = byReview.get(r.reviewId);
-		if (!review) {
-			review = { submitted: r.status === 'submitted', scores: [] };
-			byReview.set(r.reviewId, review);
-		}
-		if (r.value !== null && r.weight !== null) {
-			review.scores.push({
-				value: Number(r.value),
-				weight: Number(r.weight),
-				scaleMax: r.scaleMax
-			});
-		}
-	}
-	return [...byReview.values()];
 }
