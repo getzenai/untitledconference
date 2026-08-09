@@ -57,6 +57,15 @@ export const placementTable = pgTable(
 		endsAt: timestamp('ends_at', { withTimezone: true }),
 		/** Null means "across all rooms" — used by breaks. */
 		roomId: integer('room_id').references(() => roomTable.id, { onDelete: 'set null' }),
+		/**
+		 * The recording of the session as it was held, filled in after the event.
+		 *
+		 * It lives on the placement rather than on the submission because what was
+		 * recorded is a slot on the grid, not a proposal: a keynote or a panel is a
+		 * `block` with no submission behind it at all, and it gets recorded like
+		 * everything else. Scheme-checked on the way in — it is rendered as an `href`.
+		 */
+		recordingUrl: text('recording_url'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 		updatedAt: timestamp('updated_at', { withTimezone: true })
 			.notNull()

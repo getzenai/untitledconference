@@ -44,6 +44,11 @@ export type PublicSession = {
 	formatId: string | null;
 	/** Ordered, primary speaker first. */
 	speakerIds: string[];
+	/**
+	 * Set once the talk has been recorded and the organizer has pasted the link.
+	 * Null is the normal state before the conference happens.
+	 */
+	recordingUrl: string | null;
 };
 
 export type PublicDay = { id: string; date: string; label: string };

@@ -148,7 +148,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-platform',
 			formatId: 'fmt-keynote',
-			speakerIds: ['spk-lovelace']
+			speakerIds: ['spk-lovelace'],
+			recordingUrl: 'https://www.youtube.com/watch?v=oE49MdbPNYw'
 		},
 		{
 			id: 'ses-02',
@@ -161,7 +162,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-craft',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-hopper']
+			speakerIds: ['spk-hopper'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-03',
@@ -174,7 +176,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-studio',
 			trackId: 'track-platform',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-perlman']
+			speakerIds: ['spk-perlman'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-04',
@@ -187,7 +190,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-platform',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-hamilton']
+			speakerIds: ['spk-hamilton'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-05',
@@ -200,7 +204,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-studio',
 			trackId: 'track-craft',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-liskov']
+			speakerIds: ['spk-liskov'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-06',
@@ -213,7 +218,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-workshop',
 			trackId: 'track-product',
 			formatId: 'fmt-workshop',
-			speakerIds: ['spk-bartik', 'spk-hopper']
+			speakerIds: ['spk-bartik', 'spk-hopper'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-07',
@@ -226,7 +232,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-product',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-johnson']
+			speakerIds: ['spk-johnson'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-08',
@@ -239,7 +246,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-craft',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-turing']
+			speakerIds: ['spk-turing'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-09',
@@ -252,7 +260,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-platform',
 			formatId: 'fmt-keynote',
-			speakerIds: ['spk-berners-lee']
+			speakerIds: ['spk-berners-lee'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-10',
@@ -265,7 +274,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-craft',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-hopper']
+			speakerIds: ['spk-hopper'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-11',
@@ -278,7 +288,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-workshop',
 			trackId: 'track-product',
 			formatId: 'fmt-workshop',
-			speakerIds: ['spk-johnson', 'spk-turing']
+			speakerIds: ['spk-johnson', 'spk-turing'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-12',
@@ -291,7 +302,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-craft',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-bartik']
+			speakerIds: ['spk-bartik'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-13',
@@ -304,7 +316,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-studio',
 			trackId: 'track-platform',
 			formatId: 'fmt-talk',
-			speakerIds: ['spk-liskov', 'spk-perlman']
+			speakerIds: ['spk-liskov', 'spk-perlman'],
+			recordingUrl: null
 		},
 		{
 			id: 'ses-14',
@@ -317,7 +330,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			roomId: 'room-hall',
 			trackId: 'track-product',
 			formatId: 'fmt-keynote',
-			speakerIds: ['spk-hamilton', 'spk-lovelace']
+			speakerIds: ['spk-hamilton', 'spk-lovelace'],
+			recordingUrl: null
 		}
 	]
 };

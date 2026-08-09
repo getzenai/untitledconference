@@ -522,7 +522,11 @@ export async function submissionDetail(conferenceId: number, submissionId: numbe
 		answersFor(submissionId),
 		reviewRowsFor(conferenceId, submissionId),
 		db
-			.select({ id: placementTable.id, status: placementTable.status })
+			.select({
+				id: placementTable.id,
+				status: placementTable.status,
+				recordingUrl: placementTable.recordingUrl
+			})
 			.from(placementTable)
 			.where(eq(placementTable.submissionId, submissionId))
 	]);

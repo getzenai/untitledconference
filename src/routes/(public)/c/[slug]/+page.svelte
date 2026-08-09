@@ -146,6 +146,20 @@
 							>{session.room}{/if}
 					</p>
 
+					{#if session.recordingUrl}
+						<p class="mt-3">
+							<Button
+								href={session.recordingUrl}
+								rel="noopener"
+								target="_blank"
+								variant="outline"
+								size="sm"
+							>
+								Watch recording
+							</Button>
+						</p>
+					{/if}
+
 					<ShowMore text={session.description} class="mt-3" />
 
 					<ul class="mt-4 flex flex-wrap gap-x-6 gap-y-3">

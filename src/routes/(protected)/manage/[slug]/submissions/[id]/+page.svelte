@@ -14,6 +14,7 @@
 	import { formatScore } from '$lib/conference/scoring';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 
 	let { data, form } = $props();
 
@@ -53,6 +54,15 @@
 
 	const decided = $derived(s.status === 'accepted' || s.status === 'rejected');
 	const inTray = $derived(s.placements.length > 0);
+
+	/**
+	 * The slot the talk was actually held in.
+	 *
+	 * A recording belongs to a confirmed placement, not to a tentative one: a draft
+	 * parked on three slots is exactly the state where "which of these was recorded"
+	 * has no answer.
+	 */
+	const scheduled = $derived(s.placements.find((p) => p.status === 'confirmed') ?? null);
 </script>
 
 <svelte:head>
@@ -264,5 +274,54 @@
 				</p>
 			{/if}
 		</section>
+
+		{#if scheduled}
+			<!-- #20 stage 1. The conference page dies the day after the event unless
+			     something on it keeps working; the recording is that something. -->
+			<section class="border-border bg-card rounded-lg border p-4">
+				<h2 class="text-sm font-medium">Recording</h2>
+				<p class="text-muted-foreground mt-1 text-xs">
+					Paste the video link once it is online. The public agenda shows a "Watch recording" button
+					as soon as it is set; emptying the field takes it back down.
+				</p>
+				<form
+					method="POST"
+					action="?/recording"
+					class="mt-3 space-y-2"
+					use:enhance={() => {
+						busy = true;
+						return async ({ update }) => {
+							try {
+								await update();
+							} finally {
+								busy = false;
+							}
+						};
+					}}
+				>
+					<input type="hidden" name="placementId" value={scheduled.id} />
+					<Input
+						name="recordingUrl"
+						type="url"
+						value={scheduled.recordingUrl ?? ''}
+						placeholder="https://www.youtube.com/watch?v=…"
+						aria-label="Recording link"
+					/>
+					<div class="flex items-center gap-3">
+						<Button type="submit" size="sm" variant="outline" disabled={busy}>Save link</Button>
+						{#if scheduled.recordingUrl}
+							<a
+								href={scheduled.recordingUrl}
+								target="_blank"
+								rel="noopener"
+								class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+							>
+								Open it
+							</a>
+						{/if}
+					</div>
+				</form>
+			</section>
+		{/if}
 	</div>
 </div>
