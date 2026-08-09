@@ -20,7 +20,12 @@
 	},
 	// The real domain. `custom_domain` makes Cloudflare create and manage the DNS
 	// record and the certificate for us, so there is nothing to set by hand.
-	// The workers.dev URL keeps working alongside it.
+	//
+	// `workers_dev` must be set explicitly: declaring `routes` turns the
+	// *.workers.dev hostname OFF by default, which is how the first deploy of this
+	// block left it answering 404 / error 1042. Kept on as a fallback URL for when
+	// something is wrong with the domain itself.
+	"workers_dev": true,
 	"routes": [
 		{
 			"pattern": "untitledconference.com",
