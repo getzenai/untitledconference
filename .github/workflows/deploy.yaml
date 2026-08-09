@@ -1,0 +1,119 @@
+name: Deploy
+
+# Deploys `main` to Cloudflare Workers after CI has passed.
+#
+# Credentials come from Infisical at run time via GitHub OIDC — there are no
+# long-lived secrets in this repository. The identity is bound to
+# `repo:getzenai/untitledconference:ref:refs/heads/main`, so a pull request
+# (which can come from a fork) cannot mint a token and read production secrets.
+on:
+  workflow_run:
+    workflows: ['CI']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC; without it the Infisical step fails
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Migrate and deploy
+    runs-on: ubuntu-latest
+    # Never deploy a red main.
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fetches CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, NEON_CONNECTION_STRING,
+      # BETTER_AUTH_SECRET, RESEND_API_KEY and the R2 keys as environment variables
+      # for the rest of this job only.
+      #
+      # `domain` is not optional for us: it defaults to app.infisical.com and our
+      # tenant is in the EU region. Omitting it fails authentication without saying why.
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: oidc
+          identity-id: e8e7dc26-6908-4548-bf57-32edd043e944
+          project-slug: kill-saas-challenge-jy-cj
+          env-slug: prod
+          domain: https://eu.infisical.com
+
+      # Refuse to deploy against a database we cannot reach, rather than shipping
+      # a Worker that 500s on every request.
+      - name: Verify required variables are present
+        run: |
+          missing=0
+          for var in NEON_CONNECTION_STRING CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BETTER_AUTH_SECRET; do
+            if [ -z "${!var}" ]; then
+              echo "::error::$var is missing from Infisical (project kill-saas-challenge, env prod)"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      # The way back. Drizzle migrations are forward-only, so the rollback path is
+      # this dump plus `psql < dump.sql`, not a down-migration. Kept as an artifact
+      # because the runner is discarded.
+      - name: Dump the database before migrating
+        run: pg_dump --no-owner --no-privileges --file=pre-migration.sql "$NEON_CONNECTION_STRING"
+
+      - name: Upload pre-migration dump
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-migration-dump-${{ github.sha }}
+          path: pre-migration.sql
+          retention-days: 14
+
+      - name: Apply migrations
+        run: DATABASE_URL="$NEON_CONNECTION_STRING" node scripts/db/migrate.mjs
+
+      - name: Build
+        run: npm run build
+
+      - name: Put application secrets on the Worker
+        run: |
+          printf '%s' "$BETTER_AUTH_SECRET" | npx wrangler secret put BETTER_AUTH_SECRET
+          printf '%s' "$NEON_CONNECTION_STRING" | npx wrangler secret put DATABASE_URL
+
+      - name: Deploy
+        run: npx wrangler deploy
+
+      # Proves the deployed Worker can actually reach the database, which is what
+      # a missing or wrong variable would break. A green deploy step alone does not.
+      - name: Health check
+        run: |
+          url="https://untitledconference.jorrit-posor.workers.dev/api/v1/public/health"
+          echo "Checking $url"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -s -o /tmp/health.json -w '%{http_code}' --max-time 20 "$url" || true)
+            if [ "$code" = "200" ]; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $code"
+            sleep 6
+          done
+          echo "::error::Health check never returned 200 — the Worker is up but not healthy."
+          cat /tmp/health.json || true
+          exit 1
