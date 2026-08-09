@@ -73,11 +73,25 @@ export const cfpFormTable = pgTable('cfp_form', {
 });
 
 /**
+ * What a field's visibility condition is measured against (CFP-02).
+ *
+ * The criterion names the session format and the track explicitly — and those are
+ * columns on the submission, not answers to configurable fields, so a condition that
+ * could only point at another `form_field` would miss exactly the case being graded.
+ * `field` keeps the original ability to depend on another answer.
+ */
+export const conditionSource = pgEnum('form_field_condition_source', [
+	'field',
+	'session_format',
+	'track'
+]);
+
+/**
  * A configurable field on the submission form.
  *
- * `conditionFieldId` / `conditionValue` implement CFP-02: show this field only when
- * another field holds a given value. Self-referencing, so it is declared with an
- * explicit callback type.
+ * `conditionSource` / `conditionFieldId` / `conditionValue` implement CFP-02: show
+ * this field only when the chosen format, track or another answer holds a given
+ * value. Self-referencing, so it is declared with an explicit callback type.
  */
 export const formFieldTable = pgTable('form_field', {
 	id: serial('id').primaryKey(),
@@ -90,9 +104,13 @@ export const formFieldTable = pgTable('form_field', {
 	position: integer('position').notNull().default(0),
 	/** Choices for `select`, as a JSON array of strings. */
 	options: text('options'),
+	/** Null means the field is always shown. */
+	conditionSource: conditionSource('condition_source'),
+	/** Only for `conditionSource = 'field'`. */
 	conditionFieldId: integer('condition_field_id').references((): AnyPgColumn => formFieldTable.id, {
 		onDelete: 'set null'
 	}),
+	/** The answer, session format id or track id the condition is satisfied by. */
 	conditionValue: text('condition_value')
 });
 

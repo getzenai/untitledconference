@@ -1,0 +1,2 @@
+CREATE TYPE "public"."form_field_condition_source" AS ENUM('field', 'session_format', 'track');--> statement-breakpoint
+ALTER TABLE "form_field" ADD COLUMN "condition_source" "form_field_condition_source";
