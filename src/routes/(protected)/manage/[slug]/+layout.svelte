@@ -41,7 +41,54 @@
 	});
 </script>
 
-<div class="bg-background text-foreground flex min-h-svh">
+<div class="bg-background text-foreground flex min-h-svh flex-col md:flex-row">
+	<!--
+		The same six destinations on a phone, where the rail has nowhere to stand.
+		Below `md` the rail is hidden, and without this header the organizer arriving
+		from a link on their phone had no way to anywhere — not even back to their own
+		list of conferences.
+
+		A scrolling row rather than a drawer: no open state to get stuck, no focus trap
+		to get wrong, and it works with JavaScript switched off.
+	-->
+	<header class="border-border bg-card sticky top-0 z-10 border-b md:hidden">
+		<div class="flex items-center justify-between gap-3 px-4 py-3">
+			<a
+				href="/manage"
+				class="focus-visible:ring-ring min-w-0 rounded-md focus-visible:ring-[3px] focus-visible:outline-none"
+			>
+				<div class="truncate text-sm font-semibold">{data.conference.name}</div>
+				<div class="text-muted-foreground text-xs">Switch conference</div>
+			</a>
+			<ModeToggle />
+		</div>
+		<nav
+			class="flex gap-1 overflow-x-auto px-4 pb-2 text-sm"
+			aria-label="Conference sections"
+			data-testid="manage-mobile-nav"
+		>
+			{#each nav as item (item.href)}
+				{#if item.ready}
+					<a
+						href={item.href}
+						aria-current={isCurrent(item.href) ? 'page' : undefined}
+						class="focus-visible:ring-ring shrink-0 rounded-md px-3 py-1.5 focus-visible:ring-[3px] focus-visible:outline-none {isCurrent(
+							item.href
+						)
+							? 'bg-primary text-primary-foreground font-medium'
+							: 'text-muted-foreground hover:bg-muted hover:text-foreground'}"
+					>
+						{item.label}
+					</a>
+				{:else}
+					<span class="text-muted-foreground/60 shrink-0 px-3 py-1.5" title="Not built yet">
+						{item.label}
+					</span>
+				{/if}
+			{/each}
+		</nav>
+	</header>
+
 	<aside class="border-border bg-card hidden w-60 shrink-0 border-r p-4 md:block">
 		<a
 			href="/manage"

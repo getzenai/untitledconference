@@ -9,6 +9,7 @@
 	 * ROLES_AND_JOURNEYS moves.
 	 */
 	import { enhance } from '$app/forms';
+	import { page as currentPage } from '$app/state';
 	import { describeDecision } from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -16,7 +17,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { untrack } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
@@ -81,6 +82,27 @@
 		'withdrawn'
 	];
 
+	/**
+	 * A link to another page of the same view.
+	 *
+	 * Built from the URL that is actually on screen rather than from the parsed
+	 * filters: anything the loader learns to read later travels with the page number
+	 * on its own, instead of being silently dropped on the first "Next".
+	 */
+	const pageHref = (n: number) => {
+		// The reactive flavour, because the plain one is a lint error in a component:
+		// a mutable built-in read inside a template is exactly the thing that renders
+		// once and then never updates.
+		const params = new SvelteURLSearchParams(currentPage.url.searchParams);
+		if (n <= 1) params.delete('page');
+		else params.set('page', String(n));
+		const query = params.toString();
+		return `${base}/submissions${query ? `?${query}` : ''}`;
+	};
+
+	const firstOnPage = $derived((data.pagination.page - 1) * data.pagination.pageSize + 1);
+	const lastOnPage = $derived(firstOnPage + data.submissions.length - 1);
+
 	const speakerLine = (speakers: { name: string }[]) =>
 		speakers.length === 0
 			? '—'
@@ -101,7 +123,9 @@
 				{data.counts.total} total · {data.counts.undecided} awaiting a decision · {data.counts
 					.unreviewed} unreviewed
 				{#if filtered}
-					<span class="text-foreground">· {data.submissions.length} shown</span>
+					<!-- The filter's own count, not the page's: "12 shown" under a filter that
+					     matches 300 is a wrong answer to the question the organizer is asking. -->
+					<span class="text-foreground">· {data.pagination.matching} match the filter</span>
 				{/if}
 			</p>
 		</div>
@@ -227,8 +251,14 @@
 					{#if selected.size === 0}
 						Select rows to decide on them together.
 					{:else}
-						<span class="text-foreground font-medium tabular-nums">{selected.size} selected</span> · accepting
-						also creates the session in the agenda tray, the speaker's tasks and the decision email.
+						<span class="text-foreground font-medium tabular-nums">{selected.size} selected</span> ·
+						accepting also creates the session in the agenda tray, the speaker's tasks and the
+						decision email.
+						{#if data.pagination.pageCount > 1}
+							<!-- Said out loud because the alternative is worse: a selection that
+							     survived a page change would decide rows nobody can see. -->
+							Leaving this page clears the selection.
+						{/if}
 					{/if}
 				</p>
 				{#if selectedDecided > 0}
@@ -344,6 +374,34 @@
 					</tbody>
 				</table>
 			</div>
+
+			{#if data.pagination.pageCount > 1}
+				<nav
+					class="text-muted-foreground mt-3 flex flex-wrap items-center justify-between gap-3 text-sm"
+					aria-label="Pagination"
+					data-testid="submission-pagination"
+				>
+					<p class="tabular-nums">
+						{firstOnPage}–{lastOnPage} of {data.pagination.matching} · page {data.pagination.page} of
+						{data.pagination.pageCount}
+					</p>
+					<div class="flex gap-2">
+						<!-- Links, not buttons: they are inside the decide form, and a <button>
+						     here would submit it. They are also the reason a page of the table
+						     can be sent to a colleague at all. -->
+						{#if data.pagination.page > 1}
+							<Button href={pageHref(data.pagination.page - 1)} variant="outline" size="sm">
+								Previous
+							</Button>
+						{/if}
+						{#if data.pagination.page < data.pagination.pageCount}
+							<Button href={pageHref(data.pagination.page + 1)} variant="outline" size="sm">
+								Next
+							</Button>
+						{/if}
+					</div>
+				</nav>
+			{/if}
 		</form>
 	{/if}
 </div>
