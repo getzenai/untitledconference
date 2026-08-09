@@ -10,10 +10,13 @@
  * elsewhere in the org cannot work here — the migration has to happen on a runner
  * before the new code goes live.
  *
- * Exits 0 on success including "nothing to migrate", 1 on failure.
+ * Exits 0 on success including "nothing to migrate", 1 on failure — where
+ * "success" now means every committed migration is recorded as applied, not just
+ * that Drizzle returned without throwing. See `assertNothingSkipped`.
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { readFileSync } from 'node:fs';
 import postgres from 'postgres';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -22,6 +25,67 @@ if (!databaseUrl) {
 	process.exit(1);
 }
 
+const journal = JSON.parse(readFileSync('./drizzle/meta/_journal.json', 'utf8'));
+
+/**
+ * Drizzle applies a migration only when its journal `when` is greater than the
+ * LARGEST `created_at` already recorded — one comparison against one number, not
+ * a per-migration check. So a single entry with a `when` above its successors
+ * makes every one of them un-appliable, silently, with exit code 0.
+ *
+ * That is not hypothetical: `0001_documents_content_markdown` carried
+ * `when: 1786320000000` — a hand-rounded timestamp a day in the future — which
+ * swallowed `0005` on the production database while the deploy reported success.
+ *
+ * A journal out of order is always a bug, so it fails here, before anything runs.
+ */
+function assertJournalIsOrdered() {
+	const out = journal.entries.filter((e, i, all) => i > 0 && e.when <= all[i - 1].when);
+	if (out.length === 0) return;
+
+	console.error('[migrate] Journal timestamps are not increasing:');
+	for (const entry of out) console.error(`[migrate]   ${entry.tag} (when: ${entry.when})`);
+	console.error(
+		'[migrate] Drizzle compares each migration against the highest applied timestamp, ' +
+			'so a migration after one of these would be skipped without an error. ' +
+			'Fix the `when` values in drizzle/meta/_journal.json.'
+	);
+	process.exit(1);
+}
+
+/**
+ * Verifies that every committed migration is recorded as applied.
+ *
+ * The migration-check job in CI cannot catch a skip, because it starts from an
+ * empty database — with nothing recorded, Drizzle applies every entry regardless
+ * of its timestamp. The skip only happens against a database with history, which
+ * is to say: only in production. This assertion runs in both places and compares
+ * what is on disk with what the database says it ran.
+ */
+async function assertNothingSkipped(client) {
+	const applied = await client`
+		SELECT created_at FROM drizzle.__drizzle_migrations
+	`.catch(() => null);
+
+	if (!applied) {
+		console.error('[migrate] Could not read drizzle.__drizzle_migrations');
+		process.exit(1);
+	}
+
+	const recorded = new Set(applied.map((row) => String(row.created_at)));
+	const missing = journal.entries.filter((entry) => !recorded.has(String(entry.when)));
+	if (missing.length === 0) {
+		console.log(`[migrate] ${journal.entries.length} migrations applied`);
+		return;
+	}
+
+	console.error('[migrate] Migrations were NOT applied and no error was raised:');
+	for (const entry of missing) console.error(`[migrate]   ${entry.tag} (when: ${entry.when})`);
+	process.exit(1);
+}
+
+assertJournalIsOrdered();
+
 // `max: 1` because migrations must run on one connection, in order.
 // `prepare: false` keeps this working through a transaction-pooling proxy.
 const sql = postgres(databaseUrl, { max: 1, prepare: false });
@@ -29,6 +93,7 @@ const sql = postgres(databaseUrl, { max: 1, prepare: false });
 try {
 	console.log('[migrate] Applying migrations …');
 	await migrate(drizzle(sql), { migrationsFolder: './drizzle' });
+	await assertNothingSkipped(sql);
 	console.log('[migrate] Done');
 	await sql.end();
 } catch (error) {
