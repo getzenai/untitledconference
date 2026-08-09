@@ -4,6 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* tokens:start — generated from design/tokens.json, do not edit */
 :root {
 	--radius: 0.625rem;
 	--background: oklch(1 0 0);
@@ -14,16 +15,18 @@
 	--popover-foreground: oklch(0.145 0 0);
 	--primary: oklch(0.205 0 0);
 	--primary-foreground: oklch(0.985 0 0);
+	--act: oklch(0.78 0.15 85);
+	--act-foreground: oklch(0.145 0 0);
 	--secondary: oklch(0.97 0 0);
 	--secondary-foreground: oklch(0.205 0 0);
 	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
+	--muted-foreground: oklch(0.5 0 0);
 	--accent: oklch(0.97 0 0);
 	--accent-foreground: oklch(0.205 0 0);
 	--destructive: oklch(0.577 0.245 27.325);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
+	--ring: oklch(0.45 0 0);
 	--chart-1: oklch(0.646 0.222 41.116);
 	--chart-2: oklch(0.6 0.118 184.704);
 	--chart-3: oklch(0.398 0.07 227.392);
@@ -36,20 +39,16 @@
 	--sidebar-accent: oklch(0.97 0 0);
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
-
-	/* Status — see docs/DESIGN_SYSTEM.md. Six meanings, one colour each, used
-	   everywhere. `internal` is a rule, not a decoration: anything wearing it is
-	   filtered out of every public surface and out of the reviewer's view. */
-	--status-neutral: oklch(0.552 0 0);
+	--sidebar-ring: oklch(0.45 0 0);
+	--status-neutral: oklch(0.51 0 0);
 	--status-neutral-bg: oklch(0.97 0 0);
 	--status-progress: oklch(0.52 0.16 255);
 	--status-progress-bg: oklch(0.96 0.03 255);
-	--status-good: oklch(0.52 0.13 155);
+	--status-good: oklch(0.5 0.13 155);
 	--status-good-bg: oklch(0.96 0.04 155);
-	--status-warn: oklch(0.55 0.13 75);
-	--status-warn-bg: oklch(0.96 0.05 85);
-	--status-bad: oklch(0.55 0.19 20);
+	--status-warn: oklch(0.53 0.15 55);
+	--status-warn-bg: oklch(0.965 0.035 60);
+	--status-bad: oklch(0.53 0.19 20);
 	--status-bad-bg: oklch(0.96 0.03 20);
 	--status-internal: oklch(0.5 0.17 300);
 	--status-internal-bg: oklch(0.96 0.03 300);
@@ -64,16 +63,18 @@
 	--popover-foreground: oklch(0.985 0 0);
 	--primary: oklch(0.922 0 0);
 	--primary-foreground: oklch(0.205 0 0);
+	--act: oklch(0.8 0.14 85);
+	--act-foreground: oklch(0.145 0 0);
 	--secondary: oklch(0.269 0 0);
 	--secondary-foreground: oklch(0.985 0 0);
 	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
+	--muted-foreground: oklch(0.72 0 0);
 	--accent: oklch(0.269 0 0);
 	--accent-foreground: oklch(0.985 0 0);
 	--destructive: oklch(0.704 0.191 22.216);
 	--border: oklch(1 0 0 / 10%);
 	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.556 0 0);
+	--ring: oklch(0.65 0 0);
 	--chart-1: oklch(0.488 0.243 264.376);
 	--chart-2: oklch(0.696 0.17 162.48);
 	--chart-3: oklch(0.769 0.188 70.08);
@@ -86,16 +87,15 @@
 	--sidebar-accent: oklch(0.269 0 0);
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.556 0 0);
-
+	--sidebar-ring: oklch(0.65 0 0);
 	--status-neutral: oklch(0.72 0 0);
 	--status-neutral-bg: oklch(0.27 0 0);
 	--status-progress: oklch(0.75 0.12 255);
 	--status-progress-bg: oklch(0.3 0.06 255);
 	--status-good: oklch(0.76 0.12 155);
 	--status-good-bg: oklch(0.3 0.06 155);
-	--status-warn: oklch(0.8 0.12 85);
-	--status-warn-bg: oklch(0.32 0.06 75);
+	--status-warn: oklch(0.8 0.13 60);
+	--status-warn-bg: oklch(0.31 0.06 55);
 	--status-bad: oklch(0.75 0.15 20);
 	--status-bad-bg: oklch(0.3 0.07 20);
 	--status-internal: oklch(0.76 0.13 300);
@@ -115,6 +115,8 @@
 	--color-popover-foreground: var(--popover-foreground);
 	--color-primary: var(--primary);
 	--color-primary-foreground: var(--primary-foreground);
+	--color-act: var(--act);
+	--color-act-foreground: var(--act-foreground);
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
 	--color-muted: var(--muted);
@@ -151,10 +153,11 @@
 	--color-status-internal: var(--status-internal);
 	--color-status-internal-bg: var(--status-internal-bg);
 }
+/* tokens:end */
 
 @layer base {
 	* {
-		@apply border-border outline-ring/50;
+		@apply border-border outline-ring;
 	}
 	body {
 		@apply bg-background text-foreground;
