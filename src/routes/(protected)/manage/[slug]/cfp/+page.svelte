@@ -40,6 +40,25 @@
 		};
 	};
 
+	/**
+	 * `datetime-local` gives wall time with no zone, and the server runs in UTC — so a
+	 * plain submit stores 14:00 CEST as 14:00Z, redisplays it as 16:00, and the next
+	 * save persists 16:00Z. Both deadlines walk by the offset on every click, and one
+	 * of them locks submissions.
+	 *
+	 * The browser knows the offset the organizer meant, including which side of DST
+	 * the date is on, so the conversion happens here and the server receives an
+	 * instant. Without JavaScript the raw value is still read as UTC — one honest
+	 * fallback rather than a value that drifts.
+	 */
+	const saveSettings = ({ formData }: { formData: FormData }) => {
+		for (const name of ['opensAt', 'closesAt']) {
+			const raw = formData.get(name);
+			if (typeof raw === 'string' && raw) formData.set(name, new Date(raw).toISOString());
+		}
+		return submitting();
+	};
+
 	const fields = $derived(data.fields as unknown as FieldDefinition[]);
 
 	// Preview state. Deliberately not persisted: it is a what-if, not a draft.
@@ -116,20 +135,41 @@
 			{/each}
 		</select>
 
+		<!-- One control per source rather than one box that means three things. The
+		     server reads the one its source names; a format or track is chosen by name,
+		     never by an id typed from memory. -->
+		<select name="conditionValueFormat" aria-label="Which session format" class={selectClass}>
+			<option value="">(format)</option>
+			{#each data.formats as format (format.id)}
+				<option
+					value={format.id}
+					selected={source === 'session_format' && field?.conditionValue === String(format.id)}
+				>
+					{format.name}
+				</option>
+			{/each}
+		</select>
+
+		<select name="conditionValueTrack" aria-label="Which track" class={selectClass}>
+			<option value="">(track)</option>
+			{#each data.tracks as track (track.id)}
+				<option
+					value={track.id}
+					selected={source === 'track' && field?.conditionValue === String(track.id)}
+				>
+					{track.name}
+				</option>
+			{/each}
+		</select>
+
 		<Input
 			name="conditionValue"
-			value={field?.conditionValue ?? ''}
-			placeholder="matches this value / id"
-			class="w-48"
-			aria-label="Condition value"
+			value={source === 'field' ? (field?.conditionValue ?? '') : ''}
+			placeholder="answer must equal…"
+			class="w-44"
+			aria-label="Answer the rule matches"
 		/>
 	</div>
-	<p class="text-muted-foreground text-xs">
-		For a format or track, the value is its id: {data.formats
-			.map((f) => `${f.name}=${f.id}`)
-			.concat(data.tracks.map((t) => `${t.name}=${t.id}`))
-			.join(' · ') || 'no formats or tracks configured yet'}
-	</p>
 {/snippet}
 
 {#snippet fieldInputs(field: FieldDefinition | null)}
@@ -219,7 +259,7 @@
 					<form
 						method="POST"
 						action="?/updateForm"
-						use:enhance={submitting}
+						use:enhance={saveSettings}
 						class="mt-3 grid gap-2 sm:grid-cols-2"
 					>
 						<label class="text-muted-foreground text-xs">

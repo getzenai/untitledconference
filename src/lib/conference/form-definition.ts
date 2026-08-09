@@ -177,7 +177,10 @@ export function validateAnswers(fields: FieldDefinition[], ctx: AnswerContext): 
  * where it cannot be filled in correctly.
  */
 export function validateDefinition(
-	field: Pick<FieldDefinition, 'label' | 'kind' | 'options' | 'conditionSource' | 'conditionValue'>
+	field: Pick<
+		FieldDefinition,
+		'label' | 'kind' | 'options' | 'conditionSource' | 'conditionFieldId' | 'conditionValue'
+	>
 ): string | null {
 	if (isBlank(field.label)) return 'Give the field a label — it is what the submitter reads.';
 	if (field.kind === 'select' && parseOptions(field.options).length === 0) {
@@ -185,6 +188,11 @@ export function validateDefinition(
 	}
 	if (field.conditionSource && isBlank(field.conditionValue)) {
 		return 'A visibility rule needs the value it should match.';
+	}
+	// Without this, a rule saved with the empty placeholder still selected renders as
+	// "shown when a deleted field is …" — a field nobody chose and nobody can fix.
+	if (field.conditionSource === 'field' && !field.conditionFieldId) {
+		return 'Pick the field this rule depends on.';
 	}
 	return null;
 }

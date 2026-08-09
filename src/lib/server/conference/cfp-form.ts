@@ -134,8 +134,37 @@ function reject(input: FieldInput): string | null {
 		kind: input.kind,
 		options: optionsFromText(input.optionsText),
 		conditionSource: input.conditionSource,
+		conditionFieldId: input.conditionFieldId,
 		conditionValue: input.conditionValue
 	});
+}
+
+/**
+ * The other field id in this request — and the one place the conference scope is easy
+ * to forget, because it is not the field being written.
+ *
+ * Unchecked it takes any id at all: a field of a NEIGHBOURING conference (accepted,
+ * stored, and a foreign key whose deletion then reaches into this form) or one that
+ * does not exist (a raw foreign-key violation, i.e. a 500 where the organizer should
+ * have read a sentence).
+ */
+async function conditionProblem(
+	formId: number,
+	selfId: number | null,
+	input: FieldInput
+): Promise<string | null> {
+	if (input.conditionSource !== 'field') return null;
+	if (input.conditionFieldId === selfId) return 'A field cannot depend on itself.';
+
+	const [parent] = await db
+		.select({ id: formFieldTable.id })
+		.from(formFieldTable)
+		.where(
+			and(eq(formFieldTable.id, input.conditionFieldId!), eq(formFieldTable.cfpFormId, formId))
+		)
+		.limit(1);
+
+	return parent ? null : 'That rule points at a field that is not on this form.';
 }
 
 /** Only a `select` keeps options, and only a `field` condition keeps a field id. */
@@ -159,7 +188,7 @@ export async function addField(conferenceId: number, input: FieldInput): Promise
 	const form = await formOf(conferenceId);
 	if (!form) return { ok: false, message: 'Create the call for papers first.' };
 
-	const problem = reject(input);
+	const problem = reject(input) ?? (await conditionProblem(form.id, null, input));
 	if (problem) return { ok: false, message: problem };
 
 	const [{ next } = { next: 0 }] = await db
@@ -183,15 +212,10 @@ export async function updateField(
 	const form = await formOf(conferenceId);
 	if (!form) return { ok: false, message: 'Create the call for papers first.' };
 
-	const problem = reject(input);
+	const problem = reject(input) ?? (await conditionProblem(form.id, fieldId, input));
 	if (problem) return { ok: false, message: problem };
 
 	const columns = columnsFor(input);
-	// A field may not become its own condition — the rule would never be satisfiable
-	// and the visibility check would have to defend against it on every render.
-	if (columns.conditionFieldId === fieldId) {
-		return { ok: false, message: 'A field cannot depend on itself.' };
-	}
 
 	const [field] = await db
 		.update(formFieldTable)

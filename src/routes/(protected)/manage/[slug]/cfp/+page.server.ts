@@ -28,7 +28,14 @@ const id = (form: FormData, name: string) => {
 	return Number.isInteger(value) && value > 0 ? value : null;
 };
 
-/** Datetime-local sends local wall time; an empty box means "no date", not epoch 0. */
+/**
+ * An empty box means "no date", not epoch 0.
+ *
+ * The page converts the `datetime-local` value to an ISO instant before submitting,
+ * because only the browser knows which zone the organizer typed in. What arrives here
+ * is therefore normally `2027-02-15T22:59:00.000Z`. A submit without JavaScript still
+ * sends bare wall time, and that is read as UTC — stated rather than pretended.
+ */
 const when = (form: FormData, name: string) => {
 	const raw = text(form, name).trim();
 	if (!raw) return null;
@@ -36,18 +43,26 @@ const when = (form: FormData, name: string) => {
 	return Number.isNaN(value.getTime()) ? null : value;
 };
 
+/** Each condition source has its own control, so the value comes from its own input. */
+function conditionValue(form: FormData, source: ConditionSource | null) {
+	if (source === 'session_format') return text(form, 'conditionValueFormat');
+	if (source === 'track') return text(form, 'conditionValueTrack');
+	return text(form, 'conditionValue');
+}
+
 function fieldInput(form: FormData): FieldInput {
 	const kind = text(form, 'kind') as FieldKind;
-	const source = text(form, 'conditionSource') as ConditionSource;
+	const rawSource = text(form, 'conditionSource') as ConditionSource;
+	const source = SOURCES.includes(rawSource) ? rawSource : null;
 
 	return {
 		label: text(form, 'label'),
 		kind: KINDS.includes(kind) ? kind : 'short_text',
 		required: form.get('required') !== null,
 		optionsText: text(form, 'options'),
-		conditionSource: SOURCES.includes(source) ? source : null,
+		conditionSource: source,
 		conditionFieldId: id(form, 'conditionFieldId'),
-		conditionValue: text(form, 'conditionValue')
+		conditionValue: conditionValue(form, source)
 	};
 }
 

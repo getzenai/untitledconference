@@ -182,6 +182,43 @@ describe('fields', () => {
 		expect(result).toMatchObject({ ok: false });
 	});
 
+	/**
+	 * `conditionFieldId` is the second field id in the request, and the one the
+	 * conference scope is easiest to forget on — it is not the row being written.
+	 */
+	it('refuses a rule pointing at a field of another conference', async () => {
+		await createCfpForm(other.id, 'Neighbour CFP');
+		const theirs = await addField(other.id, input({ label: 'Theirs' }));
+		const theirId = theirs.ok ? theirs.field.id : 0;
+
+		const result = await addField(
+			conference.id,
+			input({
+				label: 'Mine',
+				conditionSource: 'field',
+				conditionFieldId: theirId,
+				conditionValue: 'x'
+			})
+		);
+
+		expect(result).toMatchObject({ ok: false });
+	});
+
+	it('answers a rule pointing at nothing with a sentence, not a foreign-key error', async () => {
+		const result = await addField(
+			conference.id,
+			input({
+				label: 'Mine',
+				conditionSource: 'field',
+				conditionFieldId: 999999,
+				conditionValue: 'x'
+			})
+		);
+
+		// Unchecked this reaches Postgres and comes back as an unhandled 500.
+		expect(result).toMatchObject({ ok: false });
+	});
+
 	it('appends new fields after the existing ones and swaps on move', async () => {
 		const ids: number[] = [];
 		for (const label of ['One', 'Two', 'Three']) {

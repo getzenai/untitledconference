@@ -163,6 +163,7 @@ describe('definition validation (the builder)', () => {
 				kind: 'short_text',
 				options: null,
 				conditionSource: null,
+				conditionFieldId: null,
 				conditionValue: null
 			})
 		).toMatch(/label/);
@@ -172,6 +173,7 @@ describe('definition validation (the builder)', () => {
 				kind: 'select',
 				options: '[]',
 				conditionSource: null,
+				conditionFieldId: null,
 				conditionValue: null
 			})
 		).toMatch(/option/);
@@ -181,6 +183,7 @@ describe('definition validation (the builder)', () => {
 				kind: 'short_text',
 				options: null,
 				conditionSource: 'track',
+				conditionFieldId: null,
 				conditionValue: ''
 			})
 		).toMatch(/value/);
@@ -190,8 +193,24 @@ describe('definition validation (the builder)', () => {
 				kind: 'select',
 				options: '["A"]',
 				conditionSource: 'track',
+				conditionFieldId: null,
 				conditionValue: '2'
 			})
 		).toBeNull();
+	});
+
+	it('will not save a field rule with no field chosen', () => {
+		// The builder's placeholder option submits empty; without this the field renders
+		// as "shown when a deleted field is …" although nobody ever chose one.
+		expect(
+			validateDefinition({
+				label: 'Extra',
+				kind: 'short_text',
+				options: null,
+				conditionSource: 'field',
+				conditionFieldId: null,
+				conditionValue: 'yes'
+			})
+		).toMatch(/Pick the field/);
 	});
 });
