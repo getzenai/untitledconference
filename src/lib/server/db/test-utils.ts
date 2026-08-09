@@ -3,6 +3,12 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { createLogger } from '../logger';
 import * as authSchema from './auth-schema';
+import * as cfpSchema from './conference/cfp-schema';
+import * as conferenceSchema from './conference/conference-schema';
+import * as contentSchema from './conference/content-schema';
+import * as emailSchema from './conference/email-schema';
+import * as programSchema from './conference/program-schema';
+import * as reviewSchema from './conference/review-schema';
 import * as exampleSchema from './examples/crud-example-schema';
 
 const logger = createLogger('TestUtils');
@@ -36,7 +42,16 @@ export function createTestDatabase(connectionId: string = 'default') {
 			connect_timeout: 10
 		});
 		const db = drizzle(client, {
-			schema: { ...authSchema, ...exampleSchema }
+			schema: {
+				...authSchema,
+				...exampleSchema,
+				...conferenceSchema,
+				...cfpSchema,
+				...reviewSchema,
+				...programSchema,
+				...contentSchema,
+				...emailSchema
+			}
 		});
 		// Add the $client property for transaction support
 		const dbWithClient = Object.assign(db, { $client: client });
