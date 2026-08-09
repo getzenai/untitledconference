@@ -50,10 +50,7 @@
 		],
 		"deny": []
 	},
-	"enabledMcpjsonServers": [
-		"playwright",
-		"github"
-	],
+	"enabledMcpjsonServers": ["playwright", "github"],
 	"hooks": {
 		"PreToolUse": [
 			{

@@ -1,8 +1,16 @@
-#!/bin/bash
+#!/bin/sh
 # Pre-push hook: unit tests always, integration + E2E when services detected.
 # Pre-commit already handles lint/format/build — this hook focuses on tests.
-
-set -euo pipefail
+#
+# husky 9 always runs this script via `sh -e "$script"` (see .husky/_/h), never
+# by executing it directly — so the shebang above is documentation only, and
+# the script must be POSIX `sh` (dash on Debian/Ubuntu), not bash. `pipefail`
+# is a bash-only option; dash aborts on `set -o pipefail` itself, which meant
+# this hook failed before running a single test, regardless of test outcome.
+# No command here relies on a pipe's exit status, so dropping pipefail is a
+# no-op for behavior. `-e` (abort on first failing command) is kept — that's
+# what actually stops the hook on a failing test run.
+set -eu
 
 echo "=== Pre-push: Unit tests ==="
 npm run test:unit

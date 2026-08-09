@@ -34,7 +34,6 @@ export async function readPdfAsText(file: File): Promise<string> {
 		const data = await file.arrayBuffer();
 		const pdf = await pdfjs.getDocument({
 			data,
-			isEvalSupported: false,
 			disableFontFace: true,
 			standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`
 		}).promise;
