@@ -50,7 +50,18 @@
 		],
 		"deny": []
 	},
-	"enabledMcpjsonServers": ["playwright", "github"],
+	"enabledMcpjsonServers": ["playwright", "github", "svelte"],
+	"extraKnownMarketplaces": {
+		"svelte": {
+			"source": {
+				"source": "github",
+				"repo": "sveltejs/ai-tools"
+			}
+		}
+	},
+	"enabledPlugins": {
+		"svelte@svelte": true
+	},
 	"hooks": {
 		"PreToolUse": [
 			{

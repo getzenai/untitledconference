@@ -31,6 +31,16 @@
 - Never log or commit secrets; environment variables (`DATABASE_URL`, `TEST_DATABASE_URL`) are pre-wired for localhost (`5432`, `5433`).
 - Reset test data through provided fixtures instead of manual SQL to keep suites deterministic.
 
+## Svelte MCP Server
+
+- The official Svelte MCP server (`https://mcp.svelte.dev/mcp`) is wired into `.mcp.json` as
+  `svelte`. It serves Svelte 5 / SvelteKit documentation and a `svelte-autofixer` that lints
+  Svelte code before you hand it over.
+- Use `list-sections` first, then `get-documentation` for the sections that match the task, and
+  run `svelte-autofixer` on any Svelte code you write until it reports nothing.
+- The full tool-by-tool instructions live in `CLAUDE.md` under "Svelte MCP Server" — that is the
+  single source, kept there because it is the file agents load automatically.
+
 ## Commit & Pull Request Guidelines
 
 - Follow the imperative style seen in history (`Fix test errors`, `Update and condense docs`) and keep subjects ≤72 chars.

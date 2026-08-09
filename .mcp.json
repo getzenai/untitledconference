@@ -3,6 +3,10 @@
 		"playwright": {
 			"command": "npx",
 			"args": ["@playwright/mcp@latest"]
+		},
+		"svelte": {
+			"type": "http",
+			"url": "https://mcp.svelte.dev/mcp"
 		}
 	}
 }

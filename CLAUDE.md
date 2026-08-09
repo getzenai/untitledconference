@@ -379,7 +379,55 @@ Rich text editing uses [Milkdown](https://milkdown.dev) (ProseMirror based, mark
 - Organization: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/organization.mdx
 - Admin: https://raw.githubusercontent.com/better-auth/better-auth/refs/heads/main/docs/content/docs/plugins/admin.mdx
 
-## Svelte/SvelteKit Docs (Compact)
+## Svelte MCP Server
+
+Configured in `.mcp.json` as `svelte` and enabled in `.claude/settings.json`. It is the
+official remote server at `https://mcp.svelte.dev/mcp` — nothing to install, and the
+documentation it serves tracks upstream, so prefer it over the static dumps below.
+
+You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
+
+### 1. list-sections
+
+Use this FIRST to discover all available documentation sections. Returns a structured list with titles, use_cases, and paths.
+When asked about Svelte or SvelteKit topics, ALWAYS use this tool at the start of the chat to find relevant sections.
+
+### 2. get-documentation
+
+Retrieves full documentation content for specific sections. Accepts single or multiple sections.
+After calling the list-sections tool, you MUST analyze the returned documentation sections (especially the use_cases field) and then use the get-documentation tool to fetch ALL documentation sections that are relevant for the user's task.
+
+### 3. svelte-autofixer
+
+Analyzes Svelte code and returns issues and suggestions.
+You MUST use this tool whenever writing Svelte code before sending it to the user. Keep calling it until no issues or suggestions are returned.
+
+### 4. playground-link
+
+Generates a Svelte Playground link with the provided code.
+After completing the code, ask the user if they want a playground link. Only call this tool after user confirmation and NEVER if code was written to files in their project.
+
+Note that the last rule means playground links are almost never appropriate here: work in
+this repo is written to files.
+
+### Svelte plugin (Claude Code)
+
+`.claude/settings.json` registers the official `sveltejs/ai-tools` marketplace and enables its
+`svelte` plugin repo-wide, so a fresh clone gets it without anyone running `/plugin install`.
+On first use Claude Code asks once to trust the marketplace. It adds:
+
+- **`svelte-file-editor`** — a subagent for editing `.svelte`, `.svelte.ts` and `.svelte.js`
+  files. Prefer it for Svelte-specific edits: it keeps that work in its own context window.
+- **Skills** — `svelte-code-writer` and `svelte-core-bestpractices`, lazy-loaded guidance on
+  writing Svelte 5.
+
+The plugin ships the same `https://mcp.svelte.dev/mcp` server as `.mcp.json`. Both are kept on
+purpose: the plugin covers Claude Code, and `.mcp.json` is what every other MCP client in this
+repo reads (see `.codex/`, `.roo/`).
+
+### Fallback — static docs dumps
+
+Use these only when the MCP server is unreachable:
 
 - Svelte: https://svelte.dev/docs/svelte/llms-small.txt
 - SvelteKit: https://svelte.dev/docs/kit/llms-small.txt
