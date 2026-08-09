@@ -19,7 +19,7 @@
 		{ href: `${base}/cfp`, label: 'Call for papers', ready: true },
 		{ href: `${base}/agenda`, label: 'Agenda', ready: false },
 		{ href: `${base}/people`, label: 'Team & reviewers', ready: false },
-		{ href: `${base}/settings`, label: 'Settings', ready: false }
+		{ href: `${base}/settings`, label: 'Settings', ready: true }
 	]);
 
 	const isCurrent = (href: string) => page.url.pathname.startsWith(href);

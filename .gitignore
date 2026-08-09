@@ -37,3 +37,6 @@ cypress/downloads
 # Cloudflare local secrets
 .dev.vars
 .wrangler/
+
+# Local editor/tool caches — absolute paths from one machine, never shared.
+.impeccable/
