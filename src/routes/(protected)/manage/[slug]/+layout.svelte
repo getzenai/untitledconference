@@ -16,7 +16,7 @@
 	const nav = $derived([
 		{ href: `${base}/dashboard`, label: 'Dashboard', ready: true },
 		{ href: `${base}/submissions`, label: 'Submissions', ready: true },
-		{ href: `${base}/cfp`, label: 'Call for papers', ready: false },
+		{ href: `${base}/cfp`, label: 'Call for papers', ready: true },
 		{ href: `${base}/agenda`, label: 'Agenda', ready: false },
 		{ href: `${base}/people`, label: 'Team & reviewers', ready: false },
 		{ href: `${base}/settings`, label: 'Settings', ready: false }
