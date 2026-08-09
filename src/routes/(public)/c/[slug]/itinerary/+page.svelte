@@ -108,7 +108,7 @@
 					class="hover:bg-muted focus-visible:ring-ring shrink-0 rounded-md px-2 py-1 text-lg leading-none transition-colors focus-visible:ring-2 focus-visible:outline-none {starred.has(
 						session.id
 					)
-						? 'text-act'
+						? 'text-status-warn'
 						: 'text-muted-foreground'}"
 				>
 					{starred.has(session.id) ? '★' : '☆'}
