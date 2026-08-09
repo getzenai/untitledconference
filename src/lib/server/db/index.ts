@@ -86,11 +86,32 @@ const requestScope = new AsyncLocalStorage<{ connection?: Connection }>();
 /** Process-wide fallback for Node contexts — tests, scripts, the job worker. */
 let processConnection: Connection | undefined;
 
+/**
+ * Workers set `navigator.userAgent` to this. It is a property of the runtime
+ * rather than of the request, which is what makes it usable here: `resolveDb`
+ * is reached from places that have no `platform` to inspect.
+ */
+const ON_WORKER = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
+
 function resolveDb(): Db {
 	const store = requestScope.getStore();
 	if (store) {
 		store.connection ??= connect();
 		return store.connection.db;
+	}
+
+	// Falling through to the process-wide client on a Worker is the bug this
+	// module exists to prevent, and it fails *intermittently* — the first query
+	// on a fresh isolate succeeds, so a silent fallback would look like it
+	// worked and then serve 500s once the isolate is reused. Refusing loudly
+	// here turns that into one obvious failure at the call site instead. A
+	// scheduled handler or a `waitUntil` task that queries needs its own scope;
+	// `withRequestScopedDb` is what gives it one.
+	if (ON_WORKER) {
+		throw new Error(
+			'No request-scoped database connection. On Cloudflare Workers every query must run ' +
+				'inside withRequestScopedDb() — a connection cannot be shared between requests.'
+		);
 	}
 
 	processConnection ??= connect();
@@ -112,8 +133,14 @@ export async function withRequestScopedDb<T>(
 	try {
 		return await requestScope.run(store, fn);
 	} finally {
-		// `end()` waits for queries already in flight, so this cannot cut short a
-		// response that is still being assembled.
+		// `end()` waits for queries already in flight, so no query that has started
+		// is cut short.
+		//
+		// Note what this does *not* cover: `fn` resolves when the Response is
+		// returned, not when its body is finished. A `load` that streams an
+		// unresolved promise would still be querying after this runs, and would
+		// see CONNECTION_ENDED. No load streams today; one that wants to must move
+		// the close to the end of the stream rather than the end of `fn`.
 		if (store.connection) defer(store.connection.client.end());
 	}
 }
