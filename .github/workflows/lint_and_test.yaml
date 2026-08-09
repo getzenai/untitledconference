@@ -136,10 +136,69 @@ jobs:
         run: npm run test:unit
 
   # Integration tests - requires database
+  # Migration checks against a real database. Cheap, and the most valuable job in
+  # this file now that the deploy migrates automatically:
+  #  1. Every committed migration applies cleanly to a fresh Postgres — the same
+  #     code path the deploy job runs, so a broken migration fails here and not
+  #     against the live database.
+  #  2. Drift: `drizzle-kit generate` must produce nothing. Catches a schema change
+  #     committed without its migration, which would otherwise deploy an app
+  #     against a database that lacks its columns.
+  migration-check:
+    name: Migration Check
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: root
+          POSTGRES_PASSWORD: mysecretpassword
+          POSTGRES_DB: migrate_check
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply every migration to a fresh database
+        run: node scripts/db/migrate.mjs
+        env:
+          DATABASE_URL: postgres://root:mysecretpassword@localhost:5434/migrate_check
+
+      - name: Check for schema drift (a migration that was never generated)
+        env:
+          DATABASE_URL: postgres://root:mysecretpassword@localhost:5434/migrate_check
+        run: |
+          npx drizzle-kit generate --name ci_drift_check
+          if [ -n "$(git status --porcelain drizzle/)" ]; then
+            echo "::error::Schema changed without a matching migration. Run 'npm run db:generate -- --name <name>' and commit the result."
+            git status --porcelain drizzle/
+            exit 1
+          fi
+
+  # Needs a database, so it is kept off the pull-request path to keep PRs fast.
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: [code-quality]
+    if: github.event_name != 'pull_request'
 
     services:
       postgres:
@@ -183,11 +242,16 @@ jobs:
       - name: Run integration tests
         run: npm run test:integration
 
-  # E2E tests - requires built app and database
+  # E2E tests - requires built app and database.
+  #
+  # The single most expensive job here: it builds the app and drives Cypress.
+  # Kept off the pull-request path deliberately — until the challenge ships, the
+  # eval harness is the real acceptance test and Cypress is the safety net on main.
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
     needs: [build, unit-tests, integration-tests]
+    if: github.event_name != 'pull_request'
 
     services:
       postgres:
