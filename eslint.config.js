@@ -30,6 +30,13 @@ export default ts.config(
 					caughtErrorsIgnorePattern: '^_'
 				}
 			],
+			// These four are warnings, and `npm run lint` caps the total (see the
+			// `--max-warnings` in package.json). The cap is a budget for the whole
+			// repository, which means it is spent by history rather than by the change
+			// in front of you: when it is full, the next warning anyone adds turns
+			// *their* CI red for something they did not write. It sat at exactly full
+			// for a while, and that is the state to stay out of — #37 tracks bringing
+			// the count down properly rather than raising the number again.
 			'max-lines': ['warn', { max: 500, skipBlankLines: true, skipComments: true }],
 			'max-lines-per-function': ['warn', { max: 50, skipBlankLines: true, skipComments: true }],
 			complexity: ['warn', 10],
@@ -57,6 +64,25 @@ export default ts.config(
 		rules: {
 			'svelte/require-each-key': 'off',
 			'svelte/no-navigation-without-resolve': 'off'
+		}
+	},
+	{
+		// Data, not logic. A length limit is a proxy for "is this function doing too
+		// much", and on a generated domain list or a seed fixture it measures
+		// nothing — the file is long because the data is long, and splitting it
+		// would make it worse. Same reasoning the test exemption below already
+		// applies; these files were simply never named.
+		//
+		// Only the size rules are lifted. `complexity` and `max-depth` still apply,
+		// because branching in a seed script is real branching.
+		files: [
+			'src/lib/validators/disposable-email-domains.ts',
+			'src/lib/test/**',
+			'scripts/db/seed-*.mjs'
+		],
+		rules: {
+			'max-lines': 'off',
+			'max-lines-per-function': 'off'
 		}
 	},
 	{
