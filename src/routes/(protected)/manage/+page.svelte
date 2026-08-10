@@ -1,6 +1,7 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { data } = $props();
 
@@ -20,16 +21,37 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-6 py-10">
-	<h1 class="text-lg font-semibold tracking-tight">My conferences</h1>
-	<p class="text-muted-foreground mt-1 text-sm">The events you organize.</p>
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div>
+			<h1 class="text-lg font-semibold tracking-tight">My conferences</h1>
+			<p class="text-muted-foreground mt-1 text-sm">The events you organize.</p>
+		</div>
+		{#if data.canCreate && data.conferences.length > 0}
+			<Button href="/manage/new" size="sm">New conference</Button>
+		{/if}
+	</div>
 
 	{#if data.conferences.length === 0}
-		<EmptyState
-			class="mt-8"
-			title="You do not organize a conference yet"
-			description="Ask an organizer to add you to their event, or start one of your own."
-			action={{ href: '/home', label: 'Back to the dashboard' }}
-		/>
+		<!--
+			The landing spot for a brand new organizer, so the action here has to be
+			the next step and not a way back. It offered "back to the dashboard",
+			which is where they had just come from.
+		-->
+		{#if data.canCreate}
+			<EmptyState
+				class="mt-8"
+				title="You do not organize a conference yet"
+				description="Start one — a name and the dates are enough to get going."
+				action={{ href: '/manage/new', label: 'Create a conference' }}
+			/>
+		{:else}
+			<EmptyState
+				class="mt-8"
+				title="A conference belongs to an organization"
+				description="Create yours first, then you can start a conference under it. Or ask an organizer to add you to theirs."
+				action={{ href: '/settings/organization/new', label: 'Create an organization' }}
+			/>
+		{/if}
 	{:else}
 		<ul class="mt-6 space-y-3">
 			{#each data.conferences as conference (conference.id)}
