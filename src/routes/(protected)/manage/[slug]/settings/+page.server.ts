@@ -5,12 +5,7 @@
  * owned by #86 (derive from start/end) — not created here.
  */
 import { requireOrganizer } from '$lib/server/conference/access';
-import {
-	addFormat,
-	addRoom,
-	addTrack,
-	conferenceConfig
-} from '$lib/server/conference/config';
+import { addFormat, addRoom, addTrack, conferenceConfig } from '$lib/server/conference/config';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 

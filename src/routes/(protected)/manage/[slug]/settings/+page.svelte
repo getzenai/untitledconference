@@ -51,7 +51,10 @@
 		</p>
 	{/if}
 
-	<section class="border-border bg-card max-w-2xl rounded-lg border p-4" data-testid="settings-rooms">
+	<section
+		class="border-border bg-card max-w-2xl rounded-lg border p-4"
+		data-testid="settings-rooms"
+	>
 		<h2 class="text-sm font-semibold">Rooms</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
 			Columns on the agenda grid. Add them here, not while scheduling.
@@ -60,7 +63,7 @@
 		{#if config.rooms.length === 0}
 			<p class="text-muted-foreground mt-3 text-sm">No rooms yet.</p>
 		{:else}
-			<ul class="mt-3 divide-border divide-y text-sm">
+			<ul class="divide-border mt-3 divide-y text-sm">
 				{#each config.rooms as room (room.id)}
 					<li class="py-2">{room.name}</li>
 				{/each}
@@ -81,7 +84,10 @@
 		</form>
 	</section>
 
-	<section class="border-border bg-card max-w-2xl rounded-lg border p-4" data-testid="settings-tracks">
+	<section
+		class="border-border bg-card max-w-2xl rounded-lg border p-4"
+		data-testid="settings-tracks"
+	>
 		<h2 class="text-sm font-semibold">Tracks</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
 			Thematic streams on the call for papers and the public site.
@@ -90,7 +96,7 @@
 		{#if config.tracks.length === 0}
 			<p class="text-muted-foreground mt-3 text-sm">No tracks yet.</p>
 		{:else}
-			<ul class="mt-3 divide-border divide-y text-sm">
+			<ul class="divide-border mt-3 divide-y text-sm">
 				{#each config.tracks as track (track.id)}
 					<li class="py-2">{track.name}</li>
 				{/each}
@@ -125,7 +131,7 @@
 				No formats yet — speakers cannot pick a format on the call until you add one.
 			</p>
 		{:else}
-			<ul class="mt-3 divide-border divide-y text-sm">
+			<ul class="divide-border mt-3 divide-y text-sm">
 				{#each config.formats as format (format.id)}
 					<li class="flex items-center justify-between gap-3 py-2">
 						<span>{format.name}</span>

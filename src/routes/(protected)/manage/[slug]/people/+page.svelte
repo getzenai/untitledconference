@@ -31,7 +31,9 @@
 
 <div class="border-border bg-card border-b px-6 py-5">
 	<h1 class="text-lg font-semibold tracking-tight">Team &amp; reviewers</h1>
-	<p class="text-muted-foreground mt-0.5 text-sm">How the review committee works with each other.</p>
+	<p class="text-muted-foreground mt-0.5 text-sm">
+		How the review committee works with each other.
+	</p>
 </div>
 
 <div class="px-6 py-5">
