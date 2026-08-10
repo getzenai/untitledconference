@@ -222,6 +222,72 @@
 					{/each}
 				</ul>
 			{/if}
+
+			<div class="border-border mt-4 border-t pt-4" data-testid="review-assignments">
+				<div class="flex flex-wrap items-baseline justify-between gap-2">
+					<h3 class="text-sm font-semibold">Reviewer assignments</h3>
+					<span class="text-muted-foreground text-xs">One reviewer at a time</span>
+				</div>
+				{#if form?.assignmentMessage}
+					<p class="mt-2 text-sm" role="status">{form.assignmentMessage}</p>
+				{/if}
+				{#if data.assignmentRounds.length === 0}
+					<p class="text-muted-foreground mt-2 text-sm">
+						Create a review round before assigning submissions.
+					</p>
+				{:else}
+					<div class="mt-3 space-y-4">
+						{#each data.assignmentRounds as round (round.id)}
+							<div>
+								<h4 class="text-xs font-medium">{round.name}</h4>
+								{#if round.reviewers.length === 0}
+									<p class="text-muted-foreground mt-1 text-sm">
+										No eligible reviewers in this round.
+									</p>
+								{:else}
+									<ul class="mt-1 divide-y">
+										{#each round.reviewers as reviewer (reviewer.userId)}
+											<li class="flex items-center justify-between gap-3 py-2 text-sm">
+												<div class="min-w-0">
+													<p class="truncate font-medium">{reviewer.name}</p>
+													<p class="text-muted-foreground truncate text-xs">{reviewer.email}</p>
+												</div>
+												<form method="POST" action="?/assignment">
+													<input type="hidden" name="roundId" value={round.id} />
+													<input type="hidden" name="reviewerUserId" value={reviewer.userId} />
+													{#if reviewer.status === 'submitted'}
+														<span class="text-muted-foreground text-xs">Submitted</span>
+													{:else if reviewer.status && reviewer.status !== 'recused'}
+														<Button
+															type="submit"
+															name="intent"
+															value="unassign"
+															variant="outline"
+															size="sm"
+														>
+															Unassign · {reviewer.status}
+														</Button>
+													{:else}
+														<Button
+															type="submit"
+															name="intent"
+															value="assign"
+															size="sm"
+															disabled={!reviewer.eligible}
+														>
+															{reviewer.status === 'recused' ? 'Reassign' : 'Assign'}
+														</Button>
+													{/if}
+												</form>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
 		</section>
 	</div>
 

@@ -35,9 +35,11 @@ import {
 	isNotNull,
 	isNull,
 	lt,
+	ne,
 	sql,
 	type SQLWrapper
 } from 'drizzle-orm';
+import { reviewerProgress, type ReviewerProgress } from './review-management';
 
 /** How many examples a section shows before it defers to the full list behind it. */
 export const MAX_ITEMS = 5;
@@ -118,6 +120,12 @@ export type DashboardSnapshot = {
 		failed: number;
 		items: MailItem[];
 	};
+	reviews: {
+		assigned: number;
+		submitted: number;
+		outstanding: number;
+		items: ReviewerProgress[];
+	};
 	inconsistencies: {
 		count: number;
 		items: InconsistencyItem[];
@@ -129,15 +137,16 @@ export async function conferenceDashboard(
 	conferenceId: number,
 	at: Date = new Date()
 ): Promise<DashboardSnapshot> {
-	const [decisions, scheduling, tasks, mail, inconsistencies] = await Promise.all([
+	const [decisions, scheduling, tasks, mail, reviews, inconsistencies] = await Promise.all([
 		decisionQueue(conferenceId),
 		schedulingGap(conferenceId),
 		taskLoad(conferenceId, at),
 		mailQueue(conferenceId),
+		reviewerLoad(conferenceId),
 		leftovers(conferenceId)
 	]);
 
-	return { decisions, scheduling, tasks, mail, inconsistencies };
+	return { decisions, scheduling, tasks, mail, reviews, inconsistencies };
 }
 
 /**
@@ -203,7 +212,8 @@ async function reviewCoverage(conferenceId: number, submissionIds: number[]) {
 		.where(
 			and(
 				eq(evaluationPlanTable.conferenceId, conferenceId),
-				inArray(reviewTable.submissionId, submissionIds)
+				inArray(reviewTable.submissionId, submissionIds),
+				ne(reviewTable.status, 'recused')
 			)
 		)
 		.groupBy(reviewTable.submissionId);
@@ -216,6 +226,17 @@ async function reviewCoverage(conferenceId: number, submissionIds: number[]) {
 	}
 
 	return byId;
+}
+
+/** Review work grouped by the person who owes it (ABS-08). */
+async function reviewerLoad(conferenceId: number): Promise<DashboardSnapshot['reviews']> {
+	const items = await reviewerProgress(conferenceId);
+	return {
+		assigned: items.reduce((total, reviewer) => total + reviewer.assigned, 0),
+		submitted: items.reduce((total, reviewer) => total + reviewer.submitted, 0),
+		outstanding: items.reduce((total, reviewer) => total + reviewer.outstanding, 0),
+		items
+	};
 }
 
 /**

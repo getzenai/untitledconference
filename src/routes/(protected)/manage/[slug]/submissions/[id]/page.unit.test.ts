@@ -19,7 +19,11 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-function renderPage(status: 'accepted' | 'submitted', notificationStatus: null | 'sent' = null) {
+function renderPage(
+	status: 'accepted' | 'submitted',
+	notificationStatus: null | 'sent' = null,
+	reviewerStatus: null | 'assigned' | 'submitted' = null
+) {
 	return render(Page, {
 		props: {
 			data: {
@@ -48,7 +52,22 @@ function renderPage(status: 'accepted' | 'submitted', notificationStatus: null |
 					score: null,
 					placements: []
 				},
-				notificationStatus
+				notificationStatus,
+				assignmentRounds: [
+					{
+						id: 10,
+						name: 'Round 1',
+						reviewers: [
+							{
+								userId: 'reviewer-1',
+								name: 'Riley Reviewer',
+								email: 'riley@example.com',
+								status: reviewerStatus,
+								eligible: true
+							}
+						]
+					}
+				]
 			} as PageData,
 			form: null
 		}
@@ -75,5 +94,21 @@ describe('organizer submission detail decision workflow', () => {
 		const notifyForm = undecided.slice(undecided.indexOf('action="?/notify"'));
 		expect(notifyForm).toContain('disabled=""');
 		expect(notifyForm).toContain('Notify speakers of decision');
+	});
+
+	it('offers an explicit organizer assignment action', () => {
+		const body = renderPage('submitted');
+
+		expect(body).toContain('Reviewer assignments');
+		expect(body).toContain('Riley Reviewer');
+		expect(body).toContain('action="?/assignment"');
+		expect(body).toContain('value="assign"');
+	});
+
+	it('preserves a submitted review instead of offering destructive unassignment', () => {
+		const body = renderPage('submitted', null, 'submitted');
+
+		expect(body).toContain('Submitted');
+		expect(body).not.toContain('value="unassign"');
 	});
 });
