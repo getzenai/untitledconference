@@ -9,6 +9,7 @@
 	import { page } from '$app/state';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
 	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
+	import { Button } from '$lib/components/ui/button';
 
 	let { data, children } = $props();
 
@@ -27,6 +28,18 @@
 	]);
 
 	const isCurrent = (href: string) => page.url.pathname.startsWith(href);
+
+	/**
+	 * Draft is a state of the whole conference, so it is shown by the shell rather
+	 * than by one page. After creating a conference the organizer lands on
+	 * Submissions, and nothing there said that the public site and the call for
+	 * papers were still 404 — the switch is in Settings, and until now only Settings
+	 * knew about it. The badge is the link to the place that changes it.
+	 */
+	const published = $derived(data.conference.status === 'published');
+
+	const draftBadgeClass =
+		'focus-visible:ring-ring shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase text-muted-foreground hover:text-foreground focus-visible:ring-[3px] focus-visible:outline-none';
 
 	const dateRange = $derived.by(() => {
 		const { startsOn, endsOn, venue } = data.conference;
@@ -71,6 +84,22 @@
 				<div class="text-muted-foreground text-xs">All conferences</div>
 			</a>
 			<div class="flex shrink-0 items-center gap-3">
+				{#if !published}
+					<a href="{base}/settings" data-testid="draft-badge-mobile" class={draftBadgeClass}>
+						Draft
+					</a>
+				{/if}
+				<!-- Same control as in the rail; below `md` the rail is hidden, and without
+				     this the public site is unreachable from a phone. -->
+				<a
+					href="/c/{data.conference.slug}"
+					target="_blank"
+					rel="noopener"
+					data-testid="view-public-site-mobile"
+					class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+				>
+					Public site
+				</a>
 				<ShellAccountLinks />
 				<ModeToggle />
 			</div>
@@ -115,6 +144,18 @@
 			<div class="text-muted-foreground mt-1 text-xs">All conferences</div>
 		</a>
 
+		{#if !published}
+			<!-- Outside the switch-conference anchor on purpose: a link inside a link is
+			     not a thing, and this one has its own destination. -->
+			<a
+				href="{base}/settings"
+				data-testid="draft-badge"
+				class="{draftBadgeClass} -mt-2 mb-4 inline-block"
+			>
+				Draft — not public yet
+			</a>
+		{/if}
+
 		<nav class="space-y-0.5 text-sm">
 			{#each nav as item (item.href)}
 				{#if item.ready}
@@ -142,18 +183,29 @@
 		</nav>
 
 		<div class="border-border mt-8 space-y-2 border-t pt-4">
+			<!--
+				In the shell, not on the pages. It used to be a button on Submissions and
+				nowhere else, so "what does this look like to the world?" was a question
+				the organizer could only ask from one screen. One control in the rail
+				answers it from all of them, and there is nothing left to keep in sync.
+			-->
+			<Button
+				href="/c/{data.conference.slug}"
+				target="_blank"
+				rel="noopener"
+				variant="outline"
+				size="sm"
+				class="mb-3 w-full"
+				data-testid="view-public-site"
+			>
+				View the public site
+			</Button>
 			<a
 				href="/home"
 				data-testid="manage-home-link"
 				class="text-muted-foreground hover:text-foreground block text-xs underline underline-offset-4"
 			>
 				Back to home
-			</a>
-			<a
-				href="/c/{data.conference.slug}"
-				class="text-muted-foreground hover:text-foreground block text-xs underline underline-offset-4"
-			>
-				View the public site
 			</a>
 			<!-- Logout only here: Home is already above as manage-home-link. -->
 			<ShellAccountLinks showHome={false} class="pt-1" />

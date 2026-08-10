@@ -55,3 +55,52 @@ describe('organizer shell exit', () => {
 		expect(body).not.toContain('Switch conference');
 	});
 });
+
+/**
+ * Draft is a property of the conference, not of one screen, so the shell carries
+ * it. After creating a conference the organizer lands on Submissions, where
+ * nothing used to say that the public site and the call for papers still answer
+ * 404 — the switch lives in Settings, and only Settings knew it existed.
+ */
+describe('draft state in the shell', () => {
+	const empty = (() => '') as unknown as import('svelte').Snippet;
+
+	const shell = (status: 'draft' | 'published') =>
+		render(Layout, {
+			props: {
+				data: {
+					conference: { ...conference, status },
+					user: { id: 'owner-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined }
+				} as never,
+				children: empty
+			}
+		}).body;
+
+	it('shows the draft state on every organizer page, pointing at the switch', () => {
+		const body = shell('draft');
+
+		expect(body).toContain('data-testid="draft-badge"');
+		expect(body).toContain('data-testid="draft-badge-mobile"');
+		// The badge is only worth anything if it leads to the control that changes it.
+		expect(body).toContain('href="/manage/devflow-2028/settings"');
+		expect(body).toContain('not public yet');
+	});
+
+	it('says nothing once the conference is live', () => {
+		const body = shell('published');
+
+		expect(body).not.toContain('data-testid="draft-badge"');
+		expect(body).not.toContain('not public yet');
+	});
+
+	/** The way out to the public site belongs to the shell, on every page and on a phone. */
+	it('offers the public site from the shell in both layouts', () => {
+		const body = shell('published');
+
+		expect(body).toContain('data-testid="view-public-site"');
+		expect(body).toContain('data-testid="view-public-site-mobile"');
+		expect(body).toContain('href="/c/devflow-2028"');
+	});
+});
