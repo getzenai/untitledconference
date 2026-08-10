@@ -201,9 +201,21 @@ async function findProfileByEmail(
 	tx: Tx,
 	organizationId: string,
 	email: string
-): Promise<number | null> {
+): Promise<{
+	id: number;
+	jobTitle: string | null;
+	company: string | null;
+	bio: string | null;
+	notes: string | null;
+} | null> {
 	const [existing] = await tx
-		.select({ id: speakerProfileTable.id })
+		.select({
+			id: speakerProfileTable.id,
+			jobTitle: speakerProfileTable.jobTitle,
+			company: speakerProfileTable.company,
+			bio: speakerProfileTable.bio,
+			notes: speakerProfileTable.notes
+		})
 		.from(speakerProfileTable)
 		.where(
 			and(
@@ -212,7 +224,17 @@ async function findProfileByEmail(
 			)
 		)
 		.limit(1);
-	return existing?.id ?? null;
+	return existing ?? null;
+}
+
+/** True when a stored optional field is missing and the add form supplied a value. */
+function blankToFill(
+	existing: string | null | undefined,
+	incoming: string | null
+): string | undefined {
+	if (incoming == null) return undefined;
+	if (existing != null && existing.trim() !== '') return undefined;
+	return incoming;
 }
 
 async function upsertProfileForAdd(
@@ -220,11 +242,11 @@ async function upsertProfileForAdd(
 	organizationId: string,
 	fields: NormalizedAdd
 ): Promise<number> {
-	const existingId = fields.email
+	const existing = fields.email
 		? await findProfileByEmail(tx, organizationId, fields.email)
 		: null;
 
-	if (existingId == null) {
+	if (existing == null) {
 		const [created] = await tx
 			.insert(speakerProfileTable)
 			.values({
@@ -241,19 +263,30 @@ async function upsertProfileForAdd(
 		return created.id;
 	}
 
-	// Reused profile: fill blanks only — do not wipe fields a submitter already set.
-	await tx
-		.update(speakerProfileTable)
-		.set({
-			name: fields.name,
-			sortName: fields.sortName,
-			...(fields.jobTitle != null ? { jobTitle: fields.jobTitle } : {}),
-			...(fields.company != null ? { company: fields.company } : {}),
-			...(fields.bio != null ? { bio: fields.bio } : {}),
-			...(fields.notes != null ? { notes: fields.notes } : {})
-		})
-		.where(eq(speakerProfileTable.id, existingId));
-	return existingId;
+	// Reuse: never overwrite identity (name/sortName/email). Only fill empty optionals
+	// so a typo on conference A cannot rewrite a speaker already on conference B.
+	const patch: {
+		jobTitle?: string;
+		company?: string;
+		bio?: string;
+		notes?: string;
+	} = {};
+	const jobTitle = blankToFill(existing.jobTitle, fields.jobTitle);
+	const company = blankToFill(existing.company, fields.company);
+	const bio = blankToFill(existing.bio, fields.bio);
+	const notes = blankToFill(existing.notes, fields.notes);
+	if (jobTitle !== undefined) patch.jobTitle = jobTitle;
+	if (company !== undefined) patch.company = company;
+	if (bio !== undefined) patch.bio = bio;
+	if (notes !== undefined) patch.notes = notes;
+
+	if (Object.keys(patch).length > 0) {
+		await tx
+			.update(speakerProfileTable)
+			.set(patch)
+			.where(eq(speakerProfileTable.id, existing.id));
+	}
+	return existing.id;
 }
 
 /**
@@ -292,11 +325,14 @@ export async function addSpeakerToConference(
 }
 
 /**
- * Persist organizer edits to identity fields on a profile in this org (SPK-02).
- * Scoping is by organizationId — a foreign org's profile id is not_found.
+ * Persist organizer edits to identity fields (SPK-02).
+ *
+ * Membership is required: the profile must sit on this conference's roster.
+ * Org-only scoping would let a conference-A organizer rewrite a sister-conference
+ * profile that is never on A's roster.
  */
 export async function updateSpeakerProfile(
-	organizationId: string,
+	conferenceId: number,
 	speakerProfileId: number,
 	input: UpdateProfileInput
 ): Promise<SpeakersWriteResult> {
@@ -305,6 +341,22 @@ export async function updateSpeakerProfile(
 	if (!Number.isInteger(speakerProfileId) || speakerProfileId <= 0) {
 		return { ok: false, reason: 'not_found' };
 	}
+
+	const [membership] = await db
+		.select({
+			conferenceSpeakerId: conferenceSpeakerTable.id,
+			speakerProfileId: conferenceSpeakerTable.speakerProfileId
+		})
+		.from(conferenceSpeakerTable)
+		.where(
+			and(
+				eq(conferenceSpeakerTable.conferenceId, conferenceId),
+				eq(conferenceSpeakerTable.speakerProfileId, speakerProfileId)
+			)
+		)
+		.limit(1);
+
+	if (!membership) return { ok: false, reason: 'not_found' };
 
 	const [updated] = await db
 		.update(speakerProfileTable)
@@ -317,16 +369,15 @@ export async function updateSpeakerProfile(
 			bio: trimOrNull(input.bio),
 			notes: trimOrNull(input.notes)
 		})
-		.where(
-			and(
-				eq(speakerProfileTable.id, speakerProfileId),
-				eq(speakerProfileTable.organizationId, organizationId)
-			)
-		)
+		.where(eq(speakerProfileTable.id, speakerProfileId))
 		.returning({ id: speakerProfileTable.id });
 
 	if (!updated) return { ok: false, reason: 'not_found' };
-	return { ok: true, speakerProfileId: updated.id, conferenceSpeakerId: 0 };
+	return {
+		ok: true,
+		speakerProfileId: updated.id,
+		conferenceSpeakerId: membership.conferenceSpeakerId
+	};
 }
 
 /**

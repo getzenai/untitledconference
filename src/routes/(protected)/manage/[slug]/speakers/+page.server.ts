@@ -93,7 +93,7 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const id = profileId(form);
 
-		const result = await updateSpeakerProfile(conference.organizationId, id, {
+		const result = await updateSpeakerProfile(conference.id, id, {
 			name: text(form, 'name'),
 			email: optionalText(form, 'email'),
 			jobTitle: optionalText(form, 'jobTitle'),
@@ -105,7 +105,7 @@ export const actions: Actions = {
 
 		if (!result.ok) {
 			if (result.reason === 'not_found') {
-				return fail(404, { error: 'Speaker not found on this organization.' });
+				return fail(404, { error: 'Speaker is not on this conference roster.' });
 			}
 			if (result.reason === 'invalid') {
 				return fail(400, { error: result.message });

@@ -117,6 +117,71 @@ describe('addSpeakerToConference', () => {
 		expect(profiles).toHaveLength(1);
 	});
 
+	it('on email reuse leaves existing profile fields alone and only fills blanks', async () => {
+		const first = await addSpeakerToConference(conference, {
+			name: 'Priya Raman',
+			email: `priya-reuse-${suffix}@example.com`,
+			jobTitle: 'Staff Engineer',
+			company: 'Acme',
+			bio: 'Original bio.',
+			notes: 'Original notes.'
+		});
+		expect(first.ok).toBe(true);
+		if (!first.ok) return;
+
+		// Sister conference: contradictory form values must not rewrite the shared profile.
+		const second = await addSpeakerToConference(otherConference, {
+			name: 'Typo Name',
+			email: `priya-reuse-${suffix}@example.com`,
+			jobTitle: 'Intern',
+			company: 'Evil Corp',
+			bio: 'Overwrite attempt.',
+			notes: 'Should not land.',
+			status: 'confirmed'
+		});
+		expect(second.ok).toBe(true);
+		if (!second.ok) return;
+		expect(second.speakerProfileId).toBe(first.speakerProfileId);
+
+		const [profile] = await db
+			.select()
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.id, first.speakerProfileId));
+		expect(profile).toMatchObject({
+			name: 'Priya Raman',
+			sortName: 'Raman, Priya',
+			jobTitle: 'Staff Engineer',
+			company: 'Acme',
+			bio: 'Original bio.',
+			notes: 'Original notes.'
+		});
+
+		// Blank optional fields on a bare profile may still be filled from a later add.
+		const bare = await addSpeakerToConference(conference, {
+			name: 'Bare Bones',
+			email: `bare-${suffix}@example.com`
+		});
+		expect(bare.ok).toBe(true);
+		if (!bare.ok) return;
+
+		await addSpeakerToConference(otherConference, {
+			name: 'Ignored Name',
+			email: `bare-${suffix}@example.com`,
+			jobTitle: 'Filled Later',
+			company: 'Northwind'
+		});
+
+		const [filled] = await db
+			.select()
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.id, bare.speakerProfileId));
+		expect(filled).toMatchObject({
+			name: 'Bare Bones',
+			jobTitle: 'Filled Later',
+			company: 'Northwind'
+		});
+	});
+
 	it('rejects a second add of the same profile on the same conference', async () => {
 		const first = await addSpeakerToConference(conference, {
 			name: 'Sam Okonkwo',
@@ -194,7 +259,7 @@ describe('listConferenceSpeakers filters (SPK-01 / SPK-04)', () => {
 });
 
 describe('updateSpeakerProfile (SPK-02)', () => {
-	it('persists organizer edits and scopes by organization', async () => {
+	it('persists organizer edits and requires conference membership', async () => {
 		const added = await addSpeakerToConference(conference, {
 			name: 'Tom Hughes',
 			email: `tom-${suffix}@example.com`
@@ -202,7 +267,7 @@ describe('updateSpeakerProfile (SPK-02)', () => {
 		expect(added.ok).toBe(true);
 		if (!added.ok) return;
 
-		const ok = await updateSpeakerProfile(organizationId, added.speakerProfileId, {
+		const ok = await updateSpeakerProfile(conference.id, added.speakerProfileId, {
 			name: 'Tom Hughes',
 			email: `tom-h-${suffix}@example.com`,
 			jobTitle: 'Principal',
@@ -221,17 +286,21 @@ describe('updateSpeakerProfile (SPK-02)', () => {
 			notes: 'Prefers morning slots'
 		});
 
-		// Foreign org cannot touch this profile.
-		const denied = await updateSpeakerProfile(foreignOrgId, added.speakerProfileId, {
-			name: 'Hijacked'
+		// Sister conference: same org, no membership on B → not_found (Sol #90 blocker 1).
+		const sisterDenied = await updateSpeakerProfile(otherConference.id, added.speakerProfileId, {
+			name: 'Hijacked On Sister'
 		});
-		expect(denied).toMatchObject({ ok: false, reason: 'not_found' });
+		expect(sisterDenied).toMatchObject({ ok: false, reason: 'not_found' });
 
 		const [still] = await db
 			.select({ name: speakerProfileTable.name })
 			.from(speakerProfileTable)
 			.where(eq(speakerProfileTable.id, added.speakerProfileId));
 		expect(still.name).toBe('Tom Hughes');
+
+		// Unknown profile id
+		const missing = await updateSpeakerProfile(conference.id, 9_999_999, { name: 'Nope' });
+		expect(missing).toMatchObject({ ok: false, reason: 'not_found' });
 	});
 });
 
