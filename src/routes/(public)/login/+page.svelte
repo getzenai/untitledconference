@@ -3,16 +3,11 @@
 	import { page } from '$app/state';
 	import { EventNames, identifyUser, trackEvent } from '$lib/analytics/posthog';
 	import { authClient } from '$lib/auth-client';
-	import {
-		Card,
-		CardContent,
-		CardDescription,
-		CardHeader,
-		CardTitle
-	} from '$lib/components/ui/card';
+	import AuthShell from '$lib/components/app/auth/auth-shell.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
+	import PasswordInput from '$lib/components/ui/password-input.svelte';
 	import { dev } from '$app/environment';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { superForm } from 'sveltekit-superforms';
@@ -93,129 +88,96 @@
 	const { form: formData, enhance, submitting, errors } = form;
 </script>
 
-<div
-	class="relative container grid min-h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-2 lg:px-0"
->
-	<div class="bg-muted relative hidden h-full flex-col p-10 text-white lg:flex dark:border-r">
-		<div class="absolute inset-0 bg-zinc-900"></div>
-		<div class="relative z-20 flex flex-1 flex-col justify-center">
-			<div class="mb-8 text-right">
-				<span class="text-2xl font-bold">Untitled Conference</span>
+<AuthShell title="Sign in" description="Use the account you registered with.">
+	<form use:enhance class="space-y-4">
+		<Form.Field {form} name="email">
+			<Form.Control>
+				{#snippet children({ props })}
+					<Form.Label>Email</Form.Label>
+					<Input
+						{...props}
+						type="email"
+						autocomplete="email"
+						placeholder="you@example.com"
+						bind:value={$formData.email}
+						disabled={$submitting}
+					/>
+				{/snippet}
+			</Form.Control>
+			<Form.FieldErrors />
+		</Form.Field>
+
+		<Form.Field {form} name="password">
+			<Form.Control>
+				{#snippet children({ props })}
+					<div class="flex items-center justify-between">
+						<Form.Label>Password</Form.Label>
+						<a
+							href="/forgot-password"
+							class="text-muted-foreground hover:text-foreground text-sm underline-offset-4 hover:underline"
+						>
+							Forgot your password?
+						</a>
+					</div>
+					<PasswordInput
+						{...props}
+						autocomplete="current-password"
+						placeholder="••••••••"
+						bind:value={$formData.password}
+						disabled={$submitting}
+					/>
+				{/snippet}
+			</Form.Control>
+			<Form.FieldErrors />
+		</Form.Field>
+
+		<Form.Field {form} name="rememberMe">
+			<Form.Control>
+				{#snippet children({ props })}
+					<div class="flex items-center space-x-2">
+						<Checkbox {...props} bind:checked={$formData.rememberMe} disabled={$submitting} />
+						<Form.Label class="text-sm font-normal">Remember me</Form.Label>
+					</div>
+				{/snippet}
+			</Form.Control>
+		</Form.Field>
+
+		{#if $errors._errors}
+			<div role="alert" class="text-destructive text-sm">
+				{#each $errors._errors as error}
+					<p>{error}</p>
+				{/each}
 			</div>
-			<blockquote class="space-y-2 text-right">
-				<p class="text-lg">
-					Run the call for papers, review the proposals, build the agenda and publish the programme
-					— in one place.
-				</p>
-			</blockquote>
-			<div class="mt-6 space-y-4 text-right">
-				<h3 class="text-xl font-semibold">Sign in as:</h3>
-				<ul class="space-y-2">
-					<li>• An organizer, to run a conference</li>
-					<li>• A speaker, to submit and manage a talk</li>
-					<li>• A reviewer, to score the proposals assigned to you</li>
-				</ul>
-			</div>
-		</div>
-	</div>
-	<div class="flex h-full items-center p-4 lg:p-8">
-		<div class="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-			<Card>
-				<CardHeader>
-					<CardTitle>Login</CardTitle>
-					<CardDescription>Enter your credentials to access your account</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<form use:enhance class="space-y-4">
-						<Form.Field {form} name="email">
-							<Form.Control>
-								{#snippet children({ props })}
-									<Form.Label>Email</Form.Label>
-									<Input
-										{...props}
-										type="email"
-										placeholder="Enter your email"
-										bind:value={$formData.email}
-										disabled={$submitting}
-									/>
-								{/snippet}
-							</Form.Control>
-							<Form.FieldErrors />
-						</Form.Field>
+		{/if}
 
-						<Form.Field {form} name="password">
-							<Form.Control>
-								{#snippet children({ props })}
-									<div class="flex items-center justify-between">
-										<Form.Label>Password</Form.Label>
-										<a href="/forgot-password" class="text-primary text-sm hover:underline">
-											Forgot your password?
-										</a>
-									</div>
-									<Input
-										{...props}
-										type="password"
-										placeholder="Enter your password"
-										bind:value={$formData.password}
-										disabled={$submitting}
-									/>
-								{/snippet}
-							</Form.Control>
-							<Form.FieldErrors />
-						</Form.Field>
+		<Form.Button type="submit" class="w-full" disabled={$submitting}>
+			{#if $submitting}
+				Logging in...
+			{:else}
+				Login
+			{/if}
+		</Form.Button>
+	</form>
 
-						<Form.Field {form} name="rememberMe">
-							<Form.Control>
-								{#snippet children({ props })}
-									<div class="flex items-center space-x-2">
-										<Checkbox
-											{...props}
-											bind:checked={$formData.rememberMe}
-											disabled={$submitting}
-										/>
-										<Form.Label class="text-sm font-normal">Remember me</Form.Label>
-									</div>
-								{/snippet}
-							</Form.Control>
-						</Form.Field>
-
-						{#if $errors._errors}
-							<div role="alert" class="text-sm text-red-500">
-								{#each $errors._errors as error}
-									<p>{error}</p>
-								{/each}
-							</div>
-						{/if}
-
-						<Form.Button type="submit" class="w-full" disabled={$submitting}>
-							{#if $submitting}
-								Logging in...
-							{:else}
-								Login
-							{/if}
-						</Form.Button>
-
-						<p class="text-muted-foreground text-center text-sm">
-							Don't have an account? <a href="/register" class="text-primary hover:underline"
-								>Register</a
-							>
-						</p>
-
-						<!--
-							The way back out, and it is load-bearing: `/` sends a visitor without
-							a session here, so without this link the login form is a dead end for
-							anyone who came for a conference's public site rather than an account.
-							It sits in this column rather than the panel on the left because that
-							panel is `lg:` only and vanishes on a phone.
-						-->
-						<p class="text-muted-foreground text-center text-sm">
-							Just looking for a conference? <a href="/" class="text-primary hover:underline"
-								>Browse public conference sites</a
-							>
-						</p>
-					</form>
-				</CardContent>
-			</Card>
-		</div>
-	</div>
-</div>
+	{#snippet footer()}
+		<p>
+			Don't have an account?
+			<a href="/register" class="text-foreground font-medium underline underline-offset-4">
+				Register
+			</a>
+		</p>
+		<!--
+			The way back out, and it is load-bearing: `/` sends a visitor without a
+			session here, so without this link the login form is a dead end for
+			anyone who came for a conference's public site rather than an account.
+			It sits under the card rather than in a panel because the old panel was
+			`lg:` only and vanished on a phone.
+		-->
+		<p class="mt-1">
+			Just looking for a conference?
+			<a href="/" class="text-foreground font-medium underline underline-offset-4">
+				Browse public conference sites
+			</a>
+		</p>
+	{/snippet}
+</AuthShell>
