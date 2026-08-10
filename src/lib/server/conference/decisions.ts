@@ -1,10 +1,9 @@
 /**
- * Deciding on submissions — and everything that decision is supposed to set off.
+ * Deciding on submissions — and the internal work that decision sets off.
  *
- * This is Ü5, Ü6 and Ü7 from ROLES_AND_JOURNEYS in one function, and it is the most
- * expensive handoff in the product: if accepting a talk does not by itself make it a
- * planable session, produce the speaker's tasks and record the mail, then somebody
- * types the whole conference in a second time.
+ * This is Ü6 and Ü7 from ROLES_AND_JOURNEYS in one function. Notification is a
+ * separate organizer action in `decision-notifications.ts`: deciding first and
+ * telling speakers later is the workflow, not an implementation detail.
  *
  * All of it in one transaction. A half-accepted submission — status changed, no
  * session, no tasks — is worse than a failed click, because nothing on screen says
@@ -18,7 +17,6 @@ import {
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
-import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 
@@ -39,7 +37,6 @@ export type DecisionResult = {
 	/** Undone by taking an acceptance back — see `withdrawFromProgramme`. */
 	sessionsRemoved: number;
 	tasksRemoved: number;
-	emailsQueued: number;
 };
 
 const NOTHING_HAPPENED: DecisionResult = {
@@ -48,31 +45,8 @@ const NOTHING_HAPPENED: DecisionResult = {
 	sessionsCreated: 0,
 	tasksCreated: 0,
 	sessionsRemoved: 0,
-	tasksRemoved: 0,
-	emailsQueued: 0
+	tasksRemoved: 0
 };
-
-const EMAIL_TEMPLATE: Record<Decision, string> = {
-	accepted: 'decision_accepted',
-	rejected: 'decision_rejected',
-	waitlisted: 'decision_waitlisted'
-};
-
-function subjectFor(decision: Decision, conference: Conference): string {
-	if (decision === 'accepted') return `Your ${conference.name} submission was accepted`;
-	if (decision === 'waitlisted') return `Your ${conference.name} submission is on the waitlist`;
-	return `About your ${conference.name} submission`;
-}
-
-function bodyFor(decision: Decision, conference: Conference, title: string): string {
-	if (decision === 'accepted') {
-		return `“${title}” is in the programme for ${conference.name}. Your speaker portal now lists what we need from you and when.`;
-	}
-	if (decision === 'waitlisted') {
-		return `“${title}” is on the waitlist for ${conference.name}. We will be in touch if a slot opens up.`;
-	}
-	return `We are not able to fit “${title}” into ${conference.name} this time. Thank you for submitting.`;
-}
 
 /**
  * Applies one decision to one or many submissions.
@@ -104,10 +78,9 @@ export async function decideSubmissions(
 				)
 			);
 
-		// A row that already carries this decision is left alone entirely. Without
-		// this the second click on Accept writes a second acceptance mail — and the
-		// send log is the evidence that the decision went out, so a duplicate there
-		// reads as "we mailed them twice", which is what would have happened.
+		// A row that already carries this decision is left alone entirely. The
+		// separate notification action is idempotent in its own right; a second click
+		// here must not recreate agenda or task work either.
 		const targets = selected.filter((s) => s.status !== decision);
 		result.unchanged = selected.length - targets.length;
 		if (targets.length === 0) return;
@@ -132,8 +105,6 @@ export async function decideSubmissions(
 			result.sessionsRemoved = undone.sessions;
 			result.tasksRemoved = undone.tasks;
 		}
-
-		result.emailsQueued = await queueDecisionMails(tx, conference, decision, speakers, targets);
 	});
 
 	return result;
@@ -289,38 +260,6 @@ async function createSpeakerTasks(
 	if (tasks.length === 0) return 0;
 	await tx.insert(taskTable).values(tasks);
 	return tasks.length;
-}
-
-/**
- * Ü5 — the decision reaches the submitter as mail, not only as a status they would
- * have to go looking for. The row IS the evidence; sending is the worker's job
- * (see email-schema).
- */
-async function queueDecisionMails(
-	tx: Tx,
-	conference: Conference,
-	decision: Decision,
-	speakers: SpeakerOnSubmission[],
-	targets: { id: number; title: string }[]
-): Promise<number> {
-	const titles = new Map(targets.map((t) => [t.id, t.title]));
-
-	const mails = speakers
-		.filter((s) => s.email)
-		.map((s) => ({
-			conferenceId: conference.id,
-			toEmail: s.email!,
-			template: EMAIL_TEMPLATE[decision],
-			subject: subjectFor(decision, conference),
-			bodyPreview: bodyFor(decision, conference, titles.get(s.submissionId) ?? ''),
-			status: 'queued' as const,
-			relatedType: 'submission',
-			relatedId: s.submissionId
-		}));
-
-	if (mails.length === 0) return 0;
-	await tx.insert(emailLogTable).values(mails);
-	return mails.length;
 }
 
 /** One row per speaker profile, however many of the accepted talks they are on. */

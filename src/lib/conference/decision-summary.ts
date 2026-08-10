@@ -6,6 +6,7 @@
  * Shared by the table and the detail page so the two cannot drift into describing
  * the same operation differently.
  */
+import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import type { DecisionResult } from '$lib/server/conference/decisions';
 
 const PAST_TENSE: Record<string, string> = {
@@ -25,8 +26,7 @@ const SIDE_EFFECTS: [keyof DecisionResult, (n: number) => string][] = [
 	['sessionsCreated', (n) => `${plural(n, 'session')} added to the agenda tray.`],
 	['tasksCreated', (n) => `${plural(n, 'speaker task')} created.`],
 	['sessionsRemoved', (n) => `${plural(n, 'session')} taken out of the agenda tray.`],
-	['tasksRemoved', (n) => `${plural(n, 'open speaker task')} withdrawn.`],
-	['emailsQueued', (n) => `${plural(n, 'email')} queued.`]
+	['tasksRemoved', (n) => `${plural(n, 'open speaker task')} withdrawn.`]
 ];
 
 export function describeDecision(decision: string, result: DecisionResult): string {
@@ -50,5 +50,29 @@ export function describeDecision(decision: string, result: DecisionResult): stri
 		if (count > 0) parts.push(sentence(count));
 	}
 
+	return parts.join(' ');
+}
+
+/** The separate confirmation after an explicit notification action. */
+export function describeNotification(result: NotificationResult): string {
+	const parts: string[] = [];
+	if (result.notified > 0) {
+		parts.push(
+			`${plural(result.notified, 'submission')} notified; ${plural(result.emailsQueued, 'email')} queued.`
+		);
+	}
+	if (result.alreadyNotified > 0) {
+		parts.push(`${plural(result.alreadyNotified, 'submission')} already notified, left untouched.`);
+	}
+	if (result.notDecided > 0) {
+		parts.push(
+			`${plural(result.notDecided, 'submission')} ${result.notDecided === 1 ? 'has' : 'have'} no decision yet, skipped.`
+		);
+	}
+	if (result.withoutEmail > 0) {
+		parts.push(
+			`${plural(result.withoutEmail, 'submission')} ${result.withoutEmail === 1 ? 'has' : 'have'} no speaker email, skipped.`
+		);
+	}
 	return parts.join(' ');
 }

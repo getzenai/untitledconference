@@ -10,7 +10,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
-	import { describeDecision } from '$lib/conference/decision-summary';
+	import { describeDecision, describeNotification } from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -60,6 +60,7 @@
 	);
 
 	const DECIDED: string[] = ['accepted', 'rejected', 'waitlisted', 'withdrawn'];
+	const NOTIFIABLE: string[] = ['accepted', 'rejected', 'waitlisted'];
 
 	/**
 	 * How many of the selected rows already carry a decision.
@@ -153,6 +154,15 @@
 			: speakers.length === 1
 				? speakers[0].name
 				: `${speakers[0].name} +${speakers.length - 1}`;
+
+	const notificationLabel = (submission: { id: number; status: string }) => {
+		if (!NOTIFIABLE.includes(submission.status)) return 'Not ready';
+		const status = data.notificationStatuses[submission.id];
+		if (status === 'queued') return 'Queued';
+		if (status === 'sent') return 'Sent';
+		if (status === 'failed') return 'Failed';
+		return 'Not sent';
+	};
 </script>
 
 <svelte:head>
@@ -263,7 +273,14 @@
 		{/if}
 	</form>
 
-	{#if form?.result}
+	{#if form?.notificationResult}
+		<p
+			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
+			role="status"
+		>
+			{describeNotification(form.notificationResult)}
+		</p>
+	{:else if form?.result}
 		<p
 			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
 			role="status"
@@ -304,18 +321,18 @@
 				};
 			}}
 		>
-			<!-- R3: four automatic consequences are too many to guess, so they are named
-			     above the button rather than discovered after it. -->
+			<!-- The programme changes now; communication is a separate, explicit step. -->
 			<div
 				class="border-border bg-muted/40 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2"
 			>
 				<p class="text-muted-foreground text-sm">
 					{#if selected.size === 0}
-						Select rows to decide on them together.
+						Select rows to decide on them together. Decisions do not notify speakers; notifications
+						are sent separately after the programme is checked.
 					{:else}
 						<span class="text-foreground font-medium tabular-nums">{selected.size} selected</span> ·
-						accepting also creates the session in the agenda tray, the speaker's tasks and the
-						decision email.
+						accepting also creates the session in the agenda tray and the speaker's tasks.
+						Notifications are sent separately after the programme is checked.
 						{#if data.pagination.pageCount > 1}
 							<!-- Said out loud because the alternative is worse: a selection that
 							     survived a page change would decide rows nobody can see. -->
@@ -360,6 +377,15 @@
 						disabled={selected.size === 0 || busy}
 					>
 						Accept
+					</Button>
+					<Button
+						type="submit"
+						formaction="?/notify"
+						variant="secondary"
+						size="sm"
+						disabled={selected.size === 0 || busy}
+					>
+						Notify decisions
 					</Button>
 				</div>
 			</div>
@@ -411,6 +437,7 @@
 								</a>
 							</th>
 							<th class="py-2 pr-4 font-medium">Status</th>
+							<th class="py-2 pr-4 font-medium">Notification</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -458,6 +485,9 @@
 									{/if}
 								</td>
 								<td class="py-2 pr-4"><StatusBadge status={submission.status} /></td>
+								<td class="text-muted-foreground py-2 pr-4">
+									{notificationLabel(submission)}
+								</td>
 							</tr>
 						{/each}
 					</tbody>

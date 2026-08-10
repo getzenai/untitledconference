@@ -1,4 +1,8 @@
 import { requireOrganizer } from '$lib/server/conference/access';
+import {
+	decisionNotificationStatuses,
+	notifySubmissionDecisions
+} from '$lib/server/conference/decision-notifications';
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
 import {
 	listSubmissions,
@@ -18,6 +22,13 @@ function parsePage(url: URL) {
 	return Number.isInteger(value) && value > 0 ? value : 1;
 }
 
+function selectedIds(form: FormData): number[] {
+	return form
+		.getAll('id')
+		.map((value) => Number(value))
+		.filter((value) => Number.isInteger(value) && value > 0);
+}
+
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 	const filters = parseSubmissionFilters(url);
@@ -31,6 +42,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		submissionFacets(conference.id),
 		submissionTotals(conference.id)
 	]);
+	const notificationStatuses = await decisionNotificationStatuses(conference.id, page.rows);
 
 	return {
 		submissions: page.rows,
@@ -43,7 +55,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		facets,
 		filters,
 		sort,
-		counts
+		counts,
+		notificationStatuses
 	};
 };
 
@@ -53,10 +66,7 @@ export const actions: Actions = {
 
 		const form = await request.formData();
 		const decision = form.get('decision');
-		const ids = form
-			.getAll('id')
-			.map((v) => Number(v))
-			.filter((n) => Number.isInteger(n) && n > 0);
+		const ids = selectedIds(form);
 
 		if (typeof decision !== 'string' || !DECISIONS.includes(decision as Decision)) {
 			return fail(400, { message: 'Unknown decision.' });
@@ -67,5 +77,15 @@ export const actions: Actions = {
 
 		const result = await decideSubmissions(conference, ids, decision as Decision);
 		return { decision, result };
+	},
+
+	notify: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const ids = selectedIds(await request.formData());
+		if (ids.length === 0) {
+			return fail(400, { message: 'Select at least one submission first.' });
+		}
+
+		return { notificationResult: await notifySubmissionDecisions(conference, ids) };
 	}
 };

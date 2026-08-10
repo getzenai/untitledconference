@@ -1,8 +1,7 @@
 /**
  * Accepting a talk is the most expensive handoff in the product (Ü6/Ü7): it has to
- * produce a planable session, the speaker's tasks and the decision mail, or somebody
- * types the conference in a second time. These tests are what keeps those four
- * effects from quietly being reduced to one status update.
+ * produce a planable session and the speaker's tasks, or somebody types the
+ * conference in a second time. Notification is intentionally a separate action.
  */
 import { db } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
@@ -100,14 +99,13 @@ afterAll(async () => {
 });
 
 describe('decideSubmissions — accepting', () => {
-	it('sets off all four consequences the screen promises', async () => {
+	it('sets the decision and internal consequences without notifying speakers', async () => {
 		const result = await decideSubmissions(conference, [submissionId], 'accepted');
 
 		expect(result).toMatchObject({
 			decided: 1,
 			sessionsCreated: 1,
-			tasksCreated: 2,
-			emailsQueued: 1
+			tasksCreated: 2
 		});
 
 		const [submission] = await db
@@ -143,27 +141,23 @@ describe('decideSubmissions — accepting', () => {
 		expect(tasks.map((t) => t.title).sort()).toEqual(['Complete bio', 'Upload headshot']);
 		expect(tasks.every((t) => t.dueOn !== null)).toBe(true);
 
-		// Ü5 — the decision leaves the building.
+		// The organizer may now sanity-check the programme before telling anyone.
 		const emails = await db
 			.select()
 			.from(emailLogTable)
 			.where(eq(emailLogTable.relatedId, submissionId));
-		expect(emails).toHaveLength(1);
-		expect(emails[0]).toMatchObject({ template: 'decision_accepted', status: 'queued' });
+		expect(emails).toHaveLength(0);
 	});
 
-	it('writes nothing at all the second time — including no second mail', async () => {
+	it('writes nothing at all the second time', async () => {
 		await decideSubmissions(conference, [submissionId], 'accepted');
 		const second = await decideSubmissions(conference, [submissionId], 'accepted');
 
-		// The send log is the evidence that the decision went out. A duplicate row
-		// there reads as "we mailed the speaker twice", because we would have.
 		expect(second).toMatchObject({
 			decided: 0,
 			unchanged: 1,
 			sessionsCreated: 0,
-			tasksCreated: 0,
-			emailsQueued: 0
+			tasksCreated: 0
 		});
 
 		const placements = await db
@@ -179,7 +173,7 @@ describe('decideSubmissions — accepting', () => {
 			.select()
 			.from(emailLogTable)
 			.where(eq(emailLogTable.relatedId, submissionId));
-		expect(emails).toHaveLength(1);
+		expect(emails).toHaveLength(0);
 	});
 });
 
@@ -231,7 +225,7 @@ describe('decideSubmissions — taking an acceptance back', () => {
 		expect(tasks.map((t) => t.id)).toEqual([firstTask.id]);
 	});
 
-	it('re-accepting after a decline puts it back and mails again', async () => {
+	it('re-accepting after a decline puts the internal work back', async () => {
 		await decideSubmissions(conference, [submissionId], 'accepted');
 		await decideSubmissions(conference, [submissionId], 'rejected');
 		const again = await decideSubmissions(conference, [submissionId], 'accepted');
@@ -239,21 +233,19 @@ describe('decideSubmissions — taking an acceptance back', () => {
 		expect(again).toMatchObject({
 			decided: 1,
 			sessionsCreated: 1,
-			tasksCreated: 2,
-			emailsQueued: 1
+			tasksCreated: 2
 		});
 	});
 });
 
 describe('decideSubmissions — declining', () => {
-	it('records the decision and the mail, and puts nothing in the programme', async () => {
+	it('records the decision without mail and puts nothing in the programme', async () => {
 		const result = await decideSubmissions(conference, [submissionId], 'rejected');
 
 		expect(result).toMatchObject({
 			decided: 1,
 			sessionsCreated: 0,
-			tasksCreated: 0,
-			emailsQueued: 1
+			tasksCreated: 0
 		});
 
 		const placements = await db
@@ -262,11 +254,11 @@ describe('decideSubmissions — declining', () => {
 			.where(eq(placementTable.submissionId, submissionId));
 		expect(placements).toHaveLength(0);
 
-		const [email] = await db
+		const emails = await db
 			.select()
 			.from(emailLogTable)
 			.where(eq(emailLogTable.relatedId, submissionId));
-		expect(email.template).toBe('decision_rejected');
+		expect(emails).toHaveLength(0);
 	});
 });
 
@@ -295,8 +287,7 @@ describe('decideSubmissions — scoping', () => {
 			sessionsCreated: 0,
 			tasksCreated: 0,
 			sessionsRemoved: 0,
-			tasksRemoved: 0,
-			emailsQueued: 0
+			tasksRemoved: 0
 		});
 	});
 });
