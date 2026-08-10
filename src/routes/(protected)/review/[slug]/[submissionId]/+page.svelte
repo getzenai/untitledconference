@@ -216,6 +216,19 @@
 			<Button type="submit" name="intent" value="draft" variant="outline" size="sm" disabled={busy}>
 				Save progress
 			</Button>
+			{#if s.own.status === 'assigned'}
+				<Button
+					type="submit"
+					name="reviewId"
+					value={s.own.reviewId}
+					formaction="?/recuse"
+					variant="ghost"
+					size="sm"
+					disabled={busy}
+				>
+					Recuse myself
+				</Button>
+			{/if}
 		</div>
 
 		<!-- The promise the veterans asked for, written where it is made: a status

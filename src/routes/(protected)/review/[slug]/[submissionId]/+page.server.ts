@@ -1,5 +1,10 @@
-import { requireReviewer, reviewerSubmission, saveReview } from '$lib/server/conference/reviewer';
-import { error, fail } from '@sveltejs/kit';
+import {
+	recuseReview,
+	requireReviewer,
+	reviewerSubmission,
+	saveReview
+} from '$lib/server/conference/reviewer';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 const submissionId = (raw: string) => {
@@ -20,6 +25,21 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 };
 
 export const actions: Actions = {
+	recuse: async ({ locals, params, request }) => {
+		const { conference } = await requireReviewer(locals.user!.id, params.slug);
+		const id = submissionId(params.submissionId);
+		const form = await request.formData();
+		const reviewId = Number(form.get('reviewId'));
+		if (!id || !Number.isInteger(reviewId) || reviewId <= 0) {
+			return fail(400, { message: 'Unknown review.' });
+		}
+		const recused = await recuseReview(conference.id, locals.user!.id, id, reviewId);
+		if (!recused) {
+			return fail(400, { message: 'Only an outstanding review can be recused.' });
+		}
+		redirect(303, `/review/${conference.slug}`);
+	},
+
 	save: async ({ locals, params, request }) => {
 		const { conference } = await requireReviewer(locals.user!.id, params.slug);
 		const id = submissionId(params.submissionId);
