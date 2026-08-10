@@ -12,7 +12,9 @@
  * one. Only Better Auth's `owner` and `admin` seats can, which is the same rule
  * `access.ts` uses for org-wide organizer rights.
  */
+import { invalidRangeField } from '$lib/conference/conference-dates';
 import { MAX_SLUG_LENGTH, SLUG_PATTERN } from '$lib/conference/slug';
+import { syncConferenceDays } from '$lib/server/conference/conference-days';
 import { db } from '$lib/server/db';
 import { member } from '$lib/server/db/auth-schema';
 import { conferenceTable, type Conference } from '$lib/server/db/conference/conference-schema';
@@ -57,48 +59,6 @@ export async function organizationForNewConference(userId: string): Promise<stri
 	return seat?.organizationId ?? null;
 }
 
-/**
- * A real calendar day written `YYYY-MM-DD`.
- *
- * The pattern alone would pass `2027-02-31`, so the parsed date has to agree
- * with the text it came from — `Date` silently rolls February 31st into March
- * 3rd rather than refusing it. `Date.UTC` keeps the comparison off the server's
- * timezone, which would otherwise shift the day either side of midnight.
- */
-function isCalendarDate(value: string): boolean {
-	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-	if (!match) return false;
-
-	const [, year, month, day] = match.map(Number);
-	const parsed = new Date(Date.UTC(year, month - 1, day));
-
-	return (
-		parsed.getUTCFullYear() === year &&
-		parsed.getUTCMonth() === month - 1 &&
-		parsed.getUTCDate() === day
-	);
-}
-
-/**
- * The field whose date is wrong, or null when both are fine.
- *
- * Both are optional, but whatever arrives has to be a date. The form sends
- * `type="date"`, which is not a guarantee about anything: a posted form carries
- * whatever the sender typed, and an unparseable value used to travel all the
- * way to Postgres and come back as a 500 through the action.
- */
-function invalidDateField(draft: ConferenceDraft): 'startsOn' | 'endsOn' | null {
-	if (draft.startsOn !== null && !isCalendarDate(draft.startsOn)) return 'startsOn';
-	if (draft.endsOn !== null && !isCalendarDate(draft.endsOn)) return 'endsOn';
-
-	// A conference that ends before it starts is a typo the organizer should see
-	// now rather than on the public page. String comparison is exact for
-	// `YYYY-MM-DD`, and both values are known to be that shape by this point.
-	if (draft.startsOn && draft.endsOn && draft.endsOn < draft.startsOn) return 'endsOn';
-
-	return null;
-}
-
 export function validateDraft(draft: ConferenceDraft): CreateConferenceResult | null {
 	if (!draft.name.trim() || draft.name.length > MAX_NAME) {
 		return { ok: false, reason: 'invalid', field: 'name' };
@@ -107,7 +67,7 @@ export function validateDraft(draft: ConferenceDraft): CreateConferenceResult | 
 		return { ok: false, reason: 'invalid', field: 'slug' };
 	}
 
-	const badDate = invalidDateField(draft);
+	const badDate = invalidRangeField(draft.startsOn, draft.endsOn);
 	if (badDate) return { ok: false, reason: 'invalid', field: badDate };
 
 	return null;
@@ -130,16 +90,25 @@ export async function createConference(
 	if (!organizationId) return { ok: false, reason: 'no_organization' };
 
 	try {
-		const [conference] = await db
-			.insert(conferenceTable)
-			.values({
-				organizationId,
-				name: draft.name.trim(),
-				slug: draft.slug,
-				startsOn: draft.startsOn,
-				endsOn: draft.endsOn
-			})
-			.returning();
+		// Conference and days in one transaction: a conference that exists without
+		// its days is exactly the state #86 is about, and a half-written creation
+		// would put a fresh one straight back into it.
+		const conference = await db.transaction(async (tx) => {
+			const [created] = await tx
+				.insert(conferenceTable)
+				.values({
+					organizationId,
+					name: draft.name.trim(),
+					slug: draft.slug,
+					startsOn: draft.startsOn,
+					endsOn: draft.endsOn
+				})
+				.returning();
+
+			await syncConferenceDays(created.id, created.startsOn, created.endsOn, tx);
+
+			return created;
+		});
 
 		return { ok: true, conference };
 	} catch (cause) {
