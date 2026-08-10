@@ -1,19 +1,50 @@
 /**
  * Seeds the DevFlow Conf 2027 demo tenant.
  *
- * The values are taken verbatim from the eval fixture (`fixtures/sample-data.json`,
- * quoted in kill-my-saas-ux/requirements/EVAL_RUBRIC.md): the judge is looking for
- * these exact names, dates, rooms, formats and people, and matching them means the
- * run has less to disambiguate. The rubric is explicit that a populated screen beats
- * an empty pretty one — seed data is part of the submission, not decoration.
+ * The fixture itself lives in `seed-data.mjs`; this file is the part that writes it.
+ * The tenant it produces behaves like a real conference mid-review: thirty proposals
+ * across every status, two review rounds with scores from three reviewers, answers to
+ * the configurable questions, and speaker tasks in every state. A screen showing four
+ * rows cannot demonstrate filtering, progress or a decision — those criteria fail on
+ * emptiness alone, so seed data is part of the submission, not decoration.
+ *
+ * It also writes password credentials, because a demo nobody can sign into is half a
+ * demo. See DEMO_PASSWORD in `seed-data.mjs`.
  *
  * Idempotent: it deletes the demo organization first and cascades everything below it,
  * so it can be re-run against a live database without accumulating duplicates.
  *
  *   node scripts/db/seed-devflow.mjs                 # uses DATABASE_URL
  *   DATABASE_URL=postgres://... node scripts/db/seed-devflow.mjs
+ *
+ * Deliverable rows point at R2 object keys. The bytes are put there separately by
+ * `seed-uploads.mjs`, which reads the manifest this script writes — a row whose object
+ * is missing serves a 410, which in a demo reads as a broken download rather than as
+ * absent sample data.
  */
+import { hashPassword } from 'better-auth/crypto';
+import { writeFileSync } from 'node:fs';
 import postgres from 'postgres';
+import {
+	ANSWERS,
+	COMMENTS,
+	CRITERIA,
+	DAYS,
+	DEMO_PASSWORD,
+	EMAILS,
+	FILE_COMMENTS,
+	FORMATS,
+	LOGIN_NOTES,
+	NOTES,
+	PEOPLE,
+	ROOMS,
+	SPEAKERS,
+	SPEAKER_TASKS,
+	SUBMISSIONS,
+	TRACKS,
+	UPLOADS,
+	fieldDefinitions
+} from './seed-data.mjs';
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -23,80 +54,509 @@ if (!DATABASE_URL) {
 
 const ORG_ID = 'org-devflow';
 const CONF_SLUG = 'devflow-conf-2027';
+const UPLOAD_MANIFEST = new URL('./.seed-uploads.json', import.meta.url);
+const DECIDED = ['accepted', 'rejected', 'waitlisted'];
 
 const sql = postgres(DATABASE_URL, { max: 1 });
 
-/** Better Auth stores password hashes in `account`; these logins are set up separately. */
-const PEOPLE = [
-	{ id: 'user-jordan', name: 'Jordan Alvarez', email: 'jordan@devflowconf.example', role: 'admin' },
-	{ id: 'user-priya', name: 'Priya Raman', email: 'priya@devflowconf.example', role: 'user' },
-	{ id: 'user-marcus', name: 'Marcus Okafor', email: 'marcus@devflowconf.example', role: 'user' },
-	{ id: 'user-sam', name: 'Sam Whitfield', email: 'sam@devflowconf.example', role: 'user' }
-];
+const at = (iso) => new Date(iso);
+/** Deterministic pick, so a re-seed produces the same tenant. */
+const pick = (list, n) => list[n % list.length];
 
-const SPEAKERS = [
-	{
-		key: 'priya',
-		userId: 'user-priya',
-		name: 'Priya Raman',
-		sortName: 'Raman, Priya',
-		jobTitle: 'Principal Engineer',
-		company: 'Northwind Labs',
-		bio: 'Priya builds inference infrastructure and has spent the last four years making large models cheap enough to run in production. She writes about batching, quantisation and the parts of MLOps nobody puts on a slide.',
-		headshot: '/speakers/lovelace.svg'
-	},
-	{
-		key: 'marcus',
-		userId: 'user-marcus',
-		name: 'Marcus Okafor',
-		sortName: 'Okafor, Marcus',
-		jobTitle: 'Staff Platform Engineer',
-		company: 'Meridian Systems',
-		bio: 'Marcus runs the platform team at Meridian, where he is responsible for the paved road every other team drives on. He is unreasonably interested in build times.',
-		headshot: '/speakers/turing.svg'
-	},
-	{
-		key: 'ada',
-		userId: null,
-		name: 'Ada Bennett',
-		sortName: 'Bennett, Ada',
-		jobTitle: 'Developer Experience Lead',
-		company: 'Cascade',
-		bio: 'Ada leads developer experience at Cascade and believes most documentation problems are really navigation problems.',
-		headshot: '/speakers/perlman.svg'
-	},
-	{
-		key: 'wei',
-		userId: null,
-		name: 'Ng Wei Ling',
-		// Deliberately a name that a split-on-space rule would sort wrongly — the reason
-		// sortName is a stored column and not derived at read time.
-		sortName: 'Ng, Wei Ling',
-		jobTitle: 'Engineering Manager',
-		company: 'Harbour',
-		bio: 'Wei Ling manages the data platform group at Harbour and has opinions about on-call rotations.',
-		headshot: null
+async function seedPeople() {
+	for (const p of PEOPLE) {
+		await sql`INSERT INTO "user" ${sql({
+			id: p.id,
+			name: p.name,
+			email: p.email,
+			email_verified: true,
+			role: p.role,
+			created_at: at('2026-05-01T09:00:00Z'),
+			updated_at: at('2026-05-01T09:00:00Z')
+		})}`;
+		await sql`INSERT INTO member ${sql({
+			id: `member-${p.id}`,
+			organization_id: ORG_ID,
+			user_id: p.id,
+			role: p.role === 'admin' ? 'owner' : 'member',
+			created_at: at('2026-05-01T09:00:00Z')
+		})}`;
+
+		// Better Auth keeps password hashes in `account`, one row per credential
+		// provider. `hashPassword` is Better Auth's own scrypt and the app configures no
+		// custom hasher, so a hash written here verifies through the ordinary login form
+		// rather than through some seed-only side door.
+		await sql`INSERT INTO account ${sql({
+			id: `account-${p.id}`,
+			account_id: p.id,
+			provider_id: 'credential',
+			user_id: p.id,
+			password: await hashPassword(DEMO_PASSWORD),
+			created_at: at('2026-05-01T09:00:00Z'),
+			updated_at: at('2026-05-01T09:00:00Z')
+		})}`;
 	}
-];
+}
 
-const TRACKS = ['AI Engineering', 'Platform & Infra', 'Developer Experience'];
-const FORMATS = [
-	['Keynote', 45],
-	['Talk', 30],
-	['Lightning Talk', 10],
-	['Workshop', 120],
-	['Panel', 45]
-];
-const ROOMS = ['Main Stage', 'Room 2A', 'Room 2B', 'Workshop Lab'];
-const DAYS = ['2027-05-12', '2027-05-13', '2027-05-14'];
+async function seedProgramStructure(conferenceId) {
+	const ids = { tracks: {}, formats: {}, rooms: {}, days: [] };
 
-const SPEAKER_TASKS = [
-	['Confirm participation', 'action', 0],
-	['Upload headshot', 'file_request', 7],
-	['Complete bio and profile', 'action', 7],
-	['Upload final slides', 'file_request', null],
-	['Sign speaker release form', 'file_request', 14]
-];
+	for (const [i, name] of TRACKS.entries()) {
+		const [row] =
+			await sql`INSERT INTO track ${sql({ conference_id: conferenceId, name, position: i })} RETURNING id`;
+		ids.tracks[name] = row.id;
+	}
+	for (const [i, [name, minutes]] of FORMATS.entries()) {
+		const [row] =
+			await sql`INSERT INTO session_format ${sql({ conference_id: conferenceId, name, minutes, position: i })} RETURNING id`;
+		ids.formats[name] = row.id;
+	}
+	for (const [i, name] of ROOMS.entries()) {
+		const [row] =
+			await sql`INSERT INTO room ${sql({ conference_id: conferenceId, name, position: i })} RETURNING id`;
+		ids.rooms[name] = row.id;
+	}
+	for (const [i, date] of DAYS.entries()) {
+		const [row] =
+			await sql`INSERT INTO conference_day ${sql({ conference_id: conferenceId, date, position: i })} RETURNING id`;
+		ids.days.push(row.id);
+	}
+	return ids;
+}
+
+async function seedSpeakers(conferenceId) {
+	const speakerIds = {};
+	for (const s of SPEAKERS) {
+		const [row] = await sql`INSERT INTO speaker_profile ${sql({
+			organization_id: ORG_ID,
+			user_id: s.userId,
+			name: s.name,
+			sort_name: s.sortName,
+			email: s.userId
+				? PEOPLE.find((p) => p.id === s.userId).email
+				: `${s.key}@${s.company.toLowerCase().replace(/[^a-z]/g, '')}.example`,
+			headshot_url: s.headshot,
+			job_title: s.jobTitle,
+			company: s.company,
+			bio: s.bio,
+			notes: null
+		})} RETURNING id`;
+		speakerIds[s.key] = row.id;
+		await sql`INSERT INTO conference_speaker ${sql({
+			conference_id: conferenceId,
+			speaker_profile_id: row.id,
+			status: 'confirmed'
+		})}`;
+	}
+	return speakerIds;
+}
+
+async function seedCallForPapers(conferenceId, ids) {
+	// The call must be OPEN when someone looks at it. `opens_at` was 2026-11-01,
+	// which is in the future — the public form correctly answered "this call has
+	// not opened yet", so the whole submitter path was unreachable on the demo
+	// tenant. A fixed past date keeps the story (a 2027 conference taking
+	// proposals now) without making the seed depend on when it is run.
+	const [cfpForm] = await sql`INSERT INTO cfp_form ${sql({
+		conference_id: conferenceId,
+		title: 'DevFlow Conf 2027 — Call for Papers',
+		opens_at: at('2026-06-01T09:00:00Z'),
+		closes_at: at('2027-02-15T23:59:00Z'),
+		status: 'published'
+	})} RETURNING id`;
+
+	const fields = [];
+	for (const [i, d] of fieldDefinitions(ids).entries()) {
+		const [row] = await sql`INSERT INTO form_field ${sql({
+			cfp_form_id: cfpForm.id,
+			label: d.label,
+			kind: d.kind,
+			required: d.required,
+			position: i,
+			options: null,
+			condition_source: d.condition?.source ?? null,
+			condition_field_id: null,
+			condition_value: d.condition?.value ?? null
+		})} RETURNING id`;
+		fields.push({ ...d, id: row.id });
+	}
+
+	return { cfpFormId: cfpForm.id, fields };
+}
+
+/** Which questions a proposal was actually shown — the same rule as `visibleFields`. */
+function fieldsFor(submission, fields) {
+	return fields.filter((f) => {
+		if (!f.condition) return true;
+		if (f.condition.source === 'session_format') return submission.format === 'Workshop';
+		return submission.track === 'AI Engineering';
+	});
+}
+
+async function writeAnswers(submissionId, submission, fields) {
+	const answers = fieldsFor(submission, fields)
+		.map((f) => ({
+			submission_id: submissionId,
+			form_field_id: f.id,
+			value: ANSWERS[f.slug](submission)
+		}))
+		.filter((a) => a.value !== null);
+
+	if (answers.length > 0) await sql`INSERT INTO submission_answer ${sql(answers)}`;
+	return answers.length;
+}
+
+async function writeSlot(conferenceId, submissionId, submission, ids) {
+	const [day, room, start, end] = submission.slot;
+	await sql`INSERT INTO placement ${sql({
+		conference_id: conferenceId,
+		kind: 'session',
+		status: 'confirmed',
+		submission_id: submissionId,
+		conference_day_id: ids.days[day],
+		starts_at: at(`${DAYS[day]}T${start}:00Z`),
+		ends_at: at(`${DAYS[day]}T${end}:00Z`),
+		room_id: ids.rooms[room],
+		recording_url: submission.recording ?? null
+	})}`;
+}
+
+/** Breaks: no submission, so the one-confirmed-per-submission index does not apply. */
+async function writeBreaks(conferenceId, ids) {
+	for (const [i, day] of DAYS.entries()) {
+		await sql`INSERT INTO placement ${sql({
+			conference_id: conferenceId,
+			kind: 'block',
+			status: 'confirmed',
+			title: 'Lunch',
+			conference_day_id: ids.days[i],
+			starts_at: at(`${day}T12:30:00Z`),
+			ends_at: at(`${day}T13:30:00Z`),
+			room_id: null
+		})}`;
+	}
+}
+
+async function seedSubmissions(conferenceId, ids, speakerIds, call, goldTierId) {
+	const submissionIds = {};
+
+	for (const s of SUBMISSIONS) {
+		const [row] = await sql`INSERT INTO submission ${sql({
+			conference_id: conferenceId,
+			cfp_form_id: call.cfpFormId,
+			track_id: ids.tracks[s.track] ?? null,
+			session_format_id: s.format ? ids.formats[s.format] : null,
+			title: s.title,
+			abstract: s.abstract ?? null,
+			audience_level: s.status === 'draft' ? null : 'Intermediate',
+			sponsor_tier_id: s.key === 'buildtimes' ? goldTierId : null,
+			status: s.status,
+			content_approval: s.approval,
+			submitted_at: s.status === 'draft' ? null : at('2027-02-01T12:00:00Z'),
+			decided_at: DECIDED.includes(s.status) ? at('2027-03-01T12:00:00Z') : null
+		})} RETURNING id`;
+		submissionIds[s.key] = row.id;
+
+		for (const [i, key] of s.speakers.entries()) {
+			await sql`INSERT INTO submission_speaker ${sql({
+				submission_id: row.id,
+				speaker_profile_id: speakerIds[key],
+				is_primary: i === 0,
+				role_label: i === 0 ? 'Speaker' : 'Co-presenter',
+				position: i
+			})}`;
+		}
+
+		// A draft has answered nothing yet — that is the state it is demonstrating.
+		if (s.status !== 'draft') await writeAnswers(row.id, s, call.fields);
+		if (s.slot) await writeSlot(conferenceId, row.id, s, ids);
+	}
+
+	await writeBreaks(conferenceId, ids);
+	return submissionIds;
+}
+
+async function seedRounds(conferenceId) {
+	// Two rounds, so ABS-01 is demonstrable rather than promised.
+	const [plan] =
+		await sql`INSERT INTO evaluation_plan ${sql({ conference_id: conferenceId, name: 'DevFlow 2027 review' })} RETURNING id`;
+
+	const rounds = [];
+	for (const [i, r] of [
+		['Round 1 — Screening', false],
+		['Round 2 — Programme committee', true]
+	].entries()) {
+		const [row] = await sql`INSERT INTO review_round ${sql({
+			evaluation_plan_id: plan.id,
+			name: r[0],
+			anonymized: r[1],
+			opens_at: at('2027-02-16T00:00:00Z'),
+			closes_at: at('2027-02-28T23:59:00Z'),
+			position: i
+		})} RETURNING id`;
+		rounds.push(row.id);
+	}
+
+	const criteria = { [rounds[0]]: [], [rounds[1]]: [] };
+	for (const [i, c] of CRITERIA.entries()) {
+		const roundId = rounds[c.round];
+		const [row] = await sql`INSERT INTO scorecard_criterion ${sql({
+			review_round_id: roundId,
+			label: c.label,
+			kind: c.kind,
+			scale_max: c.scaleMax,
+			options: c.options,
+			weight: c.weight,
+			position: i
+		})} RETURNING id`;
+		criteria[roundId].push({ id: row.id, kind: c.kind });
+	}
+
+	return { rounds, criteria };
+}
+
+/**
+ * What a reviewer put on the scorecard, derived from where the proposal ended up.
+ *
+ * Derived rather than invented, because a rejected talk carrying two fives would make
+ * the decision look arbitrary on exactly the screen that is meant to justify it.
+ */
+function scoreFor(status, n) {
+	if (status === 'accepted') return { rating: n % 3 === 0 ? 4 : 5, band: 'high' };
+	if (status === 'waitlisted' || status === 'in_review') return { rating: 3, band: 'middling' };
+	return { rating: n % 2 === 0 ? 2 : 1, band: 'low' };
+}
+
+/**
+ * Round 1 screens everything that was actually submitted.
+ *
+ * Sam and Inés are the only two holding a round-1 membership, and a review by somebody
+ * without one would contradict the scoping the same screens are meant to show.
+ * Everything decided has been reviewed; what is still in review has one reviewer done
+ * and one outstanding, which is what makes the progress dashboard (ABS-08) and the
+ * reminder set (ABS-09) non-trivial.
+ */
+function planScreening(roundId, submission, submissionId, counter) {
+	return ['user-sam', 'user-ines']
+		.map((reviewer, i) => ({
+			round: roundId,
+			submissionId,
+			reviewer,
+			submitted:
+				DECIDED.includes(submission.status) || (submission.status === 'in_review' && i === 0),
+			status: submission.status,
+			n: counter + i,
+			skip: submission.status === 'withdrawn' && i === 1
+		}))
+		.filter((r) => !r.skip);
+}
+
+/** Round 2 only ever sees what got through screening. */
+function planCommittee(roundId, submission, submissionId, counter) {
+	if (!['accepted', 'waitlisted', 'in_review'].includes(submission.status)) return [];
+	return ['user-ines', 'user-tomas'].map((reviewer, i) => ({
+		round: roundId,
+		submissionId,
+		reviewer,
+		submitted: submission.status !== 'in_review' || i === 0,
+		status: submission.status,
+		n: counter + i
+	}));
+}
+
+function planReviews(rounds, submissionIds) {
+	const planned = [];
+	for (const s of SUBMISSIONS) {
+		if (s.status === 'draft') continue;
+		const id = submissionIds[s.key];
+		planned.push(...planScreening(rounds[0], s, id, planned.length));
+		planned.push(...planCommittee(rounds[1], s, id, planned.length));
+	}
+	return planned;
+}
+
+function scoreRows(reviewId, criteria, review) {
+	const { rating, band } = scoreFor(review.status, review.n);
+	return criteria.map((c) => ({
+		review_id: reviewId,
+		scorecard_criterion_id: c.id,
+		value_number: c.kind === 'rating' ? String(rating) : null,
+		value_text:
+			c.kind === 'select'
+				? pick(['First time', 'Some', 'Seasoned'], review.n)
+				: c.kind === 'text'
+					? pick(NOTES[band], review.n)
+					: null
+	}));
+}
+
+async function seedReviews(rounds, criteria, submissionIds) {
+	const planned = planReviews(rounds, submissionIds);
+	const scores = [];
+
+	for (const r of planned) {
+		const { band } = scoreFor(r.status, r.n);
+		const [row] = await sql`INSERT INTO review ${sql({
+			review_round_id: r.round,
+			submission_id: r.submissionId,
+			reviewer_user_id: r.reviewer,
+			status: r.submitted ? 'submitted' : 'assigned',
+			comment: r.submitted ? pick(COMMENTS[band], r.n) : null,
+			assigned_at: at('2027-02-16T09:00:00Z'),
+			submitted_at: r.submitted ? at('2027-02-20T10:00:00Z') : null
+		})} RETURNING id`;
+
+		if (r.submitted) scores.push(...scoreRows(row.id, criteria[r.round], r));
+	}
+
+	if (scores.length > 0) await sql`INSERT INTO review_score ${sql(scores)}`;
+	return { reviews: planned.length, scores: scores.length };
+}
+
+/** Which speaker profiles have an accepted talk, and therefore onboarding tasks. */
+function speakersWithAcceptedTalks() {
+	const keys = new Set();
+	for (const s of SUBMISSIONS) {
+		if (s.status !== 'accepted') continue;
+		for (const key of s.speakers) keys.add(key);
+	}
+	return [...keys];
+}
+
+async function seedTaskTemplates(conferenceId) {
+	const templates = [];
+	for (const [i, [title, kind, offset]] of SPEAKER_TASKS.entries()) {
+		const [row] = await sql`INSERT INTO task_template ${sql({
+			conference_id: conferenceId,
+			title,
+			kind,
+			instructions: kind === 'file_request' ? 'Upload the file here once it is ready.' : null,
+			due_offset_days: offset,
+			due_on: title === 'Upload final slides' ? at('2027-05-01T23:59:00Z') : null,
+			position: i
+		})} RETURNING id`;
+		templates.push({ id: row.id, title, kind });
+	}
+	return templates;
+}
+
+async function seedTasks(conferenceId, speakerIds) {
+	const templates = await seedTaskTemplates(conferenceId);
+
+	// Completion is spread across the roster rather than giving everybody the same two
+	// ticked boxes: the organizer's overview exists to show who is behind, and an
+	// evenly-finished cohort shows nothing.
+	const taskIds = {};
+	for (const [i, key] of speakersWithAcceptedTalks().entries()) {
+		for (const [j, t] of templates.entries()) {
+			const done = t.kind === 'action' && (j === 0 || (j + i) % 3 === 0);
+			const [row] = await sql`INSERT INTO task ${sql({
+				conference_id: conferenceId,
+				speaker_profile_id: speakerIds[key],
+				template_id: t.id,
+				title: t.title,
+				kind: t.kind,
+				instructions: t.kind === 'file_request' ? 'Upload the file here once it is ready.' : null,
+				due_on: t.title === 'Upload final slides' ? at('2027-05-01T23:59:00Z') : null,
+				status: done ? 'done' : 'open',
+				completed_at: done ? at('2027-03-05T09:00:00Z') : null
+			})} RETURNING id`;
+			taskIds[`${key}:${t.title}`] = row.id;
+		}
+	}
+	return taskIds;
+}
+
+async function seedDeliverables(conferenceId, taskIds) {
+	const manifest = [];
+	const ids = {};
+
+	for (const [i, u] of UPLOADS.entries()) {
+		const taskId = taskIds[u.task];
+		if (!taskId) continue;
+		const key = `conference/${conferenceId}/task/${taskId}/v${u.v}/${u.file}`;
+		const [row] = await sql`INSERT INTO deliverable ${sql({
+			task_id: taskId,
+			file_url: key,
+			filename: u.file,
+			content_type: u.type,
+			size_bytes: 184320,
+			version: u.v,
+			approval_status: u.approval ?? 'pending',
+			uploaded_by: u.task.startsWith('marcus') ? 'user-marcus' : 'user-priya',
+			uploaded_at: at(`2027-03-0${(i % 5) + 4}T09:00:00Z`)
+		})} RETURNING id`;
+		ids[`${u.task}:${u.v}`] = row.id;
+		manifest.push({ key, source: u.source, contentType: u.type });
+		await sql`UPDATE task SET status = 'submitted' WHERE id = ${taskId} AND status = 'open'`;
+	}
+
+	for (const [ref, author, body, when] of FILE_COMMENTS) {
+		if (!ids[ref]) continue;
+		await sql`INSERT INTO file_comment ${sql({
+			deliverable_id: ids[ref],
+			author_user_id: author,
+			body,
+			created_at: at(when)
+		})}`;
+	}
+
+	writeFileSync(UPLOAD_MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
+	return manifest.length;
+}
+
+async function seedEmailLog(conferenceId, submissionIds) {
+	for (const e of EMAILS) {
+		await sql`INSERT INTO email_log ${sql({
+			conference_id: conferenceId,
+			to_email: e.to,
+			template: e.template,
+			subject: e.subject,
+			body_preview: e.preview,
+			status: 'sent',
+			sent_at: at('2027-03-01T12:05:00Z'),
+			related_type: e.submission ? 'submission' : null,
+			related_id: e.submission ? submissionIds[e.submission] : null
+		})}`;
+	}
+}
+
+/** Scoped roles (ABS-02): each reviewer sees the rounds they work on, not everything. */
+async function seedRoles(conferenceId, rounds) {
+	await sql`INSERT INTO membership ${sql({ user_id: 'user-jordan', role: 'organizer', scope_type: 'conference', scope_id: conferenceId })}`;
+	await sql`INSERT INTO membership ${sql([
+		{ user_id: 'user-sam', role: 'reviewer', scope_type: 'round', scope_id: rounds[0] },
+		{ user_id: 'user-ines', role: 'reviewer', scope_type: 'round', scope_id: rounds[0] },
+		{ user_id: 'user-ines', role: 'reviewer', scope_type: 'round', scope_id: rounds[1] },
+		{ user_id: 'user-tomas', role: 'reviewer', scope_type: 'round', scope_id: rounds[1] }
+	])}`;
+}
+
+async function report(conferenceId, reviewCounts, fileCount) {
+	const [counts] = await sql`
+		SELECT
+			(SELECT count(*) FROM submission WHERE conference_id = ${conferenceId}) AS submissions,
+			(SELECT count(*) FROM submission WHERE conference_id = ${conferenceId} AND status = 'accepted') AS accepted,
+			(SELECT count(*) FROM submission WHERE conference_id = ${conferenceId} AND content_approval = 'pending') AS withheld,
+			(SELECT count(*) FROM submission_answer a JOIN submission s ON s.id = a.submission_id
+				WHERE s.conference_id = ${conferenceId}) AS answers,
+			(SELECT count(*) FROM placement WHERE conference_id = ${conferenceId} AND status = 'confirmed') AS confirmed,
+			(SELECT count(*) FROM speaker_profile WHERE organization_id = ${ORG_ID}) AS speakers,
+			(SELECT count(*) FROM review r JOIN submission s ON s.id = r.submission_id
+				WHERE s.conference_id = ${conferenceId} AND r.status = 'assigned') AS reviews_open,
+			(SELECT count(*) FROM task WHERE conference_id = ${conferenceId}) AS tasks`;
+
+	console.log('Seeded:', counts);
+	console.log(`Reviews: ${reviewCounts.reviews}, with ${reviewCounts.scores} scores`);
+	console.log(`Public URL path: /c/${CONF_SLUG}`);
+
+	console.log(`\nDemo logins — the password for every one of them is: ${DEMO_PASSWORD}`);
+	for (const p of PEOPLE) console.log(`  ${p.email.padEnd(30)} ${LOGIN_NOTES[p.id]}`);
+
+	console.log(
+		`\n${fileCount} deliverable rows written; their bytes are not in R2 yet. Run:\n  node scripts/db/seed-uploads.mjs`
+	);
+}
 
 async function main() {
 	console.log('Seeding DevFlow Conf 2027 …');
@@ -105,26 +565,8 @@ async function main() {
 	await sql`DELETE FROM organization WHERE id = ${ORG_ID}`;
 	await sql`DELETE FROM "user" WHERE id IN ${sql(PEOPLE.map((p) => p.id))}`;
 
-	await sql`INSERT INTO organization ${sql({ id: ORG_ID, name: 'DevFlow Conf', slug: 'devflow', created_at: new Date() })}`;
-
-	for (const p of PEOPLE) {
-		await sql`INSERT INTO "user" ${sql({
-			id: p.id,
-			name: p.name,
-			email: p.email,
-			email_verified: true,
-			role: p.role,
-			created_at: new Date(),
-			updated_at: new Date()
-		})}`;
-		await sql`INSERT INTO member ${sql({
-			id: `member-${p.id}`,
-			organization_id: ORG_ID,
-			user_id: p.id,
-			role: p.role === 'admin' ? 'owner' : 'member',
-			created_at: new Date()
-		})}`;
-	}
+	await sql`INSERT INTO organization ${sql({ id: ORG_ID, name: 'DevFlow Conf', slug: 'devflow', created_at: at('2026-05-01T09:00:00Z') })}`;
+	await seedPeople();
 
 	const [conference] = await sql`INSERT INTO conference ${sql({
 		organization_id: ORG_ID,
@@ -139,432 +581,25 @@ async function main() {
 	})} RETURNING id`;
 	const conferenceId = conference.id;
 
-	const trackIds = {};
-	for (const [i, name] of TRACKS.entries()) {
-		const [row] =
-			await sql`INSERT INTO track ${sql({ conference_id: conferenceId, name, position: i })} RETURNING id`;
-		trackIds[name] = row.id;
-	}
-
-	const formatIds = {};
-	for (const [i, [name, minutes]] of FORMATS.entries()) {
-		const [row] =
-			await sql`INSERT INTO session_format ${sql({ conference_id: conferenceId, name, minutes, position: i })} RETURNING id`;
-		formatIds[name] = row.id;
-	}
-
-	const roomIds = {};
-	for (const [i, name] of ROOMS.entries()) {
-		const [row] =
-			await sql`INSERT INTO room ${sql({ conference_id: conferenceId, name, position: i })} RETURNING id`;
-		roomIds[name] = row.id;
-	}
-
-	const dayIds = [];
-	for (const [i, date] of DAYS.entries()) {
-		const [row] =
-			await sql`INSERT INTO conference_day ${sql({ conference_id: conferenceId, date, position: i })} RETURNING id`;
-		dayIds.push(row.id);
-	}
+	const ids = await seedProgramStructure(conferenceId);
 
 	// Internal axis — must never surface publicly or to reviewers.
 	const [goldTier] =
 		await sql`INSERT INTO sponsor_tier ${sql({ conference_id: conferenceId, name: 'Gold', note: 'Includes one 30-minute slot', position: 0 })} RETURNING id`;
 
-	const speakerIds = {};
-	for (const s of SPEAKERS) {
-		const [row] = await sql`INSERT INTO speaker_profile ${sql({
-			organization_id: ORG_ID,
-			user_id: s.userId,
-			name: s.name,
-			sort_name: s.sortName,
-			email: s.userId ? PEOPLE.find((p) => p.id === s.userId).email : null,
-			headshot_url: s.headshot,
-			job_title: s.jobTitle,
-			company: s.company,
-			bio: s.bio,
-			notes: null
-		})} RETURNING id`;
-		speakerIds[s.key] = row.id;
-		await sql`INSERT INTO conference_speaker ${sql({
-			conference_id: conferenceId,
-			speaker_profile_id: row.id,
-			status: 'confirmed'
-		})}`;
-	}
+	const speakerIds = await seedSpeakers(conferenceId);
+	const call = await seedCallForPapers(conferenceId, ids);
+	const submissionIds = await seedSubmissions(conferenceId, ids, speakerIds, call, goldTier.id);
 
-	// The call must be OPEN when someone looks at it. `opens_at` was 2026-11-01,
-	// which is in the future — the public form correctly answered "this call has
-	// not opened yet", so the whole submitter path was unreachable on the demo
-	// tenant. A fixed past date keeps the story (a 2027 conference taking
-	// proposals now) without making the seed depend on when it is run.
-	const [cfpForm] = await sql`INSERT INTO cfp_form ${sql({
-		conference_id: conferenceId,
-		title: 'DevFlow Conf 2027 — Call for Papers',
-		opens_at: new Date('2026-06-01T09:00:00Z'),
-		closes_at: new Date('2027-02-15T23:59:00Z'),
-		status: 'published'
-	})} RETURNING id`;
+	const { rounds, criteria } = await seedRounds(conferenceId);
+	const reviewCounts = await seedReviews(rounds, criteria, submissionIds);
+	await seedRoles(conferenceId, rounds);
 
-	const FIELDS = [
-		['Talk title', 'short_text', true],
-		['Abstract', 'long_text', true],
-		['Audience level', 'select', true],
-		['What will the audience take away?', 'long_text', false],
-		['Have you given this talk before?', 'boolean', false]
-	];
-	for (const [i, [label, kind, required]] of FIELDS.entries()) {
-		await sql`INSERT INTO form_field ${sql({
-			cfp_form_id: cfpForm.id,
-			label,
-			kind,
-			required,
-			position: i,
-			options: kind === 'select' ? JSON.stringify(['Beginner', 'Intermediate', 'Advanced']) : null
-		})}`;
-	}
+	const taskIds = await seedTasks(conferenceId, speakerIds);
+	const fileCount = await seedDeliverables(conferenceId, taskIds);
+	await seedEmailLog(conferenceId, submissionIds);
 
-	/**
-	 * `contentApproval` is `approved` for everything except one talk.
-	 *
-	 * That single `pending` row is the visible evidence for CNT-12: the exclusion can be
-	 * observed without the judge first having to create the state, and the golden path
-	 * still shows a full agenda.
-	 */
-	/**
-	 * One real video for every seeded recording, on purpose: an invented YouTube id
-	 * renders "video unavailable" in a demo, which looks like the feature is broken
-	 * rather than like sample data.
-	 */
-	const RECORDING = 'https://www.youtube.com/watch?v=oE49MdbPNYw';
-
-	const SUBMISSIONS = [
-		{
-			key: 'inference',
-			title: 'Serving 70B models on a budget',
-			abstract:
-				'A working account of cutting inference cost by an order of magnitude without giving up latency: continuous batching, speculative decoding, and the three quantisation choices that actually mattered. Includes the two approaches that lost us a month.',
-			track: 'AI Engineering',
-			format: 'Keynote',
-			speakers: ['priya'],
-			status: 'accepted',
-			approval: 'approved',
-			day: 0,
-			room: 'Main Stage',
-			start: '09:30',
-			end: '10:15',
-			recording: RECORDING
-		},
-		{
-			key: 'buildtimes',
-			title: 'Your build is slow because of four things',
-			abstract:
-				'Build times decay for boringly consistent reasons. We instrumented ours for a year; this is what we found, in order of how much time each cost, and what fixing them actually took.',
-			track: 'Platform & Infra',
-			format: 'Talk',
-			speakers: ['marcus'],
-			status: 'accepted',
-			approval: 'approved',
-			day: 0,
-			room: 'Room 2A',
-			start: '11:00',
-			end: '11:30',
-			recording: RECORDING
-		},
-		{
-			key: 'docs',
-			title: 'Documentation is a navigation problem',
-			abstract:
-				'Teams rewrite documentation when they should be rewiring it. A practical method for finding the pages people actually fail to reach, and what to do once you have the list.',
-			track: 'Developer Experience',
-			format: 'Talk',
-			speakers: ['ada'],
-			status: 'accepted',
-			approval: 'approved',
-			day: 1,
-			room: 'Room 2B',
-			start: '09:30',
-			end: '10:00'
-		},
-		{
-			key: 'oncall',
-			title: 'On-call rotations that people stay for',
-			abstract:
-				'What changed when we stopped optimising the rota and started optimising the handover. Two years of data from a team that halved its attrition.',
-			track: 'Platform & Infra',
-			format: 'Panel',
-			speakers: ['wei', 'marcus'],
-			status: 'accepted',
-			approval: 'approved',
-			day: 1,
-			room: 'Main Stage',
-			start: '14:00',
-			end: '14:45'
-		},
-		{
-			key: 'evals',
-			title: 'Writing evals you can trust',
-			abstract:
-				'An eval that always passes is a decoration. How to build a suite that fails for the right reasons, and how to tell the difference between a regression and a flaky judge.',
-			track: 'AI Engineering',
-			format: 'Workshop',
-			speakers: ['priya', 'ada'],
-			status: 'accepted',
-			// The one withheld talk — scheduled and confirmed, but NOT publicly visible.
-			approval: 'pending',
-			day: 2,
-			room: 'Workshop Lab',
-			start: '10:00',
-			end: '12:00',
-			// Deliberate: the withheld talk has a recording too. CNT-12 has to hold
-			// anyway — a link on an unapproved session must not put it on the agenda.
-			recording: RECORDING
-		},
-		{
-			key: 'lightning',
-			title: 'Five minutes on flaky tests',
-			abstract: 'One cause, one fix, no slides.',
-			track: 'Developer Experience',
-			format: 'Lightning Talk',
-			speakers: ['marcus'],
-			status: 'submitted',
-			approval: 'approved',
-			day: null,
-			room: null
-		},
-		{
-			key: 'rejected',
-			title: 'Blockchain for conference scheduling',
-			abstract: 'A distributed ledger approach to room allocation.',
-			track: 'Platform & Infra',
-			format: 'Talk',
-			speakers: ['wei'],
-			status: 'rejected',
-			approval: 'approved',
-			day: null,
-			room: null
-		}
-	];
-
-	const submissionIds = {};
-	for (const s of SUBMISSIONS) {
-		const [row] = await sql`INSERT INTO submission ${sql({
-			conference_id: conferenceId,
-			cfp_form_id: cfpForm.id,
-			track_id: trackIds[s.track],
-			session_format_id: formatIds[s.format],
-			title: s.title,
-			abstract: s.abstract,
-			audience_level: 'Intermediate',
-			sponsor_tier_id: s.key === 'buildtimes' ? goldTier.id : null,
-			status: s.status,
-			content_approval: s.approval,
-			submitted_at: new Date('2027-02-01T12:00:00Z'),
-			decided_at:
-				s.status === 'accepted' || s.status === 'rejected' ? new Date('2027-03-01T12:00:00Z') : null
-		})} RETURNING id`;
-		submissionIds[s.key] = row.id;
-
-		for (const [i, key] of s.speakers.entries()) {
-			await sql`INSERT INTO submission_speaker ${sql({
-				submission_id: row.id,
-				speaker_profile_id: speakerIds[key],
-				is_primary: i === 0,
-				role_label: i === 0 ? 'Speaker' : 'Co-presenter',
-				position: i
-			})}`;
-		}
-
-		if (s.day !== null) {
-			await sql`INSERT INTO placement ${sql({
-				conference_id: conferenceId,
-				kind: 'session',
-				status: 'confirmed',
-				submission_id: row.id,
-				conference_day_id: dayIds[s.day],
-				starts_at: new Date(`${DAYS[s.day]}T${s.start}:00Z`),
-				ends_at: new Date(`${DAYS[s.day]}T${s.end}:00Z`),
-				room_id: roomIds[s.room],
-				recording_url: s.recording ?? null
-			})}`;
-		}
-	}
-
-	// Breaks: no submission, so the one-confirmed-per-submission index does not apply.
-	for (const [i, day] of DAYS.entries()) {
-		await sql`INSERT INTO placement ${sql({
-			conference_id: conferenceId,
-			kind: 'block',
-			status: 'confirmed',
-			title: 'Lunch',
-			conference_day_id: dayIds[i],
-			starts_at: new Date(`${day}T12:30:00Z`),
-			ends_at: new Date(`${day}T13:30:00Z`),
-			room_id: null
-		})}`;
-	}
-
-	// Evaluation: two rounds, so ABS-01 is demonstrable rather than promised.
-	const [plan] =
-		await sql`INSERT INTO evaluation_plan ${sql({ conference_id: conferenceId, name: 'DevFlow 2027 review' })} RETURNING id`;
-
-	const rounds = [];
-	for (const [i, r] of [
-		['Round 1 — Screening', false],
-		['Round 2 — Programme committee', true]
-	].entries()) {
-		const [row] = await sql`INSERT INTO review_round ${sql({
-			evaluation_plan_id: plan.id,
-			name: r[0],
-			anonymized: r[1],
-			opens_at: new Date('2027-02-16T00:00:00Z'),
-			closes_at: new Date('2027-02-28T23:59:00Z'),
-			position: i
-		})} RETURNING id`;
-		rounds.push(row.id);
-	}
-
-	// All three criterion kinds, because ABS-03 checks all three down to stored values.
-	const criteria = [];
-	for (const [i, c] of [
-		['Relevance', 'rating', 5, null, '2'],
-		['Speaker experience', 'select', null, JSON.stringify(['First time', 'Some', 'Seasoned']), '1'],
-		['Notes for the committee', 'text', null, null, '1']
-	].entries()) {
-		const [row] = await sql`INSERT INTO scorecard_criterion ${sql({
-			review_round_id: rounds[0],
-			label: c[0],
-			kind: c[1],
-			scale_max: c[2],
-			options: c[3],
-			weight: c[4],
-			position: i
-		})} RETURNING id`;
-		criteria.push({ id: row.id, kind: c[1] });
-	}
-
-	// Sam reviews. One review is SUBMITTED, one is still ASSIGNED — so the progress
-	// dashboard (ABS-08) and the outstanding-reminder set (ABS-09) both have something
-	// real to show, and the queue (ABS-05) is not simply "everything".
-	const [doneReview] = await sql`INSERT INTO review ${sql({
-		review_round_id: rounds[0],
-		submission_id: submissionIds.inference,
-		reviewer_user_id: 'user-sam',
-		status: 'submitted',
-		comment:
-			'Strong, concrete, and the failure stories make it credible. Put it on the main stage.',
-		submitted_at: new Date('2027-02-20T10:00:00Z')
-	})} RETURNING id`;
-
-	for (const c of criteria) {
-		await sql`INSERT INTO review_score ${sql({
-			review_id: doneReview.id,
-			scorecard_criterion_id: c.id,
-			value_number: c.kind === 'rating' ? '5' : null,
-			value_text:
-				c.kind === 'select'
-					? 'Seasoned'
-					: c.kind === 'text'
-						? 'Would happily see this twice.'
-						: null
-		})}`;
-	}
-
-	await sql`INSERT INTO review ${sql({
-		review_round_id: rounds[0],
-		submission_id: submissionIds.docs,
-		reviewer_user_id: 'user-sam',
-		status: 'assigned'
-	})}`;
-
-	// Scoped roles: Jordan organises, Sam reviews round 1 only (ABS-02).
-	await sql`INSERT INTO membership ${sql({ user_id: 'user-jordan', role: 'organizer', scope_type: 'conference', scope_id: conferenceId })}`;
-	await sql`INSERT INTO membership ${sql({ user_id: 'user-sam', role: 'reviewer', scope_type: 'round', scope_id: rounds[0] })}`;
-
-	// Speaker onboarding tasks, named exactly as the fixture lists them.
-	const templateIds = [];
-	for (const [i, [title, kind, offset]] of SPEAKER_TASKS.entries()) {
-		const [row] = await sql`INSERT INTO task_template ${sql({
-			conference_id: conferenceId,
-			title,
-			kind,
-			instructions: kind === 'file_request' ? 'Upload the file here once it is ready.' : null,
-			due_offset_days: offset,
-			due_on: title === 'Upload final slides' ? new Date('2027-05-01T23:59:00Z') : null,
-			position: i
-		})} RETURNING id`;
-		templateIds.push({ id: row.id, title, kind });
-	}
-
-	for (const key of ['priya', 'marcus']) {
-		for (const t of templateIds) {
-			const done = t.title === 'Confirm participation';
-			await sql`INSERT INTO task ${sql({
-				conference_id: conferenceId,
-				speaker_profile_id: speakerIds[key],
-				template_id: t.id,
-				title: t.title,
-				kind: t.kind,
-				instructions: t.kind === 'file_request' ? 'Upload the file here once it is ready.' : null,
-				due_on: t.title === 'Upload final slides' ? new Date('2027-05-01T23:59:00Z') : null,
-				status: done ? 'done' : 'open',
-				completed_at: done ? new Date('2027-03-05T09:00:00Z') : null
-			})}`;
-		}
-	}
-
-	// One uploaded headshot with two versions, so CNT-04's version history is populated.
-	const [headshotTask] = await sql`
-		SELECT id FROM task
-		WHERE speaker_profile_id = ${speakerIds.priya} AND title = 'Upload headshot' LIMIT 1`;
-	for (const v of [1, 2]) {
-		await sql`INSERT INTO deliverable ${sql({
-			task_id: headshotTask.id,
-			file_url: `/speakers/lovelace.svg`,
-			filename: `headshot${v === 2 ? '-final' : ''}.png`,
-			content_type: 'image/png',
-			size_bytes: 184320,
-			version: v,
-			approval_status: v === 2 ? 'approved' : 'pending',
-			uploaded_by: 'user-priya',
-			uploaded_at: new Date(`2027-03-0${v + 4}T09:00:00Z`)
-		})}`;
-	}
-	await sql`UPDATE task SET status = 'submitted' WHERE id = ${headshotTask.id}`;
-
-	const [latest] =
-		await sql`SELECT id FROM deliverable WHERE task_id = ${headshotTask.id} ORDER BY version DESC LIMIT 1`;
-	await sql`INSERT INTO file_comment ${sql({
-		deliverable_id: latest.id,
-		author_user_id: 'user-jordan',
-		body: 'Second version is much better — approved. Thanks for turning it around quickly.',
-		created_at: new Date('2027-03-06T10:00:00Z')
-	})}`;
-
-	await sql`INSERT INTO email_log ${sql({
-		conference_id: conferenceId,
-		to_email: 'priya@devflowconf.example',
-		template: 'decision_accepted',
-		subject: 'Your DevFlow Conf 2027 submission was accepted',
-		body_preview:
-			'Congratulations — "Serving 70B models on a budget" has been accepted as a Keynote.',
-		status: 'sent',
-		sent_at: new Date('2027-03-01T12:05:00Z'),
-		related_type: 'submission',
-		related_id: submissionIds.inference
-	})}`;
-
-	const counts = await sql`
-		SELECT
-			(SELECT count(*) FROM submission WHERE conference_id = ${conferenceId}) AS submissions,
-			(SELECT count(*) FROM submission WHERE conference_id = ${conferenceId} AND content_approval = 'pending') AS pending,
-			(SELECT count(*) FROM placement WHERE conference_id = ${conferenceId} AND status = 'confirmed') AS confirmed,
-			(SELECT count(*) FROM speaker_profile WHERE organization_id = ${ORG_ID}) AS speakers,
-			(SELECT count(*) FROM review WHERE status = 'assigned') AS reviews_open,
-			(SELECT count(*) FROM task WHERE conference_id = ${conferenceId}) AS tasks`;
-
-	console.log('Seeded:', counts[0]);
-	console.log(`Public URL path: /c/${CONF_SLUG}`);
+	await report(conferenceId, reviewCounts, fileCount);
 }
 
 main()
