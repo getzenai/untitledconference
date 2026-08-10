@@ -2,11 +2,14 @@
 	/**
 	 * The agenda builder — journey 2, step 8.
 	 *
-	 * Click-to-assign rather than drag-and-drop, and that is a decision rather than a
-	 * shortcut. The brief allows "drag-and-drop or whatever click-to-assign mechanism
-	 * the UI offers"; selects are reachable by keyboard, survive a small screen, and an
-	 * automated agent can drive them. Dragging is the more impressive demo and the more
-	 * fragile one.
+	 * Scheduling happens through the slot editor: open a slot, and either put a
+	 * waiting talk in it or take out the one that is there. It replaced three
+	 * dropdowns hanging off every card, which worked and read as a spreadsheet.
+	 *
+	 * This is the deterministic path, not the only planned one — drag-and-drop is
+	 * meant to land on top of it for humans (#69). It is built first and kept
+	 * visible on purpose: Cypress and the eval harness drive it, and it is what
+	 * makes the grid usable from a keyboard.
 	 *
 	 * The tray on the left is every accepted talk with nowhere to be. The grid on the
 	 * right is the conference. Conflicts are shown on the sessions that cause them,
@@ -16,6 +19,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { formatDayLong } from '$lib/conference/public-view';
+	import SlotEditor from './SlotEditor.svelte';
 
 	let { data, form } = $props();
 
@@ -72,8 +76,8 @@
 	/**
 	 * Twenty rooms is twenty cards, and the one you are looking at is somewhere past
 	 * the fold. Narrowing to a single room is the cheap way out; it is a view filter
-	 * only — the move dropdowns keep offering every room, so nothing becomes
-	 * unreachable by hiding it.
+	 * only — the slot editor's room select keeps offering every room, so nothing
+	 * becomes unreachable by hiding it.
 	 */
 	const ROOM_FILTER_FROM = 6;
 	let roomFilter = $state('all');
@@ -85,7 +89,54 @@
 	const everythingPublished = $derived(
 		board.placed.length > 0 && board.placed.every((p) => p.status === 'confirmed')
 	);
+
+	/**
+	 * Which slot the editor is open on, or null for closed. `SlotEditor.svelte`
+	 * holds the dialog itself and the reasoning behind its two shapes.
+	 *
+	 * It is instantiated only while `editing` is set, rather than rendered and
+	 * hidden: a dialog that is always in the DOM is one a test can assert against
+	 * without ever having opened it.
+	 */
+	type SlotTarget = { roomId: number; roomName: string; startMinutes: number };
+	let editing = $state<SlotTarget | null>(null);
+
+	/**
+	 * What starts in a slot — not what covers it.
+	 *
+	 * A 30-minute talk at 10:00 leaves 10:15 free by this definition even though
+	 * it runs through it, and that is on purpose: overlapping placements are how
+	 * a room clash arises at all (AIA-05), and greying out covered slots would
+	 * close the only path an agent has to produce one.
+	 */
+	const startingAt = (roomId: number, startMinutes: number) =>
+		daySessions.find((s) => s.roomId === roomId && s.startMinutes === startMinutes) ?? null;
+
+	const occupant = $derived(editing ? startingAt(editing.roomId, editing.startMinutes) : null);
+
+	const openSlot = (room: { id: number; name: string }, startMinutes: number) => {
+		editing = { roomId: room.id, roomName: room.name, startMinutes };
+	};
+
+	const closeSlot = () => {
+		editing = null;
+	};
+
+	/** Close on a successful write, so the grid behind the dialog is the answer. */
+	const submittingSlot = () => {
+		busy = true;
+		return async ({ update }: { update: () => Promise<void> }) => {
+			try {
+				await update();
+				closeSlot();
+			} finally {
+				busy = false;
+			}
+		};
+	};
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && closeSlot()} />
 
 <svelte:head>
 	<title>Agenda — {data.conference.name}</title>
@@ -180,44 +231,9 @@
 								<span class="px-1">·</span>{item.minutes} min
 							</p>
 
-							<form
-								method="POST"
-								action="?/place"
-								use:enhance={submitting}
-								class="mt-2 grid grid-cols-3 gap-1.5"
-							>
-								<input type="hidden" name="placementId" value={item.placementId} />
-								<select
-									name="dayId"
-									aria-label="Day for {item.title}"
-									class="border-input bg-background rounded-md border px-1.5 py-1 text-xs"
-								>
-									{#each board.days as d (d.id)}
-										<option value={d.id} selected={d.id === day?.id}>{d.date.slice(5)}</option>
-									{/each}
-								</select>
-								<select
-									name="startMinutes"
-									aria-label="Start time for {item.title}"
-									class="border-input bg-background rounded-md border px-1.5 py-1 text-xs"
-								>
-									{#each data.slots as slot (slot.minutes)}
-										<option value={slot.minutes}>{slot.label}</option>
-									{/each}
-								</select>
-								<select
-									name="roomId"
-									aria-label="Room for {item.title}"
-									class="border-input bg-background rounded-md border px-1.5 py-1 text-xs"
-								>
-									{#each board.rooms as room (room.id)}
-										<option value={room.id}>{room.name}</option>
-									{/each}
-								</select>
-								<Button type="submit" size="sm" class="col-span-3 mt-1" disabled={busy}>
-									Put it on the grid
-								</Button>
-							</form>
+							<p class="text-muted-foreground mt-2 text-xs">
+								Open a slot on the grid to put this somewhere.
+							</p>
 						</li>
 					{/each}
 				</ul>
@@ -287,8 +303,19 @@
 
 				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
 					{#each visibleRooms as room (room.id)}
-						<div class="border-border bg-card rounded-lg border p-3">
-							<h3 class="text-sm font-medium">{room.name}</h3>
+						<div class="border-border bg-card rounded-lg border p-3" data-testid="agenda-room-card">
+							<div class="flex items-baseline justify-between gap-2">
+								<h3 class="text-sm font-medium">{room.name}</h3>
+								<Button
+									type="button"
+									size="sm"
+									variant="outline"
+									data-testid="agenda-open-slot-{room.id}"
+									onclick={() => openSlot(room, data.slots[0].minutes)}
+								>
+									Open a slot
+								</Button>
+							</div>
 
 							{#if sessionsIn(room.id).length === 0}
 								<p class="text-muted-foreground mt-2 text-xs">Empty on this day.</p>
@@ -297,6 +324,7 @@
 									{#each sessionsIn(room.id) as session (session.placementId)}
 										{@const clashes = clashesFor(session.placementId)}
 										<li
+											data-testid="agenda-placed-session"
 											class="rounded-md border p-2 {clashes.length > 0
 												? 'border-status-bad'
 												: 'border-border'}"
@@ -316,57 +344,24 @@
 											</p>
 
 											{#each clashes as clash (clash)}
-												<p class="text-status-bad mt-1 text-xs font-medium">{clash}</p>
+												<p
+													data-testid="agenda-conflict"
+													class="text-status-bad mt-1 text-xs font-medium"
+												>
+													{clash}
+												</p>
 											{/each}
 
 											<div class="mt-2 flex flex-wrap items-end gap-1.5">
-												<form
-													method="POST"
-													action="?/place"
-													use:enhance={submitting}
-													class="flex flex-wrap items-center gap-1"
+												<Button
+													type="button"
+													size="sm"
+													variant="outline"
+													data-testid="agenda-edit-slot-{session.placementId}"
+													onclick={() => openSlot(room, session.startMinutes ?? 0)}
 												>
-													<input type="hidden" name="placementId" value={session.placementId} />
-													<select
-														name="dayId"
-														aria-label="Move {session.title} to a day"
-														class="border-input bg-background rounded-md border px-1 py-0.5 text-xs"
-													>
-														{#each board.days as d (d.id)}
-															<option value={d.id} selected={d.id === session.dayId}>
-																{d.date.slice(5)}
-															</option>
-														{/each}
-													</select>
-													<select
-														name="startMinutes"
-														aria-label="Move {session.title} to a time"
-														class="border-input bg-background rounded-md border px-1 py-0.5 text-xs"
-													>
-														{#each data.slots as slot (slot.minutes)}
-															<option
-																value={slot.minutes}
-																selected={slot.minutes === session.startMinutes}
-															>
-																{slot.label}
-															</option>
-														{/each}
-													</select>
-													<select
-														name="roomId"
-														aria-label="Move {session.title} to a room"
-														class="border-input bg-background rounded-md border px-1 py-0.5 text-xs"
-													>
-														{#each board.rooms as r (r.id)}
-															<option value={r.id} selected={r.id === session.roomId}>
-																{r.name}
-															</option>
-														{/each}
-													</select>
-													<Button type="submit" size="sm" variant="outline" disabled={busy}>
-														Move
-													</Button>
-												</form>
+													Edit slot
+												</Button>
 
 												<form method="POST" action="?/toggleOne" use:enhance={submitting}>
 													<input type="hidden" name="placementId" value={session.placementId} />
@@ -398,3 +393,19 @@
 		</section>
 	</div>
 </div>
+
+{#if editing}
+	<SlotEditor
+		target={editing}
+		{occupant}
+		tray={board.tray}
+		days={board.days}
+		rooms={board.rooms}
+		slots={data.slots}
+		activeDayId={day?.id}
+		{busy}
+		{timeLabel}
+		close={closeSlot}
+		submit={submittingSlot}
+	/>
+{/if}
