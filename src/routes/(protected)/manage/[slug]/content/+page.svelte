@@ -11,8 +11,18 @@
 	 */
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 
 	let { data } = $props();
+
+	/**
+	 * A conference with a hundred speakers turns this page into a scroll of a hundred
+	 * cards. Full virtualization is not the answer before the room is booked — being
+	 * able to type a name is. The box only appears once scrolling is actually the
+	 * problem; below that it would be furniture.
+	 */
+	const FILTER_FROM = 8;
+	let query = $state('');
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const t = $derived(data.totals);
@@ -22,6 +32,16 @@
 			(a, b) => b.waiting - a.waiting || b.open - a.open || a.name.localeCompare(b.name)
 		)
 	);
+
+	const shown = $derived.by(() => {
+		const needle = query.trim().toLowerCase();
+		if (!needle) return ordered;
+		return ordered.filter((s) =>
+			`${s.name} ${s.email ?? ''} ${s.tasks.map((t) => t.title).join(' ')}`
+				.toLowerCase()
+				.includes(needle)
+		);
+	});
 
 	const due = (value: Date | string | null) =>
 		value ? new Date(value).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : null;
@@ -40,25 +60,49 @@
 	<title>Speaker content — {data.conference.name}</title>
 </svelte:head>
 
-<div class="space-y-6">
-	<div>
-		<h1 class="text-2xl font-semibold tracking-tight">Speaker content</h1>
-		<p class="text-muted-foreground mt-1 text-sm">
-			{headline}
-			{#if t.overdue > 0}
-				<span class="text-status-bad font-medium">{t.overdue} overdue.</span>
-			{/if}
-		</p>
+<div class="border-border bg-card border-b px-6 py-5">
+	<div class="flex flex-wrap items-start justify-between gap-4">
+		<div>
+			<h1 class="text-lg font-semibold tracking-tight">Speaker content</h1>
+			<p class="text-muted-foreground mt-0.5 text-sm">
+				{headline}
+				{#if t.overdue > 0}
+					<span class="text-status-bad font-medium">{t.overdue} overdue.</span>
+				{/if}
+			</p>
+		</div>
+		{#if ordered.length >= FILTER_FROM}
+			<label class="w-full max-w-xs text-sm">
+				<span class="sr-only">Find a speaker</span>
+				<Input
+					bind:value={query}
+					type="search"
+					placeholder="Find a speaker or task"
+					data-testid="content-filter"
+				/>
+			</label>
+		{/if}
 	</div>
+</div>
 
+<!--
+	max-w-5xl, not full bleed: these are rows of names on a wide screen, and a card
+	that runs the whole width of a 34" monitor puts the name and its counts an arm's
+	length apart.
+-->
+<div class="mx-auto max-w-5xl space-y-6 px-6 py-5">
 	{#if ordered.length === 0}
 		<p class="border-border bg-muted/40 rounded-lg border p-4 text-sm">
 			No speaker has any tasks yet. Tasks are created from the templates in
 			<a class="underline" href="{base}/settings">settings</a> when a talk is accepted.
 		</p>
+	{:else if shown.length === 0}
+		<p class="border-border bg-muted/40 rounded-lg border p-4 text-sm">
+			No speaker or task matches “{query}”.
+		</p>
 	{:else}
 		<div class="space-y-4">
-			{#each ordered as speaker (speaker.speakerProfileId)}
+			{#each shown as speaker (speaker.speakerProfileId)}
 				<section class="border-border bg-card rounded-lg border p-4">
 					<div class="flex flex-wrap items-baseline justify-between gap-2">
 						<div>
