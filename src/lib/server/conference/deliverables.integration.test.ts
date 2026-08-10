@@ -294,7 +294,19 @@ describe('the key and the header are built from sanitised names', () => {
 
 	it('never lets a filename escape its own segment of the key', () => {
 		const key = objectKey(1, 2, 3, '../../../secret.pdf');
-		expect(key).toBe('conference/1/task/2/v3/secret.pdf');
+		// Asserted as a shape rather than a literal, because the key carries a nonce
+		// segment. What must hold is that the traversal is gone and the name occupies
+		// exactly the last segment.
+		expect(key).toMatch(/^conference\/1\/task\/2\/v3\/[0-9a-f]{6}\/secret\.pdf$/);
+		expect(key).not.toContain('..');
+	});
+
+	it('gives two simultaneous uploads different keys', () => {
+		// Same task, same version, same filename — the case where both callers read
+		// the same max(version) before either inserts. Without distinct keys the
+		// loser's put overwrites the winner's object and the surviving row serves
+		// somebody else's bytes.
+		expect(objectKey(1, 2, 3, 'slides.pdf')).not.toBe(objectKey(1, 2, 3, 'slides.pdf'));
 	});
 
 	it('refuses SVG, the one image type that carries script', () => {
