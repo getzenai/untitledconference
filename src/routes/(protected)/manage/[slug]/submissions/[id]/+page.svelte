@@ -10,7 +10,7 @@
 	 * and what the button is about to set off (R3).
 	 */
 	import { enhance } from '$app/forms';
-	import { describeDecision } from '$lib/conference/decision-summary';
+	import { describeDecision, describeNotification } from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -62,8 +62,21 @@
 			.map((w) => w[0]?.toUpperCase() ?? '')
 			.join('');
 
-	const decided = $derived(s.status === 'accepted' || s.status === 'rejected');
+	const decided = $derived(
+		s.status === 'accepted' || s.status === 'rejected' || s.status === 'waitlisted'
+	);
 	const inTray = $derived(s.placements.length > 0);
+	const notificationLabel = $derived(
+		data.notificationStatus === 'queued'
+			? 'Decision notification queued.'
+			: data.notificationStatus === 'sent'
+				? 'Decision notification sent.'
+				: data.notificationStatus === 'failed'
+					? 'Decision notification failed. Notify again to retry.'
+					: decided
+						? 'Decision saved. Speakers have not been notified.'
+						: 'Choose a decision before notifying speakers.'
+	);
 
 	/**
 	 * The slot the talk was actually held in.
@@ -122,7 +135,11 @@
 		</form>
 	</div>
 
-	{#if form?.result}
+	{#if form?.notificationResult}
+		<p class="text-status-good mt-3 text-sm" role="status">
+			{describeNotification(form.notificationResult)}
+		</p>
+	{:else if form?.result}
 		<p class="text-status-good mt-3 text-sm" role="status">
 			{describeDecision(form.decision, form.result)}
 		</p>
@@ -261,16 +278,18 @@
 			</section>
 		{/if}
 
-		<!-- R3 — said before the click, and worded as what the code actually does. -->
+		<!-- Deciding changes the programme; notifying people is deliberately separate. -->
 		<section class="border-border bg-card rounded-lg border p-4">
-			<h2 class="text-sm font-medium">
-				{decided ? 'Accepting did' : 'Accepting will'} automatically
-			</h2>
+			<h2 class="text-sm font-medium">Decision workflow</h2>
+			<p class="text-muted-foreground mt-1 text-xs">
+				Saving Accept, Waitlist or Decline does not notify speakers. Check the programme first, then
+				send the decision explicitly.
+			</p>
+			<h3 class="mt-3 text-xs font-medium">Accepting also</h3>
 			<ul class="text-muted-foreground mt-2 space-y-1 text-sm">
 				<li>· put the talk in the agenda tray as an unscheduled session</li>
 				<li>· confirm the speakers for this conference</li>
 				<li>· create their tasks from the conference's task template</li>
-				<li>· queue the decision email to every speaker</li>
 			</ul>
 			<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
 				Declining or waitlisting an accepted talk takes the session back out of the tray and
@@ -283,6 +302,30 @@
 					{s.placements.map((p) => p.status).join(', ')}.
 				</p>
 			{/if}
+			<div class="border-border mt-3 border-t pt-3">
+				<p class="text-muted-foreground text-xs" data-testid="decision-notification-status">
+					{notificationLabel}
+				</p>
+				<form
+					method="POST"
+					action="?/notify"
+					class="mt-2"
+					use:enhance={() => {
+						busy = true;
+						return async ({ update }) => {
+							try {
+								await update();
+							} finally {
+								busy = false;
+							}
+						};
+					}}
+				>
+					<Button type="submit" variant="secondary" size="sm" disabled={!decided || busy}>
+						Notify speakers of decision
+					</Button>
+				</form>
+			</div>
 		</section>
 
 		{#if scheduled}
