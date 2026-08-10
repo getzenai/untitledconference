@@ -72,9 +72,12 @@ describe('conference settings config surface', () => {
 		expect(body).toContain('role="alert"');
 		expect(body).toContain('text-status-bad');
 		expect(body).toContain('Give the room a name.');
+		// The claim is that the failure did not come back on the success channel, and
+		// this is the assertion that says exactly that. It used to be backed up by
+		// searching the whole page for `text-status-good` and `role="status"` — but the
+		// "Live" badge on the visibility section is green on the same token for an
+		// unrelated reason, so a page-wide search now answers a different question.
 		expect(body).not.toContain('data-testid="settings-message"');
-		expect(body).not.toContain('text-status-good');
-		expect(body).not.toContain('role="status"');
 	});
 
 	it('keeps real success messages on the green status channel', () => {
@@ -138,5 +141,56 @@ describe('conference date range', () => {
 
 		expect(body).toContain('name="startsOn"');
 		expect(body).not.toContain('value="2028-05-12"');
+	});
+});
+
+/**
+ * The switch that decides whether the public half of the product exists at all.
+ *
+ * `conference.status` had no writer in the app before this: everything an
+ * organizer created stayed `draft`, and `draft` is what the public site, the
+ * front-door directory and the public CFP form all filter out.
+ */
+describe('draft or live', () => {
+	const renderVisibility = (status: 'draft' | 'published') =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference: { ...conference, status },
+					config: { rooms: [], tracks: [], formats: [] }
+				} as never,
+				form: null
+			}
+		}).body;
+
+	it('offers to publish a draft, and says what staying a draft costs', () => {
+		const body = renderVisibility('draft');
+
+		expect(body).toContain('data-testid="settings-visibility"');
+		expect(body).toContain('action="?/visibility"');
+		expect(body).toContain('Publish');
+		expect(body).toContain('404');
+	});
+
+	it('offers the way back once it is live, and links the address it went live at', () => {
+		const body = renderVisibility('published');
+
+		expect(body).toContain('Return to draft');
+		expect(body).toContain('/c/test-conf');
+		expect(body).not.toContain('404');
+	});
+
+	/**
+	 * The hidden field carries the state the organizer is asking for, not "flip it".
+	 * A tab left open on the old value would otherwise publish a conference its
+	 * owner had just taken down — the button and the payload must disagree exactly
+	 * this way round.
+	 */
+	it('posts the wanted state rather than a toggle', () => {
+		expect(renderVisibility('draft')).toContain('name="published" value="true"');
+		expect(renderVisibility('published')).toContain('name="published" value="false"');
 	});
 });

@@ -52,6 +52,46 @@ function daysChangedMessage(added: number, removed: number, keptInUse: string[])
 
 export const actions: Actions = {
 	/**
+	 * Draft or live — the switch the whole public half of the product hangs on.
+	 *
+	 * `conference.status` had no writer anywhere in the app: `create-conference`
+	 * inserts without it, so every conference an organizer made stayed `draft`
+	 * forever, and `draft` is what the public site, the front-door directory and the
+	 * public CFP form all filter out. Every conference built through the product was
+	 * therefore invisible to visitors and closed to speakers, permanently. Only the
+	 * seeded demo conference was ever published, and only because the seed script
+	 * writes the column directly.
+	 *
+	 * The form sends the state it wants rather than "toggle": a stale tab would
+	 * otherwise flip the conference the wrong way, and asking for the state you can
+	 * see is idempotent by construction.
+	 *
+	 * Nothing gates publishing — no rooms, no days, no accepted talks. Publishing is
+	 * what opens the call for papers, so requiring a programme first would be the
+	 * wrong way round.
+	 */
+	visibility: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const wantsPublished = text(await request.formData(), 'published') === 'true';
+		const next = wantsPublished ? 'published' : 'draft';
+
+		if (conference.status === next) {
+			return { message: wantsPublished ? 'Already published.' : 'Already a draft.' };
+		}
+
+		await db
+			.update(conferenceTable)
+			.set({ status: next })
+			.where(eq(conferenceTable.id, conference.id));
+
+		return {
+			message: wantsPublished
+				? `Published. /c/${conference.slug} is live and the call for papers can take submissions.`
+				: 'Back to draft. The public site and the public submission form answer 404 again.'
+		};
+	},
+
+	/**
 	 * The date range — and, derived from it, the days the agenda grid stands on.
 	 *
 	 * The organizer states the range; they never enumerate days. Two sources for
