@@ -249,15 +249,11 @@ jobs:
         run: npm run test:integration
 
   # E2E tests - requires built app and database.
-  #
-  # The single most expensive job here: it builds the app and drives Cypress.
-  # Kept off the pull-request path deliberately — until the challenge ships, the
-  # eval harness is the real acceptance test and Cypress is the safety net on main.
+  # Runs for pull requests as well as main so user-facing regressions block merges.
   e2e-tests:
     name: E2E Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [build, unit-tests, integration-tests]
-    if: github.event_name != 'pull_request'
 
     services:
       postgres:
