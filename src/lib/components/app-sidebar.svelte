@@ -1,12 +1,8 @@
 <script lang="ts" module>
-	import BotIcon from '@lucide/svelte/icons/bot';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
 	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
-	import FrameIcon from '@lucide/svelte/icons/frame';
-	import LifeBuoyIcon from '@lucide/svelte/icons/life-buoy';
+	import GithubIcon from '@lucide/svelte/icons/github';
 	import MicIcon from '@lucide/svelte/icons/mic';
-	import SendIcon from '@lucide/svelte/icons/send';
-	import SquareTerminalIcon from '@lucide/svelte/icons/square-terminal';
 
 	const data = {
 		navMain: [
@@ -42,62 +38,14 @@
 				url: '/review',
 				icon: ClipboardCheckIcon,
 				isActive: false
-			},
-			{
-				title: 'Examples',
-				url: '#',
-				icon: SquareTerminalIcon,
-				isActive: false,
-				items: [
-					{
-						title: 'CRUD',
-						url: '/examples/crud'
-					},
-					{
-						title: 'Toast',
-						url: '/examples/toast'
-					},
-					{
-						title: 'Drag & Drop',
-						url: '/examples/drag-drop'
-					},
-					{
-						title: 'Documents',
-						url: '/documents'
-					},
-					{
-						title: 'UI Components',
-						url: '/examples/ui-components'
-					},
-					{
-						title: 'Multi Language',
-						url: '/examples/paraglide'
-					}
-				]
-			},
-			{
-				title: 'Models',
-				url: '#',
-				icon: BotIcon
 			}
 		],
 		navSecondary: [
 			{
-				title: 'Support',
-				url: '#',
-				icon: LifeBuoyIcon
-			},
-			{
-				title: 'Feedback',
-				url: '#',
-				icon: SendIcon
-			}
-		],
-		projects: [
-			{
-				name: 'SvelteKit Vibe Starter',
-				url: '#',
-				icon: FrameIcon
+				title: 'GitHub',
+				url: 'https://github.com/getzenai/untitledconference',
+				icon: GithubIcon,
+				external: true
 			}
 		]
 	};
@@ -105,7 +53,6 @@
 
 <script lang="ts">
 	import NavMain from './nav-main.svelte';
-	import NavProjects from './nav-projects.svelte';
 	import NavSecondary from './nav-secondary.svelte';
 	import NavUser from './nav-user.svelte';
 	import NavAdmin from './nav-admin.svelte';
@@ -151,7 +98,6 @@
 	</Sidebar.Header>
 	<Sidebar.Content>
 		<NavMain items={data.navMain} />
-		<NavProjects projects={data.projects} />
 		{#if isAdmin}
 			<NavAdmin />
 		{/if}
