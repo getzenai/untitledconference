@@ -7,11 +7,13 @@
 	 */
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
 	import { emptyProposal } from '$lib/conference/proposal-draft';
+	import { proseBlocks } from '$lib/conference/prose';
 	import { formatDayLong, isoDay } from '$lib/conference/public-view';
 
 	let { data, form } = $props();
 
 	const call = $derived(data.call);
+	const intro = $derived(proseBlocks(call.form.description));
 	const signedIn = $derived(Boolean(data.user));
 	const signInHref = $derived(`/login?returnTo=/c/${call.conference.slug}/cfp`);
 
@@ -27,6 +29,38 @@
 <div class="max-w-3xl">
 	<h2 class="text-xl font-semibold tracking-tight">{call.form.title}</h2>
 
+	<!--
+		The deadline stays directly under the title, as in the prototype: it is the
+		one thing someone reopens this page for, so it goes above the explanation
+		rather than beneath it.
+	-->
+	{#if closesLabel && call.state === 'open'}
+		<p class="text-muted-foreground mt-1 text-sm">Proposals close on {closesLabel}.</p>
+	{/if}
+
+	<!--
+		What the organizer wants a submitter to know before starting (CFP-01). It
+		sits above the form and above the sign-in note, because it is what decides
+		whether someone fills the form in at all — and it is dropped once the call
+		has closed, where "travel is covered" would be a promise about a call nobody
+		can enter any more.
+	-->
+	{#if intro.length > 0 && call.state !== 'closed'}
+		<div class="border-border bg-card mt-4 rounded-lg border p-6">
+			{#each intro as block, i (i)}
+				{#if block.kind === 'paragraph'}
+					<p class="text-muted-foreground text-sm {i > 0 ? 'mt-3' : ''}">{block.text}</p>
+				{:else}
+					<ul class="text-muted-foreground space-y-1.5 text-sm {i > 0 ? 'mt-3' : ''}">
+						{#each block.items as item, j (j)}
+							<li class="flex gap-2"><span aria-hidden="true">·</span><span>{item}</span></li>
+						{/each}
+					</ul>
+				{/if}
+			{/each}
+		</div>
+	{/if}
+
 	{#if call.state === 'closed'}
 		<p class="border-border bg-muted/40 text-muted-foreground mt-4 rounded-lg border p-4 text-sm">
 			This call has closed{#if closesLabel}
@@ -38,10 +72,6 @@
 			This call has not opened yet. Check back nearer the date.
 		</p>
 	{:else}
-		{#if closesLabel}
-			<p class="text-muted-foreground mt-1 text-sm">Proposals close on {closesLabel}.</p>
-		{/if}
-
 		{#if data.existingDraft}
 			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
 				You already have an unfinished proposal here —

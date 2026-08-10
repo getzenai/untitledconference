@@ -151,6 +151,9 @@ async function seedSpeakers(conferenceId) {
 	return speakerIds;
 }
 
+/** What a submitter reads before starting — the prototype's "What we are looking for". */
+const CFP_INTRO = `DevFlow is a conference for engineers who ship. We want talks that show the work: the migration that failed first, the number that moved, the trade-off you would make differently today. No product pitches, no roadmap slides.\n\nFirst-time speakers are explicitly welcome — roughly a third of every DevFlow programme is someone’s first conference talk.\n\n- Submissions are read by the program committee of the track you pick.\n- Reviews are anonymous — your name is hidden from reviewers.\n- Travel and two hotel nights are covered for every accepted speaker.\n- You can edit anything until the deadline. Drafts are saved.`;
+
 async function seedCallForPapers(conferenceId, ids) {
 	// The call must be OPEN when someone looks at it. `opens_at` was 2026-11-01,
 	// which is in the future — the public form correctly answered "this call has
@@ -160,6 +163,7 @@ async function seedCallForPapers(conferenceId, ids) {
 	const [cfpForm] = await sql`INSERT INTO cfp_form ${sql({
 		conference_id: conferenceId,
 		title: 'DevFlow Conf 2027 — Call for Papers',
+		description: CFP_INTRO,
 		opens_at: at('2026-06-01T09:00:00Z'),
 		closes_at: at('2027-02-15T23:59:00Z'),
 		status: 'published'

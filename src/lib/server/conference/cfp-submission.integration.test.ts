@@ -187,6 +187,21 @@ describe('openCall', () => {
 	it('is null for a conference that does not exist', async () => {
 		expect(await openCall(`${slug}-nope`)).toBeNull();
 	});
+
+	it('carries the organizer’s intro text to the public page', async () => {
+		// The text decides whether someone submits at all, so it has to survive the
+		// trip from the builder to the page that shows the form.
+		const formId = (await openCall(slug))!.form.id;
+
+		await db
+			.update(cfpFormTable)
+			.set({ description: 'What we are looking for.' })
+			.where(eq(cfpFormTable.id, formId));
+
+		expect((await openCall(slug))?.form.description).toBe('What we are looking for.');
+
+		await db.update(cfpFormTable).set({ description: null }).where(eq(cfpFormTable.id, formId));
+	});
 });
 
 describe('saveSubmission', () => {

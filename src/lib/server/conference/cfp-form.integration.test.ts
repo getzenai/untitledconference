@@ -109,6 +109,7 @@ describe('creating the form', () => {
 
 		await updateCfpForm(conference.id, {
 			title: 'DevFlow CFP',
+			description: '',
 			opensAt: null,
 			closesAt: null,
 			status: 'published'
@@ -116,6 +117,25 @@ describe('creating the form', () => {
 
 		const published = await publishedFormFor(conference.id);
 		expect(published?.form.status).toBe('published');
+	});
+
+	it('keeps the organizer’s intro text, and forgets it when the box is emptied', async () => {
+		await createCfpForm(conference.id, 'DevFlow CFP');
+		const meta = {
+			title: 'DevFlow CFP',
+			description: '  What we are looking for.\n\n- Reviews are anonymous.  ',
+			opensAt: null,
+			closesAt: null,
+			status: 'published' as const
+		};
+
+		const saved = await updateCfpForm(conference.id, meta);
+		expect(saved?.description).toBe('What we are looking for.\n\n- Reviews are anonymous.');
+
+		// An emptied box is "say nothing here", not an empty paragraph — the public
+		// page decides whether to render the card by testing for content.
+		const cleared = await updateCfpForm(conference.id, { ...meta, description: '   ' });
+		expect(cleared?.description).toBeNull();
 	});
 });
 
@@ -282,6 +302,7 @@ describe('scoping', () => {
 		expect(
 			await updateCfpForm(conference.id, {
 				title: 'x',
+				description: '',
 				opensAt: null,
 				closesAt: null,
 				status: 'published'

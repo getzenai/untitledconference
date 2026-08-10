@@ -94,6 +94,7 @@ export const actions: Actions = {
 
 		const updated = await updateCfpForm(conference.id, {
 			title: text(form, 'title'),
+			description: text(form, 'description'),
 			opensAt: when(form, 'opensAt'),
 			closesAt: when(form, 'closesAt'),
 			status: STATUSES.includes(status) ? status : 'draft'
