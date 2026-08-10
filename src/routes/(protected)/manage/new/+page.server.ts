@@ -22,7 +22,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 const MESSAGES = {
 	name: 'Give the conference a name.',
 	slug: 'Use lowercase letters, numbers and hyphens — this becomes the public address.',
-	endsOn: 'The end date is before the start date.',
+	startsOn: 'That start date is not a real date. Use YYYY-MM-DD.',
+	endsOn: 'Check the end date — it must be a real date, and not before the start.',
 	slug_taken: 'That address is already taken. Try another.',
 	no_organization: 'Create an organization first — a conference belongs to one.'
 } as const;

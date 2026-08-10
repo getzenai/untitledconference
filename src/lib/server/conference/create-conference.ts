@@ -57,6 +57,48 @@ export async function organizationForNewConference(userId: string): Promise<stri
 	return seat?.organizationId ?? null;
 }
 
+/**
+ * A real calendar day written `YYYY-MM-DD`.
+ *
+ * The pattern alone would pass `2027-02-31`, so the parsed date has to agree
+ * with the text it came from — `Date` silently rolls February 31st into March
+ * 3rd rather than refusing it. `Date.UTC` keeps the comparison off the server's
+ * timezone, which would otherwise shift the day either side of midnight.
+ */
+function isCalendarDate(value: string): boolean {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+	if (!match) return false;
+
+	const [, year, month, day] = match.map(Number);
+	const parsed = new Date(Date.UTC(year, month - 1, day));
+
+	return (
+		parsed.getUTCFullYear() === year &&
+		parsed.getUTCMonth() === month - 1 &&
+		parsed.getUTCDate() === day
+	);
+}
+
+/**
+ * The field whose date is wrong, or null when both are fine.
+ *
+ * Both are optional, but whatever arrives has to be a date. The form sends
+ * `type="date"`, which is not a guarantee about anything: a posted form carries
+ * whatever the sender typed, and an unparseable value used to travel all the
+ * way to Postgres and come back as a 500 through the action.
+ */
+function invalidDateField(draft: ConferenceDraft): 'startsOn' | 'endsOn' | null {
+	if (draft.startsOn !== null && !isCalendarDate(draft.startsOn)) return 'startsOn';
+	if (draft.endsOn !== null && !isCalendarDate(draft.endsOn)) return 'endsOn';
+
+	// A conference that ends before it starts is a typo the organizer should see
+	// now rather than on the public page. String comparison is exact for
+	// `YYYY-MM-DD`, and both values are known to be that shape by this point.
+	if (draft.startsOn && draft.endsOn && draft.endsOn < draft.startsOn) return 'endsOn';
+
+	return null;
+}
+
 export function validateDraft(draft: ConferenceDraft): CreateConferenceResult | null {
 	if (!draft.name.trim() || draft.name.length > MAX_NAME) {
 		return { ok: false, reason: 'invalid', field: 'name' };
@@ -64,11 +106,10 @@ export function validateDraft(draft: ConferenceDraft): CreateConferenceResult | 
 	if (!SLUG_PATTERN.test(draft.slug) || draft.slug.length > MAX_SLUG_LENGTH) {
 		return { ok: false, reason: 'invalid', field: 'slug' };
 	}
-	// Both dates are optional, but a conference that ends before it starts is a
-	// typo the organizer should see now rather than on the public page.
-	if (draft.startsOn && draft.endsOn && draft.endsOn < draft.startsOn) {
-		return { ok: false, reason: 'invalid', field: 'endsOn' };
-	}
+
+	const badDate = invalidDateField(draft);
+	if (badDate) return { ok: false, reason: 'invalid', field: badDate };
+
 	return null;
 }
 

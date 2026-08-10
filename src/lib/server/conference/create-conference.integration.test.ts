@@ -132,6 +132,37 @@ describe('createConference', () => {
 		}
 	});
 
+	it('rejects a date that is not a date, instead of letting Postgres do it', async () => {
+		// Without this the value travelled to Postgres, which threw through the
+		// server action and turned a typo into a 500. `type="date"` in the browser
+		// is not a guarantee: a posted form carries whatever was sent.
+		for (const startsOn of ['not-a-date', '12/05/2028', '2028-5-1', '2028-05-12T10:00:00Z']) {
+			expect(await create(ownerId, { slug: `bad-start-${suffix}`, startsOn })).toMatchObject({
+				ok: false,
+				reason: 'invalid',
+				field: 'startsOn'
+			});
+		}
+
+		expect(
+			await create(ownerId, { slug: `bad-end-${suffix}`, endsOn: 'sometime in May' })
+		).toMatchObject({ ok: false, reason: 'invalid', field: 'endsOn' });
+	});
+
+	it('rejects a day the calendar does not have', async () => {
+		// The shape is right and the pattern passes; only the calendar disagrees.
+		// `new Date` would roll this into 3 March rather than refuse it, so a
+		// pattern check alone would store a date nobody typed.
+		expect(
+			await create(ownerId, { slug: `feb31-${suffix}`, startsOn: '2028-02-31' })
+		).toMatchObject({ ok: false, reason: 'invalid', field: 'startsOn' });
+
+		// And the leap day that does exist is accepted — 2028 is a leap year.
+		expect(
+			await create(ownerId, { slug: `leap-${suffix}`, startsOn: '2028-02-29', endsOn: null })
+		).toMatchObject({ ok: true });
+	});
+
 	it('rejects an end date before the start date', async () => {
 		const result = await create(ownerId, {
 			slug: `backwards-${suffix}`,

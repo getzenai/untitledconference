@@ -53,7 +53,7 @@
 		<EmptyState
 			class="mt-8"
 			title="A conference belongs to an organization"
-			description="Create yours first — it takes one field — and you will land back here."
+			description="Create yours first — it takes one field. Then start a conference under it from My conferences."
 			action={{ href: '/settings/organization/new', label: 'Create an organization' }}
 		/>
 	{:else}

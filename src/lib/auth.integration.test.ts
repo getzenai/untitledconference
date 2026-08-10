@@ -1,8 +1,8 @@
 import { auth, firstOrganizationFor, OAUTH_SCOPES } from '$lib/auth';
 import { db } from '$lib/server/db';
-import { member, organization, user } from '$lib/server/db/auth-schema';
+import { member, organization, session, user } from '$lib/server/db/auth-schema';
 import { oauthProviderAuthServerMetadata } from '@better-auth/oauth-provider';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const BASE_URL = 'http://localhost:5173';
@@ -141,5 +141,92 @@ describe('firstOrganizationFor', () => {
 		// Not a failure: this is a fresh sign-up, and the caller leaves the session
 		// without an organization so onboarding can take over.
 		expect(await firstOrganizationFor(loneId)).toBeNull();
+	});
+
+	/**
+	 * The helper being right is not the fix. The fix is that signing in puts its
+	 * answer on the session — so this goes through Better Auth for real and then
+	 * reads the row it wrote.
+	 */
+	describe('signing in', () => {
+		const password = 'ActiveOrgProbe2027!';
+		const memberEmail = `signin-member-${suffix}@example.test`;
+		const loneEmail = `signin-lone-${suffix}@example.test`;
+
+		/**
+		 * Registers an account and signs in, returning the sign-in response.
+		 *
+		 * The `emailVerified` update in the middle is not a shortcut around the
+		 * product rule — `REQUIRE_EMAIL_VERIFICATION` defaults to true and there is
+		 * no mailbox here, so without it sign-in answers 403 and the session this
+		 * test is about is never created.
+		 */
+		async function register(email: string) {
+			await authRequest('/sign-up/email', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, password, name: 'Probe' })
+			});
+
+			await db.update(user).set({ emailVerified: true }).where(eq(user.email, email));
+
+			const [account] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+			return account.id;
+		}
+
+		function signIn(email: string) {
+			return authRequest('/sign-in/email', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, password })
+			});
+		}
+
+		/** The `activeOrganizationId` on this user's newest session row. */
+		async function storedActiveOrganization(userId: string) {
+			const [row] = await db
+				.select({ activeOrganizationId: session.activeOrganizationId })
+				.from(session)
+				.where(eq(session.userId, userId))
+				.orderBy(desc(session.createdAt))
+				.limit(1);
+
+			return row?.activeOrganizationId ?? null;
+		}
+
+		afterAll(async () => {
+			for (const email of [memberEmail, loneEmail]) {
+				const [account] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+				if (!account) continue;
+				await db.delete(session).where(eq(session.userId, account.id));
+				await db.delete(member).where(eq(member.userId, account.id));
+				await db.delete(user).where(eq(user.id, account.id));
+			}
+		});
+
+		it('puts the user\u2019s organization on the new session', async () => {
+			const userId = await register(memberEmail);
+
+			// The membership has to exist before the session is created — that is
+			// the whole ordering the fix depends on.
+			await db.insert(member).values({
+				id: `seat-signin-${suffix}`,
+				organizationId: firstOldOrgId,
+				userId,
+				role: 'owner',
+				createdAt: new Date()
+			});
+
+			expect((await signIn(memberEmail)).status).toBe(200);
+			expect(await storedActiveOrganization(userId)).toBe(firstOldOrgId);
+		});
+
+		it('leaves it empty for someone who belongs to nothing', async () => {
+			// The onboarding case has to stay distinguishable from the healed one.
+			const userId = await register(loneEmail);
+
+			expect((await signIn(loneEmail)).status).toBe(200);
+			expect(await storedActiveOrganization(userId)).toBeNull();
+		});
 	});
 });
