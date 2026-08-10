@@ -23,8 +23,8 @@ export class HomePage extends BasePage {
 	}
 
 	/**
-	 * Logout moved off the home card into the sidebar account menu (NavUser).
-	 * Open that menu, then the "Log out" control inside it.
+	 * Logout lives in the sidebar account menu (NavUser), not on the home card.
+	 * Open that menu, then the pinned logout control.
 	 */
 	openAccountMenu(): this {
 		this.sidebar().find('[data-sidebar="footer"] button').first().click();
@@ -32,7 +32,8 @@ export class HomePage extends BasePage {
 	}
 
 	logoutButton(): Cypress.Chainable<JQuery<HTMLElement>> {
-		return cy.contains('button', /^Log out$/);
+		// bits-ui DropdownMenu.Item is a menuitem, not a bare <button> — pin by testid.
+		return cy.get('[data-testid="nav-user-logout"]');
 	}
 
 	adminNavLink(): Cypress.Chainable<JQuery<HTMLElement>> {
@@ -57,7 +58,7 @@ export class HomePage extends BasePage {
 
 	logout(): this {
 		this.openAccountMenu();
-		this.logoutButton().click();
+		this.logoutButton().should('be.visible').click();
 		cy.url({ timeout: 20000 }).should('include', '/login');
 		return this;
 	}
