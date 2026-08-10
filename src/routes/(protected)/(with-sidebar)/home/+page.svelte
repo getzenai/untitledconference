@@ -76,43 +76,65 @@
 		</Card>
 	{/if}
 
-	<Card>
+	<Card data-testid="home-dashboard">
 		<CardHeader>
-			<CardTitle>Protected Dashboard</CardTitle>
-			<CardDescription>This page is only visible to authenticated users</CardDescription>
+			<CardTitle>Where do you want to go?</CardTitle>
+			<CardDescription>
+				{#if $sessionState.isPending}
+					Loading user information...
+				{:else if $sessionState.data?.user}
+					Welcome, {$sessionState.data.user.email}!
+				{:else if $page.data.user?.email && !$sessionState.error}
+					<!-- Fallback to page data from server load if the session hook is slow -->
+					Welcome, {$page.data.user?.email}!
+				{:else if $sessionState.error}
+					Could not load user session: {$sessionState.error.message}
+				{:else}
+					Welcome! (User data not available)
+				{/if}
+			</CardDescription>
 		</CardHeader>
 		<CardContent>
+			<!--
+				The three roles one account can hold, named on the first screen after
+				login. `/portal` and `/review` were reachable only by typing the URL,
+				which made a speaker's own proposals and a reviewer's queue invisible to
+				anyone who had not been sent a link. All three are listed for everyone:
+				the session carries no role to branch on, and both loaders answer a user
+				who holds neither role with an empty list rather than an error.
+			-->
 			<div class="space-y-4">
-				{#if $sessionState.isPending}
-					<p>Loading user information...</p>
-				{:else if $sessionState.data?.user}
-					<p>Welcome, {$sessionState.data.user.email}!</p>
-				{:else if $page.data.user?.email && !$sessionState.error}
-					<!-- Fallback to page data from server load if session hook is slow or for initial render -->
-					<p>Welcome, {$page.data.user?.email}!</p>
-				{:else if $sessionState.error}
-					<p>Could not load user session: {$sessionState.error.message}</p>
-				{:else}
-					<p>Welcome! (User data not available)</p>
-				{/if}
-
-				<div class="flex flex-col gap-4 sm:flex-row">
-					<Button onclick={handleLogout} variant="outline" disabled={$sessionState.isPending}
-						>Logout</Button
+				<div class="grid gap-3 sm:grid-cols-3">
+					<a
+						href="/manage"
+						class="border-border hover:border-primary hover:bg-muted/40 block rounded-lg border p-4 transition-colors"
 					>
-					<a href="/documents">
-						<Button>Documents</Button>
+						<span class="block font-medium">Organizing</span>
+						<span class="text-muted-foreground text-sm">
+							Your conferences, the call, decisions and the programme.
+						</span>
 					</a>
-					<a href="/examples/crud">
-						<Button>CRUD Example</Button>
+					<a
+						href="/portal"
+						class="border-border hover:border-primary hover:bg-muted/40 block rounded-lg border p-4 transition-colors"
+					>
+						<span class="block font-medium">Speaking</span>
+						<span class="text-muted-foreground text-sm"> Your proposals, tasks and files. </span>
 					</a>
-					<a href="/examples/toast">
-						<Button>Toast Example</Button>
-					</a>
-					<a href="/examples/drag-drop">
-						<Button>Drag Drop Example</Button>
+					<a
+						href="/review"
+						class="border-border hover:border-primary hover:bg-muted/40 block rounded-lg border p-4 transition-colors"
+					>
+						<span class="block font-medium">Reviewing</span>
+						<span class="text-muted-foreground text-sm">
+							The proposals assigned to you to score.
+						</span>
 					</a>
 				</div>
+
+				<Button onclick={handleLogout} variant="outline" disabled={$sessionState.isPending}
+					>Logout</Button
+				>
 			</div>
 		</CardContent>
 	</Card>

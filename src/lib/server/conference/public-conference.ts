@@ -248,3 +248,47 @@ export async function loadPublicConference(slug: string): Promise<PublicConferen
 		...assembleProgramme(placements, speakerRows)
 	};
 }
+
+/** One row of the front door: enough to recognise a conference, nothing more. */
+export type PublicConferenceSummary = {
+	slug: string;
+	name: string;
+	venue: string | null;
+	startsOn: string;
+	endsOn: string;
+};
+
+/**
+ * Every conference whose organizer has published it, soonest first.
+ *
+ * This exists because `/` was a dead end for anyone without an account: it
+ * redirected to the login form, and no page reachable from there linked a public
+ * conference site. The EMB scenarios all start "at the base URL, logged out", so
+ * a visitor who cannot get from `/` to `/c/<slug>` cannot reach any of the five
+ * public surfaces at all — however well those surfaces work.
+ *
+ * `status = 'published'` is the same predicate `loadHeader` applies, and it has to
+ * be: a directory that lists a draft conference would hand out a link to a page
+ * that 404s.
+ */
+export async function listPublishedConferences(): Promise<PublicConferenceSummary[]> {
+	const rows = await db
+		.select({
+			slug: conferenceTable.slug,
+			name: conferenceTable.name,
+			venue: conferenceTable.venue,
+			startsOn: conferenceTable.startsOn,
+			endsOn: conferenceTable.endsOn
+		})
+		.from(conferenceTable)
+		.where(eq(conferenceTable.status, 'published'))
+		.orderBy(asc(conferenceTable.startsOn), asc(conferenceTable.name));
+
+	return rows.map((row) => ({
+		slug: row.slug,
+		name: row.name,
+		venue: row.venue,
+		startsOn: row.startsOn ?? '',
+		endsOn: row.endsOn ?? ''
+	}));
+}
