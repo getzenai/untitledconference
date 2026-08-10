@@ -16,3 +16,6 @@ project.inlang/
 .context/
 # Local design-hook cache, not source
 .impeccable/
+
+# Agent scratch worktrees (11 GB of checkouts, not source)
+.claude/worktrees/

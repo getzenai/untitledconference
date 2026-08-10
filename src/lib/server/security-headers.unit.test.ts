@@ -56,6 +56,36 @@ describe('applySecurityHeaders', () => {
 		expect(response.headers.get('Strict-Transport-Security')).toBe(HSTS_HEADER_VALUE);
 	});
 
+	it('lets a public widget surface be framed by anyone', () => {
+		const response = applySecurityHeaders(
+			new Response('<html></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
+			'/c/devflow-conf-2027/agenda'
+		);
+
+		// Both headers together would be an argument the browser decides: X-Frame-Options
+		// has no "allow anyone" value, so it has to be absent, not permissive.
+		expect(response.headers.get('Content-Security-Policy')).toBe('frame-ancestors *');
+		expect(response.headers.get('X-Frame-Options')).toBeNull();
+	});
+
+	it('keeps denying the pages next door in the same subtree', () => {
+		const response = applySecurityHeaders(
+			new Response('<html></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
+			'/c/devflow-conf-2027/cfp'
+		);
+
+		expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+		expect(response.headers.get('Content-Security-Policy')).toBeNull();
+	});
+
+	it('denies framing when no path is given at all', () => {
+		const response = applySecurityHeaders(
+			new Response('<html></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+		);
+
+		expect(response.headers.get('X-Frame-Options')).toBe('DENY');
+	});
+
 	it('rewraps an immutable-header 304 without a body', () => {
 		const immutable = new Response(null, { status: 304 });
 		immutable.headers.set = () => {

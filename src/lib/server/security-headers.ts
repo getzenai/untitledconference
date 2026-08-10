@@ -3,11 +3,15 @@
  * `src/hooks.server.ts`, so they also cover the short-circuit responses produced
  * further down (401/403) and every non-HTML API response.
  *
- * Deliberately no Content-Security-Policy: a CSP that doesn't break SvelteKit's
- * inline hydration script has to be issued via `kit.csp` in `svelte.config.js`,
- * which nonces those scripts. Setting one from here would block hydration.
- * Configure `kit.csp` once the app's script and style origins are known.
+ * Deliberately no script or style Content-Security-Policy: a CSP that doesn't
+ * break SvelteKit's inline hydration script has to be issued via `kit.csp` in
+ * `svelte.config.js`, which nonces those scripts. Setting one from here would
+ * block hydration. Configure `kit.csp` once the app's script and style origins
+ * are known. The one directive sent from here, `frame-ancestors`, is safe to
+ * send alone: it governs who may frame the document and touches no script.
  */
+
+import { isEmbeddableSurface } from '$lib/conference/embed';
 
 /**
  * HSTS applies per-response (RFC 6797), so it must ride on every response the
@@ -17,7 +21,7 @@
  */
 export const HSTS_HEADER_VALUE = 'max-age=31536000; includeSubDomains';
 
-export function applySecurityHeaders(response: Response): Response {
+export function applySecurityHeaders(response: Response, pathname = '/'): Response {
 	let target = response;
 
 	try {
@@ -37,7 +41,17 @@ export function applySecurityHeaders(response: Response): Response {
 	// Clickjacking protection is only meaningful for rendered documents; setting
 	// it on API and asset responses would be noise.
 	if ((target.headers.get('content-type') ?? '').includes('text/html')) {
-		target.headers.set('X-Frame-Options', 'DENY');
+		if (isEmbeddableSurface(pathname)) {
+			// The five public widgets are meant to be framed — that is the whole of
+			// EMB-15, and a share page offering a snippet the server then refuses is
+			// a lie told in two files. `frame-ancestors *` says the same thing
+			// X-Frame-Options cannot: allow anyone. The two headers must not both be
+			// sent, because X-Frame-Options has no "allow from everyone" value and
+			// browsers that honour it would win the argument.
+			target.headers.set('Content-Security-Policy', 'frame-ancestors *');
+		} else {
+			target.headers.set('X-Frame-Options', 'DENY');
+		}
 	}
 
 	return target;
