@@ -100,22 +100,20 @@
 		<div class="absolute inset-0 bg-zinc-900"></div>
 		<div class="relative z-20 flex flex-1 flex-col justify-center">
 			<div class="mb-8 text-right">
-				<span class="text-2xl font-bold">SvelteKit Vibe Starter</span>
+				<span class="text-2xl font-bold">Untitled Conference</span>
 			</div>
 			<blockquote class="space-y-2 text-right">
 				<p class="text-lg">
-					A powerful SvelteKit starter application to vibe code with RooCode, featuring modern
-					authentication, database integration, and beautiful UI components.
+					Run the call for papers, review the proposals, build the agenda and publish the programme
+					— in one place.
 				</p>
 			</blockquote>
 			<div class="mt-6 space-y-4 text-right">
-				<h3 class="text-xl font-semibold">Features:</h3>
+				<h3 class="text-xl font-semibold">Sign in as:</h3>
 				<ul class="space-y-2">
-					<li>• Modern Authentication with Better Auth</li>
-					<li>• PostgreSQL Database with Drizzle ORM</li>
-					<li>• Beautiful UI Components with shadcn</li>
-					<li>• Internationalization with Paraglide</li>
-					<li>• Type-safe Database Operations</li>
+					<li>• An organizer, to run a conference</li>
+					<li>• A speaker, to submit and manage a talk</li>
+					<li>• A reviewer, to score the proposals assigned to you</li>
 				</ul>
 			</div>
 		</div>
@@ -200,6 +198,19 @@
 						<p class="text-muted-foreground text-center text-sm">
 							Don't have an account? <a href="/register" class="text-primary hover:underline"
 								>Register</a
+							>
+						</p>
+
+						<!--
+							The way back out, and it is load-bearing: `/` sends a visitor without
+							a session here, so without this link the login form is a dead end for
+							anyone who came for a conference's public site rather than an account.
+							It sits in this column rather than the panel on the left because that
+							panel is `lg:` only and vanishes on a phone.
+						-->
+						<p class="text-muted-foreground text-center text-sm">
+							Just looking for a conference? <a href="/" class="text-primary hover:underline"
+								>Browse public conference sites</a
 							>
 						</p>
 					</form>

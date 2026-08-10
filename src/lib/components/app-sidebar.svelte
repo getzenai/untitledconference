@@ -1,8 +1,10 @@
 <script lang="ts" module>
 	import BotIcon from '@lucide/svelte/icons/bot';
 	import CalendarIcon from '@lucide/svelte/icons/calendar';
+	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
 	import FrameIcon from '@lucide/svelte/icons/frame';
 	import LifeBuoyIcon from '@lucide/svelte/icons/life-buoy';
+	import MicIcon from '@lucide/svelte/icons/mic';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import SquareTerminalIcon from '@lucide/svelte/icons/square-terminal';
 
@@ -21,6 +23,25 @@
 						url: '/manage'
 					}
 				]
+			},
+			{
+				// The same person is often all three. `/portal` and `/review` existed
+				// with no link anywhere in the signed-in app: a speaker could only
+				// reach their own proposals by being sent a URL, and a reviewer only
+				// by typing one. Both loaders are safe for a user who is neither —
+				// they render an empty list rather than erroring — so these are
+				// unconditional rather than guessed from a role the session does not
+				// carry.
+				title: 'Speaking',
+				url: '/portal',
+				icon: MicIcon,
+				isActive: false
+			},
+			{
+				title: 'Reviewing',
+				url: '/review',
+				icon: ClipboardCheckIcon,
+				isActive: false
 			},
 			{
 				title: 'Examples',

@@ -1,4 +1,8 @@
-import { loadPublicConference } from '$lib/server/conference/public-conference';
+import {
+	listPublishedConferences,
+	loadPublicConference,
+	type PublicConferenceSummary
+} from '$lib/server/conference/public-conference';
 import { FIXTURE_CONFERENCE } from './public-fixtures';
 import type { PublicConference } from './public-types';
 
@@ -27,4 +31,19 @@ import type { PublicConference } from './public-types';
 export async function publicConference(slug: string): Promise<PublicConference | null> {
 	if (slug === FIXTURE_CONFERENCE.slug) return FIXTURE_CONFERENCE;
 	return loadPublicConference(slug);
+}
+
+export type { PublicConferenceSummary };
+
+/**
+ * The published conferences the front door lists.
+ *
+ * The design fixture is deliberately *not* in here, and that is the one rule this
+ * function has beyond the query. It stays reachable at `/c/untitled-2026` for
+ * checking layouts against its awkward cases, but a made-up conference on the
+ * public index would be indistinguishable from a real one to anybody arriving at
+ * the base URL — including a judge.
+ */
+export async function publicConferenceDirectory(): Promise<PublicConferenceSummary[]> {
+	return listPublishedConferences();
 }
