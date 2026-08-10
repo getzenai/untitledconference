@@ -32,12 +32,6 @@
 			"custom_domain": true
 		}
 	],
-	// Hyperdrive is the supported way to reach a Postgres server from a Worker.
-	// `id` is only used by `wrangler deploy`, never by `wrangler dev`, which uses
-	// `localConnectionString` and connects directly.
-	// This is the real config "kill-my-saas-neon", pointing at the Neon project's
-	// DIRECT endpoint - not the `-pooler` host. Hyperdrive does its own pooling,
-	// so stacking it on Neon's PgBouncer is both redundant and unsupported.
 	// Speaker deliverables — slides, headshots, signed release forms. A bucket
 	// rather than a column: these are files, and some of them are large.
 	//
@@ -52,14 +46,37 @@
 		}
 	],
 
+	// Hyperdrive is Cloudflare's supported way to reach a Postgres server from a
+	// Worker: it pools connections at the edge, so the TLS handshake terminates
+	// near the visitor rather than at the database. `hooks.server.ts` reads
+	// `env.HYPERDRIVE.connectionString` and hands it to the request-scoped client;
+	// without the binding that client falls back to `DATABASE_URL`.
+	//
+	// The origin is the Neon project's DIRECT endpoint, never the `-pooler` host:
+	// Hyperdrive pools already, and stacking it on Neon's PgBouncer is redundant
+	// and unsupported.
+	//
+	// Caching is OFF on this config. Hyperdrive can cache read queries, and in an
+	// app where an organizer saves and immediately reloads the same page a stale
+	// read looks exactly like lost data. Pooling is the win; caching is a separate
+	// decision that needs its own thought about which queries.
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",
-			"id": "c9ca2bbdd9db4bf19b9e02a19e08a4fa",
-			// AP10 spike DB (own database so other agents' `dev` DB is untouched).
-			// NOTE: under `wrangler dev` this string is handed to the Worker verbatim
-			// as env.HYPERDRIVE.connectionString - local dev connects DIRECTLY to
-			// Postgres and does NOT proxy through Hyperdrive (no pooling, no caching).
+			// "kill-my-saas-neon-uswest" — the us-west-2 database (#78 moved it there).
+			// The previous config still pointed at eu-central-1; deploying with that id
+			// would have quietly sent every query back across the Atlantic.
+			"id": "57c0cadd34ce4bc186e416663a8fecd7",
+			// Local only, and it is a real address the app now connects to: `vite dev`,
+			// `vite preview` and `wrangler dev` all hand this string to the Worker
+			// verbatim as env.HYPERDRIVE.connectionString and talk to Postgres
+			// directly — no pooling, no caching, no Hyperdrive in the path.
+			//
+			// It therefore has to point at a database with the schema pushed, or every
+			// page 500s with "relation does not exist". Override it per run rather
+			// than editing this file:
+			//   WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE=<url>
+			// which is what `scripts/run-e2e.sh` does with TEST_DATABASE_URL.
 			// https://developers.cloudflare.com/hyperdrive/configuration/local-development/
 			"localConnectionString": "postgres://root:mysecretpassword@localhost:5432/hyperdrive_spike"
 		}
