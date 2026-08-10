@@ -26,6 +26,7 @@ const MESSAGES = {
 	startsOn: 'That start date is not a real date. Use YYYY-MM-DD.',
 	endsOn: `Check the end date — it must be a real date, on or after the start, and within ${MAX_CONFERENCE_DAYS} days of it.`,
 	slug_taken: 'That address is already taken. Try another.',
+	slug_reserved: '“new” is reserved — /manage/new is the page you are on. Pick another address.',
 	no_organization: 'Create an organization first — a conference belongs to one.'
 } as const;
 
