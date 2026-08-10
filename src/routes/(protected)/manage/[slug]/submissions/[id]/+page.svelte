@@ -32,6 +32,16 @@
 				})
 			: null;
 
+	/**
+	 * A boolean answer is stored as the string the form's dropdown posted, so printing
+	 * it raw puts "false" on the organizer's screen where the submitter chose "No".
+	 */
+	const answerValue = (answer: { kind: string; value: string | null }) => {
+		if (answer.value === null || answer.value === '') return '—';
+		if (answer.kind !== 'boolean') return answer.value;
+		return answer.value === 'true' ? 'Yes' : 'No';
+	};
+
 	const subtitle = $derived(
 		[
 			s.speakers.map((sp) => sp.name).join(', ') || null,
@@ -150,7 +160,7 @@
 					{#each s.answers as answer, i (i)}
 						<div>
 							<dt class="text-muted-foreground">{answer.label}</dt>
-							<dd>{answer.value ?? '—'}</dd>
+							<dd>{answerValue(answer)}</dd>
 						</div>
 					{/each}
 				</dl>
