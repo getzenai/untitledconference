@@ -1,5 +1,6 @@
 import { EMBED_PARAM } from '$lib/conference/embed';
 import { publicConference } from '$lib/conference/public-data';
+import { daysUntil } from '$lib/conference/public-view';
 import { callSummary } from '$lib/server/conference/cfp-submission';
 import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
@@ -29,5 +30,15 @@ export const load: LayoutServerLoad = async ({ params, url }) => {
 	// Presentation only (EMB-15): inside somebody else's page, our header and tab
 	// bar are a second site's furniture in their room. Nothing is withheld and
 	// nothing is granted by this flag — the same data renders either way.
-	return { conference, call, embed: url.searchParams.get(EMBED_PARAM) === '1' };
+	return {
+		conference,
+		call,
+		// "Closes in 6 days" is counted here rather than in the component on
+		// purpose. A count taken in the browser is taken in the visitor's zone and
+		// at a different instant than the server's, so the banner would render one
+		// number in the HTML and another after hydration — the same class of
+		// mismatch `public-view` formats times in UTC to avoid.
+		daysUntilClose: daysUntil(call?.closesAt ?? null),
+		embed: url.searchParams.get(EMBED_PARAM) === '1'
+	};
 };

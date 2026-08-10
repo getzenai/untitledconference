@@ -56,6 +56,7 @@ const renderCfp = (state: 'open' | 'closed' | 'not_yet_open', description: strin
 				// The public layout's data reaches this page's type but not its body.
 				user: undefined,
 				conference: publicConference,
+				daysUntilClose: null,
 				embed: false,
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined }

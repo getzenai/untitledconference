@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { withEmbed } from '$lib/conference/embed';
+	import ConferenceHero from '$lib/components/app/conference/conference-hero.svelte';
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import ShowMore from '$lib/components/app/conference/show-more.svelte';
 	import { Badge } from '$lib/components/ui/badge';
@@ -8,7 +9,12 @@
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { buildView, formatFullStamp, matchesQuery } from '$lib/conference/public-view';
+	import {
+		buildView,
+		formatDateRange,
+		formatFullStamp,
+		matchesQuery
+	} from '$lib/conference/public-view';
 
 	let { data } = $props();
 
@@ -70,6 +76,25 @@
 <svelte:head>
 	<title>Sessions — {view.conference.name}</title>
 </svelte:head>
+
+<!--
+	The hero is a head zone above the existing list, not a separate landing page:
+	`/c/<slug>` is the address in every share link, every embed snippet and every
+	E2E spec, and moving the session list off it to make room would cost all three
+	for nothing a visitor can see.
+
+	It comes off inside an embed. A host site that framed the session widget asked
+	for the sessions, not for our title page in their column.
+-->
+{#if !data.embed}
+	<div class="border-border mb-12 border-b pb-12">
+		<ConferenceHero
+			{view}
+			dateRange={formatDateRange(view.conference)}
+			callIsOpen={data.call?.state === 'open'}
+		/>
+	</div>
+{/if}
 
 <div class="grid gap-8 md:grid-cols-[13rem_1fr]">
 	<aside class="space-y-6">
