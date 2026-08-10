@@ -16,10 +16,9 @@
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { formatDayLong } from '$lib/conference/public-view';
+	import { REPO_URL } from '$lib/constants';
 
 	let { data } = $props();
-
-	const GITHUB_URL = 'https://github.com/getzenai/untitledconference';
 
 	// Each role's one sentence, from the prototype's home screen: what this tool
 	// does for you, in the words of the person doing the job.
@@ -129,7 +128,7 @@
 			class="text-muted-foreground mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-sm"
 		>
 			<span>Open source. Run it yourself.</span>
-			<a class="hover:text-foreground underline" href={GITHUB_URL} rel="noreferrer">GitHub</a>
+			<a class="hover:text-foreground underline" href={REPO_URL} rel="noreferrer">GitHub</a>
 		</div>
 	</footer>
 </div>

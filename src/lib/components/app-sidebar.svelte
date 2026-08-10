@@ -3,6 +3,7 @@
 	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
 	import GithubIcon from '@lucide/svelte/icons/github';
 	import MicIcon from '@lucide/svelte/icons/mic';
+	import { REPO_URL } from '$lib/constants';
 
 	const data = {
 		navMain: [
@@ -43,7 +44,7 @@
 		navSecondary: [
 			{
 				title: 'GitHub',
-				url: 'https://github.com/getzenai/untitledconference',
+				url: REPO_URL,
 				icon: GithubIcon,
 				external: true
 			}
