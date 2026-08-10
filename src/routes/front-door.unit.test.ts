@@ -1,4 +1,5 @@
 import { isRedirect } from '@sveltejs/kit';
+import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 
 // The directory query is stubbed: what is under test is which of the two things
@@ -10,6 +11,7 @@ vi.mock('$lib/conference/public-data', () => ({
 }));
 
 import { load } from './+page.server';
+import Page from './+page.svelte';
 
 // `load` is typed as MaybePromise; wrapping keeps the awaits and the rejection
 // assertions honest without an `any` at every call site.
@@ -67,5 +69,62 @@ describe('the front door', () => {
 		await call({ user: { id: 'u1' } }).catch(() => undefined);
 
 		expect(publicConferenceDirectory).not.toHaveBeenCalled();
+	});
+});
+
+describe('the front page a visitor sees', () => {
+	// The loader tests above pass just as well against the old page, which was a
+	// bare conference index. These pin what #5 actually asked for: the pitch, the
+	// way in, and — still — a link to every published conference.
+	const renderFrontPage = (conferences: { slug: string; name: string }[]) =>
+		render(Page, {
+			props: {
+				data: {
+					// The layout's data flows through the page's own `data` type; the
+					// front page reads none of it.
+					user: undefined,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conferences: conferences.map((c) => ({
+						venue: 'Hall A',
+						startsOn: '2027-05-12',
+						endsOn: '2027-05-13',
+						...c
+					}))
+				}
+			}
+		}).body;
+
+	it('leads with what the tool does and how to start', () => {
+		const body = renderFrontPage([{ slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027' }]);
+
+		expect(body).toContain('From first submission to published schedule.');
+		expect(body).toContain('Speakers');
+		expect(body).toContain('Reviewers');
+		expect(body).toContain('Organizers');
+		expect(body).toContain('Set up a conference');
+		// Two ways in, and neither may quietly disappear: the CTA for someone new,
+		// the sign-in for someone who has been here.
+		expect(body).toContain('href="/register"');
+		expect(body).toContain('href="/login"');
+	});
+
+	it('still links every published conference, below the pitch', () => {
+		const body = renderFrontPage([{ slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027' }]);
+
+		expect(body).toContain('href="/c/devflow-conf-2027"');
+		expect(body).toContain('DevFlow Conf 2027');
+		// Below, not above: this is the EMB start point, not the point of the page.
+		expect(body).toContain('From first submission');
+		expect(body.indexOf('From first submission')).toBeLessThan(
+			body.indexOf('href="/c/devflow-conf-2027"')
+		);
+	});
+
+	it('keeps the pitch when nothing is published yet', () => {
+		const body = renderFrontPage([]);
+
+		expect(body).toContain('From first submission to published schedule.');
+		expect(body).toContain('Nothing published yet.');
 	});
 });
