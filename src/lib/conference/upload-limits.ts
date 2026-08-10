@@ -13,6 +13,11 @@ export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
  *
  * An allowlist rather than a denylist. It is short because the deliverable kinds
  * are short; anything beyond this is a product decision, not a config tweak.
+ *
+ * `image/svg+xml` is absent deliberately: an SVG is a document that can carry
+ * script, so it is the one image type that would turn "we accept headshots"
+ * into "we host arbitrary markup". The download route serves everything as an
+ * attachment with `nosniff`, but the cheapest place to refuse is here.
  */
 export const ALLOWED_UPLOAD_TYPES = [
 	'application/pdf',

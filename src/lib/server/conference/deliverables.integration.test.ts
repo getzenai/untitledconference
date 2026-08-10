@@ -10,6 +10,8 @@
  * Storage is not exercised: the bytes live in R2 and there is no bucket here.
  * What is tested is everything around it — versioning, ownership, status.
  */
+import { MAX_UPLOAD_BYTES, rejectUpload } from '$lib/conference/upload-limits';
+import { objectKey, safeFilename } from '$lib/server/conference/deliverable-storage';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
@@ -273,5 +275,35 @@ describe('action tasks', () => {
 		// The owner can, so the refusal below is about ownership and nothing else.
 		expect(await setActionTaskDone(strangerUserId, otherPersonsTaskId, true)).toBe(true);
 		expect(await setActionTaskDone(speakerUserId, otherPersonsTaskId, true)).toBe(false);
+	});
+});
+
+describe('the key and the header are built from sanitised names', () => {
+	it('strips path separators and control characters out of a filename', () => {
+		// A header built from stored data must not depend on every past writer
+		// having been careful: a stray CR/LF would be a second header.
+		expect(safeFilename('../../etc/passwd')).toBe('passwd');
+		expect(safeFilename('slides.pdf')).toBe('slides.pdf');
+
+		// Assert the property, not the spelling: what matters is that no CR or LF
+		// survives, whatever the replacement happens to look like.
+		const injected = safeFilename('deck\r\nX-Evil: yes.pdf');
+		expect(injected).not.toMatch(/[\r\n]/);
+		expect(injected).toContain('.pdf');
+	});
+
+	it('never lets a filename escape its own segment of the key', () => {
+		const key = objectKey(1, 2, 3, '../../../secret.pdf');
+		expect(key).toBe('conference/1/task/2/v3/secret.pdf');
+	});
+
+	it('refuses SVG, the one image type that carries script', () => {
+		expect(rejectUpload({ size: 10, type: 'image/svg+xml' })).toBe('unsupported_type');
+		expect(rejectUpload({ size: 10, type: 'image/png' })).toBeNull();
+	});
+
+	it('enforces the size limit on the server, not only in the form', () => {
+		expect(rejectUpload({ size: MAX_UPLOAD_BYTES + 1, type: 'application/pdf' })).toBe('too_large');
+		expect(rejectUpload({ size: 0, type: 'application/pdf' })).toBe('empty');
 	});
 });

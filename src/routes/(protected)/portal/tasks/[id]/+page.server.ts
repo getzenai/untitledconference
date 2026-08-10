@@ -32,6 +32,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	return { task, files: await taskFiles(task.id) };
 };
 
+/** Postgres 23505 on the (task, version) index, wrapped by Drizzle. */
+function isVersionCollision(cause: unknown): boolean {
+	const driver = (cause as { cause?: { code?: string; constraint_name?: string } })?.cause;
+	return driver?.code === '23505' && driver?.constraint_name === 'deliverable_version_unique';
+}
+
 export const actions: Actions = {
 	/**
 	 * Stores the bytes, then records the row.
@@ -67,15 +73,27 @@ export const actions: Actions = {
 			httpMetadata: { contentType: file.type }
 		});
 
-		await recordDeliverable({
-			taskId: task.id,
-			userId: locals.user.id,
-			fileUrl: key,
-			filename: safeFilename(file.name),
-			contentType: file.type,
-			sizeBytes: file.size,
-			version
-		});
+		try {
+			await recordDeliverable({
+				taskId: task.id,
+				userId: locals.user.id,
+				fileUrl: key,
+				filename: safeFilename(file.name),
+				contentType: file.type,
+				sizeBytes: file.size,
+				version
+			});
+		} catch (cause) {
+			// `deliverable_version_unique` is the guard against two uploads that
+			// read the same `max(version)`. It takes two uploads to one task within
+			// the same moment — rare, since it is one speaker's own task — so this
+			// answers the collision instead of redesigning around it. What it must
+			// not do is surface as a 500 that reads like the file was rejected.
+			if (isVersionCollision(cause)) {
+				return fail(409, { uploadError: 'Another upload just landed. Try again.' });
+			}
+			throw cause;
+		}
 
 		return { uploaded: true, version };
 	},
