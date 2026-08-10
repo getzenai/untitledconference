@@ -13,12 +13,12 @@ const conference = {
 	organizationId: 'org-test',
 	name: 'Test Conf',
 	slug: 'test-conf',
-	status: 'published',
+	status: 'published' as const,
 	venue: null,
 	startsOn: null,
 	endsOn: null,
 	cfpIntro: null,
-	reviewVisibility: 'open',
+	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
@@ -27,12 +27,22 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	id,
 	title: status === 'accepted' ? 'A decided talk' : 'An undecided talk',
 	status,
-	contentApproval: 'pending',
+	contentApproval: 'pending' as const,
 	submittedAt: new Date('2027-01-02T00:00:00Z'),
 	track: null,
 	sessionFormat: null,
 	sponsorTier: null,
-	speakers: [{ name: 'Ada Speaker' }],
+	speakers: [
+		{
+			id: id + 10,
+			name: 'Ada Speaker',
+			jobTitle: null,
+			company: null,
+			headshotUrl: null,
+			isPrimary: true,
+			roleLabel: null
+		}
+	],
 	score: null,
 	reviewsSubmitted: 0,
 	reviewsAssigned: 0
