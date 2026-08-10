@@ -1,0 +1,75 @@
+/**
+ * "My conferences" has to keep offering the way to start another one.
+ *
+ * This page used to redirect straight into the conference when there was
+ * exactly one — which is the state an organizer is in immediately after making
+ * their first. Everything living on this page, the create entry point included,
+ * became unreachable at that moment. The redirect is gone; these tests hold the
+ * button in place for the state that hid it.
+ */
+import { render } from 'svelte/server';
+import { describe, expect, it } from 'vitest';
+import Page from './+page.svelte';
+
+const conference = (id: number, slug: string) => ({
+	id,
+	organizationId: 'org-test',
+	name: `Conference ${id}`,
+	slug,
+	status: 'draft' as const,
+	venue: null,
+	startsOn: '2028-05-12',
+	endsOn: '2028-05-14',
+	cfpIntro: null,
+	reviewVisibility: 'open' as const,
+	createdAt: new Date('2027-01-01T00:00:00Z'),
+	updatedAt: new Date('2027-01-01T00:00:00Z')
+});
+
+/** The layout fields the page's `data` type carries but this page never reads. */
+const layoutData = {
+	user: { id: 'owner-1', name: 'Jordan' },
+	impersonating: null,
+	analytics: { apiKey: undefined, host: undefined }
+};
+
+function body(conferences: ReturnType<typeof conference>[], canCreate: boolean) {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	return render(Page, { props: { data: { ...layoutData, conferences, canCreate } as any } }).body;
+}
+
+describe('my conferences', () => {
+	it('offers a way to start another one when the owner already has exactly one', () => {
+		// The regression this file exists for.
+		const html = body([conference(1, 'devflow-2028')], true);
+
+		expect(html).toContain('/manage/new');
+		expect(html).toContain('New conference');
+		// The one they have is still listed and still reachable.
+		expect(html).toContain('/manage/devflow-2028/submissions');
+	});
+
+	it('offers the create step to an owner with none yet', () => {
+		const html = body([], true);
+
+		expect(html).toContain('/manage/new');
+		expect(html).toContain('Create a conference');
+	});
+
+	it('sends someone with no organization to that step first', () => {
+		const html = body([], false);
+
+		expect(html).toContain('/settings/organization/new');
+		// No point offering a conference to somebody who has nowhere to put it.
+		expect(html).not.toContain('/manage/new');
+	});
+
+	it('hides the create entry from a member who may not use it', () => {
+		// A scoped conference organizer sees their events, but creating one is an
+		// org-wide right — an offer they cannot accept is worse than no offer.
+		const html = body([conference(1, 'devflow-2028'), conference(2, 'other-2028')], false);
+
+		expect(html).toContain('/manage/devflow-2028/submissions');
+		expect(html).not.toContain('/manage/new');
+	});
+});

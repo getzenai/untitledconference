@@ -1,15 +1,21 @@
 import { organizedConferences } from '$lib/server/conference/access';
-import { redirect } from '@sveltejs/kit';
+import { organizationForNewConference } from '$lib/server/conference/create-conference';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals }) => {
+	// No shortcut past this page when there is exactly one conference.
+	//
+	// It used to redirect straight into that conference, which read as a
+	// convenience and behaved as a trap: "My conferences" could not be looked at,
+	// and every entry point living on it — including "New conference" — became
+	// unreachable the moment an organizer had their first event. A list of one
+	// with a visible button is the honest state.
 	const conferences = await organizedConferences(locals.user!.id);
 
-	// One conference is the normal case; making the organizer pick from a list of one
-	// is a click that buys nothing.
-	if (conferences.length === 1) {
-		redirect(303, `/manage/${conferences[0].slug}/submissions`);
-	}
+	// Whether the page offers "create a conference" or "create an organization
+	// first". This is the page a new organizer lands on, and it used to send them
+	// back to the dashboard from an empty list — a dead end with a polite tone.
+	const canCreate = (await organizationForNewConference(locals.user!.id)) !== null;
 
-	return { conferences };
+	return { conferences, canCreate };
 };

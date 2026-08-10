@@ -2,40 +2,31 @@ import { auth } from '$lib/auth';
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 
+/**
+ * Sends the user to their organization, or to the page that creates one.
+ *
+ * Asks `listOrganizations` rather than `getActiveMember`. The latter answers
+ * with an error when the session carries no active organization, which is the
+ * ordinary state of a new account — and the old code caught that error and
+ * redirected to `/new`, where the same call ran unguarded and produced a 500
+ * two redirects away from its cause. Membership is the question being asked
+ * here, so ask it directly.
+ */
 export const load: PageServerLoad = async ({ locals, request }) => {
 	if (!locals.user) {
 		throw redirect(303, '/login');
 	}
 
-	let redirectPath: string | null = null;
+	const organizations = await auth.api.listOrganizations({ headers: request.headers });
 
-	try {
-		const headers = request.headers;
+	// The active one when the session names it, otherwise the first they belong
+	// to. `locals.organizationId` comes from hooks.server.ts, which also adopts
+	// one for sessions that have none.
+	const active = organizations?.find((org) => org.id === locals.organizationId);
+	const destination = active ?? organizations?.[0];
 
-		// Get active member info to check current organization
-		const activeMember = await auth.api.getActiveMember({ headers });
-
-		if (activeMember?.organizationId) {
-			// User has an active organization, get its details
-			const organizations = await auth.api.listOrganizations({ headers });
-			const activeOrg = organizations?.find((org) => org.id === activeMember.organizationId);
-
-			if (activeOrg?.slug) {
-				// Set redirect to the organization details page
-				redirectPath = `/settings/organization/${activeOrg.slug}`;
-			}
-		}
-
-		// If no redirect path set, user doesn't have an organization
-		if (!redirectPath) {
-			redirectPath = '/settings/organization/new';
-		}
-	} catch (error) {
-		// For API errors, redirect to new organization page
-		console.error('Error checking organization status:', error);
-		redirectPath = '/settings/organization/new';
-	}
-
-	// Perform redirect outside try-catch
-	throw redirect(303, redirectPath);
+	throw redirect(
+		303,
+		destination?.slug ? `/settings/organization/${destination.slug}` : '/settings/organization/new'
+	);
 };

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { auth } from '$lib/auth';
+import { auth, firstOrganizationFor } from '$lib/auth';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handle } from '../../../hooks.server.js';
 
@@ -12,14 +12,24 @@ const paraglideMiddlewareMock = vi.hoisted(() =>
 	)
 );
 
-// Mock the auth module
+// Mock the auth module.
+//
+// `firstOrganizationFor` and `setActiveOrganization` belong here even though no
+// test below reaches for them by name: the hook calls both when a session has
+// no active organization. Leaving them out does not disable that path, it
+// breaks it — the call throws a TypeError, the hook's own guard catches it, and
+// the result is indistinguishable from "this user has no organization". Every
+// assertion about that state would then be certifying the behaviour from before
+// the adoption path existed.
 vi.mock('$lib/auth', () => ({
 	auth: {
 		api: {
 			getSession: vi.fn(),
-			listMembers: vi.fn()
+			listMembers: vi.fn(),
+			setActiveOrganization: vi.fn()
 		}
-	}
+	},
+	firstOrganizationFor: vi.fn()
 }));
 
 vi.mock('$lib/paraglide/server', () => ({
@@ -63,6 +73,7 @@ vi.mock('@sveltejs/kit/hooks', () => ({
 }));
 
 const mockAuth = vi.mocked(auth);
+const mockFirstOrganizationFor = vi.mocked(firstOrganizationFor);
 
 // Helper to create mock events
 function createMockEvent(pathname: string, method: string = 'GET') {
@@ -130,6 +141,10 @@ describe('API Routing - Authenticated Access', () => {
 		const mockUser = { id: 'user456', email: 'admin@example.com', role: 'admin' };
 		const mockSession = { user: mockUser, session: { activeOrganizationId: null } };
 		(mockAuth.api.getSession as any).mockResolvedValue(mockSession);
+		// Belongs to nothing, so there is nothing to adopt. Stated explicitly:
+		// without it the lookup returns undefined and the null below would be an
+		// accident of the mock rather than the behaviour under test.
+		mockFirstOrganizationFor.mockResolvedValue(null);
 
 		const event = createMockEvent('/api/v1/some/endpoint');
 
@@ -141,6 +156,69 @@ describe('API Routing - Authenticated Access', () => {
 		expect(event.locals.isAdmin).toBe(true);
 		expect(event.locals.organizationId).toBe(null);
 		expect(event.locals.organizationRole).toBe(null);
+		expect(mockAuth.api.setActiveOrganization).not.toHaveBeenCalled();
+	});
+
+	describe('a session that carries no active organization', () => {
+		const mockUser = { id: 'user789', email: 'member@example.com' };
+
+		function sessionWithoutActiveOrganization() {
+			(mockAuth.api.getSession as any).mockResolvedValue({
+				user: mockUser,
+				session: { activeOrganizationId: null }
+			});
+		}
+
+		it('adopts the user’s organization and writes it back to the session', async () => {
+			sessionWithoutActiveOrganization();
+			mockFirstOrganizationFor.mockResolvedValue('org-adopted');
+			(mockAuth.api.listMembers as any).mockResolvedValue({
+				members: [{ userId: mockUser.id, role: 'owner' }]
+			});
+
+			const event = createMockEvent('/api/v1/protected');
+			await handle({ event: event as any, resolve: mockResolve });
+
+			// The request itself sees the organization…
+			expect(event.locals.organizationId).toBe('org-adopted');
+			expect(event.locals.organizationRole).toBe('owner');
+			// …and the session row is updated, so the next request does not repeat
+			// the lookup. Without this the fix would heal one request at a time
+			// forever and never actually stick.
+			expect(mockAuth.api.setActiveOrganization).toHaveBeenCalledWith(
+				expect.objectContaining({ body: { organizationId: 'org-adopted' } })
+			);
+		});
+
+		it('keeps the user signed in when the membership lookup fails', async () => {
+			// The failure that matters. The hook's outer catch wraps the whole
+			// session block, so a throwing lookup could take `locals.user` with it
+			// and sign the request out over a database hiccup.
+			sessionWithoutActiveOrganization();
+			mockFirstOrganizationFor.mockRejectedValue(new Error('database is having a moment'));
+
+			const event = createMockEvent('/api/v1/protected');
+			await handle({ event: event as any, resolve: mockResolve });
+
+			expect(event.locals.user).toEqual(mockUser);
+			expect(event.locals.organizationId).toBe(null);
+			expect(event.locals.organizationRole).toBe(null);
+		});
+
+		it('keeps the user signed in when writing the session back fails', async () => {
+			sessionWithoutActiveOrganization();
+			mockFirstOrganizationFor.mockResolvedValue('org-adopted');
+			(mockAuth.api.setActiveOrganization as any).mockRejectedValue(new Error('write refused'));
+
+			const event = createMockEvent('/api/v1/protected');
+			await handle({ event: event as any, resolve: mockResolve });
+
+			expect(event.locals.user).toEqual(mockUser);
+			// Falls back to no organization rather than claiming one it could not
+			// persist — a half-applied adoption is worse than none.
+			expect(event.locals.organizationId).toBe(null);
+			expect(event.locals.organizationRole).toBe(null);
+		});
 	});
 
 	it('should handle organization member lookup errors gracefully', async () => {

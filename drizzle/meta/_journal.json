@@ -64,6 +64,13 @@
 			"when": 1786368515848,
 			"tag": "0008_cheerful_sharon_ventura",
 			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1786372349380,
+			"tag": "0009_conference_slug_unique",
+			"breakpoints": true
 		}
 	]
 }
