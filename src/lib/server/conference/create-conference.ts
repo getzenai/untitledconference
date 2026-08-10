@@ -13,7 +13,7 @@
  * `access.ts` uses for org-wide organizer rights.
  */
 import { invalidRangeField } from '$lib/conference/conference-dates';
-import { MAX_SLUG_LENGTH, SLUG_PATTERN } from '$lib/conference/slug';
+import { hasSlugShape, isReservedSlug } from '$lib/conference/slug';
 import { syncConferenceDays } from '$lib/server/conference/conference-days';
 import { db } from '$lib/server/db';
 import { member } from '$lib/server/db/auth-schema';
@@ -34,7 +34,7 @@ export type CreateConferenceResult =
 	| { ok: true; conference: Conference }
 	| {
 			ok: false;
-			reason: 'no_organization' | 'slug_taken' | 'invalid';
+			reason: 'no_organization' | 'slug_taken' | 'slug_reserved' | 'invalid';
 			field?: keyof ConferenceDraft;
 	  };
 
@@ -63,8 +63,14 @@ export function validateDraft(draft: ConferenceDraft): CreateConferenceResult | 
 	if (!draft.name.trim() || draft.name.length > MAX_NAME) {
 		return { ok: false, reason: 'invalid', field: 'name' };
 	}
-	if (!SLUG_PATTERN.test(draft.slug) || draft.slug.length > MAX_SLUG_LENGTH) {
+	if (!hasSlugShape(draft.slug)) {
 		return { ok: false, reason: 'invalid', field: 'slug' };
+	}
+	// Its own reason, not `invalid`: the address is spelled correctly and the
+	// organizer still cannot have it, which is the same shape of answer as
+	// `slug_taken` rather than a spelling complaint.
+	if (isReservedSlug(draft.slug)) {
+		return { ok: false, reason: 'slug_reserved', field: 'slug' };
 	}
 
 	const badDate = invalidRangeField(draft.startsOn, draft.endsOn);

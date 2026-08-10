@@ -132,6 +132,34 @@ describe('createConference', () => {
 		}
 	});
 
+	it('refuses a slug a route already owns, and says why truthfully', async () => {
+		// `/manage/new` beats `/manage/[slug]`, so this conference could be created
+		// and then never opened. It has to fail at the write path, not only in the
+		// form — the action posts whatever the field contains.
+		const result = await createConference(ownerId, {
+			name: 'New',
+			slug: 'new',
+			startsOn: null,
+			endsOn: null
+		});
+
+		expect(result).toEqual({ ok: false, reason: 'slug_reserved', field: 'slug' });
+
+		// Its own reason, because the spelling complaint would be untrue here.
+		expect(result).not.toMatchObject({ reason: 'invalid' });
+	});
+
+	it('still accepts an address that merely starts with a reserved word', async () => {
+		const result = await createConference(ownerId, {
+			name: 'Newcastle Devs',
+			slug: `newcastle-devs-${suffix}`,
+			startsOn: null,
+			endsOn: null
+		});
+
+		expect(result.ok).toBe(true);
+	});
+
 	it('rejects a date that is not a date, instead of letting Postgres do it', async () => {
 		// Without this the value travelled to Postgres, which threw through the
 		// server action and turned a typo into a 500. `type="date"` in the browser
