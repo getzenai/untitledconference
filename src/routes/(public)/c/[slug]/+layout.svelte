@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import CallBanner from '$lib/components/app/conference/call-banner.svelte';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
 	import { EMBEDDABLE_SURFACES } from '$lib/conference/embed';
-	import { formatDayLong } from '$lib/conference/public-view';
+	import { formatDateRange } from '$lib/conference/public-view';
 
 	let { children, data } = $props();
 
@@ -29,10 +30,18 @@
 	const isCurrent = (path: string) =>
 		path === '' ? page.url.pathname === base : page.url.pathname.startsWith(base + path);
 
-	const dateRange = $derived(
-		conference.startsOn === conference.endsOn
-			? formatDayLong(conference.startsOn)
-			: `${formatDayLong(conference.startsOn)} – ${formatDayLong(conference.endsOn)}`
+	const dateRange = $derived(formatDateRange(conference));
+
+	// The index carries the hero, which says the name, the dates and the venue in
+	// a larger voice. Rendering the header's identity row above it would say all
+	// three twice, so on that one page the header keeps only the tab bar.
+	const onIndex = $derived(page.url.pathname === base);
+
+	// A countdown only where there is something to count down to: an open call
+	// with a deadline. A call that has not opened yet, or one already closed, has
+	// no "closes in N days" to announce.
+	const countdown = $derived(
+		data.call?.state === 'open' && data.daysUntilClose !== null ? data.daysUntilClose : null
 	);
 </script>
 
@@ -43,14 +52,24 @@
 		to scroll past. What stays is the content and one way back to the real site.
 	-->
 	{#if !data.embed}
+		{#if countdown !== null}
+			<CallBanner slug={conference.slug} days={countdown} />
+		{/if}
+
 		<header class="border-border border-b">
-			<div class="mx-auto flex max-w-6xl items-start justify-between gap-4 px-6 py-8">
-				<div>
-					<h1 class="text-2xl font-semibold tracking-tight">{conference.name}</h1>
-					<p class="text-muted-foreground mt-1 text-sm">
-						{dateRange}{#if conference.venue}<span class="px-1.5">·</span>{conference.venue}{/if}
-					</p>
-				</div>
+			<div
+				class="mx-auto flex max-w-6xl items-start gap-4 px-6 {onIndex
+					? 'justify-end py-4'
+					: 'justify-between py-8'}"
+			>
+				{#if !onIndex}
+					<div>
+						<h1 class="text-2xl font-semibold tracking-tight">{conference.name}</h1>
+						<p class="text-muted-foreground mt-1 text-sm">
+							{dateRange}{#if conference.venue}<span class="px-1.5">·</span>{conference.venue}{/if}
+						</p>
+					</div>
+				{/if}
 				<ModeToggle class="-mr-2" />
 			</div>
 
