@@ -23,6 +23,15 @@
 <div class="mx-auto w-full max-w-3xl px-6 py-10">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
+			<p class="text-muted-foreground mb-2 text-xs">
+				<a
+					href="/home"
+					class="hover:text-foreground underline underline-offset-4"
+					data-testid="manage-home-link"
+				>
+					Home
+				</a>
+			</p>
 			<h1 class="text-lg font-semibold tracking-tight">My conferences</h1>
 			<p class="text-muted-foreground mt-1 text-sm">The events you organize.</p>
 		</div>

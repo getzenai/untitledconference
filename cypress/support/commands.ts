@@ -152,9 +152,12 @@ Cypress.Commands.add('setActiveOrganization', (name?: string) => {
 });
 
 Cypress.Commands.add('logout', () => {
+	// Logout lives in the sidebar account menu, not on the home card (that
+	// second button was starter leftover removed with #62).
 	cy.visit('/home');
 	cy.waitForHydration();
-	cy.contains('button', /^Logout$/).click();
+	cy.get('[data-testid="app-sidebar"] [data-sidebar="footer"] button').first().click();
+	cy.contains('button', /^Log out$/).click();
 	cy.url({ timeout: 20000 }).should('include', '/login');
 });
 
