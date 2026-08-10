@@ -66,6 +66,35 @@ export const formatDayLong = (iso: string) =>
 		timeZone: 'UTC'
 	}).format(new Date(iso));
 
+/**
+ * Whole days from today until `at`, both read as UTC days.
+ *
+ * Day boundaries, not elapsed hours: a deadline 20 hours out is "tomorrow" to
+ * the person reading it, and dividing the raw millisecond difference would call
+ * it "today". Null for a date already past, so a closed call has no countdown
+ * left to render.
+ */
+export function daysUntil(at: Date | null, now = new Date()): number | null {
+	if (!at) return null;
+	const DAY = 86_400_000;
+	const days =
+		Math.round(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate()) / DAY) -
+		Math.round(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) / DAY);
+	return days < 0 ? null : days;
+}
+
+/**
+ * "Thursday 17 September 2026" for a one-day event, both ends otherwise.
+ *
+ * Lives here because two surfaces render it — the header on every inner page and
+ * the hero on the index — and a conference whose dates read differently on two
+ * pages of its own site is the drift EMB-16 grades.
+ */
+export const formatDateRange = (conference: { startsOn: string; endsOn: string }) =>
+	conference.startsOn === conference.endsOn
+		? formatDayLong(conference.startsOn)
+		: `${formatDayLong(conference.startsOn)} – ${formatDayLong(conference.endsOn)}`;
+
 /** "Thu 17 Sep, 10:00 – 10:30" — the full stamp EMB-08 and EMB-09 ask for. */
 export const formatFullStamp = (session: { startsAt: string; endsAt: string }) => {
 	const date = new Intl.DateTimeFormat('en-GB', {
