@@ -54,8 +54,12 @@
 	// must be set with `wrangler secret put <NAME>` and NOT be listed here.
 	// For local `wrangler dev` they are read from `.dev.vars` (git-ignored).
 	"vars": {
-		"BETTER_AUTH_URL": "http://localhost:8787",
-		"BETTER_AUTH_TRUSTED_ORIGINS": "http://localhost:8787,http://127.0.0.1:8787",
+		// These are the PRODUCTION values: `wrangler deploy` ships `vars` verbatim,
+		// so localhost here means better-auth 403s every sign-up on the real domain
+		// with INVALID_ORIGIN. Local `wrangler dev` overrides these via `.dev.vars`
+		// (which takes precedence over `vars`).
+		"BETTER_AUTH_URL": "https://untitledconference.com",
+		"BETTER_AUTH_TRUSTED_ORIGINS": "https://untitledconference.com",
 		"REQUIRE_EMAIL_VERIFICATION": "false",
 		"SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG": "false",
 		"LOG_LEVEL": "info",
