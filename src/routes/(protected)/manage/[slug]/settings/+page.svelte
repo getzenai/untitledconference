@@ -41,7 +41,15 @@
 </div>
 
 <div class="space-y-6 px-6 py-5">
-	{#if form?.message}
+	{#if form?.error}
+		<p
+			class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
+			role="alert"
+			data-testid="settings-error"
+		>
+			{form.error}
+		</p>
+	{:else if form?.message}
 		<p
 			class="border-status-good text-status-good max-w-2xl rounded-md border px-3 py-2 text-sm"
 			role="status"

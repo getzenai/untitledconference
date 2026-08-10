@@ -22,7 +22,7 @@ export const actions: Actions = {
 	addRoom: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		if ((await addRoom(conference.id, text(await request.formData(), 'name'))) === null) {
-			return fail(400, { message: 'Give the room a name.' });
+			return fail(400, { error: 'Give the room a name.' });
 		}
 		return { message: 'Room added.' };
 	},
@@ -30,7 +30,7 @@ export const actions: Actions = {
 	addTrack: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		if ((await addTrack(conference.id, text(await request.formData(), 'name'))) === null) {
-			return fail(400, { message: 'Give the track a name.' });
+			return fail(400, { error: 'Give the track a name.' });
 		}
 		return { message: 'Track added.' };
 	},
@@ -43,11 +43,11 @@ export const actions: Actions = {
 		const minutes = rawMinutes === '' ? null : Number(rawMinutes);
 
 		if (minutes !== null && !Number.isInteger(minutes)) {
-			return fail(400, { message: 'Minutes must be a whole number.' });
+			return fail(400, { error: 'Minutes must be a whole number.' });
 		}
 		if ((await addFormat(conference.id, name, minutes)) === null) {
 			return fail(400, {
-				message: 'Give the format a name, and minutes between 1 and 1440 if set.'
+				error: 'Give the format a name, and minutes between 1 and 1440 if set.'
 			});
 		}
 		return { message: 'Session format added.' };

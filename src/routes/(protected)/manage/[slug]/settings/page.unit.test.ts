@@ -53,4 +53,50 @@ describe('conference settings config surface', () => {
 		expect(body).not.toContain('action="?/reviewVisibility"');
 		expect(body).toContain('/manage/test-conf/people');
 	});
+
+	it('renders a rejected add as a red alert, not a green success', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: { rooms: [], tracks: [], formats: [] }
+				} as never,
+				form: { error: 'Give the room a name.' }
+			}
+		});
+
+		expect(body).toContain('data-testid="settings-error"');
+		expect(body).toContain('role="alert"');
+		expect(body).toContain('text-status-bad');
+		expect(body).toContain('Give the room a name.');
+		expect(body).not.toContain('data-testid="settings-message"');
+		expect(body).not.toContain('text-status-good');
+		expect(body).not.toContain('role="status"');
+	});
+
+	it('keeps real success messages on the green status channel', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: { rooms: [], tracks: [], formats: [] }
+				} as never,
+				form: { message: 'Room added.' }
+			}
+		});
+
+		expect(body).toContain('data-testid="settings-message"');
+		expect(body).toContain('role="status"');
+		expect(body).toContain('text-status-good');
+		expect(body).toContain('Room added.');
+		expect(body).not.toContain('data-testid="settings-error"');
+		expect(body).not.toContain('text-status-bad');
+		expect(body).not.toContain('role="alert"');
+	});
 });
