@@ -15,7 +15,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import type { Snippet } from 'svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const d = $derived(data.dashboard);
@@ -101,6 +101,63 @@
 			{/if}
 		</section>
 	{/if}
+
+	<section class="border-border bg-card rounded-lg border p-4" data-testid="reviewer-progress">
+		<div class="flex flex-wrap items-start justify-between gap-3">
+			<div>
+				<h2 class="text-sm font-semibold tracking-tight">Reviewer progress</h2>
+				<p class="text-muted-foreground mt-0.5 text-xs tabular-nums">
+					{d.reviews.submitted}/{d.reviews.assigned} submitted · {d.reviews.outstanding} outstanding
+				</p>
+			</div>
+			{#if form?.reminderMessage}
+				<p class="text-sm" role="status">{form.reminderMessage}</p>
+			{/if}
+		</div>
+		{#if d.reviews.items.length === 0}
+			{@render nothing('No reviewer assignments yet.')}
+		{:else}
+			<div class="mt-3 overflow-x-auto">
+				<table class="w-full text-left text-sm">
+					<thead class="text-muted-foreground text-xs">
+						<tr>
+							<th class="pb-2 font-medium">Reviewer</th>
+							<th class="pb-2 font-medium">Progress</th>
+							<th class="pb-2 text-right font-medium">Reminder</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each d.reviews.items as reviewer (reviewer.userId)}
+							<tr class="border-border border-t">
+								<td class="py-2 pr-4">
+									<p class="font-medium">{reviewer.name}</p>
+									<p class="text-muted-foreground text-xs">{reviewer.email}</p>
+								</td>
+								<td class="py-2 pr-4 tabular-nums">
+									{reviewer.submitted}/{reviewer.assigned} submitted
+								</td>
+								<td class="py-2 text-right">
+									{#if reviewer.outstanding === 0}
+										<StatusBadge status="submitted" label="Complete" />
+									{:else if reviewer.reminderStatus === 'queued' || reviewer.reminderStatus === 'sent'}
+										<StatusBadge
+											status={reviewer.reminderStatus}
+											label={reviewer.reminderStatus === 'queued' ? 'Reminder queued' : 'Reminded'}
+										/>
+									{:else}
+										<form method="POST" action="?/remindReviewer">
+											<input type="hidden" name="reviewerUserId" value={reviewer.userId} />
+											<Button type="submit" variant="outline" size="sm">Send reminder</Button>
+										</form>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+	</section>
 
 	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 		{#snippet decisionsBody()}

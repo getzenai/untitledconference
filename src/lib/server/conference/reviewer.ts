@@ -42,7 +42,7 @@ import {
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
 import { error } from '@sveltejs/kit';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 
 /** Every review round of a conference — the unit reviewer memberships are scoped to. */
 async function roundsOf(conferenceId: number): Promise<number[]> {
@@ -155,7 +155,8 @@ async function reviewsOn(conferenceId: number, submissionIds: number[]) {
 		.where(
 			and(
 				eq(evaluationPlanTable.conferenceId, conferenceId),
-				inArray(reviewTable.submissionId, submissionIds)
+				inArray(reviewTable.submissionId, submissionIds),
+				ne(reviewTable.status, 'recused')
 			)
 		)
 		.orderBy(asc(reviewTable.id), asc(scorecardCriterionTable.position));
@@ -265,7 +266,8 @@ export async function reviewQueue(
 		.where(
 			and(
 				eq(evaluationPlanTable.conferenceId, conference.id),
-				eq(reviewTable.reviewerUserId, userId)
+				eq(reviewTable.reviewerUserId, userId),
+				ne(reviewTable.status, 'recused')
 			)
 		);
 
@@ -410,7 +412,8 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 			and(
 				eq(evaluationPlanTable.conferenceId, conferenceId),
 				eq(reviewTable.reviewerUserId, userId),
-				eq(reviewTable.submissionId, submissionId)
+				eq(reviewTable.submissionId, submissionId),
+				ne(reviewTable.status, 'recused')
 			)
 		)
 		.limit(1);
@@ -532,6 +535,32 @@ export async function saveReview(
 	});
 
 	return true;
+}
+
+/** Recuses one exact assigned review without letting a forged id cross its boundary. */
+export async function recuseReview(
+	conferenceId: number,
+	userId: string,
+	submissionId: number,
+	reviewId: number
+): Promise<boolean> {
+	const roundIds = await roundsOf(conferenceId);
+	if (roundIds.length === 0) return false;
+	const recused = await db
+		.update(reviewTable)
+		.set({ status: 'recused', submittedAt: null })
+		.where(
+			and(
+				eq(reviewTable.id, reviewId),
+				eq(reviewTable.reviewerUserId, userId),
+				eq(reviewTable.submissionId, submissionId),
+				eq(reviewTable.status, 'assigned'),
+				inArray(reviewTable.reviewRoundId, roundIds)
+			)
+		)
+		.returning({ id: reviewTable.id });
+
+	return recused.length > 0;
 }
 
 type Criterion = { id: number; kind: string; scaleMax: number | null };

@@ -7,6 +7,11 @@ import {
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
 import { submissionDetail } from '$lib/server/conference/organizer-submissions';
 import { setRecordingUrl } from '$lib/server/conference/recordings';
+import {
+	reviewAssignmentMatrix,
+	setReviewAssignment,
+	type AssignmentResult
+} from '$lib/server/conference/review-management';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -18,14 +23,28 @@ function submissionId(raw: string): number {
 	return id;
 }
 
+function assignmentMessage(result: AssignmentResult): string {
+	if (result === 'assigned') return 'Reviewer assigned.';
+	if (result === 'unassigned') return 'Reviewer unassigned.';
+	if (result === 'complete') return 'A submitted review is kept as part of the review record.';
+	return 'The assignment was already up to date.';
+}
+
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
 	if (!submission) throw error(404, 'Submission not found');
-	const notificationStatuses = await decisionNotificationStatuses(conference.id, [submission]);
+	const [notificationStatuses, assignmentRounds] = await Promise.all([
+		decisionNotificationStatuses(conference.id, [submission]),
+		reviewAssignmentMatrix(conference.id, submission.id)
+	]);
 
-	return { submission, notificationStatus: notificationStatuses[submission.id] ?? null };
+	return {
+		submission,
+		notificationStatus: notificationStatuses[submission.id] ?? null,
+		assignmentRounds
+	};
 };
 
 export const actions: Actions = {
@@ -51,6 +70,35 @@ export const actions: Actions = {
 		return {
 			notificationResult: await notifySubmissionDecisions(conference, [submissionId(params.id)])
 		};
+	},
+
+	assignment: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const roundId = Number(form.get('roundId'));
+		const reviewerUserId = form.get('reviewerUserId');
+		const intent = form.get('intent');
+		if (
+			!Number.isInteger(roundId) ||
+			roundId <= 0 ||
+			typeof reviewerUserId !== 'string' ||
+			reviewerUserId === '' ||
+			(intent !== 'assign' && intent !== 'unassign')
+		) {
+			return fail(400, { assignmentMessage: 'Unknown reviewer assignment.' });
+		}
+
+		const result = await setReviewAssignment(
+			conference.id,
+			submissionId(params.id),
+			roundId,
+			reviewerUserId,
+			intent === 'assign'
+		);
+		if (result === 'invalid') {
+			return fail(400, { assignmentMessage: 'That reviewer cannot review this submission.' });
+		}
+		return { assignmentMessage: assignmentMessage(result) };
 	},
 
 	/**
