@@ -24,10 +24,20 @@
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+
+	// A placeholder rather than a default value: the real text is the one thing on
+	// this screen only the organizer knows, and a prefilled box invites shipping
+	// someone else's words.
+	const DESCRIPTION_HINT = `We want talks that show the work — the migration that failed first, the number that moved.
+
+- Reviews are anonymous; your name is hidden from reviewers.
+- Travel is covered for accepted speakers.
+- You can edit until the call closes.`;
 
 	const submitting = () => {
 		busy = true;
@@ -293,6 +303,20 @@
 								value={localInput(data.form.closesAt)}
 								class="mt-1"
 							/>
+						</label>
+						<label class="text-muted-foreground text-xs sm:col-span-2">
+							What submitters should know before they start
+							<Textarea
+								name="description"
+								rows={8}
+								value={data.form.description ?? ''}
+								class="mt-1"
+								placeholder={DESCRIPTION_HINT}
+							/>
+							<span class="mt-1 block">
+								Shown above the form. Blank line starts a paragraph, a line beginning with “-”
+								becomes a bullet.
+							</span>
 						</label>
 						<div class="sm:col-span-2">
 							<Button type="submit" size="sm" disabled={busy}>Save settings</Button>

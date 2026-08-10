@@ -52,7 +52,13 @@ export type OpenCall = {
 		startsOn: string | null;
 		endsOn: string | null;
 	};
-	form: { id: number; title: string; opensAt: Date | null; closesAt: Date | null };
+	form: {
+		id: number;
+		title: string;
+		description: string | null;
+		opensAt: Date | null;
+		closesAt: Date | null;
+	};
 	state: CallState;
 	fields: FieldDefinition[];
 	formats: { id: number; name: string; minutes: number | null }[];
@@ -124,6 +130,7 @@ export async function openCall(slug: string, now = new Date()): Promise<OpenCall
 		form: {
 			id: published.form.id,
 			title: published.form.title,
+			description: published.form.description,
 			opensAt: published.form.opensAt,
 			closesAt: published.form.closesAt
 		},

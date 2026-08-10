@@ -65,6 +65,18 @@ export const cfpFormTable = pgTable('cfp_form', {
 		.notNull()
 		.references(() => conferenceTable.id, { onDelete: 'cascade' }),
 	title: text('title').notNull(),
+	/**
+	 * What a submitter needs to know before they start: what the programme is
+	 * looking for, whether reviews are anonymous, whether travel is covered.
+	 *
+	 * A column rather than fixed copy because none of that is true of conferences
+	 * in general — it is true of one conference, and only its organizer knows it.
+	 * Plain text: paragraphs separated by a blank line, lines starting with `-`
+	 * become bullets (see `$lib/conference/prose`). Not markdown — this is public,
+	 * organizer-authored text, and a real renderer is a much larger surface than
+	 * the two shapes the page actually needs.
+	 */
+	description: text('description'),
 	opensAt: timestamp('opens_at', { withTimezone: true }),
 	/** CFP-04 and CFP-16: the public portal closes and editing locks once this passes. */
 	closesAt: timestamp('closes_at', { withTimezone: true }),
