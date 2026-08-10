@@ -204,11 +204,28 @@ export const SPEAKER_TASKS = [
 ];
 
 /**
- * One real video for every seeded recording, on purpose: an invented YouTube id
- * renders "video unavailable" in a demo, which looks like the feature is broken
+ * Real, public session videos for every seeded recording — invented YouTube ids
+ * render "video unavailable" in a demo, which looks like the feature is broken
  * rather than like sample data.
+ *
+ * All ids are from the official AI Engineer channel (@aiDotEngineer) public
+ * uploads list (issue #84). Do not re-use unlisted challenge-entry videos.
  */
-export const RECORDING = 'https://www.youtube.com/watch?v=oE49MdbPNYw';
+export const RECORDINGS = {
+	// Building AI For All — Amjad Masad & Michele Catasta (keynote)
+	inference: 'https://www.youtube.com/watch?v=ju73sWVtvU0',
+	// AI Engineering at Jane Street — John Crepezzi
+	buildtimes: 'https://www.youtube.com/watch?v=0ML7ZLMdcl4',
+	// Why Agent Engineering — swyx
+	oncall: 'https://www.youtube.com/watch?v=5N33E9tC400',
+	// How We Build Effective Agents — Barry Zhang, Anthropic
+	flags: 'https://www.youtube.com/watch?v=D7_ipDqhtwk',
+	// Climbing the Ladder of Abstraction — Amelia Wattenberger (withheld talk still has a link)
+	evals: 'https://www.youtube.com/watch?v=PAy_GHUAICw'
+};
+
+/** Fallback for callers that just need "any real public recording". */
+export const RECORDING = RECORDINGS.inference;
 
 /**
  * Thirty proposals, every status represented.
@@ -239,7 +256,7 @@ export const SUBMISSIONS = [
 		status: 'accepted',
 		approval: 'approved',
 		slot: [0, 'Main Stage', '09:30', '10:15'],
-		recording: RECORDING
+		recording: RECORDINGS.inference
 	},
 	{
 		key: 'buildtimes',
@@ -252,7 +269,7 @@ export const SUBMISSIONS = [
 		status: 'accepted',
 		approval: 'approved',
 		slot: [0, 'Room 2A', '11:00', '11:30'],
-		recording: RECORDING
+		recording: RECORDINGS.buildtimes
 	},
 	{
 		key: 'docs',
@@ -276,7 +293,9 @@ export const SUBMISSIONS = [
 		speakers: ['wei', 'marcus'],
 		status: 'accepted',
 		approval: 'approved',
-		slot: [1, 'Main Stage', '14:00', '14:45']
+		slot: [1, 'Main Stage', '14:00', '14:45'],
+		// Public recording for the panel — also used as prior_link for the CFP answer.
+		recording: RECORDINGS.oncall
 	},
 	{
 		key: 'evals',
@@ -292,7 +311,7 @@ export const SUBMISSIONS = [
 		slot: [2, 'Workshop Lab', '10:00', '12:00'],
 		// Deliberate: the withheld talk has a recording too. CNT-12 has to hold
 		// anyway — a link on an unapproved session must not put it on the agenda.
-		recording: RECORDING
+		recording: RECORDINGS.evals
 	},
 	{
 		key: 'monorepo',
@@ -317,7 +336,7 @@ export const SUBMISSIONS = [
 		status: 'accepted',
 		approval: 'approved',
 		slot: [0, 'Main Stage', '11:00', '11:30'],
-		recording: RECORDING
+		recording: RECORDINGS.flags
 	},
 	{
 		key: 'injection',
@@ -586,7 +605,9 @@ export const ANSWERS = {
 				? 'Has run something in production and been paged about it.'
 				: 'Writes code on a team of more than three people.',
 	prior_link: (s) =>
-		['inference', 'buildtimes', 'oncall', 'flags'].includes(s.key) ? RECORDING : null,
+		['inference', 'buildtimes', 'oncall', 'flags'].includes(s.key)
+			? (RECORDINGS[s.key] ?? RECORDING)
+			: null,
 	workshop_outcome: () =>
 		'Attendees leave with a running example on their own machine and a checklist they can apply to their own codebase the next morning.',
 	model_assumed: (s) =>
