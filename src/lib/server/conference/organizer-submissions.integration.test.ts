@@ -21,10 +21,10 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { exportSubmissions, listSubmissions, PAGE_SIZE } from './organizer-submissions';
-import { parseSort } from './submission-sort';
+import { parseSort, scoreExpression } from './submission-sort';
 
 const suffix = `paging-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -280,6 +280,42 @@ describe('ordering the table by score (ABS-10)', () => {
 					scores: [
 						{ value: 4, weight: 1, scaleMax: 5 },
 						{ value: 8, weight: 3, scaleMax: 10 }
+					]
+				},
+				{ submitted: true, scores: [{ value: 2, weight: 1, scaleMax: 5 }] }
+			])!,
+			6
+		);
+	});
+
+	it('agrees with the TypeScript when the SQL itself is asked, not the order it produces', async () => {
+		await addSubmission(conference, 'Asked directly', 1);
+		const id = await idFor('Asked directly');
+		// The two criteria must DISAGREE for the weights to be visible: 5/5 and 4/10
+		// normalise to 1.0 and 0.4, so weighting them 1:3 gives 0.55 where an unweighted
+		// mean gives 0.7. Equal normalised values (say 4/5 and 8/10) would make the two
+		// formulas print the same number and the test would pin nothing.
+		await addReview(id, REVIEWERS[0], { relevance: 5, depth: 4 });
+		await addReview(id, REVIEWERS[1], { relevance: 2, depth: null });
+
+		// The test above reads `row.score`, which `listSubmissions` computes in
+		// TypeScript — it can agree with itself all day. This one selects the SQL
+		// expression, the copy that can actually drift, and an ordering assertion
+		// cannot substitute: with the weights dropped the rows still come out in the
+		// same order, and every number on the screen is wrong.
+		const rows = await db.execute<{ score: string | null }>(
+			sql`select ${scoreExpression(conference.id)} as score
+				from ${submissionTable}
+				where ${submissionTable.id} = ${id}`
+		);
+
+		expect(Number(rows[0].score)).toBeCloseTo(
+			submissionScore([
+				{
+					submitted: true,
+					scores: [
+						{ value: 5, weight: 1, scaleMax: 5 },
+						{ value: 4, weight: 3, scaleMax: 10 }
 					]
 				},
 				{ submitted: true, scores: [{ value: 2, weight: 1, scaleMax: 5 }] }

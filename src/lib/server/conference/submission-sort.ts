@@ -45,10 +45,12 @@ export function parseSort(raw: string | null | undefined): SubmissionSort {
  * unusable criteria are dropped rather than counted as zero, and a review whose
  * scores are all blank contributes nothing — it does not drag the mean down.
  *
- * An integration test pins the two implementations against each other on the same
- * rows, so the copy cannot drift silently.
+ * An integration test selects this expression itself and pins it against
+ * `submissionScore` on the same rows, so the copy cannot drift silently. Exported for
+ * exactly that: asserting the resulting ORDER alone is too weak a net — drop the
+ * weights here and a two-row ordering test stays green while every number is wrong.
  */
-function scoreExpression(conferenceId: number) {
+export function scoreExpression(conferenceId: number) {
 	return sql<number | null>`(
 		select avg(per_review.value) * 5
 		from (
