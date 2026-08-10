@@ -151,7 +151,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:18
         env:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: mysecretpassword
@@ -208,7 +208,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:18
         env:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: mysecretpassword
@@ -257,7 +257,7 @@ jobs:
 
     services:
       postgres:
-        image: postgres:15
+        image: postgres:18
         env:
           POSTGRES_USER: root
           POSTGRES_PASSWORD: mysecretpassword

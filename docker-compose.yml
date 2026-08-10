@@ -1,6 +1,17 @@
+# Postgres 18 to match production (Neon 18.4). CI runs the same major.
+#
+# ONE-TIME STEP WHEN YOU PULL THIS: a volume initialised by an older major will
+# not start under 18 — the container exits with "This is usually the result of
+# upgrading the Docker image without upgrading the underlying database using
+# pg_upgrade". Both databases here are disposable (schema from `npm run db:push`,
+# contents from the seed scripts), so the fix is to throw them away rather than
+# upgrade them:
+#
+#   docker compose down -v && docker compose up -d && npm run db:push
+#
 services:
   dev-db:
-    image: postgres:16
+    image: postgres:18
     container_name: postgres-vibe-starter-dev
     restart: always
     ports:
@@ -18,7 +29,7 @@ services:
       retries: 10
 
   test-db:
-    image: postgres:16
+    image: postgres:18
     container_name: postgres-vibe-starter-test
     restart: always
     ports:
