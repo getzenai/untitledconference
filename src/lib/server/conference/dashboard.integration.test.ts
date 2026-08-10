@@ -467,7 +467,6 @@ describe('submissions over time', () => {
 		expect(days[days.length - 1].day).toBe(dayOf(0));
 
 		const on = (offset: number) => days.find((d) => d.day === dayOf(offset))?.count;
-		console.log('DEBUG', JSON.stringify(days.filter((d) => d.count > 0)));
 		expect(on(0)).toBe(2);
 		expect(on(-7)).toBe(1);
 
