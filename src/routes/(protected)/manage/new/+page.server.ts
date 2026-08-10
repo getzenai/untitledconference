@@ -4,6 +4,7 @@
  * A static segment beside `[slug]`, so `/manage/new` is the form and
  * `/manage/anything-else` is still a conference.
  */
+import { MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
 import { slugify } from '$lib/conference/slug';
 import {
 	createConference,
@@ -23,7 +24,7 @@ const MESSAGES = {
 	name: 'Give the conference a name.',
 	slug: 'Use lowercase letters, numbers and hyphens — this becomes the public address.',
 	startsOn: 'That start date is not a real date. Use YYYY-MM-DD.',
-	endsOn: 'Check the end date — it must be a real date, and not before the start.',
+	endsOn: `Check the end date — it must be a real date, on or after the start, and within ${MAX_CONFERENCE_DAYS} days of it.`,
 	slug_taken: 'That address is already taken. Try another.',
 	no_organization: 'Create an organization first — a conference belongs to one.'
 } as const;

@@ -100,3 +100,43 @@ describe('conference settings config surface', () => {
 		expect(body).not.toContain('role="alert"');
 	});
 });
+
+/**
+ * The date range is the only way to give a conference days (#86). Before this,
+ * the agenda's empty board pointed here and the page had nothing to offer.
+ */
+describe('conference date range', () => {
+	const renderDates = (over: { startsOn?: string | null; endsOn?: string | null } = {}) =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference: { ...conference, startsOn: '2028-05-12', endsOn: '2028-05-14', ...over },
+					config: { rooms: [], tracks: [], formats: [] }
+				} as never,
+				form: null
+			}
+		}).body;
+
+	it('asks for start and end and shows what is already stored', () => {
+		const body = renderDates();
+
+		expect(body).toContain('data-testid="settings-dates"');
+		expect(body).toContain('action="?/dates"');
+		expect(body).toContain('name="startsOn"');
+		expect(body).toContain('name="endsOn"');
+		// Both values have to come back into the fields, or saving one would clear
+		// the other — the form posts whatever is in the inputs.
+		expect(body).toContain('value="2028-05-12"');
+		expect(body).toContain('value="2028-05-14"');
+	});
+
+	it('leaves the fields empty for a conference whose dates are not settled', () => {
+		const body = renderDates({ startsOn: null, endsOn: null });
+
+		expect(body).toContain('name="startsOn"');
+		expect(body).not.toContain('value="2028-05-12"');
+	});
+});
