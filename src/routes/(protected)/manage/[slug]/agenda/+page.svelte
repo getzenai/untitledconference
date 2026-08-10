@@ -70,6 +70,18 @@
 	 */
 	const dayBreaks = $derived(daySessions.filter((s) => s.roomId === null).sort(byStart));
 
+	/**
+	 * Twenty rooms is twenty cards, and the one you are looking at is somewhere past
+	 * the fold. Narrowing to a single room is the cheap way out; it is a view filter
+	 * only — the move dropdowns keep offering every room, so nothing becomes
+	 * unreachable by hiding it.
+	 */
+	const ROOM_FILTER_FROM = 6;
+	let roomFilter = $state('all');
+	const visibleRooms = $derived(
+		roomFilter === 'all' ? board.rooms : board.rooms.filter((r) => String(r.id) === roomFilter)
+	);
+
 	const unscheduled = $derived(board.tray.length);
 	const everythingPublished = $derived(
 		board.placed.length > 0 && board.placed.every((p) => p.status === 'confirmed')
@@ -80,11 +92,11 @@
 	<title>Agenda — {data.conference.name}</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="border-border bg-card border-b px-6 py-5">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-2xl font-semibold tracking-tight">Agenda</h1>
-			<p class="text-muted-foreground mt-1 text-sm">
+			<h1 class="text-lg font-semibold tracking-tight">Agenda</h1>
+			<p class="text-muted-foreground mt-0.5 text-sm">
 				{#if unscheduled > 0}
 					{unscheduled}
 					{unscheduled === 1 ? 'talk needs' : 'talks need'} a slot.
@@ -119,7 +131,10 @@
 			</Button>
 		</div>
 	</div>
+</div>
 
+<!-- Wide on purpose — this is the grid — but never flush against the rail. -->
+<div class="space-y-6 px-6 py-5">
 	{#if form?.error}
 		<p class="text-status-bad text-sm">{form.error}</p>
 	{/if}
@@ -269,8 +284,24 @@
 					</ul>
 				{/if}
 
+				{#if board.rooms.length >= ROOM_FILTER_FROM}
+					<label class="mb-4 flex items-center gap-2 text-sm">
+						<span class="text-muted-foreground">Show</span>
+						<select
+							bind:value={roomFilter}
+							data-testid="agenda-room-filter"
+							class="border-input bg-background rounded-md border px-2 py-1 text-sm"
+						>
+							<option value="all">All {board.rooms.length} rooms</option>
+							{#each board.rooms as room (room.id)}
+								<option value={String(room.id)}>{room.name}</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+
 				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-					{#each board.rooms as room (room.id)}
+					{#each visibleRooms as room (room.id)}
 						<div class="border-border bg-card rounded-lg border p-3">
 							<h3 class="text-sm font-medium">{room.name}</h3>
 
