@@ -38,6 +38,20 @@
 	// This is the real config "kill-my-saas-neon", pointing at the Neon project's
 	// DIRECT endpoint - not the `-pooler` host. Hyperdrive does its own pooling,
 	// so stacking it on Neon's PgBouncer is both redundant and unsupported.
+	// Speaker deliverables — slides, headshots, signed release forms. A bucket
+	// rather than a column: these are files, and some of them are large.
+	//
+	// Nothing here is public. The bucket has no public URL and no custom domain;
+	// files are read back through an authenticated route that checks the same
+	// ownership rule as the rest of the portal. A public bucket would make every
+	// unreleased slide deck world-readable to anyone who guessed a key.
+	"r2_buckets": [
+		{
+			"binding": "UPLOADS",
+			"bucket_name": "untitledconference-uploads"
+		}
+	],
+
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",
