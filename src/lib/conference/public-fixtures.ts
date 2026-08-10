@@ -149,7 +149,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			trackId: 'track-platform',
 			formatId: 'fmt-keynote',
 			speakerIds: ['spk-lovelace'],
-			recordingUrl: 'https://www.youtube.com/watch?v=oE49MdbPNYw'
+			// Public AI Engineer channel talk (issue #84) — not an unlisted challenge entry.
+			recordingUrl: 'https://www.youtube.com/watch?v=ju73sWVtvU0'
 		},
 		{
 			id: 'ses-02',

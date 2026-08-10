@@ -3,10 +3,9 @@ import { normalizeRecordingUrl } from './recording-url';
 
 describe('a recording link', () => {
 	it('keeps an ordinary video address', () => {
-		expect(normalizeRecordingUrl('https://www.youtube.com/watch?v=oE49MdbPNYw')).toEqual({
-			ok: true,
-			url: 'https://www.youtube.com/watch?v=oE49MdbPNYw'
-		});
+		// Public AI Engineer channel talk (issue #84).
+		const url = 'https://www.youtube.com/watch?v=ju73sWVtvU0';
+		expect(normalizeRecordingUrl(url)).toEqual({ ok: true, url });
 	});
 
 	it('reads an empty field as taking the recording down', () => {
