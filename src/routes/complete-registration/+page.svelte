@@ -3,14 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { superForm } from 'sveltekit-superforms';
 	import * as Form from '$lib/components/ui/form';
-	import {
-		Card,
-		CardContent,
-		CardDescription,
-		CardHeader,
-		CardTitle
-	} from '$lib/components/ui/card';
-	import { Input } from '$lib/components/ui/input';
+	import AuthShell from '$lib/components/app/auth/auth-shell.svelte';
+	import PasswordInput from '$lib/components/ui/password-input.svelte';
 	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { toast } from 'svelte-sonner';
 	import { onMount } from 'svelte';
@@ -99,54 +93,49 @@
 	const { form: formData, enhance, submitting, errors } = form;
 </script>
 
-<div class="bg-background flex min-h-screen items-center justify-center p-4">
-	<Card class="w-full max-w-md">
-		<CardHeader>
-			<CardTitle>Complete Your Registration</CardTitle>
-			<CardDescription>Welcome! Please set up your account by creating a password.</CardDescription>
-		</CardHeader>
-		<CardContent>
-			<form use:enhance class="space-y-4">
-				<input type="hidden" name="token" bind:value={$formData.token} />
+<AuthShell
+	title="Complete your registration"
+	description="Welcome! Set up your account by choosing a password."
+>
+	<form use:enhance class="space-y-4">
+		<input type="hidden" name="token" bind:value={$formData.token} />
 
-				<Form.Field {form} name="password">
-					<Form.Control>
-						{#snippet children({ props })}
-							<Form.Label>Password</Form.Label>
-							<Input
-								{...props}
-								type="password"
-								placeholder="Enter a secure password"
-								bind:value={$formData.password}
-								disabled={$submitting}
-								required
-							/>
-							<PasswordStrength password={$formData.password} userInputs={[data.email]} />
-						{/snippet}
-					</Form.Control>
-					<Form.FieldErrors />
-				</Form.Field>
+		<Form.Field {form} name="password">
+			<Form.Control>
+				{#snippet children({ props })}
+					<Form.Label>Password</Form.Label>
+					<PasswordInput
+						{...props}
+						autocomplete="new-password"
+						placeholder="Enter a secure password"
+						bind:value={$formData.password}
+						disabled={$submitting}
+						required
+					/>
+					<PasswordStrength password={$formData.password} userInputs={[data.email]} />
+				{/snippet}
+			</Form.Control>
+			<Form.FieldErrors />
+		</Form.Field>
 
-				{#if $errors._errors}
-					<div role="alert" class="text-sm text-red-500">
-						{#each $errors._errors as error, i (i)}
-							<p>{error}</p>
-						{/each}
-					</div>
-				{/if}
+		{#if $errors._errors}
+			<div role="alert" class="text-destructive text-sm">
+				{#each $errors._errors as error, i (i)}
+					<p>{error}</p>
+				{/each}
+			</div>
+		{/if}
 
-				<p class="text-muted-foreground text-xs">
-					Use at least 8 characters with a mix of letters, numbers and symbols.
-				</p>
+		<p class="text-muted-foreground text-xs">
+			Use at least 8 characters with a mix of letters, numbers and symbols.
+		</p>
 
-				<Form.Button type="submit" disabled={$submitting || !data.token} class="w-full">
-					{#if $submitting}
-						Completing Registration...
-					{:else}
-						Complete Registration
-					{/if}
-				</Form.Button>
-			</form>
-		</CardContent>
-	</Card>
-</div>
+		<Form.Button type="submit" disabled={$submitting || !data.token} class="w-full">
+			{#if $submitting}
+				Completing Registration...
+			{:else}
+				Complete Registration
+			{/if}
+		</Form.Button>
+	</form>
+</AuthShell>

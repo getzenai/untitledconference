@@ -77,7 +77,7 @@ const VERIFICATION_EMAIL_TEMPLATE = `<!doctype html>
 				<h2 class="email-title">Verify your email address</h2>
 
 				<p>
-					Thank you for signing up with SvelteKit Vibe Starter! Please click the button below to
+					Thank you for signing up with Untitled Conference! Please click the button below to
 					verify your email address and complete your registration:
 				</p>
 
@@ -128,7 +128,7 @@ export function generateVerificationEmailTemplate({
 	// Generate text version programmatically
 	const text = `Verify your email address
 
-Thank you for signing up with SvelteKit Vibe Starter!
+Thank you for signing up with Untitled Conference!
 
 Please verify your email address by clicking the link below:
 
@@ -218,7 +218,7 @@ const PASSWORD_RESET_EMAIL_TEMPLATE = `<!doctype html>
 				<h2 class="email-title">Reset your password</h2>
 
 				<p>
-					We received a request to reset the password for your SvelteKit Vibe Starter account.
+					We received a request to reset the password for your Untitled Conference account.
 					Click the button below to create a new password:
 				</p>
 
@@ -264,7 +264,7 @@ export function generatePasswordResetEmailContent(
 	// Generate text version programmatically
 	const text = `Reset your password
 
-We received a request to reset the password for your SvelteKit Vibe Starter account.
+We received a request to reset the password for your Untitled Conference account.
 
 To create a new password, visit the following link:
 
