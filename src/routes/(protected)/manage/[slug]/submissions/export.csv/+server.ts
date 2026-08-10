@@ -6,7 +6,7 @@ import {
 	type SubmissionRow
 } from '$lib/server/conference/organizer-submissions';
 import { parseSort } from '$lib/server/conference/submission-sort';
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { parseSubmissionFilters } from '../filters';
 import type { RequestHandler } from './$types';
 
@@ -23,6 +23,10 @@ import type { RequestHandler } from './$types';
  * guard, asked here rather than inherited — a `+server.ts` does not run the layout
  * load, and a route that is only protected because of where it sits in the tree is
  * protected by a coincidence.
+ *
+ * That same missing layout load is why the signed-out case is answered here too. The
+ * layout would have sent them to /login; this route has to say it itself, or
+ * `locals.user` is simply undefined and an anonymous request crashes the handler.
  */
 
 const HEADER = [
@@ -62,7 +66,13 @@ function line(row: SubmissionRow) {
 }
 
 export const GET: RequestHandler = async ({ locals, params, url }) => {
-	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+	// The query string is part of the request: an expired session should hand back the
+	// export they asked for, filters and order included, not an unfiltered one.
+	if (!locals.user) {
+		redirect(303, `/login?returnTo=${encodeURIComponent(url.pathname + url.search)}`);
+	}
+
+	const { conference } = await requireOrganizer(locals.user.id, params.slug);
 
 	const { rows, truncated } = await exportSubmissions(
 		conference.id,
