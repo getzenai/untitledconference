@@ -16,11 +16,16 @@ import { load } from './+page.server';
 const call = (locals: object) => Promise.resolve(load({ locals } as never));
 
 describe('the front door', () => {
-	it('lists the published conferences to a visitor without a session', async () => {
+	it('gives the published conferences to a visitor without a session', async () => {
 		// The regression this pins: `/` used to redirect here too, to /login, and no
 		// page reachable from there linked a public conference site. Every EMB
 		// scenario starts logged out at the base URL, so that redirect put all five
 		// public surfaces out of reach of anyone who did not already know a slug.
+		//
+		// The page around this data is now a product page — the list moved below
+		// the pitch and reads as evidence rather than as the point of the site —
+		// but the loader's contract is exactly what it was, and it is the contract
+		// the EMB start point depends on.
 		publicConferenceDirectory.mockResolvedValue([
 			{
 				slug: 'devflow-conf-2027',
