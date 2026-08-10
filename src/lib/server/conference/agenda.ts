@@ -447,39 +447,8 @@ export async function setPlacementStatus(
 	return true;
 }
 
-export async function addRoom(conferenceId: number, name: string): Promise<number | null> {
-	const trimmed = name.trim();
-	if (!trimmed) return null;
-
-	const [{ next }] = await db
-		.select({ next: sql<number>`coalesce(max(${roomTable.position}), -1) + 1` })
-		.from(roomTable)
-		.where(eq(roomTable.conferenceId, conferenceId));
-
-	const [created] = await db
-		.insert(roomTable)
-		.values({ conferenceId, name: trimmed.slice(0, 120), position: next })
-		.returning({ id: roomTable.id });
-
-	return created.id;
-}
-
-export async function addTrack(conferenceId: number, name: string): Promise<number | null> {
-	const trimmed = name.trim();
-	if (!trimmed) return null;
-
-	const [{ next }] = await db
-		.select({ next: sql<number>`coalesce(max(${trackTable.position}), -1) + 1` })
-		.from(trackTable)
-		.where(eq(trackTable.conferenceId, conferenceId));
-
-	const [created] = await db
-		.insert(trackTable)
-		.values({ conferenceId, name: trimmed.slice(0, 120), position: next })
-		.returning({ id: trackTable.id });
-
-	return created.id;
-}
+/** @deprecated Prefer `$lib/server/conference/config` — rooms live in settings (#63). */
+export { addRoom, addTrack } from './config';
 
 type Window = { start: number; end: number };
 

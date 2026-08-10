@@ -8,8 +8,6 @@
  */
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
-	addRoom,
-	addTrack,
 	agendaBoard,
 	autoPlace,
 	backfillTray,
@@ -100,25 +98,5 @@ export const actions: Actions = {
 	autoPlace: async ({ locals, params }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		return { autoPlaced: await autoPlace(conference.id) };
-	},
-
-	addRoom: async ({ locals, params, request }) => {
-		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		const name = String((await request.formData()).get('name') ?? '');
-
-		if ((await addRoom(conference.id, name)) === null) {
-			return fail(400, { error: 'Give the room a name.' });
-		}
-		return { roomAdded: true };
-	},
-
-	addTrack: async ({ locals, params, request }) => {
-		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		const name = String((await request.formData()).get('name') ?? '');
-
-		if ((await addTrack(conference.id, name)) === null) {
-			return fail(400, { error: 'Give the track a name.' });
-		}
-		return { trackAdded: true };
 	}
 };
