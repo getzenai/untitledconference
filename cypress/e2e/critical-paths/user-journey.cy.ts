@@ -75,8 +75,9 @@ describe('Critical User Journey', () => {
 		cy.loginViaUi(ownerEmail, password);
 		homePage.shouldBeLoggedIn();
 
-		// The sidebar navigation reaches the protected CRUD example
-		homePage.navigateToCrud();
+		// The CRUD example is no longer linked from the sidebar (PR #59 removed the
+		// Vibe Starter "Examples" nav group), so reach it by URL like the other specs
+		CrudActions.navigateToCrudPage();
 		CrudActions.createExampleObject(itemName, 'Basic test description');
 		CrudActions.verifyObjectExists(itemName);
 	});
