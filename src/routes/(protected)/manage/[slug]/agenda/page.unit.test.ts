@@ -21,7 +21,23 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-const renderWith = (roomCount: number) =>
+const session = (placementId: number, roomId: number | null) => ({
+	placementId,
+	submissionId: placementId,
+	title: `Talk ${placementId}`,
+	kind: 'talk',
+	status: 'tentative',
+	trackName: null,
+	formatName: null,
+	minutes: 30,
+	dayId: roomId === null ? null : 1,
+	roomId,
+	startMinutes: roomId === null ? null : 540,
+	endMinutes: roomId === null ? null : 570,
+	speakers: ['Robin']
+});
+
+const renderWith = (roomCount: number, movable = false) =>
 	render(Page, {
 		props: {
 			data: {
@@ -38,8 +54,11 @@ const renderWith = (roomCount: number) =>
 					})),
 					tracks: [],
 					formats: [],
-					placed: [],
-					tray: [],
+					// One waiting talk and one already on the grid: the two places a room
+					// dropdown exists at all. Without them the page renders no `roomId`
+					// select and a test about dropdowns has nothing to look at.
+					placed: movable ? [session(2, 1)] : [],
+					tray: movable ? [session(1, null)] : [],
 					conflicts: []
 				},
 				slots: [{ minutes: 540, label: '09:00' }]
@@ -47,6 +66,12 @@ const renderWith = (roomCount: number) =>
 			form: null
 		}
 	}).body;
+
+/** Every `<option>` label inside each rendered `name="roomId"` select. */
+const roomSelects = (body: string) =>
+	[...body.matchAll(/<select[^>]*name="roomId"[^>]*>([\s\S]*?)<\/select>/g)].map((select) =>
+		[...select[1].matchAll(/<option[^>]*>([\s\S]*?)<\/option>/g)].map((o) => o[1].trim())
+	);
 
 describe('organizer agenda layout', () => {
 	it('pads the grid away from the rail while staying full width', () => {
@@ -56,13 +81,29 @@ describe('organizer agenda layout', () => {
 		expect(body).toMatch(/<div class="space-y-6 px-6 py-5"/);
 	});
 
-	it('offers a room filter once a conference has enough rooms to lose one in', () => {
-		expect(renderWith(2)).not.toContain('data-testid="agenda-room-filter"');
+	// The pair either side of the threshold, not two points far away from it: a test
+	// that only knows 2-versus-20 stays green if the threshold moves to 19.
+	it('offers a room filter at six rooms and not at five', () => {
+		expect(renderWith(5)).not.toContain('data-testid="agenda-room-filter"');
 
-		const many = renderWith(20);
-		expect(many).toContain('data-testid="agenda-room-filter"');
-		// Hiding a room from the grid must not make it unreachable: the move
-		// dropdowns still carry every room.
-		expect(many).toContain('All 20 rooms');
+		const six = renderWith(6);
+		expect(six).toContain('data-testid="agenda-room-filter"');
+		expect(six).toContain('All 6 rooms');
+	});
+
+	/**
+	 * Hiding a room from the grid must not make it unreachable. What this pins is the
+	 * rendered markup: with the filter offered, both room dropdowns — the one on a
+	 * waiting talk and the one on a placed session — list every room, not a subset.
+	 * It does not exercise the client-side filter: the select starts on "all", so a
+	 * server render cannot tell `board.rooms` from `visibleRooms`. That the dropdowns
+	 * read the unfiltered list is a code fact, checked by reading, not by this test.
+	 */
+	it('offers every room in both move dropdowns while the filter is on screen', () => {
+		const selects = roomSelects(renderWith(6, true));
+		const allRooms = ['Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5', 'Room 6'];
+
+		expect(selects).toHaveLength(2);
+		for (const options of selects) expect(options).toEqual(allRooms);
 	});
 });

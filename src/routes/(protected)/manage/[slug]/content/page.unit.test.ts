@@ -70,8 +70,10 @@ describe('organizer speaker content layout', () => {
 		expect(container).toContain('mx-auto');
 	});
 
-	it('offers a filter once the list is long enough to need one, and not before', () => {
-		expect(renderWith(3)).not.toContain('data-testid="content-filter"');
-		expect(renderWith(20)).toContain('data-testid="content-filter"');
+	// The pair either side of the threshold, not two points far away from it: a test
+	// that only knows 3-versus-20 stays green if the threshold moves to 19.
+	it('offers a filter at eight speakers and not at seven', () => {
+		expect(renderWith(7)).not.toContain('data-testid="content-filter"');
+		expect(renderWith(8)).toContain('data-testid="content-filter"');
 	});
 });
