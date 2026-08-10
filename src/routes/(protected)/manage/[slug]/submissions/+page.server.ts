@@ -2,34 +2,15 @@ import { requireOrganizer } from '$lib/server/conference/access';
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
 import {
 	listSubmissions,
-	parseSort,
 	submissionFacets,
 	submissionTotals
 } from '$lib/server/conference/organizer-submissions';
+import { parseSort } from '$lib/server/conference/submission-sort';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { parseSubmissionFilters } from './filters';
 
 const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted'];
-
-/**
- * Filters live in the URL, not in component state: a filtered table is a view the
- * organizer sends to a colleague, and the browser's back button is the undo they
- * already know.
- */
-function parseFilters(url: URL) {
-	const number = (name: string) => {
-		const raw = url.searchParams.get(name);
-		const value = raw ? Number(raw) : NaN;
-		return Number.isInteger(value) && value > 0 ? value : undefined;
-	};
-
-	return {
-		q: url.searchParams.get('q') ?? undefined,
-		status: url.searchParams.getAll('status').filter(Boolean),
-		trackId: number('track'),
-		sessionFormatId: number('format')
-	};
-}
 
 /** The page number lives in the URL for the same reason the filters do. */
 function parsePage(url: URL) {
@@ -39,7 +20,7 @@ function parsePage(url: URL) {
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-	const filters = parseFilters(url);
+	const filters = parseSubmissionFilters(url);
 	// An unknown `?sort=` falls back to the default rather than failing: the sort is
 	// part of a URL organizers paste to each other, and a broken link should still
 	// show the table.
