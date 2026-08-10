@@ -56,32 +56,46 @@ type Db = ReturnType<typeof drizzle>;
 /** A connection and its Drizzle wrapper, created together and discarded together. */
 type Connection = { client: Client; db: Db };
 
-function connect(): Connection {
-	const { DATABASE_URL } = serverEnv();
+/**
+ * Opens a connection, preferring an address the caller was handed.
+ *
+ * `override` is Hyperdrive's `connectionString` when a Worker request supplied
+ * one — see `withRequestScopedDb`. Everywhere else it is absent and the
+ * environment's `DATABASE_URL` stands, which is what keeps Node, tests and
+ * scripts on the path they have always used.
+ */
+function connect(override?: string): Connection {
+	const url = override ?? serverEnv().DATABASE_URL;
 	logger.debug('Opening database connection', {
-		url: DATABASE_URL.replace(/:([^@]+)@/, ':****@')
+		url: url.replace(/:([^@]+)@/, ':****@'),
+		viaHyperdrive: override !== undefined
 	});
 
 	// `max: 1` — nothing here benefits from a pool. On a Worker the client lives
 	// for a single request, so a pool would only mean several sockets and several
 	// TLS handshakes for one page; in Node the pool is fronted by a pooler anyway.
 	//
-	// `prepare: false` — required, not defensive: `DATABASE_URL` points at Neon's
-	// `-pooler` endpoint, which pools in transaction mode. Named prepared
-	// statements do not survive it handing the next query to a different backend.
+	// `prepare: false` — required, not defensive, and for the same reason on both
+	// addresses: `DATABASE_URL` points at Neon's `-pooler` endpoint and Hyperdrive
+	// pools in front of the direct one. Either way a named prepared statement does
+	// not survive the next query landing on a different backend.
 	//
 	// `scripts/db/migrate.mjs` connects with the same two options.
-	const client = postgres(DATABASE_URL, { max: 1, prepare: false });
+	const client = postgres(url, { max: 1, prepare: false });
 	return { client, db: drizzle(client, { schema }) };
 }
 
 /**
- * The per-request connection, when there is one.
+ * The per-request connection, when there is one, and the address to open it at.
  *
- * Empty on entry: the connection is opened on the request's first query, so a
- * request that never touches the database never opens one.
+ * `connection` is empty on entry: it is opened on the request's first query, so
+ * a request that never touches the database never opens one. `connectionString`
+ * is set on entry when the request arrived with a Hyperdrive binding.
  */
-const requestScope = new AsyncLocalStorage<{ connection?: Connection }>();
+const requestScope = new AsyncLocalStorage<{
+	connection?: Connection;
+	connectionString?: string;
+}>();
 
 /** Process-wide fallback for Node contexts — tests, scripts, the job worker. */
 let processConnection: Connection | undefined;
@@ -96,7 +110,7 @@ const ON_WORKER = typeof navigator !== 'undefined' && navigator.userAgent === 'C
 function resolveDb(): Db {
 	const store = requestScope.getStore();
 	if (store) {
-		store.connection ??= connect();
+		store.connection ??= connect(store.connectionString);
 		return store.connection.db;
 	}
 
@@ -127,9 +141,10 @@ function resolveDb(): Db {
  */
 export async function withRequestScopedDb<T>(
 	fn: () => Promise<T>,
-	defer: (closing: Promise<void>) => void
+	defer: (closing: Promise<void>) => void,
+	connectionString?: string
 ): Promise<T> {
-	const store: { connection?: Connection } = {};
+	const store: { connection?: Connection; connectionString?: string } = { connectionString };
 	try {
 		return await requestScope.run(store, fn);
 	} finally {
@@ -152,6 +167,17 @@ export async function withRequestScopedDb<T>(
  * presence is the same question as "am I running on a Worker" — and it is the
  * very thing we need from the platform, rather than a proxy for it.
  */
+/**
+ * The address the current request would open a connection at, or undefined for
+ * the environment's own `DATABASE_URL`.
+ *
+ * Exists so the Hyperdrive hand-off can be asserted without opening a socket:
+ * this reads exactly the field `resolveDb` reads.
+ */
+export function readScopedConnectionString(): string | undefined {
+	return requestScope.getStore()?.connectionString;
+}
+
 export function needsRequestScopedDb(platform: App.Platform | undefined): boolean {
 	return typeof platform?.ctx?.waitUntil === 'function';
 }

@@ -32,6 +32,13 @@ fi
 
 export TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}"
 export DATABASE_URL="$TEST_DATABASE_URL"
+# `vite preview` emulates the Worker's bindings from wrangler.jsonc, so the app
+# reads HYPERDRIVE.connectionString here exactly as it does in production. Left
+# alone that is wrangler's `localConnectionString`, which points at a fixed
+# database and would send the whole suite somewhere the schema was never pushed
+# — every page a 500, and nothing naming the cause. This is wrangler's own
+# override, and it keeps the address in one place: TEST_DATABASE_URL.
+export WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$TEST_DATABASE_URL"
 # This script owns the preview server, so the auth base URL is fixed to it -
 # a stale BETTER_AUTH_URL from .env (e.g. the dev server on :5173) would make
 # Better Auth mint links and cookies for the wrong origin.

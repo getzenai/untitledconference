@@ -100,6 +100,16 @@ done
 
 echo ""
 
+# `vite dev` emulates the Worker's bindings from wrangler.jsonc (adapter-cloudflare
+# `platformProxy`), and the app reads HYPERDRIVE.connectionString wherever the
+# binding is present. Left alone that is wrangler's `localConnectionString` — a
+# fixed address that is not the one validated above, so dev would either 500 or,
+# worse, quietly read and write a different database than the developer
+# configured. Point the binding at DATABASE_URL so there is one answer to "which
+# database am I on" locally, the same thing `run-e2e.sh` does with
+# TEST_DATABASE_URL.
+export WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="${WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE:-$DATABASE_URL}"
+
 # Non-secret configuration (set directly, allow env overrides)
 export BETTER_AUTH_URL="${BETTER_AUTH_URL:-http://localhost:5173}"
 export BETTER_AUTH_TRUSTED_ORIGINS="${BETTER_AUTH_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174}"
