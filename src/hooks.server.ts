@@ -27,7 +27,7 @@ const API_V1_PREFIX = '/api/v1';
 // cover the short-circuit responses produced further down (401/403) and every
 // non-HTML API response.
 const securityHeadersHandler: Handle = async ({ event, resolve }) =>
-	applySecurityHeaders(await resolve(event));
+	applySecurityHeaders(await resolve(event), event.url.pathname);
 
 // Gives the request its own database connection, on the platforms that require
 // one. A Cloudflare Worker cannot use a socket opened by an earlier request, so

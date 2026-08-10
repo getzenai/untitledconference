@@ -3,7 +3,7 @@
 	 * The organizer's shell: one rail, always the same, with the conference at the top.
 	 *
 	 * The rail is the answer to the diagnosis in DESIGN_STANCE — the original has the
-	 * features and loses the owner inside them. Six destinations, no nesting, and the
+	 * features and loses the owner inside them. Seven destinations, no nesting, and the
 	 * ones that are not built yet are visibly not links rather than 404s.
 	 */
 	import { page } from '$app/state';
@@ -19,6 +19,7 @@
 		{ href: `${base}/cfp`, label: 'Call for papers', ready: true },
 		{ href: `${base}/agenda`, label: 'Agenda', ready: false },
 		{ href: `${base}/people`, label: 'Team & reviewers', ready: false },
+		{ href: `${base}/embed`, label: 'Embed & share', ready: true },
 		{ href: `${base}/settings`, label: 'Settings', ready: true }
 	]);
 
