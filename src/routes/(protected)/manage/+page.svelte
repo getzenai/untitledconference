@@ -1,5 +1,6 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 
@@ -23,6 +24,9 @@
 <div class="mx-auto w-full max-w-3xl px-6 py-10">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
+			<div class="mb-2">
+				<ShellAccountLinks homeTestId="manage-home-link" />
+			</div>
 			<h1 class="text-lg font-semibold tracking-tight">My conferences</h1>
 			<p class="text-muted-foreground mt-1 text-sm">The events you organize.</p>
 		</div>

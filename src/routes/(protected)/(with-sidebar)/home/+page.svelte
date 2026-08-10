@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { Button } from '$lib/components/ui/button';
-
-	import {
-		Card,
-		CardContent,
-		CardDescription,
-		CardHeader,
-		CardTitle
-	} from '$lib/components/ui/card';
-	import { authClient } from '$lib/auth-client';
-	import { goto } from '$app/navigation';
+	/**
+	 * The first screen after login: pick which hat you are wearing.
+	 *
+	 * One account can organize, speak and review. The three destinations used to be
+	 * reachable only by typing a URL (except organizing, which lived under /manage
+	 * once you knew to look). Listing all three here is the navigation; a loader that
+	 * finds neither role answers with an empty list rather than an error, so the
+	 * cards are unconditional.
+	 *
+	 * Logout lives in the sidebar account menu — not on this page. A second logout
+	 * button here was leftover from the starter template and made the screen look
+	 * like a demo rather than the product.
+	 */
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -19,123 +20,78 @@
 
 	let { data }: Props = $props();
 
-	const sessionState = authClient.useSession();
-	// $sessionState will have properties like .data, .isPending, .error
-	// .data itself is likely the store containing the actual session object { user, session } or null
-
-	async function handleLogout() {
-		try {
-			await authClient.signOut({
-				fetchOptions: {
-					onSuccess: () => {
-						// The svelteKitHandler should clear the session cookie.
-						// The useSession hook will react, and route guards should redirect.
-						// Explicit redirect as a fallback or primary action.
-						goto('/login', { replaceState: true });
-					}
-				}
-			});
-		} catch (error) {
-			console.error('Logout failed:', error);
-			// Optionally display an error to the user
+	const roles = [
+		{
+			href: '/manage',
+			title: 'Organizing',
+			description: 'Your conferences, the call, decisions and the programme.'
+		},
+		{
+			href: '/portal',
+			title: 'Speaking',
+			description: 'Your proposals, tasks and files.'
+		},
+		{
+			href: '/review',
+			title: 'Reviewing',
+			description: 'The proposals assigned to you to score.'
 		}
-	}
+	] as const;
 </script>
 
-<div class="container space-y-4 py-8">
+<div class="container space-y-6 py-8" data-testid="home-dashboard">
+	<div>
+		<h1 class="text-lg font-semibold tracking-tight">Home</h1>
+		{#if data.user?.email}
+			<p class="text-muted-foreground mt-1 text-sm">Welcome, {data.user.email}</p>
+		{:else}
+			<p class="text-muted-foreground mt-1 text-sm">Welcome</p>
+		{/if}
+	</div>
+
 	{#if data.onboarding}
-		<Card>
-			<CardHeader>
-				<CardTitle>
-					{#if data.onboarding.pendingInvitationCount > 0}
-						You have {data.onboarding.pendingInvitationCount} pending invitation{data.onboarding
-							.pendingInvitationCount === 1
-							? ''
-							: 's'}
-					{:else}
-						Finish setting up your account
-					{/if}
-				</CardTitle>
-				<CardDescription>
-					{#if data.onboarding.pendingInvitationCount > 0}
-						Join an organization you have been invited to.
-					{:else}
-						Create an organization to start collaborating.
-					{/if}
-				</CardDescription>
-			</CardHeader>
-			<CardContent>
-				<a href={data.onboarding.href}>
-					<Button>
-						{data.onboarding.pendingInvitationCount > 0
-							? 'Review invitations'
-							: 'Create organization'}
-					</Button>
+		<section class="border-border bg-card rounded-lg border p-4">
+			<h2 class="text-sm font-semibold">
+				{#if data.onboarding.pendingInvitationCount > 0}
+					You have {data.onboarding.pendingInvitationCount} pending invitation{data.onboarding
+						.pendingInvitationCount === 1
+						? ''
+						: 's'}
+				{:else}
+					Finish setting up your account
+				{/if}
+			</h2>
+			<p class="text-muted-foreground mt-1 text-sm">
+				{#if data.onboarding.pendingInvitationCount > 0}
+					Join an organization you have been invited to.
+				{:else}
+					Create an organization to start collaborating.
+				{/if}
+			</p>
+			<p class="mt-3">
+				<a
+					href={data.onboarding.href}
+					class="bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring inline-flex h-9 items-center rounded-md px-3 text-sm font-medium focus-visible:ring-[3px] focus-visible:outline-none"
+				>
+					{data.onboarding.pendingInvitationCount > 0
+						? 'Review invitations'
+						: 'Create organization'}
 				</a>
-			</CardContent>
-		</Card>
+			</p>
+		</section>
 	{/if}
 
-	<Card data-testid="home-dashboard">
-		<CardHeader>
-			<CardTitle>Where do you want to go?</CardTitle>
-			<CardDescription>
-				{#if $sessionState.isPending}
-					Loading user information...
-				{:else if $sessionState.data?.user}
-					Welcome, {$sessionState.data.user.email}!
-				{:else if $page.data.user?.email && !$sessionState.error}
-					<!-- Fallback to page data from server load if the session hook is slow -->
-					Welcome, {$page.data.user?.email}!
-				{:else if $sessionState.error}
-					Could not load user session: {$sessionState.error.message}
-				{:else}
-					Welcome! (User data not available)
-				{/if}
-			</CardDescription>
-		</CardHeader>
-		<CardContent>
-			<!--
-				The three roles one account can hold, named on the first screen after
-				login. `/portal` and `/review` were reachable only by typing the URL,
-				which made a speaker's own proposals and a reviewer's queue invisible to
-				anyone who had not been sent a link. All three are listed for everyone:
-				the session carries no role to branch on, and both loaders answer a user
-				who holds neither role with an empty list rather than an error.
-			-->
-			<div class="space-y-4">
-				<div class="grid gap-3 sm:grid-cols-3">
-					<a
-						href="/manage"
-						class="border-border hover:border-primary hover:bg-muted/40 block rounded-lg border p-4 transition-colors"
-					>
-						<span class="block font-medium">Organizing</span>
-						<span class="text-muted-foreground text-sm">
-							Your conferences, the call, decisions and the programme.
-						</span>
-					</a>
-					<a
-						href="/portal"
-						class="border-border hover:border-primary hover:bg-muted/40 block rounded-lg border p-4 transition-colors"
-					>
-						<span class="block font-medium">Speaking</span>
-						<span class="text-muted-foreground text-sm"> Your proposals, tasks and files. </span>
-					</a>
-					<a
-						href="/review"
-						class="border-border hover:border-primary hover:bg-muted/40 block rounded-lg border p-4 transition-colors"
-					>
-						<span class="block font-medium">Reviewing</span>
-						<span class="text-muted-foreground text-sm">
-							The proposals assigned to you to score.
-						</span>
-					</a>
-				</div>
-
-				<Button onclick={handleLogout} variant="outline" disabled={$sessionState.isPending}
-					>Logout</Button
+	<section aria-label="Where to work">
+		<div class="grid gap-3 sm:grid-cols-3">
+			{#each roles as role (role.href)}
+				<a
+					href={role.href}
+					class="border-border hover:border-primary hover:bg-muted/40 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
 				>
-			</div>
-		</CardContent>
-	</Card>
+					<span class="block font-medium">{role.title}</span>
+					<span class="text-muted-foreground text-sm">{role.description}</span>
+				</a>
+			{/each}
+		</div>
+	</section>
 </div>
