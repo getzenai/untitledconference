@@ -30,10 +30,6 @@ export class HomePage extends BasePage {
 		return cy.get('[data-testid="app-sidebar"]').find('a[href="/admin/users"]');
 	}
 
-	crudNavLink(): Cypress.Chainable<JQuery<HTMLElement>> {
-		return cy.get('[data-testid="app-sidebar"]').find('a[href="/examples/crud"]');
-	}
-
 	shouldBeLoggedIn(): this {
 		cy.url().should('include', '/home');
 		this.dashboardContent().should('be.visible');
@@ -53,23 +49,6 @@ export class HomePage extends BasePage {
 	logout(): this {
 		this.logoutButton().click();
 		cy.url({ timeout: 20000 }).should('include', '/login');
-		return this;
-	}
-
-	/** The "Examples" nav group is collapsed by default; open it before clicking a child link. */
-	openExamplesNav(): this {
-		cy.get('[data-testid="app-sidebar"]').then(($sidebar) => {
-			if ($sidebar.find('a[href="/examples/crud"]:visible').length === 0) {
-				cy.get('[data-testid="toggle-examples"]').click();
-			}
-		});
-		return this;
-	}
-
-	navigateToCrud(): this {
-		this.openExamplesNav();
-		this.crudNavLink().click();
-		cy.url({ timeout: 20000 }).should('include', '/examples/crud');
 		return this;
 	}
 }
