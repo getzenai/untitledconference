@@ -21,7 +21,7 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-const renderWith = (roomCount: number) =>
+const renderWith = (roomCount: number, dayCount = 1) =>
 	render(Page, {
 		props: {
 			data: {
@@ -30,7 +30,11 @@ const renderWith = (roomCount: number) =>
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
 				board: {
-					days: [{ id: 1, date: '2027-05-10', position: 0 }],
+					days: Array.from({ length: dayCount }, (_, i) => ({
+						id: i + 1,
+						date: `2027-05-${10 + i}`,
+						position: i
+					})),
 					rooms: Array.from({ length: roomCount }, (_, i) => ({
 						id: i + 1,
 						name: `Room ${i + 1}`,
@@ -75,5 +79,26 @@ describe('organizer agenda layout', () => {
 		const six = renderWith(6);
 		expect(six).toContain('data-testid="agenda-room-filter"');
 		expect(six).toContain('All 6 rooms');
+	});
+});
+
+/**
+ * The empty board is where a fresh organizer lands, and until #86 it sent them to
+ * a settings page that could not create a day. Now it can, so the copy has to name
+ * the thing that actually produces days: the conference date range.
+ */
+describe('empty board guidance', () => {
+	it('points at the date range when the conference has no days', () => {
+		const body = renderWith(2, 0);
+
+		expect(body).toContain('Days follow from the conference dates');
+		expect(body).toContain('/manage/test-conf/settings');
+	});
+
+	it('says nothing about days when only a room is missing', () => {
+		const body = renderWith(0);
+
+		expect(body).toContain('Add rooms in');
+		expect(body).not.toContain('Days follow from the conference dates');
 	});
 });

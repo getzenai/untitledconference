@@ -204,7 +204,8 @@
 				<a class="underline" href="{base}/settings">settings</a>.
 			{/if}
 			{#if board.days.length === 0}
-				Conference days come from the event date range (settings once that is wired).
+				Days follow from the conference dates — set the start and end date in
+				<a class="underline" href="{base}/settings">settings</a>.
 			{/if}
 		</p>
 	{/if}

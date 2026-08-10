@@ -1,9 +1,9 @@
 <script lang="ts">
 	/**
-	 * Conference configuration (#63): rooms, tracks, session formats.
+	 * Conference configuration (#63, #86): dates, rooms, tracks, session formats.
 	 *
-	 * Reviewer-visibility lives under Team & reviewers. Days are derived from the
-	 * conference date range (#86) — not listed here yet.
+	 * Reviewer-visibility lives under Team & reviewers. The days of the agenda grid
+	 * are not a list here — they follow from the date range at the top (#86).
 	 */
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
@@ -35,7 +35,7 @@
 <div class="border-border bg-card border-b px-6 py-5">
 	<h1 class="text-lg font-semibold tracking-tight">Settings</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
-		Rooms, tracks and session formats for this conference. Reviewer visibility is under
+		Dates, rooms, tracks and session formats for this conference. Reviewer visibility is under
 		<a class="underline underline-offset-4" href="{base}/people">Team &amp; reviewers</a>.
 	</p>
 </div>
@@ -58,6 +58,45 @@
 			{form.message}
 		</p>
 	{/if}
+
+	<section
+		class="border-border bg-card max-w-2xl rounded-lg border p-4"
+		data-testid="settings-dates"
+	>
+		<h2 class="text-sm font-semibold">When it runs</h2>
+		<p class="text-muted-foreground mt-0.5 text-xs">
+			The agenda grid is built from these dates — one column per day. Change them and the grid
+			follows. A day that still holds sessions is never dropped silently; you are told which ones to
+			clear first.
+		</p>
+
+		<form method="POST" action="?/dates" use:enhance={submitting} class="mt-3 space-y-3">
+			<div class="flex flex-wrap items-end gap-2">
+				<label class="w-44 text-xs">
+					<span class="text-muted-foreground">Starts on</span>
+					<Input
+						name="startsOn"
+						type="date"
+						value={data.conference.startsOn ?? ''}
+						class="mt-1 h-8 text-sm"
+					/>
+				</label>
+				<label class="w-44 text-xs">
+					<span class="text-muted-foreground">Ends on</span>
+					<Input
+						name="endsOn"
+						type="date"
+						value={data.conference.endsOn ?? ''}
+						class="mt-1 h-8 text-sm"
+					/>
+				</label>
+				<Button type="submit" size="sm" disabled={busy}>Save dates</Button>
+			</div>
+			<p class="text-muted-foreground text-xs">
+				Leave the end date blank for a one-day conference.
+			</p>
+		</form>
+	</section>
 
 	<section
 		class="border-border bg-card max-w-2xl rounded-lg border p-4"
