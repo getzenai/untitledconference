@@ -1,35 +1,55 @@
-import type { ReviewVisibility } from '$lib/conference/review-visibility';
+/**
+ * Conference settings: rooms, tracks, session formats (#63).
+ *
+ * Reviewer visibility moved to Team & reviewers (`/people`). Conference days are
+ * owned by #86 (derive from start/end) — not created here.
+ */
 import { requireOrganizer } from '$lib/server/conference/access';
-import { db } from '$lib/server/db';
-import { conferenceTable } from '$lib/server/db/conference/conference-schema';
+import { addFormat, addRoom, addTrack, conferenceConfig } from '$lib/server/conference/config';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
-const MODES: ReviewVisibility[] = ['open', 'blind_until_reviewed'];
-
 export const load: PageServerLoad = async ({ locals, params }) => {
-	await requireOrganizer(locals.user!.id, params.slug);
-	return {};
+	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+	return { config: await conferenceConfig(conference.id) };
 };
 
+function text(form: FormData, key: string): string {
+	return String(form.get(key) ?? '');
+}
+
 export const actions: Actions = {
-	reviewVisibility: async ({ locals, params, request }) => {
+	addRoom: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		const mode = String((await request.formData()).get('mode')) as ReviewVisibility;
+		if ((await addRoom(conference.id, text(await request.formData(), 'name'))) === null) {
+			return fail(400, { error: 'Give the room a name.' });
+		}
+		return { message: 'Room added.' };
+	},
 
-		if (!MODES.includes(mode)) return fail(400, { message: 'Unknown review mode.' });
+	addTrack: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		if ((await addTrack(conference.id, text(await request.formData(), 'name'))) === null) {
+			return fail(400, { error: 'Give the track a name.' });
+		}
+		return { message: 'Track added.' };
+	},
 
-		await db
-			.update(conferenceTable)
-			.set({ reviewVisibility: mode })
-			.where(eq(conferenceTable.id, conference.id));
+	addFormat: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const name = text(form, 'name');
+		const rawMinutes = String(form.get('minutes') ?? '').trim();
+		const minutes = rawMinutes === '' ? null : Number(rawMinutes);
 
-		return {
-			message:
-				mode === 'open'
-					? 'Reviewers now see each other’s scores and comments at any time.'
-					: 'Reviewers now see each other’s scores and comments only after filing their own.'
-		};
+		if (minutes !== null && !Number.isInteger(minutes)) {
+			return fail(400, { error: 'Minutes must be a whole number.' });
+		}
+		if ((await addFormat(conference.id, name, minutes)) === null) {
+			return fail(400, {
+				error: 'Give the format a name, and minutes between 1 and 1440 if set.'
+			});
+		}
+		return { message: 'Session format added.' };
 	}
 };
