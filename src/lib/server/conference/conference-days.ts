@@ -11,6 +11,13 @@
  * word. Shrinking the range therefore only clears days that are *empty*; a day
  * that still holds something stays, and the caller is told which, so the
  * organizer can move those sessions and shrink again.
+ *
+ * "Empty" is a claim about a moment, and the moment has to be held. Reading the
+ * placements and then deleting leaves a window in which another organizer drops
+ * a session onto the day being judged: the check saw nothing, the cascade takes
+ * the new row, and the write that reported success is gone. The days are
+ * therefore locked before they are judged and stay locked until the transaction
+ * ends — see `lockedDays` below.
  */
 import { datesInRange } from '$lib/conference/conference-dates';
 import { db } from '$lib/server/db';
@@ -54,11 +61,7 @@ export async function syncConferenceDays(
 	// field by accident.
 	if (wanted.length === 0) return EMPTY;
 
-	const existing = await tx
-		.select({ id: conferenceDayTable.id, date: conferenceDayTable.date })
-		.from(conferenceDayTable)
-		.where(eq(conferenceDayTable.conferenceId, conferenceId))
-		.orderBy(asc(conferenceDayTable.date));
+	const existing = await lockedDays(tx, conferenceId);
 
 	const wantedSet = new Set(wanted);
 	const known = new Set(existing.map((day) => day.date));
@@ -90,6 +93,34 @@ export async function syncConferenceDays(
 }
 
 const byId = (day: { id: number }) => day.id;
+
+/**
+ * This conference's days, locked for the rest of the transaction.
+ *
+ * `FOR UPDATE` is what makes the emptiness check below trustworthy. Writing a
+ * placement onto a day makes Postgres take a `FOR KEY SHARE` lock on that day
+ * row for the foreign key, and `FOR UPDATE` is the one mode that conflicts with
+ * it. So a placement racing this sync either lands before the lock — and is
+ * then visible to the placement check, which keeps the day — or waits behind it
+ * and finds the day gone, which `placeSession` reports as "No such day". What
+ * cannot happen any more is a placement that reports success and is then eaten
+ * by the cascade.
+ *
+ * It locks every day rather than only the ones outside the range: which days
+ * are stale is a conclusion drawn from this very read, so leaving the read
+ * unlocked would just move the window one step earlier. The cost is that
+ * placements on this conference wait for the length of a settings save, and the
+ * date order the rows are locked in is the same order everywhere, so two syncs
+ * queue up instead of deadlocking.
+ */
+function lockedDays(tx: Tx, conferenceId: number) {
+	return tx
+		.select({ id: conferenceDayTable.id, date: conferenceDayTable.date })
+		.from(conferenceDayTable)
+		.where(eq(conferenceDayTable.conferenceId, conferenceId))
+		.orderBy(asc(conferenceDayTable.date))
+		.for('update');
+}
 
 /** Which of these days something is scheduled on. */
 async function daysWithPlacements(tx: Tx, dayIds: number[]): Promise<Set<number>> {

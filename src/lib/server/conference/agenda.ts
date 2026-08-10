@@ -338,6 +338,14 @@ export type PlaceResult = { ok: true; endMinutes: number } | { ok: false; reason
  * through invalid states on the way to a valid one, and a builder that refuses the
  * intermediate step forces them to undo before they can redo. The clash is reported,
  * not prevented — AIA-05 asks to *see* the warning.
+ *
+ * The one thing it does refuse is a day that is being deleted underneath it. The
+ * day is read `FOR KEY SHARE` and the write happens in the same transaction, so
+ * a range shrink running at the same time (`syncConferenceDays`) either sees this
+ * placement and keeps the day, or takes the day and leaves this call reporting
+ * "No such day". Without the shared transaction the lock would end with the read
+ * and the write would land on a row that no longer exists — a foreign key error
+ * where a plain answer belongs.
  */
 export async function placeSession(
 	conferenceId: number,
@@ -347,40 +355,46 @@ export async function placeSession(
 	const placement = await ownPlacement(conferenceId, placementId);
 	if (!placement) return { ok: false, reason: 'No such session' };
 
-	const [day] = await db
-		.select({ date: conferenceDayTable.date })
-		.from(conferenceDayTable)
-		.where(
-			and(eq(conferenceDayTable.id, slot.dayId), eq(conferenceDayTable.conferenceId, conferenceId))
-		)
-		.limit(1);
-	if (!day) return { ok: false, reason: 'No such day' };
+	return db.transaction(async (tx) => {
+		const [day] = await tx
+			.select({ date: conferenceDayTable.date })
+			.from(conferenceDayTable)
+			.where(
+				and(
+					eq(conferenceDayTable.id, slot.dayId),
+					eq(conferenceDayTable.conferenceId, conferenceId)
+				)
+			)
+			.limit(1)
+			.for('key share');
+		if (!day) return { ok: false, reason: 'No such day' };
 
-	const [room] = await db
-		.select({ id: roomTable.id })
-		.from(roomTable)
-		.where(and(eq(roomTable.id, slot.roomId), eq(roomTable.conferenceId, conferenceId)))
-		.limit(1);
-	if (!room) return { ok: false, reason: 'No such room' };
+		const [room] = await tx
+			.select({ id: roomTable.id })
+			.from(roomTable)
+			.where(and(eq(roomTable.id, slot.roomId), eq(roomTable.conferenceId, conferenceId)))
+			.limit(1);
+		if (!room) return { ok: false, reason: 'No such room' };
 
-	if (slot.startMinutes < DAY_STARTS_AT || slot.startMinutes >= DAY_ENDS_AT) {
-		return { ok: false, reason: 'That start time is outside the conference day' };
-	}
+		if (slot.startMinutes < DAY_STARTS_AT || slot.startMinutes >= DAY_ENDS_AT) {
+			return { ok: false, reason: 'That start time is outside the conference day' };
+		}
 
-	const minutes = placement.formatMinutes ?? DEFAULT_MINUTES;
-	const endMinutes = slot.startMinutes + minutes;
+		const minutes = placement.formatMinutes ?? DEFAULT_MINUTES;
+		const endMinutes = slot.startMinutes + minutes;
 
-	await db
-		.update(placementTable)
-		.set({
-			conferenceDayId: slot.dayId,
-			roomId: slot.roomId,
-			startsAt: slotInstant(day.date, slot.startMinutes),
-			endsAt: slotInstant(day.date, endMinutes)
-		})
-		.where(eq(placementTable.id, placementId));
+		await tx
+			.update(placementTable)
+			.set({
+				conferenceDayId: slot.dayId,
+				roomId: slot.roomId,
+				startsAt: slotInstant(day.date, slot.startMinutes),
+				endsAt: slotInstant(day.date, endMinutes)
+			})
+			.where(eq(placementTable.id, placementId));
 
-	return { ok: true, endMinutes };
+		return { ok: true, endMinutes };
+	});
 }
 
 /**

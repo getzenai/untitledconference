@@ -7,12 +7,17 @@
  * session on it with it, silently. These tests exist to make that impossible to
  * reintroduce without a red run.
  */
-import { db } from '$lib/server/db';
+import { db, withRequestScopedDb } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
-import { conferenceDayTable, conferenceTable } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceDayTable,
+	conferenceTable,
+	roomTable
+} from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { asc, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { placeSession } from './agenda';
 import { syncConferenceDays } from './conference-days';
 
 const suffix = `days-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -42,6 +47,36 @@ async function occupy(dayId: number) {
 		.returning();
 
 	return placement.id;
+}
+
+/**
+ * Runs `fn` on a database connection of its own.
+ *
+ * The process-wide client is `max: 1`, so two transactions cannot interleave on
+ * it — a second query would simply queue behind the first and the test would
+ * hang rather than race. `withRequestScopedDb` is the mechanism the request
+ * handlers already use to get their own connection; here it is what turns
+ * "concurrent" from a hope into a fact.
+ */
+function onOwnConnection<T>(fn: () => Promise<T>): Promise<T> {
+	let closing: Promise<void> | undefined;
+	return withRequestScopedDb(fn, (c) => {
+		closing = c;
+	}).finally(() => closing);
+}
+
+/**
+ * Whether `promise` finished within `ms` — for asserting that something is
+ * *still blocked*, which is the whole claim a lock makes.
+ */
+function settledWithin(promise: Promise<unknown>, ms = 300): Promise<boolean> {
+	return Promise.race([
+		promise.then(
+			() => true,
+			() => true
+		),
+		new Promise<boolean>((resolve) => setTimeout(() => resolve(false), ms))
+	]);
 }
 
 beforeAll(async () => {
@@ -179,5 +214,103 @@ describe('syncConferenceDays', () => {
 		const sync = await syncConferenceDays(conferenceId, '2028-05-12', null);
 
 		expect(sync.added).toEqual(['2028-05-12']);
+	});
+});
+
+/**
+ * The guard under concurrency (#93 review).
+ *
+ * Everything above runs one statement after another, where "the day is empty"
+ * stays true between reading it and acting on it. In production it does not:
+ * one organizer shortens the range while another drags a talk onto the day
+ * about to go. Both of these tests pin one of the two orders the lock allows,
+ * and neither of them may end in a placement that reported success and is gone.
+ */
+describe('syncConferenceDays under a concurrent placement', () => {
+	it('waits for a placement in flight and then keeps the day it landed on', async () => {
+		await syncConferenceDays(conferenceId, '2028-05-12', '2028-05-15');
+		const days = await daysByPosition();
+		const lastDay = days[3];
+
+		let shrink!: Promise<unknown>;
+		let placementId!: number;
+
+		await db.transaction(async (tx) => {
+			// Exactly the lock `placeSession` takes on the day it is about to write
+			// to — taken here by hand so the write can be held open mid-flight.
+			await tx
+				.select({ id: conferenceDayTable.id })
+				.from(conferenceDayTable)
+				.where(eq(conferenceDayTable.id, lastDay.id))
+				.for('key share');
+
+			shrink = onOwnConnection(() => syncConferenceDays(conferenceId, '2028-05-12', '2028-05-13'));
+
+			// The assertion that makes this a lock test. Unlocked, the shrink runs
+			// straight through here: it reads no placements, deletes the day, and
+			// the cascade eats the row inserted on the next line.
+			expect(await settledWithin(shrink)).toBe(false);
+
+			const [placement] = await tx
+				.insert(placementTable)
+				.values({ conferenceId, kind: 'block', title: 'Lunch', conferenceDayId: lastDay.id })
+				.returning();
+			placementId = placement.id;
+		});
+
+		expect(await shrink).toEqual({
+			added: [],
+			removed: ['2028-05-14'],
+			keptInUse: ['2028-05-15']
+		});
+
+		const survivors = await db
+			.select({ dayId: placementTable.conferenceDayId })
+			.from(placementTable)
+			.where(eq(placementTable.id, placementId));
+		expect(survivors).toEqual([{ dayId: lastDay.id }]);
+	});
+
+	it('makes a placement that lost the race say so instead of failing', async () => {
+		await syncConferenceDays(conferenceId, '2028-05-12', '2028-05-15');
+		const days = await daysByPosition();
+		const lastDay = days[3];
+
+		const [room] = await db
+			.insert(roomTable)
+			.values({ conferenceId, name: 'Hall 1' })
+			.returning({ id: roomTable.id });
+		const [tray] = await db
+			.insert(placementTable)
+			.values({ conferenceId, kind: 'block', title: 'Lunch' })
+			.returning({ id: placementTable.id });
+
+		let placing!: ReturnType<typeof placeSession>;
+
+		await db.transaction(async (tx) => {
+			await syncConferenceDays(conferenceId, '2028-05-12', '2028-05-13', tx);
+
+			// The shrink has decided the day is empty and deleted it, but has not
+			// committed. The placement arriving now must not be allowed to slip in
+			// behind that decision.
+			placing = onOwnConnection(() =>
+				placeSession(conferenceId, tray.id, {
+					dayId: lastDay.id,
+					roomId: room.id,
+					startMinutes: 10 * 60
+				})
+			);
+			expect(await settledWithin(placing)).toBe(false);
+		});
+
+		// A plain answer, not a foreign key error: the day genuinely is not there
+		// any more by the time this call gets to look.
+		expect(await placing).toEqual({ ok: false, reason: 'No such day' });
+
+		const [after] = await db
+			.select({ dayId: placementTable.conferenceDayId })
+			.from(placementTable)
+			.where(eq(placementTable.id, tray.id));
+		expect(after.dayId).toBeNull();
 	});
 });
