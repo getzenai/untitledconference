@@ -364,8 +364,45 @@ describe('ordering the table by score (ABS-10)', () => {
 
 	it('reads an unknown sort as the default instead of failing', () => {
 		expect(parseSort('score-asc')).toBe('score-asc');
+		expect(parseSort('title-asc')).toBe('title-asc');
+		expect(parseSort('title-desc')).toBe('title-desc');
 		expect(parseSort('id; drop table')).toBe('newest');
 		expect(parseSort(null)).toBe('newest');
+	});
+
+	/**
+	 * A–Z, both ways, and mixed case on purpose.
+	 *
+	 * Honest limit, found by mutating the implementation: dropping the `lower(...)`
+	 * from `orderFor` leaves this test green, because the database here collates
+	 * `en_US.utf8` and already ignores case. The assertion below pins the direction
+	 * and the tiebreaker — the two things that do break — not the collation guard.
+	 */
+	it('orders titles as a person reads an alphabet', async () => {
+		await addSubmission(conference, 'banana talk', 1);
+		await addSubmission(conference, 'Apple talk', 2);
+		await addSubmission(conference, 'Cherry talk', 3);
+
+		const up = await listSubmissions(conference.id, {}, 1, 'title-asc');
+		expect(up.rows.map((r) => r.title)).toEqual(['Apple talk', 'banana talk', 'Cherry talk']);
+
+		const down = await listSubmissions(conference.id, {}, 1, 'title-desc');
+		expect(down.rows.map((r) => r.title)).toEqual(['Cherry talk', 'banana talk', 'Apple talk']);
+	});
+
+	it('keeps the title order stable across a page boundary', async () => {
+		// Zero-padded so the intended order is unambiguous, and inserted back to front
+		// so insertion order cannot be what makes the assertion pass.
+		for (let i = PAGE_SIZE + 4; i > 0; i--) {
+			await addSubmission(conference, `Talk ${String(i).padStart(3, '0')}`, i % 60);
+		}
+
+		const first = await listSubmissions(conference.id, {}, 1, 'title-asc');
+		const second = await listSubmissions(conference.id, {}, 2, 'title-asc');
+		const titles = [...first.rows, ...second.rows].map((r) => r.title);
+
+		expect(new Set(titles).size).toBe(PAGE_SIZE + 4);
+		expect(titles).toEqual([...titles].sort());
 	});
 });
 

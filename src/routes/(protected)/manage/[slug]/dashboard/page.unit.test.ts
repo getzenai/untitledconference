@@ -131,3 +131,73 @@ describe('dashboard metrics', () => {
 		expect(withCounts()).not.toMatch(/tabular-nums[^"]*"[^>]*>\s*7\s*</);
 	});
 });
+
+/**
+ * The reviewer box after #82: a comparison, not a list of fractions.
+ */
+describe('reviewer progress as a comparison', () => {
+	const reviewer = (name: string, submitted: number, assigned: number) => ({
+		userId: `u-${name}`,
+		name,
+		email: `${name.toLowerCase()}@example.com`,
+		assigned,
+		submitted,
+		outstanding: assigned - submitted,
+		reminderStatus: null
+	});
+
+	function withReviewers(items: ReturnType<typeof reviewer>[]) {
+		return render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					dashboard: {
+						...emptyDashboard,
+						reviews: {
+							assigned: items.reduce((n, r) => n + r.assigned, 0),
+							submitted: items.reduce((n, r) => n + r.submitted, 0),
+							outstanding: items.reduce((n, r) => n + r.outstanding, 0),
+							items
+						}
+					}
+				} as PageData,
+				form: null
+			}
+		}).body;
+	}
+
+	/**
+	 * The query returns reviewers alphabetically, which is right for a general
+	 * function and wrong for this box: an organizer opens it to find who to chase.
+	 */
+	it('puts the person holding up the round at the top', () => {
+		// Alphabetically Ada comes first and owes nothing; Zoe comes last and owes
+		// four. If this ever renders in name order the assertion flips.
+		const body = withReviewers([reviewer('Ada', 5, 5), reviewer('Zoe', 1, 5)]);
+
+		// Positions of the email, not the name: a two-letter name matches half the
+		// markup by accident, and a test that passes for the wrong reason is worse
+		// than none.
+		expect(body.indexOf('zoe@example.com')).toBeLessThan(body.indexOf('ada@example.com'));
+	});
+
+	it('breaks a tie by name so the order does not wobble between loads', () => {
+		const body = withReviewers([reviewer('Quinn', 1, 3), reviewer('Perry', 1, 3)]);
+
+		expect(body.indexOf('perry@example.com')).toBeLessThan(body.indexOf('quinn@example.com'));
+	});
+
+	it('draws the bar from the same numbers it prints, and prints them', () => {
+		const body = withReviewers([reviewer('Ada', 1, 4)]);
+
+		expect(body).toContain('1/4 submitted');
+		expect(body).toContain('3 to go');
+		// A quarter done. The bar is decoration on top of the sentence, never
+		// instead of it — hidden from a screen reader for exactly that reason.
+		expect(body).toContain('width: 25%');
+		expect(body).toMatch(/aria-hidden="true"[^>]*>\s*<div class="bg-status-good/);
+	});
+});
