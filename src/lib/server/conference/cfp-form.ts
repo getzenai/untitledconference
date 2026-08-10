@@ -93,6 +93,7 @@ export async function createCfpForm(conferenceId: number, title: string): Promis
 
 export type FormMeta = {
 	title: string;
+	description: string;
 	opensAt: Date | null;
 	closesAt: Date | null;
 	status: CfpForm['status'];
@@ -106,6 +107,9 @@ export async function updateCfpForm(conferenceId: number, meta: FormMeta): Promi
 		.update(cfpFormTable)
 		.set({
 			title: meta.title.trim() || form.title,
+			// An emptied box means "say nothing here", so it becomes null rather than
+			// an empty string — the page tests for content, not for a value.
+			description: meta.description.trim() || null,
 			opensAt: meta.opensAt,
 			closesAt: meta.closesAt,
 			status: meta.status
