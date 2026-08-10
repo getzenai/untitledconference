@@ -18,6 +18,7 @@
 		{ href: `${base}/submissions`, label: 'Submissions', ready: true },
 		{ href: `${base}/cfp`, label: 'Call for papers', ready: true },
 		{ href: `${base}/agenda`, label: 'Agenda', ready: true },
+		{ href: `${base}/content`, label: 'Speaker content', ready: true },
 		{ href: `${base}/people`, label: 'Team & reviewers', ready: false },
 		{ href: `${base}/embed`, label: 'Embed & share', ready: true },
 		{ href: `${base}/settings`, label: 'Settings', ready: true }
