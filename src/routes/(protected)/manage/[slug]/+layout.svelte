@@ -8,6 +8,7 @@
 	 */
 	import { page } from '$app/state';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
+	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
 
 	let { data, children } = $props();
 
@@ -55,14 +56,23 @@
 	-->
 	<header class="border-border bg-card sticky top-0 z-10 border-b md:hidden">
 		<div class="flex items-center justify-between gap-3 px-4 py-3">
+			<!--
+				Real exit from the conference shell. /manage lists every conference
+				the organizer can open — including a single one — so this is never a
+				redirect loop back into the same event.
+			-->
 			<a
 				href="/manage"
+				data-testid="switch-conference"
 				class="focus-visible:ring-ring min-w-0 rounded-md focus-visible:ring-[3px] focus-visible:outline-none"
 			>
 				<div class="truncate text-sm font-semibold">{data.conference.name}</div>
-				<div class="text-muted-foreground text-xs">Switch conference</div>
+				<div class="text-muted-foreground text-xs">All conferences</div>
 			</a>
-			<ModeToggle />
+			<div class="flex shrink-0 items-center gap-3">
+				<ShellAccountLinks />
+				<ModeToggle />
+			</div>
 		</div>
 		<nav
 			class="flex gap-1 overflow-x-auto px-4 pb-2 text-sm"
@@ -94,13 +104,14 @@
 	<aside class="border-border bg-card hidden w-60 shrink-0 border-r p-4 md:block">
 		<a
 			href="/manage"
+			data-testid="switch-conference"
 			class="hover:bg-muted focus-visible:ring-ring -mx-2 mb-4 block rounded-md px-2 py-1.5 focus-visible:ring-[3px] focus-visible:outline-none"
 		>
 			<div class="text-sm font-semibold">{data.conference.name}</div>
 			{#if dateRange}
 				<div class="text-muted-foreground text-xs">{dateRange}</div>
 			{/if}
-			<div class="text-muted-foreground mt-1 text-xs">Switch conference</div>
+			<div class="text-muted-foreground mt-1 text-xs">All conferences</div>
 		</a>
 
 		<nav class="space-y-0.5 text-sm">
@@ -129,14 +140,23 @@
 			{/each}
 		</nav>
 
-		<div class="border-border mt-8 border-t pt-4">
+		<div class="border-border mt-8 space-y-2 border-t pt-4">
+			<a
+				href="/home"
+				data-testid="manage-home-link"
+				class="text-muted-foreground hover:text-foreground block text-xs underline underline-offset-4"
+			>
+				Back to home
+			</a>
 			<a
 				href="/c/{data.conference.slug}"
-				class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+				class="text-muted-foreground hover:text-foreground block text-xs underline underline-offset-4"
 			>
 				View the public site
 			</a>
-			<div class="mt-3"><ModeToggle /></div>
+			<!-- Logout only here: Home is already above as manage-home-link. -->
+			<ShellAccountLinks showHome={false} class="pt-1" />
+			<div class="pt-1"><ModeToggle /></div>
 		</div>
 	</aside>
 

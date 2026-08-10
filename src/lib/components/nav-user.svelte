@@ -97,15 +97,14 @@
 					</DropdownMenu.Item>
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
-				<DropdownMenu.Item class="p-0">
-					<button
-						type="button"
-						class="flex w-full items-center gap-2 px-2 py-1.5"
-						onclick={handleLogout}
-					>
-						<LogOutIcon />
-						Log out
-					</button>
+				<!--
+					Same shape as the other items — a nested <button> inside Item is not a
+					reliable Cypress target (bits-ui renders the item as menuitem; the
+					user-journey E2E timed out looking for button/^Log out$/ with the menu open).
+				-->
+				<DropdownMenu.Item data-testid="nav-user-logout" onclick={handleLogout}>
+					<LogOutIcon />
+					Log out
 				</DropdownMenu.Item>
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>

@@ -58,7 +58,6 @@
 	import NavUser from './nav-user.svelte';
 	import NavAdmin from './nav-admin.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import CommandIcon from '@lucide/svelte/icons/command';
 	import type { ComponentProps } from 'svelte';
 
 	let {
@@ -76,27 +75,7 @@
 </script>
 
 <Sidebar.Root bind:ref {variant} class={className} data-testid="app-sidebar">
-	<Sidebar.Header>
-		<Sidebar.Menu>
-			<Sidebar.MenuItem>
-				<Sidebar.MenuButton size="lg">
-					{#snippet child({ props })}
-						<a href="##" {...props}>
-							<div
-								class="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg"
-							>
-								<CommandIcon class="size-4" />
-							</div>
-							<div class="grid flex-1 text-left text-sm leading-tight">
-								<span class="truncate font-medium">Zen AI</span>
-								<span class="truncate text-xs">Enterprise</span>
-							</div>
-						</a>
-					{/snippet}
-				</Sidebar.MenuButton>
-			</Sidebar.MenuItem>
-		</Sidebar.Menu>
-	</Sidebar.Header>
+	<!-- No team-switcher header — starter demo chrome removed with #62. -->
 	<Sidebar.Content>
 		<NavMain items={data.navMain} />
 		{#if isAdmin}

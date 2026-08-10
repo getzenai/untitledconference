@@ -37,4 +37,24 @@ describe('Critical Login Workflow', () => {
 		loginPage.shouldShowError();
 		cy.url().should('include', '/login');
 	});
+
+	/**
+	 * Regression for #80 / Sol review: product shells outside (with-sidebar)
+	 * must offer Log out. /portal is reachable without a role seed; the same
+	 * control sits on /review and /manage shells.
+	 */
+	it('logs out from a non-sidebar product shell (/portal)', () => {
+		cy.createTestUser({ organizationName: 'Shell Logout Org' }).then((user) => {
+			loginPage.visit();
+			loginPage.loginAndWaitForRedirect(user.email, user.password, '/home');
+			homePage.shouldBeLoggedIn();
+
+			// Leave the sidebar layout — speakers/reviewers land here without NavUser.
+			cy.visit('/portal');
+			cy.waitForHydration();
+			cy.get('[data-testid="app-sidebar"]').should('not.exist');
+			cy.get('[data-testid="shell-logout"]').should('be.visible').click();
+			cy.url({ timeout: 20000 }).should('include', '/login');
+		});
+	});
 });
