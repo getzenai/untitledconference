@@ -134,7 +134,15 @@
 			<option value="field" selected={source === 'field'}>Only when another answer is…</option>
 		</select>
 
-		<select name="conditionFieldId" aria-label="Depends on field" class={selectClass}>
+		<!-- One control per source rather than one box that means three things. The
+		     server reads the one its source names; a format or track is chosen by name,
+		     never by an id typed from memory. Irrelevant controls stay out of the way
+		     via :has() on .field-editor (see <style>) so the chosen rule is readable. -->
+		<select
+			name="conditionFieldId"
+			aria-label="Depends on field"
+			class="field-editor-when-field {selectClass}"
+		>
 			<option value="">(field)</option>
 			{#each fields as other (other.id)}
 				{#if other.id !== field?.id}
@@ -145,10 +153,11 @@
 			{/each}
 		</select>
 
-		<!-- One control per source rather than one box that means three things. The
-		     server reads the one its source names; a format or track is chosen by name,
-		     never by an id typed from memory. -->
-		<select name="conditionValueFormat" aria-label="Which session format" class={selectClass}>
+		<select
+			name="conditionValueFormat"
+			aria-label="Which session format"
+			class="field-editor-when-format {selectClass}"
+		>
 			<option value="">(format)</option>
 			{#each data.formats as format (format.id)}
 				<option
@@ -160,7 +169,11 @@
 			{/each}
 		</select>
 
-		<select name="conditionValueTrack" aria-label="Which track" class={selectClass}>
+		<select
+			name="conditionValueTrack"
+			aria-label="Which track"
+			class="field-editor-when-track {selectClass}"
+		>
 			<option value="">(track)</option>
 			{#each data.tracks as track (track.id)}
 				<option
@@ -172,51 +185,61 @@
 			{/each}
 		</select>
 
-		<Input
-			name="conditionValue"
-			value={source === 'field' ? (field?.conditionValue ?? '') : ''}
-			placeholder="answer must equal…"
-			class="w-44"
-			aria-label="Answer the rule matches"
-		/>
+		<div class="field-editor-when-field">
+			<Input
+				name="conditionValue"
+				value={source === 'field' ? (field?.conditionValue ?? '') : ''}
+				placeholder="answer must equal…"
+				class="w-44"
+				aria-label="Answer the rule matches"
+			/>
+		</div>
 	</div>
 {/snippet}
 
 {#snippet fieldInputs(field: FieldDefinition | null)}
-	<div class="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
-		<Input
-			name="label"
-			value={field?.label ?? ''}
-			placeholder="Label"
-			aria-label="Label"
-			required
-		/>
-		<select name="kind" aria-label="Field type" class={selectClass}>
-			{#each FIELD_KINDS as kind (kind.value)}
-				<option value={kind.value} selected={field?.kind === kind.value}>{kind.label}</option>
-			{/each}
-		</select>
-		<label class="flex items-center gap-2 text-sm">
-			<input
-				type="checkbox"
-				name="required"
-				checked={field?.required ?? false}
-				class="border-input accent-primary size-4 rounded"
+	<!--
+		.field-editor scopes the :has() rules that show only the controls that apply
+		to the current kind / visibility rule. Pure CSS so changing a select updates
+		the form without a round-trip, and without JS the initial selection still
+		hides the rest (dropdown options stay available for a no-JS Dropdown pick).
+	-->
+	<div class="field-editor space-y-2">
+		<div class="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
+			<Input
+				name="label"
+				value={field?.label ?? ''}
+				placeholder="Label"
+				aria-label="Label"
+				required
 			/>
-			Required
-		</label>
+			<select name="kind" aria-label="Field type" class={selectClass}>
+				{#each FIELD_KINDS as kind (kind.value)}
+					<option value={kind.value} selected={field?.kind === kind.value}>{kind.label}</option>
+				{/each}
+			</select>
+			<label class="flex items-center gap-2 text-sm">
+				<input
+					type="checkbox"
+					name="required"
+					checked={field?.required ?? false}
+					class="border-input accent-primary size-4 rounded"
+				/>
+				Required
+			</label>
+		</div>
+
+		<textarea
+			name="options"
+			rows="2"
+			placeholder="Dropdown options — one per line"
+			aria-label="Dropdown options"
+			class="field-editor-options border-input bg-background focus-visible:ring-ring w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
+			>{field ? optionsText(field) : ''}</textarea
+		>
+
+		{@render conditionInputs(field)}
 	</div>
-
-	<textarea
-		name="options"
-		rows="2"
-		placeholder="Dropdown options — one per line"
-		aria-label="Dropdown options"
-		class="border-input bg-background focus-visible:ring-ring w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-		>{field ? optionsText(field) : ''}</textarea
-	>
-
-	{@render conditionInputs(field)}
 {/snippet}
 
 <div class="border-border bg-card border-b px-6 py-5">
@@ -503,3 +526,32 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	/*
+	 * Only the controls that apply to the current kind / visibility rule are shown.
+	 * Driven by the live :checked option so changing a select updates the form
+	 * immediately (no Svelte state, works without JS for the initial selection).
+	 * Hidden controls remain in the form; the server already ignores options for
+	 * non-select kinds and condition values that do not match the chosen source.
+	 */
+	.field-editor:not(:has(select[name='kind'] > option[value='select']:checked))
+		.field-editor-options {
+		display: none;
+	}
+
+	.field-editor:not(:has(select[name='conditionSource'] > option[value='field']:checked))
+		.field-editor-when-field {
+		display: none;
+	}
+
+	.field-editor:not(:has(select[name='conditionSource'] > option[value='session_format']:checked))
+		.field-editor-when-format {
+		display: none;
+	}
+
+	.field-editor:not(:has(select[name='conditionSource'] > option[value='track']:checked))
+		.field-editor-when-track {
+		display: none;
+	}
+</style>
