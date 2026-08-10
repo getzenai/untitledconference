@@ -8,6 +8,7 @@
 	 */
 	import { page } from '$app/state';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
+	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
 
 	let { data, children } = $props();
 
@@ -68,7 +69,10 @@
 				<div class="truncate text-sm font-semibold">{data.conference.name}</div>
 				<div class="text-muted-foreground text-xs">All conferences</div>
 			</a>
-			<ModeToggle />
+			<div class="flex shrink-0 items-center gap-3">
+				<ShellAccountLinks />
+				<ModeToggle />
+			</div>
 		</div>
 		<nav
 			class="flex gap-1 overflow-x-auto px-4 pb-2 text-sm"
@@ -150,6 +154,8 @@
 			>
 				View the public site
 			</a>
+			<!-- Logout only here: Home is already above as manage-home-link. -->
+			<ShellAccountLinks showHome={false} class="pt-1" />
 			<div class="pt-1"><ModeToggle /></div>
 		</div>
 	</aside>

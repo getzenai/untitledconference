@@ -48,6 +48,9 @@ describe('organizer shell exit', () => {
 		expect(body).toContain('data-testid="manage-home-link"');
 		expect(body).toContain('href="/home"');
 		expect(body).toContain('Back to home');
+		// Logout outside the sidebar shell (Sol #80 review).
+		expect(body).toContain('data-testid="shell-logout"');
+		expect(body).toContain('Log out');
 		// Old label that looked clickable but described a no-op in earlier builds.
 		expect(body).not.toContain('Switch conference');
 	});
