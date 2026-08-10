@@ -52,6 +52,16 @@ export const actions: Actions = {
 		const task = await ownTask(locals.user.id, taskId(params.id));
 		if (!task) error(404, 'No such task');
 
+		// An action task is ticked off, not handed in. The page only draws the upload
+		// form for a file request, but a form posted straight at this action never
+		// went through the page — and a deliverable hanging off an action task puts
+		// two different rules on one `task.status`: its owner's tick and the newest
+		// file's approval. Refused here, before the bucket is touched, so a rejected
+		// upload leaves nothing behind to clean up.
+		if (task.kind !== 'file_request') {
+			return fail(400, { uploadError: 'This task is ticked off, not handed in.' });
+		}
+
 		const bucket = uploadsBucket(platform);
 		if (!bucket) return fail(503, { uploadError: REJECTION_MESSAGES.no_storage });
 
@@ -74,7 +84,7 @@ export const actions: Actions = {
 		});
 
 		try {
-			await recordDeliverable({
+			const recorded = await recordDeliverable({
 				taskId: task.id,
 				userId: locals.user.id,
 				fileUrl: key,
@@ -83,6 +93,13 @@ export const actions: Actions = {
 				sizeBytes: file.size,
 				version
 			});
+
+			// The kind was checked above, but not under a lock: `recordDeliverable`
+			// re-checks it on the row it holds and refuses. Reaching this leaves the
+			// object with no row — the same harmless leftover as a lost 409 above.
+			if (recorded === null) {
+				return fail(400, { uploadError: 'This task is ticked off, not handed in.' });
+			}
 		} catch (cause) {
 			// `deliverable_version_unique` is the guard against two uploads that
 			// read the same `max(version)`. It takes two uploads to one task within
