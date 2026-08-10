@@ -221,6 +221,11 @@ export const RECORDING = 'https://www.youtube.com/watch?v=oE49MdbPNYw';
  * per room and no speaker appears in two overlapping sessions — a seeded
  * double-booking would light up the conflict warnings on a schedule that is supposed
  * to look settled.
+ *
+ * Two accepted talks deliberately have NO slot. They are the agenda builder's tray and
+ * the dashboard's "accepted, not scheduled" count: a tenant where everything is already
+ * placed shows a finished conference and hides the screen that finishes it. Somebody
+ * opening the builder should find work waiting, not an empty column.
  */
 export const SUBMISSIONS = [
 	{
@@ -335,8 +340,8 @@ export const SUBMISSIONS = [
 		format: 'Talk',
 		speakers: ['elena'],
 		status: 'accepted',
-		approval: 'approved',
-		slot: [0, 'Room 2B', '15:00', '15:30']
+		approval: 'approved'
+		// No slot on purpose — see the note above `SUBMISSIONS`.
 	},
 	{
 		key: 'retrieval',
@@ -359,8 +364,8 @@ export const SUBMISSIONS = [
 		format: 'Talk',
 		speakers: ['joon'],
 		status: 'accepted',
-		approval: 'approved',
-		slot: [1, 'Room 2B', '14:00', '14:30']
+		approval: 'approved'
+		// No slot on purpose — see the note above `SUBMISSIONS`.
 	},
 	{
 		key: 'abstraction',
