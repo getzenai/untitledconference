@@ -96,53 +96,27 @@
 	</div>
 {/if}
 
-<div class="grid gap-8 md:grid-cols-[13rem_1fr]">
-	<aside class="space-y-6">
-		<div>
-			<label for="session-search" class="mb-2 block text-sm font-medium">Search</label>
-			<Input
-				id="session-search"
-				type="search"
-				bind:value={query}
-				placeholder="Session or speaker"
-				autocomplete="off"
-			/>
-		</div>
-
-		{#each facets as facet (facet.label)}
-			<fieldset class="border-0 p-0">
-				<legend class="mb-2 text-sm font-medium">{facet.label}</legend>
-				<ul class="space-y-1.5">
-					{#each facet.options as option (option.id)}
-						<li>
-							<label class="flex cursor-pointer items-center gap-2 text-sm">
-								<Checkbox
-									checked={facet.selected.has(option.id)}
-									onCheckedChange={() => toggle(facet.selected, option.id)}
-								/>
-								<span class="text-muted-foreground">{option.name}</span>
-							</label>
-						</li>
-					{/each}
-				</ul>
-			</fieldset>
-		{/each}
-
-		{#if filtered}
-			<button
-				type="button"
-				onclick={clearAll}
-				class="text-muted-foreground hover:text-foreground text-sm underline underline-offset-2"
-			>
-				Clear filters
-			</button>
-		{/if}
-	</aside>
-
+<!--
+	The list first, the filters after it — in the DOM, not only on screen. On a phone
+	the two stack in source order, and the old order put four fieldsets between the
+	visitor and the first session title. Screen readers walk the same order.
+-->
+<div class="grid gap-8 md:grid-cols-[1fr_13rem]">
 	<section>
-		<p class="text-muted-foreground mb-4 text-sm" aria-live="polite">
-			{visible.length} of {view.sessions.length} sessions
-		</p>
+		<div class="mb-4 flex items-baseline justify-between gap-4">
+			<p class="text-muted-foreground text-sm" aria-live="polite">
+				{visible.length} of {view.sessions.length} sessions
+			</p>
+			<!--
+				Below `md` the two stack, so the filters now sit under the list — past
+				thirty sessions on a phone that is out of reach. One link back down to
+				them costs nothing and keeps the DOM order honest; no `order-*` trick,
+				so focus and screen-reader order stay what the markup says.
+			-->
+			<a href="#session-filters" class="text-sm underline underline-offset-4 md:hidden">
+				Search and filter
+			</a>
+		</div>
 
 		{#if visible.length === 0}
 			<EmptyState
@@ -213,4 +187,46 @@
 			{/each}
 		</ul>
 	</section>
+
+	<aside id="session-filters" class="scroll-mt-4 space-y-6">
+		<div>
+			<label for="session-search" class="mb-2 block text-sm font-medium">Search</label>
+			<Input
+				id="session-search"
+				type="search"
+				bind:value={query}
+				placeholder="Session or speaker"
+				autocomplete="off"
+			/>
+		</div>
+
+		{#each facets as facet (facet.label)}
+			<fieldset class="border-0 p-0">
+				<legend class="mb-2 text-sm font-medium">{facet.label}</legend>
+				<ul class="space-y-1.5">
+					{#each facet.options as option (option.id)}
+						<li>
+							<label class="flex cursor-pointer items-center gap-2 text-sm">
+								<Checkbox
+									checked={facet.selected.has(option.id)}
+									onCheckedChange={() => toggle(facet.selected, option.id)}
+								/>
+								<span class="text-muted-foreground">{option.name}</span>
+							</label>
+						</li>
+					{/each}
+				</ul>
+			</fieldset>
+		{/each}
+
+		{#if filtered}
+			<button
+				type="button"
+				onclick={clearAll}
+				class="text-muted-foreground hover:text-foreground text-sm underline underline-offset-2"
+			>
+				Clear filters
+			</button>
+		{/if}
+	</aside>
 </div>
