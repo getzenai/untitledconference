@@ -13,6 +13,7 @@
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const config = $derived(data.config);
+	const published = $derived(data.conference.status === 'published');
 
 	let busy = $state(false);
 
@@ -35,7 +36,8 @@
 <div class="border-border bg-card border-b px-6 py-5">
 	<h1 class="text-lg font-semibold tracking-tight">Settings</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
-		Dates, rooms, tracks and session formats for this conference. Reviewer visibility is under
+		Whether this conference is public, plus its dates, rooms, tracks and session formats. Reviewer
+		visibility is under
 		<a class="underline underline-offset-4" href="{base}/people">Team &amp; reviewers</a>.
 	</p>
 </div>
@@ -58,6 +60,69 @@
 			{form.message}
 		</p>
 	{/if}
+
+	<!--
+		First on the page, because until this is on, half the product does not exist:
+		the public site, the conference directory on the front door and the public
+		submission form all filter on `status = 'published'`. The Embed & share page
+		has been telling organizers to "publish it in Settings" while there was
+		nothing here to press.
+	-->
+	<section
+		class="border-border bg-card max-w-2xl rounded-lg border p-4"
+		data-testid="settings-visibility"
+	>
+		<h2 class="text-sm font-semibold">Draft or live</h2>
+		<p class="text-muted-foreground mt-0.5 text-xs">
+			A draft conference is yours alone. Publishing puts the public site online and lets speakers
+			reach the call for papers — it does not decide what is on the programme, only whether anyone
+			outside can see it.
+		</p>
+
+		<div class="mt-3 flex flex-wrap items-center gap-3">
+			<span
+				class="rounded-md border px-2 py-1 text-xs {published
+					? 'border-status-good text-status-good'
+					: 'text-muted-foreground'}"
+				data-testid="visibility-state"
+			>
+				{published ? 'Live' : 'Draft'}
+			</span>
+
+			<form method="POST" action="?/visibility" use:enhance={submitting}>
+				<!-- The state we want, not "toggle": a tab left open on the old value would
+				     otherwise flip the conference the wrong way when it is submitted. -->
+				<input type="hidden" name="published" value={published ? 'false' : 'true'} />
+				<Button
+					type="submit"
+					size="sm"
+					variant={published ? 'outline' : 'default'}
+					disabled={busy}
+					data-testid="visibility-submit"
+				>
+					{published ? 'Return to draft' : 'Publish'}
+				</Button>
+			</form>
+
+			{#if published}
+				<a
+					href="/c/{data.conference.slug}"
+					target="_blank"
+					rel="noopener"
+					class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+				>
+					/c/{data.conference.slug}
+				</a>
+			{/if}
+		</div>
+
+		{#if !published}
+			<p class="text-muted-foreground mt-3 text-xs">
+				While it is a draft, <code>/c/{data.conference.slug}</code> and the public submission form answer
+				404.
+			</p>
+		{/if}
+	</section>
 
 	<section
 		class="border-border bg-card max-w-2xl rounded-lg border p-4"

@@ -45,8 +45,11 @@
 			class="border-status-warn text-status-warn mb-4 rounded-md border px-3 py-2 text-sm"
 			role="status"
 		>
-			This conference is still a draft, so the addresses below are not live yet. Publish it in
-			Settings and every link and snippet on this page starts working — they do not change.
+			This conference is still a draft, so the addresses below are not live yet.
+			<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/settings">
+				Publish it in Settings
+			</a>
+			and every link and snippet on this page starts working — they do not change.
 		</p>
 	{/if}
 
