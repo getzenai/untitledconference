@@ -125,8 +125,8 @@
 						The decision sits on the newest version only. The task follows that
 						version (the server derives it, so an older one cannot rewrite the
 						status), and offering the buttons on every version invited a click
-						that looked like it did nothing. Comments stay available on all of
-						them — talking about an earlier file is a normal thing to do.
+						that looked like it did nothing. The separate comment form below stays
+						available on every version, including older files.
 					-->
 					{#if i === 0}
 						<form method="POST" action="?/decide" use:enhance={submitting} class="mt-3">
@@ -166,6 +166,27 @@
 							</div>
 						</form>
 					{/if}
+
+					<form
+						method="POST"
+						action="?/comment"
+						use:enhance={submitting}
+						class="mt-3"
+						data-testid={`organizer-comment-form-${file.id}`}
+					>
+						<input type="hidden" name="deliverableId" value={file.id} />
+						<Textarea
+							name="body"
+							aria-label={`Comment on ${file.filename}`}
+							rows={2}
+							placeholder="Add a comment about this file"
+							required
+							class="text-sm"
+						/>
+						<Button type="submit" variant="outline" size="sm" class="mt-2" disabled={busy}>
+							Add comment
+						</Button>
+					</form>
 				</li>
 			{/each}
 		</ul>
