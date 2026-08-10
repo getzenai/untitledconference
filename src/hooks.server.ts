@@ -1,4 +1,4 @@
-import { auth } from '$lib/auth';
+import { auth, firstOrganizationFor } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
 import { needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
@@ -83,6 +83,44 @@ const botDetectionHandler: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
+/**
+ * Writes the user's organization onto a session that has none, and returns it.
+ *
+ * Only sessions created before sign-in started doing this reach here; for
+ * everyone else the value is already on the session and this is never called.
+ * Null when the user belongs to no organization — nothing to adopt.
+ *
+ * A failure here is not fatal: the request continues without an organization,
+ * which is the behaviour it had before. It is logged rather than swallowed,
+ * because a permanent failure would look exactly like the bug this fixes.
+ */
+async function adoptOrganizationForSession(
+	headers: Headers,
+	userId: string
+): Promise<string | null> {
+	let organizationId: string | null = null;
+
+	try {
+		// The lookup is inside the guard, not before it. The caller's own catch
+		// covers the whole session block, so anything thrown here would drop
+		// `locals.user` as well and sign the request out over a database hiccup —
+		// a much worse failure than the missing organization it was reaching for.
+		organizationId = await firstOrganizationFor(userId);
+		if (!organizationId) return null;
+
+		await auth.api.setActiveOrganization({ headers, body: { organizationId } });
+		logger.info('Adopted organization for a session that had none', { userId, organizationId });
+		return organizationId;
+	} catch (error) {
+		logger.warn('Could not set the active organization on an existing session', {
+			userId,
+			organizationId,
+			reason: error instanceof Error ? error.message : String(error)
+		});
+		return null;
+	}
+}
+
 // This new handler will attempt to populate event.locals.user and organization on every request.
 const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 	logger.debug('Processing request for:', event.url.pathname);
@@ -115,16 +153,28 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 				event.locals.impersonating = null;
 			}
 
-			// Get active organization from session
-			if (session.session?.activeOrganizationId) {
-				event.locals.organizationId = session.session.activeOrganizationId;
+			// Get active organization from session, adopting one for sessions that
+			// predate sign-in setting it.
+			//
+			// Without the second half, every session created before that change keeps
+			// behaving as if its owner belonged to no organization until they sign out
+			// and back in — including the ones we verify against, which would report
+			// the bug as unfixed. Healing on the next request costs one indexed lookup
+			// for a signed-in user with no active organization, and stops as soon as
+			// the session row is written.
+			const activeOrganizationId =
+				session.session?.activeOrganizationId ??
+				(await adoptOrganizationForSession(requestHeaders, session.user.id));
+
+			if (activeOrganizationId) {
+				event.locals.organizationId = activeOrganizationId;
 
 				// Get user's role in the active organization
 				try {
 					const orgMembers = await auth.api.listMembers({
 						headers: requestHeaders,
 						query: {
-							organizationId: session.session.activeOrganizationId
+							organizationId: activeOrganizationId
 						}
 					});
 
@@ -139,7 +189,7 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 					event.locals.organizationRole = null;
 				}
 			} else {
-				// No active organization set
+				// Belongs to no organization — the onboarding case, not a failure.
 				event.locals.organizationId = null;
 				event.locals.organizationRole = null;
 			}
