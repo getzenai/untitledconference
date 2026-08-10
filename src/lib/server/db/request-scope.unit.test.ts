@@ -13,7 +13,7 @@
  * the assertions.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { needsRequestScopedDb, withRequestScopedDb } from './index';
+import { needsRequestScopedDb, readScopedConnectionString, withRequestScopedDb } from './index';
 
 describe('needsRequestScopedDb', () => {
 	it('is true only when the platform hands us a waitUntil', () => {
@@ -56,5 +56,40 @@ describe('withRequestScopedDb', () => {
 			}, defer)
 		).rejects.toThrow('boom');
 		expect(defer).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * The Hyperdrive address, when one is handed in, has to reach the connection
+	 * the request opens — that is the whole of #17. Asserting it without opening a
+	 * socket means reading the scope from inside the request, which is exactly
+	 * where `resolveDb` reads it.
+	 */
+	it('carries a supplied connection string into the request scope', async () => {
+		const defer = vi.fn();
+		let seen: string | undefined = 'not-read';
+
+		await withRequestScopedDb(
+			async () => {
+				seen = readScopedConnectionString();
+			},
+			defer,
+			'postgres://hyperdrive.local/db'
+		);
+
+		expect(seen).toBe('postgres://hyperdrive.local/db');
+	});
+
+	it('leaves the address undefined when no binding was supplied', async () => {
+		const defer = vi.fn();
+		let seen: string | undefined = 'not-read';
+
+		// The fallback that keeps `vite dev`, the Node adapter and every script on
+		// `DATABASE_URL`. If this ever returned a string, those would silently move
+		// onto an address nobody configured for them.
+		await withRequestScopedDb(async () => {
+			seen = readScopedConnectionString();
+		}, defer);
+
+		expect(seen).toBeUndefined();
 	});
 });

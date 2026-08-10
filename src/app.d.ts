@@ -18,6 +18,12 @@ declare global {
 		interface Platform {
 			env?: {
 				UPLOADS?: import('@cloudflare/workers-types').R2Bucket;
+				/**
+				 * Edge connection pooling in front of the Postgres database. Optional
+				 * on purpose: `wrangler dev` without the binding, `vite dev` and the
+				 * Node adapter all have to keep working on `DATABASE_URL` alone.
+				 */
+				HYPERDRIVE?: import('@cloudflare/workers-types').Hyperdrive;
 			};
 		}
 
