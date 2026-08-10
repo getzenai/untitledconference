@@ -90,3 +90,39 @@ describe('organizer submission decisions', () => {
 		expect(renderPage('queued')).toContain('Queued');
 	});
 });
+
+/**
+ * The filter row. Two things it used to get wrong: several statuses at once were
+ * asked for with ⌘-click on a `multiple` listbox — invisible, and a plain click
+ * silently threw the other picks away — and every change then needed a second
+ * press on a "Filter" button to mean anything.
+ */
+describe('submission filters', () => {
+	it('asks for several statuses with checkboxes rather than a ⌘-click listbox', () => {
+		const body = renderPage();
+
+		expect(body).toContain('data-testid="submission-filters"');
+		// Same repeated `status` parameter the server has read as a list all along;
+		// only the control changed.
+		expect(body).toContain('type="checkbox"');
+		expect(body).toContain('name="status"');
+		expect(body).not.toContain('multiple');
+		expect(body).not.toContain('⌘');
+	});
+
+	it('applies on change instead of behind a Filter button', () => {
+		const body = renderPage();
+
+		// Without JavaScript nothing would apply at all, so one Filter button survives
+		// — inside `<noscript>`, and nowhere else. Counting is the assertion: a bare
+		// "no Filter button anywhere" would fail on the fallback, and "a noscript
+		// exists" would pass with the old button still sitting next to it.
+		expect(body.match(/>\s*Filter\s*</g) ?? []).toHaveLength(1);
+		expect(body).toMatch(/<noscript><button[^>]*>\s*Filter\s*<\/button><\/noscript>/);
+	});
+
+	/** One control in the shell now; two copies of it were one too many. */
+	it('leaves the public-site link to the shell', () => {
+		expect(renderPage()).not.toContain('View the public site');
+	});
+});

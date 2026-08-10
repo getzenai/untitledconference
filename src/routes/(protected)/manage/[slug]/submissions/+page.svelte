@@ -84,6 +84,18 @@
 	];
 
 	/**
+	 * Apply the filters the moment one of them changes.
+	 *
+	 * `change` rather than `input`: this is a GET form and submitting it navigates,
+	 * so firing per keystroke would reload the page under the organizer's caret. On a
+	 * text field `change` means blur or Enter; on a select or a checkbox it means the
+	 * click they just made.
+	 */
+	const applyFilters = (event: Event) => {
+		(event.currentTarget as HTMLFormElement).requestSubmit();
+	};
+
+	/**
 	 * A link to another page of the same view.
 	 *
 	 * Built from the URL that is actually on screen rather than from the parsed
@@ -187,10 +199,12 @@
 			<!-- The file is the view: same filters, same order, every matching row. The
 			     query travels so the download and the screen cannot disagree, and
 			     `download` is on the anchor because a CSV in a tab is nobody's plan. -->
+			<!-- "View the public site" used to sit here and only here. It lives in the
+			     rail now, on every organizer page, so this row keeps just the action
+			     that belongs to this screen. -->
 			<Button href={exportHref} variant="outline" download data-testid="export-csv">
 				Export CSV
 			</Button>
-			<Button href="/c/{data.conference.slug}" variant="outline">View the public site</Button>
 		</div>
 	</div>
 </div>
@@ -198,11 +212,12 @@
 <div class="px-6 py-5">
 	<form
 		method="GET"
-		class="mb-3 flex flex-wrap items-center gap-2"
+		class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-2"
 		data-testid="submission-filters"
+		onchange={applyFilters}
 	>
-		<!-- A GET form submits only its own fields, so without this the first "Filter"
-		     click would quietly throw the chosen order away. -->
+		<!-- A GET form submits only its own fields, so without this the first filter
+		     change would quietly throw the chosen order away. -->
 		{#if data.sort !== 'newest'}
 			<input type="hidden" name="sort" value={data.sort} />
 		{/if}
@@ -239,34 +254,65 @@
 			{/each}
 		</select>
 
-		<!-- Multiple on purpose: "undecided" is `submitted` OR `in_review`, and that pair
-		     is the single most useful view on this screen. The server has read the
-		     status parameter as a list since day one — this is the control catching up
-		     with it, rather than the plumbing being torn out. -->
-		<select
-			name="status"
-			multiple
-			size={3}
-			aria-label="Status (pick several with ⌘ or Ctrl)"
-			title="Pick several with ⌘ or Ctrl"
-			class="border-input bg-background focus-visible:ring-ring w-40 rounded-md border px-2 py-1 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-		>
-			{#each STATUSES as status (status)}
-				<option value={status} selected={data.filters.status?.includes(status)}>
-					{status.replace(/_/g, ' ')}
-				</option>
-			{/each}
-		</select>
+		<!--
+			Checkboxes, not a `multiple` listbox. Several statuses at once is the point —
+			"undecided" is `submitted` OR `in_review`, the most useful view on this screen
+			— but the old control asked for that with ⌘-click, which is invisible, easy to
+			get wrong (a plain click silently drops the other picks) and impossible on a
+			touch screen. Checkboxes send the same repeated `status` parameter the server
+			has read as a list since day one; only the control changed.
+		-->
+		<!--
+			Its own row from the start. Seven checkboxes plus a search box and two
+			selects do not fit on one line at any width an organizer actually uses, and
+			as a flex item the group does not wrap on its own — it just runs off the
+			right edge and takes "rejected" and "withdrawn" with it.
+		-->
+		<fieldset class="order-last basis-full border-0 p-0">
+			<legend class="text-muted-foreground mb-1 text-xs">Status</legend>
+			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+				{#each STATUSES as status (status)}
+					<label class="flex cursor-pointer items-center gap-1.5 text-sm">
+						<input
+							type="checkbox"
+							name="status"
+							value={status}
+							checked={data.filters.status?.includes(status)}
+							class="border-input accent-primary size-4 rounded"
+						/>
+						<span>{status.replace(/_/g, ' ')}</span>
+					</label>
+				{/each}
+			</div>
+		</fieldset>
 
-		<Button type="submit" variant="outline" size="sm">Filter</Button>
+		<!--
+			No "Filter" button: every control applies itself on change, so the button was
+			a second step that only ever meant "yes, I meant it". `onchange` on the form
+			catches all of them at once — and for the search box that is blur or Enter,
+			not every keystroke, because a GET form navigates and a navigation per letter
+			would take the caret with it.
+
+			Without JavaScript nothing would apply at all, so the fallback is a real
+			submit button that only exists in that case.
+		-->
+		<noscript>
+			<button
+				type="submit"
+				class="border-input bg-background hover:bg-muted h-9 rounded-md border px-3 text-sm"
+			>
+				Filter
+			</button>
+		</noscript>
+
 		{#if filtered}
-			<!-- Clears the filters and keeps the order: the button says "Clear", and the
-			     organizer means the boxes above it, not the column they just sorted by. -->
+			<!-- Clears the filters and keeps the order: the link says "Clear", and the
+			     organizer means the boxes beside it, not the column they just sorted by. -->
 			<a
 				href={data.sort === 'newest'
 					? `${base}/submissions`
 					: `${base}/submissions?sort=${data.sort}`}
-				class="text-muted-foreground hover:text-foreground text-sm underline underline-offset-4"
+				class="text-muted-foreground hover:text-foreground pb-1.5 text-sm underline underline-offset-4"
 			>
 				Clear
 			</a>
