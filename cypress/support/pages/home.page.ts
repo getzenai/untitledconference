@@ -4,8 +4,14 @@ import { BasePage } from './base.page';
 export class HomePage extends BasePage {
 	readonly path = '/home';
 
+	/**
+	 * Anchored on a testid rather than the heading text. The heading used to read
+	 * "Protected Dashboard" — starter-template wording that a judge sees on the
+	 * first screen after login — and renaming it should not be able to break the
+	 * "am I logged in" assertion of four specs.
+	 */
 	dashboardContent(): Cypress.Chainable<JQuery<HTMLElement>> {
-		return cy.contains('Protected Dashboard');
+		return cy.get('[data-testid="home-dashboard"]');
 	}
 
 	welcomeMessage(): Cypress.Chainable<JQuery<HTMLElement>> {
