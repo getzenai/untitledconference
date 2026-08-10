@@ -1,0 +1,55 @@
+/**
+ * Limits the upload form and the server both need.
+ *
+ * Not under `$lib/server` because the form has to state the limit before a file
+ * is chosen — a rule the submitter only learns about by breaking it is a bad
+ * rule. The server enforces; this module is the single place the number lives.
+ */
+export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
+
+/**
+ * What a speaker may hand in: slides, documents, and the images a headshot
+ * request actually needs.
+ *
+ * An allowlist rather than a denylist. It is short because the deliverable kinds
+ * are short; anything beyond this is a product decision, not a config tweak.
+ */
+export const ALLOWED_UPLOAD_TYPES = [
+	'application/pdf',
+	'image/jpeg',
+	'image/png',
+	'image/webp',
+	'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+	'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+	'text/plain',
+	'text/markdown'
+] as const;
+
+/** The `accept` attribute, so the file picker filters before the server refuses. */
+export const UPLOAD_ACCEPT = ALLOWED_UPLOAD_TYPES.join(',');
+
+export type UploadRejection = 'too_large' | 'unsupported_type' | 'empty' | 'no_storage';
+
+export const REJECTION_MESSAGES: Record<UploadRejection, string> = {
+	empty: 'That file is empty.',
+	too_large: `Files must be smaller than ${MAX_UPLOAD_BYTES / 1024 / 1024} MB.`,
+	unsupported_type: 'That file type is not accepted. Use a PDF, image, slide deck or document.',
+	no_storage: 'File storage is not configured on this deployment.'
+};
+
+/**
+ * Checks a file before a byte is stored.
+ *
+ * The type comes from what the browser reported, which is not trustworthy — but
+ * this is not the sandbox boundary. Nothing uploaded is executed, and the
+ * download route serves everything as an attachment. This check exists so a
+ * speaker who picks the wrong file learns immediately.
+ */
+export function rejectUpload(file: { size: number; type: string }): UploadRejection | null {
+	if (file.size === 0) return 'empty';
+	if (file.size > MAX_UPLOAD_BYTES) return 'too_large';
+	if (!ALLOWED_UPLOAD_TYPES.includes(file.type as (typeof ALLOWED_UPLOAD_TYPES)[number])) {
+		return 'unsupported_type';
+	}
+	return null;
+}

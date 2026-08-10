@@ -70,7 +70,9 @@
 				{#each open as task (task.id)}
 					<li class="flex flex-wrap items-start justify-between gap-3 py-3">
 						<div>
-							<p class="text-sm font-medium">{task.title}</p>
+							<a class="text-sm font-medium hover:underline" href="/portal/tasks/{task.id}">
+								{task.title}
+							</a>
 							<p class="text-muted-foreground mt-0.5 text-sm">
 								{task.conference.name}{#if task.submissionTitle}<span class="px-1.5">·</span
 									>{task.submissionTitle}{/if}
@@ -93,9 +95,19 @@
 		{/if}
 
 		{#if settled.length > 0}
-			<p class="text-muted-foreground mt-3 text-sm">
-				{settled.length} already done.
-			</p>
+			<details class="mt-4">
+				<summary class="text-muted-foreground cursor-pointer text-sm">
+					{settled.length} already done
+				</summary>
+				<ul class="divide-border mt-2 divide-y">
+					{#each settled as task (task.id)}
+						<li class="py-2">
+							<a class="text-sm hover:underline" href="/portal/tasks/{task.id}">{task.title}</a>
+							<span class="text-muted-foreground ml-2 text-sm">{task.conference.name}</span>
+						</li>
+					{/each}
+				</ul>
+			</details>
 		{/if}
 	</section>
 

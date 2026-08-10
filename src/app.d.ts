@@ -10,6 +10,17 @@
 
 declare global {
 	namespace App {
+		/**
+		 * `env` is not declared by the adapter's ambient types on purpose — it is
+		 * where a project names its own bindings. `UPLOADS` is the R2 bucket that
+		 * holds speaker deliverables.
+		 */
+		interface Platform {
+			env?: {
+				UPLOADS?: import('@cloudflare/workers-types').R2Bucket;
+			};
+		}
+
 		interface Locals {
 			user: import('$lib/server/auth').SessionValidationResult['user'];
 			session: import('$lib/server/auth').SessionValidationResult['session'];
