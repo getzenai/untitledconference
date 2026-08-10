@@ -10,8 +10,15 @@
  * favicon, a one-page PDF built here so its xref offsets are computed rather than
  * counted by hand, and a plain-text release form.
  *
- *   node scripts/db/seed-uploads.mjs             # uploads to the remote bucket
- *   node scripts/db/seed-uploads.mjs --local     # to wrangler's local storage instead
+ *   node scripts/db/seed-uploads.mjs             # wrangler's local storage
+ *   node scripts/db/seed-uploads.mjs --remote    # the real bucket
+ *
+ * Local is the default, and that is a safety property rather than a preference.
+ * The bucket name below is the production bucket, and the keys in the manifest are
+ * built from whatever database the seed just ran against — usually a local one, whose
+ * serial ids collide with production's. Someone who seeds locally and then copies the
+ * suggested command without reading it would otherwise overwrite six real objects.
+ * That very copy-paste path nearly happened here; only a missing API token stopped it.
  *
  * Run it after the seed, against the same environment the seed wrote to.
  */
@@ -22,7 +29,7 @@ import { join } from 'node:path';
 
 const MANIFEST = new URL('./.seed-uploads.json', import.meta.url);
 const BUCKET = 'untitledconference-uploads';
-const REMOTE = !process.argv.includes('--local');
+const REMOTE = process.argv.includes('--remote');
 
 /** A one-page PDF that actually opens: offsets are accumulated, never hand-counted. */
 function buildPdf(line) {
@@ -84,8 +91,16 @@ if (manifest.length === 0) {
 	process.exit(1);
 }
 
+// Checked up front rather than discovered on the first put: a run that dies halfway
+// leaves you not knowing how many objects it managed to write before it stopped.
+if (REMOTE && !process.env.CLOUDFLARE_API_TOKEN) {
+	console.error('--remote needs CLOUDFLARE_API_TOKEN. Run it under `inf run -- …`.');
+	process.exit(1);
+}
+
 const files = sources();
-console.log(`Uploading ${manifest.length} objects to ${BUCKET} (${REMOTE ? 'remote' : 'local'}) …`);
+console.log(`Uploading ${manifest.length} objects to ${BUCKET} (${REMOTE ? 'REMOTE' : 'local'}) …`);
+if (REMOTE) for (const entry of manifest) console.log(`  ${entry.key}`);
 
 for (const entry of manifest) {
 	const file = files[entry.source];

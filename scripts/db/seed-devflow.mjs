@@ -554,7 +554,9 @@ async function report(conferenceId, reviewCounts, fileCount) {
 	for (const p of PEOPLE) console.log(`  ${p.email.padEnd(30)} ${LOGIN_NOTES[p.id]}`);
 
 	console.log(
-		`\n${fileCount} deliverable rows written; their bytes are not in R2 yet. Run:\n  node scripts/db/seed-uploads.mjs`
+		`\n${fileCount} deliverable rows written; their bytes are not in storage yet:\n` +
+			`  node scripts/db/seed-uploads.mjs            # local storage\n` +
+			`  node scripts/db/seed-uploads.mjs --remote   # the real bucket — only for a production seed`
 	);
 }
 
