@@ -8,7 +8,8 @@
  * be right ACROSS pages, and the SQL that produces it is a second implementation of
  * `submissionScore` that only a database can be asked whether it still agrees.
  */
-import { submissionScore } from '$lib/conference/scoring';
+import { csvFile } from '$lib/conference/csv';
+import { formatScore, submissionScore } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -20,9 +21,10 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { listSubmissions, PAGE_SIZE, parseSort } from './organizer-submissions';
+import { exportSubmissions, listSubmissions, PAGE_SIZE } from './organizer-submissions';
+import { parseSort, scoreExpression } from './submission-sort';
 
 const suffix = `paging-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -199,43 +201,46 @@ async function idFor(title: string) {
 
 let roundId: number;
 
+// Top-level rather than inside one `describe`: both the ordering suite and the
+// export suite file reviews, and a fixture that only exists for the first of them
+// leaves the second silently reviewing nothing.
+beforeAll(async () => {
+	for (const id of REVIEWERS) {
+		await db.insert(user).values({
+			id,
+			name: id,
+			email: `${id}@example.com`,
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+	}
+
+	const [plan] = await db
+		.insert(evaluationPlanTable)
+		.values({ conferenceId: conference.id, name: 'Plan' })
+		.returning();
+	const [round] = await db
+		.insert(reviewRoundTable)
+		.values({ evaluationPlanId: plan.id, name: 'Round 1', position: 0 })
+		.returning();
+	roundId = round.id;
+
+	const criteria = await db
+		.insert(scorecardCriterionTable)
+		.values([
+			{ reviewRoundId: roundId, label: 'Relevance', kind: 'rating', scaleMax: 5, weight: '1' },
+			{ reviewRoundId: roundId, label: 'Depth', kind: 'rating', scaleMax: 10, weight: '3' }
+		])
+		.returning();
+	[relevanceId, depthId] = criteria.map((c) => c.id);
+});
+
+afterAll(async () => {
+	for (const id of REVIEWERS) await db.delete(user).where(eq(user.id, id));
+});
+
 describe('ordering the table by score (ABS-10)', () => {
-	beforeAll(async () => {
-		for (const id of REVIEWERS) {
-			await db.insert(user).values({
-				id,
-				name: id,
-				email: `${id}@example.com`,
-				emailVerified: true,
-				createdAt: new Date(),
-				updatedAt: new Date()
-			});
-		}
-
-		const [plan] = await db
-			.insert(evaluationPlanTable)
-			.values({ conferenceId: conference.id, name: 'Plan' })
-			.returning();
-		const [round] = await db
-			.insert(reviewRoundTable)
-			.values({ evaluationPlanId: plan.id, name: 'Round 1', position: 0 })
-			.returning();
-		roundId = round.id;
-
-		const criteria = await db
-			.insert(scorecardCriterionTable)
-			.values([
-				{ reviewRoundId: roundId, label: 'Relevance', kind: 'rating', scaleMax: 5, weight: '1' },
-				{ reviewRoundId: roundId, label: 'Depth', kind: 'rating', scaleMax: 10, weight: '3' }
-			])
-			.returning();
-		[relevanceId, depthId] = criteria.map((c) => c.id);
-	});
-
-	afterAll(async () => {
-		for (const id of REVIEWERS) await db.delete(user).where(eq(user.id, id));
-	});
-
 	it('orders the whole pile, not the page that happens to be on screen', async () => {
 		// One more row than fits on a page, with the best score at the very bottom of
 		// the default order. Sorting the page instead of the query would leave it on
@@ -275,6 +280,42 @@ describe('ordering the table by score (ABS-10)', () => {
 					scores: [
 						{ value: 4, weight: 1, scaleMax: 5 },
 						{ value: 8, weight: 3, scaleMax: 10 }
+					]
+				},
+				{ submitted: true, scores: [{ value: 2, weight: 1, scaleMax: 5 }] }
+			])!,
+			6
+		);
+	});
+
+	it('agrees with the TypeScript when the SQL itself is asked, not the order it produces', async () => {
+		await addSubmission(conference, 'Asked directly', 1);
+		const id = await idFor('Asked directly');
+		// The two criteria must DISAGREE for the weights to be visible: 5/5 and 4/10
+		// normalise to 1.0 and 0.4, so weighting them 1:3 gives 0.55 where an unweighted
+		// mean gives 0.7. Equal normalised values (say 4/5 and 8/10) would make the two
+		// formulas print the same number and the test would pin nothing.
+		await addReview(id, REVIEWERS[0], { relevance: 5, depth: 4 });
+		await addReview(id, REVIEWERS[1], { relevance: 2, depth: null });
+
+		// The test above reads `row.score`, which `listSubmissions` computes in
+		// TypeScript — it can agree with itself all day. This one selects the SQL
+		// expression, the copy that can actually drift, and an ordering assertion
+		// cannot substitute: with the weights dropped the rows still come out in the
+		// same order, and every number on the screen is wrong.
+		const rows = await db.execute<{ score: string | null }>(
+			sql`select ${scoreExpression(conference.id)} as score
+				from ${submissionTable}
+				where ${submissionTable.id} = ${id}`
+		);
+
+		expect(Number(rows[0].score)).toBeCloseTo(
+			submissionScore([
+				{
+					submitted: true,
+					scores: [
+						{ value: 5, weight: 1, scaleMax: 5 },
+						{ value: 4, weight: 3, scaleMax: 10 }
 					]
 				},
 				{ submitted: true, scores: [{ value: 2, weight: 1, scaleMax: 5 }] }
@@ -325,5 +366,62 @@ describe('ordering the table by score (ABS-10)', () => {
 		expect(parseSort('score-asc')).toBe('score-asc');
 		expect(parseSort('id; drop table')).toBe('newest');
 		expect(parseSort(null)).toBe('newest');
+	});
+});
+
+describe('exporting the table as a file (ABS-13)', () => {
+	it('carries every matching row, not the fifty on screen', async () => {
+		for (let i = 0; i < PAGE_SIZE + 12; i++) await addSubmission(conference, `Talk ${i}`, i);
+
+		const { rows, truncated } = await exportSubmissions(conference.id);
+
+		// The bug this guards is the one a spreadsheet cannot show you: a file that
+		// looks complete and stops at the page boundary.
+		expect(rows).toHaveLength(PAGE_SIZE + 12);
+		expect(truncated).toBe(false);
+	});
+
+	it('honours the filter, and only the conference it was asked about', async () => {
+		await addSubmission(conference, 'Deep learning here', 1);
+		await addSubmission(conference, 'Something else', 2);
+		await addSubmission(other, 'Deep learning next door', 3);
+
+		const { rows } = await exportSubmissions(conference.id, { q: 'Deep learning' });
+
+		expect(rows.map((r) => r.title)).toEqual(['Deep learning here']);
+	});
+
+	it('comes out in the order that was asked for, scores and all', async () => {
+		await addSubmission(conference, 'Weak', 1);
+		await addSubmission(conference, 'Strong', 2);
+		await addReview(await idFor('Weak'), REVIEWERS[0], { relevance: 1, depth: 2 });
+		await addReview(await idFor('Strong'), REVIEWERS[0], { relevance: 5, depth: 10 });
+
+		const { rows } = await exportSubmissions(conference.id, {}, 'score-desc');
+
+		expect(rows.map((r) => r.title)).toEqual(['Strong', 'Weak']);
+		// The file and the screen read the same score off the same helper — this is the
+		// assertion that keeps them from disagreeing in front of a committee.
+		expect(rows[0].score).toBe(5);
+	});
+});
+
+describe('the exported file itself', () => {
+	it('is a spreadsheet that says what the table says', async () => {
+		await addSubmission(conference, 'Testing, "briefly"', 1);
+		await addReview(await idFor('Testing, "briefly"'), REVIEWERS[0], { relevance: 4, depth: 8 });
+
+		const { rows } = await exportSubmissions(conference.id, {}, 'score-desc');
+		const file = csvFile(
+			['title', 'score'],
+			rows.map((r) => [r.title, formatScore(r.score)])
+		);
+
+		// The comma and the quotes in the title are the whole point: the row must stay
+		// one row, and the score must read as the table renders it.
+		expect(file.trimEnd().split('\r\n')).toEqual([
+			'\uFEFFtitle,score',
+			'"Testing, ""briefly""",4.0'
+		]);
 	});
 });

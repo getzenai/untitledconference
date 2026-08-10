@@ -131,6 +131,19 @@
 				: 'Sort by score, highest first'
 	);
 
+	/**
+	 * The export of exactly what is on screen (ABS-13).
+	 *
+	 * Carries the filters and the sort and drops the page: the file is the whole
+	 * filtered set, and a `?page=2` in its URL would read like a promise that it is not.
+	 */
+	const exportHref = $derived.by(() => {
+		const params = new SvelteURLSearchParams(currentPage.url.searchParams);
+		params.delete('page');
+		const query = params.toString();
+		return `${base}/submissions/export.csv${query ? `?${query}` : ''}`;
+	});
+
 	const firstOnPage = $derived((data.pagination.page - 1) * data.pagination.pageSize + 1);
 	const lastOnPage = $derived(firstOnPage + data.submissions.length - 1);
 
@@ -160,7 +173,15 @@
 				{/if}
 			</p>
 		</div>
-		<Button href="/c/{data.conference.slug}" variant="outline">View the public site</Button>
+		<div class="flex gap-2">
+			<!-- The file is the view: same filters, same order, every matching row. The
+			     query travels so the download and the screen cannot disagree, and
+			     `download` is on the anchor because a CSV in a tab is nobody's plan. -->
+			<Button href={exportHref} variant="outline" download data-testid="export-csv">
+				Export CSV
+			</Button>
+			<Button href="/c/{data.conference.slug}" variant="outline">View the public site</Button>
+		</div>
 	</div>
 </div>
 
