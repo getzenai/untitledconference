@@ -25,7 +25,7 @@ import {
 } from '$lib/server/db/conference/review-schema';
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { conferenceDashboard, MAX_ITEMS } from './dashboard';
+import { conferenceDashboard, MAX_ITEMS, TIMELINE_DAYS } from './dashboard';
 import { decideSubmissions } from './decisions';
 
 const suffix = `dash-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -427,5 +427,55 @@ describe('what a taken-back acceptance leaves behind', () => {
 		const { inconsistencies } = await conferenceDashboard(conference.id, NOW);
 
 		expect(inconsistencies).toMatchObject({ count: 0, items: [] });
+	});
+});
+
+/**
+ * The submissions chart. Two things can go wrong here and neither shows up in a
+ * type: the window can silently include a neighbouring conference, and the quiet
+ * days can go missing — which turns a fortnight of silence into a tick on the axis
+ * and makes a flat month look like a steady climb.
+ */
+describe('submissions over time', () => {
+	const dayOf = (offset: number) =>
+		new Date(NOW.getTime() + offset * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+	beforeEach(async () => {
+		// Two on the same day, one a week back, one outside the window, and one on
+		// the neighbouring conference on a day this one is quiet.
+		const stamp = async (target: Conference, title: string, at: Date) => {
+			const [row] = await db
+				.insert(submissionTable)
+				.values({ conferenceId: target.id, title, status: 'submitted', submittedAt: at })
+				.returning();
+			await db.update(submissionTable).set({ createdAt: at }).where(eq(submissionTable.id, row.id));
+		};
+
+		await stamp(conference, 'Today one', NOW);
+		await stamp(conference, 'Today two', new Date(NOW.getTime() - 60 * 60 * 1000));
+		await stamp(conference, 'A week back', new Date(NOW.getTime() - 7 * 24 * 60 * 60 * 1000));
+		await stamp(conference, 'Too old', new Date(NOW.getTime() - 40 * 24 * 60 * 60 * 1000));
+		await stamp(other, 'Neighbour', new Date(NOW.getTime() - 3 * 24 * 60 * 60 * 1000));
+	});
+
+	it('counts this conference per day and keeps the quiet days as zeroes', async () => {
+		const { submissionsOverTime: days } = await conferenceDashboard(conference.id, NOW);
+
+		// One row per day, contiguous, oldest first — no gaps to misread.
+		expect(days).toHaveLength(TIMELINE_DAYS);
+		expect(days[0].day).toBe(dayOf(-(TIMELINE_DAYS - 1)));
+		expect(days[days.length - 1].day).toBe(dayOf(0));
+
+		const on = (offset: number) => days.find((d) => d.day === dayOf(offset))?.count;
+		console.log('DEBUG', JSON.stringify(days.filter((d) => d.count > 0)));
+		expect(on(0)).toBe(2);
+		expect(on(-7)).toBe(1);
+
+		// The neighbour's submission falls on a day this conference had none. If the
+		// scoping leaked it would read as 1 here, and nowhere else in the snapshot.
+		expect(on(-3)).toBe(0);
+
+		// Everything outside the window is dropped rather than piled onto the first day.
+		expect(days.reduce((sum, d) => sum + d.count, 0)).toBe(3);
 	});
 });

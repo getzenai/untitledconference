@@ -11,6 +11,7 @@
 	 * inconsistency strip sits above all of it because it is the only thing here that
 	 * means something is *wrong* rather than merely unfinished.
 	 */
+	import SubmissionsChart from '$lib/components/app/conference/submissions-chart.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import type { Snippet } from 'svelte';
@@ -53,6 +54,23 @@
 
 {#snippet nothing(text: string)}
 	<p class="text-muted-foreground py-2 text-sm">{text}</p>
+{/snippet}
+
+<!--
+	A stat tile: label, value, one line of context, and a link to the screen where
+	the number can be acted on. The value carries the font's proportional figures —
+	`tabular-nums` gives every digit the width of a zero, which makes a large `121`
+	look like it has come loose.
+-->
+{#snippet tile(label: string, value: number, context: string, href: string)}
+	<a
+		{href}
+		class="border-border bg-card hover:border-foreground/20 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+	>
+		<p class="text-muted-foreground text-xs">{label}</p>
+		<p class="mt-1 text-2xl leading-none font-semibold">{value}</p>
+		<p class="text-muted-foreground mt-1.5 text-xs">{context}</p>
+	</a>
 {/snippet}
 
 <div class="border-border bg-card border-b px-6 py-5">
@@ -101,6 +119,55 @@
 			{/if}
 		</section>
 	{/if}
+
+	<!--
+		Four numbers, and every one of them is a queue with somewhere to go. The
+		temptation on a dashboard is a row of totals — submissions, speakers, days —
+		which look like a summary and are read once and never again. These are the
+		counts that decide what the organizer does next, which is why each tile is a
+		link rather than a figure.
+	-->
+	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="dashboard-metrics">
+		{@render tile(
+			'Awaiting a decision',
+			d.decisions.undecided,
+			`${d.decisions.unreviewed} with no review yet`,
+			`${base}/submissions?status=submitted&status=in_review`
+		)}
+		{@render tile(
+			'Accepted',
+			d.scheduling.accepted,
+			`${d.scheduling.unplaced + d.scheduling.tentative} without a confirmed slot`,
+			`${base}/submissions?status=accepted`
+		)}
+		{@render tile(
+			'Reviews outstanding',
+			d.reviews.outstanding,
+			`${d.reviews.submitted} of ${d.reviews.assigned} assigned are in`,
+			`${base}/people`
+		)}
+		{@render tile(
+			'Speaker tasks overdue',
+			d.tasks.overdue,
+			`${d.tasks.dueSoon} more due this week`,
+			`${base}/content`
+		)}
+	</div>
+
+	<section class="border-border bg-card rounded-lg border p-4" data-testid="submissions-over-time">
+		<h2 class="text-sm font-semibold tracking-tight">Submissions over time</h2>
+		<p class="text-muted-foreground mt-0.5 text-xs">
+			Per day, counted when the submission was started. Quiet days are on the axis as zeroes — the
+			gaps are the point of the chart.
+		</p>
+		<!--
+			Capped rather than full-bleed. The plot keeps its 640x180 box and scales
+			with its container, so on a wide screen an uncapped chart grows to four
+			hundred pixels tall and takes over a page whose subject is the queues
+			underneath it. Thirty days need width, not height.
+		-->
+		<SubmissionsChart days={d.submissionsOverTime} class="mt-3 max-w-3xl" />
+	</section>
 
 	<section class="border-border bg-card rounded-lg border p-4" data-testid="reviewer-progress">
 		<div class="flex flex-wrap items-start justify-between gap-3">

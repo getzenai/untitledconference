@@ -31,6 +31,7 @@ import {
 	asc,
 	count,
 	eq,
+	gte,
 	inArray,
 	isNotNull,
 	isNull,
@@ -96,6 +97,22 @@ export type InconsistencyItem = {
 	detail: string;
 };
 
+/**
+ * One day on the submissions chart.
+ *
+ * Days with no submissions are present with a zero rather than missing: a time
+ * axis that only carries the days something happened compresses a quiet fortnight
+ * into a tick and makes a flat month look like a steady climb.
+ */
+export type SubmissionDay = {
+	/** Calendar day in UTC, `YYYY-MM-DD`. */
+	day: string;
+	count: number;
+};
+
+/** How far back the submissions chart looks. */
+export const TIMELINE_DAYS = 30;
+
 export type DashboardSnapshot = {
 	decisions: {
 		undecided: number;
@@ -130,6 +147,7 @@ export type DashboardSnapshot = {
 		count: number;
 		items: InconsistencyItem[];
 	};
+	submissionsOverTime: SubmissionDay[];
 };
 
 /** Everything the landing page shows, in one call. */
@@ -137,16 +155,18 @@ export async function conferenceDashboard(
 	conferenceId: number,
 	at: Date = new Date()
 ): Promise<DashboardSnapshot> {
-	const [decisions, scheduling, tasks, mail, reviews, inconsistencies] = await Promise.all([
-		decisionQueue(conferenceId),
-		schedulingGap(conferenceId),
-		taskLoad(conferenceId, at),
-		mailQueue(conferenceId),
-		reviewerLoad(conferenceId),
-		leftovers(conferenceId)
-	]);
+	const [decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime] =
+		await Promise.all([
+			decisionQueue(conferenceId),
+			schedulingGap(conferenceId),
+			taskLoad(conferenceId, at),
+			mailQueue(conferenceId),
+			reviewerLoad(conferenceId),
+			leftovers(conferenceId),
+			submissionTimeline(conferenceId, at)
+		]);
 
-	return { decisions, scheduling, tasks, mail, reviews, inconsistencies };
+	return { decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime };
 }
 
 /**
@@ -493,3 +513,49 @@ const decidedAgainst = (conferenceId: number) =>
 		eq(submissionTable.conferenceId, conferenceId),
 		inArray(submissionTable.status, ['rejected', 'waitlisted', 'withdrawn'])
 	);
+
+/**
+ * Submissions per day over the last `TIMELINE_DAYS`, oldest first.
+ *
+ * Grouped in SQL and then zero-filled in JS, which is the division of labour the
+ * rest of this file uses: the database counts, the caller never scans. Postgres
+ * only returns the days that have rows, and the gaps are exactly the information
+ * the chart needs — a call that went quiet for a week has to look quiet.
+ *
+ * Buckets are UTC calendar days. An organizer in Berlin submitting at 00:30 local
+ * lands on the previous day; for a shape-over-weeks chart that is a rounding
+ * detail, and one fixed rule beats a per-viewer one that makes two people
+ * disagree about the same chart.
+ *
+ * `createdAt`, not `submittedAt`: a draft that was started counts as activity on
+ * the call, and `submittedAt` is null until it is sent — the difference would show
+ * up as a chart that is empty while the CFP is visibly busy.
+ */
+async function submissionTimeline(conferenceId: number, at: Date): Promise<SubmissionDay[]> {
+	const day = sql<string>`to_char(${submissionTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`;
+
+	// The first day of the window, at midnight UTC, so the SQL bound and the
+	// zero-fill below agree about where the chart starts. The bound narrows the
+	// scan; it is not what makes the window right — anything older than `start`
+	// has no key in the array below and is dropped there regardless.
+	const start = new Date(
+		Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate() - (TIMELINE_DAYS - 1))
+	);
+
+	const rows = await db
+		.select({ day, total: count() })
+		.from(submissionTable)
+		.where(
+			and(eq(submissionTable.conferenceId, conferenceId), gte(submissionTable.createdAt, start))
+		)
+		.groupBy(day);
+
+	const counted = new Map(rows.map((row) => [row.day, row.total]));
+
+	return Array.from({ length: TIMELINE_DAYS }, (_, i) => {
+		const date = new Date(start);
+		date.setUTCDate(date.getUTCDate() + i);
+		const key = date.toISOString().slice(0, 10);
+		return { day: key, count: counted.get(key) ?? 0 };
+	});
+}
