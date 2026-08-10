@@ -52,27 +52,41 @@ export const conferenceSpeakerStatus = pgEnum('conference_speaker_status', [
 	'cancelled'
 ]);
 
-export const conferenceTable = pgTable('conference', {
-	id: serial('id').primaryKey(),
-	organizationId: text('organization_id')
-		.notNull()
-		.references(() => organization.id, { onDelete: 'cascade' }),
-	name: text('name').notNull(),
-	slug: text('slug').notNull(),
-	venue: text('venue'),
-	startsOn: date('starts_on'),
-	endsOn: date('ends_on'),
-	/** Free text shown above the public submission form (CFP-03). */
-	cfpIntro: text('cfp_intro'),
-	status: conferenceStatus('status').notNull().default('draft'),
-	/** ABS-07's setting, per conference — see `reviewVisibility`. */
-	reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
-	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-	updatedAt: timestamp('updated_at', { withTimezone: true })
-		.notNull()
-		.defaultNow()
-		.$onUpdate(() => new Date())
-});
+export const conferenceTable = pgTable(
+	'conference',
+	{
+		id: serial('id').primaryKey(),
+		organizationId: text('organization_id')
+			.notNull()
+			.references(() => organization.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		/**
+		 * The public address of the conference, and the key every lookup uses.
+		 *
+		 * Unique across the whole table, not per organization: `access.ts` and
+		 * `public-conference.ts` both resolve a bare slug with `limit(1)`, so a second
+		 * conference claiming the same one would not collide — it would quietly
+		 * shadow the first, and `/c/<slug>` would show one organization's event under
+		 * another's link. Harmless while conferences only came from the seed;
+		 * unacceptable now that organizers choose their own.
+		 */
+		slug: text('slug').notNull(),
+		venue: text('venue'),
+		startsOn: date('starts_on'),
+		endsOn: date('ends_on'),
+		/** Free text shown above the public submission form (CFP-03). */
+		cfpIntro: text('cfp_intro'),
+		status: conferenceStatus('status').notNull().default('draft'),
+		/** ABS-07's setting, per conference — see `reviewVisibility`. */
+		reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [uniqueIndex('conference_slug_unique').on(t.slug)]
+);
 
 export const trackTable = pgTable('track', {
 	id: serial('id').primaryKey(),

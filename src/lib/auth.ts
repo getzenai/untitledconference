@@ -5,7 +5,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin } from 'better-auth/plugins/admin';
 import { jwt } from 'better-auth/plugins/jwt';
 import { organization } from 'better-auth/plugins/organization';
-import { and, count, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { organizationAccessControl, organizationRoles } from './auth/permissions';
 import { buildRateLimitConfig } from './auth/rate-limit-config';
@@ -59,6 +59,27 @@ async function sendPasswordResetEmail(email: string, url: string) {
 		text,
 		html
 	});
+}
+
+/**
+ * The organization a new session starts in: the user's oldest membership.
+ *
+ * Null when they belong to none — that is the onboarding case, not an error.
+ *
+ * Ordered by `createdAt` and then `id`. The second key is not decoration: the
+ * seed writes several memberships with one timestamp, and "whichever row the
+ * database happened to return" is not a rule anybody can reason about when the
+ * answer differs between two runs.
+ */
+export async function firstOrganizationFor(userId: string): Promise<string | null> {
+	const [row] = await db
+		.select({ organizationId: schema.member.organizationId })
+		.from(schema.member)
+		.where(eq(schema.member.userId, userId))
+		.orderBy(asc(schema.member.createdAt), asc(schema.member.id))
+		.limit(1);
+
+	return row?.organizationId ?? null;
 }
 
 /**
@@ -298,6 +319,26 @@ function createAuth() {
 					},
 					after: async (user) => {
 						logUserCreationWithRole(user);
+					}
+				}
+			},
+
+			session: {
+				create: {
+					before: async (session) => {
+						// Put the user's organization on the session at sign-in.
+						//
+						// Nothing did this before except accepting an invitation, so an
+						// ordinary sign-in produced a session with no active organization —
+						// and that is the state every "which organization am I in?" caller
+						// mishandles: `getActiveMember` answers 400, `locals.organizationId`
+						// stays null, and a member of one organization is treated as a member
+						// of none. The 500 on /settings/organization/new was this, surfacing
+						// two redirects away from its cause.
+						const organizationId = await firstOrganizationFor(session.userId);
+						if (!organizationId) return;
+
+						return { data: { ...session, activeOrganizationId: organizationId } };
 					}
 				}
 			}

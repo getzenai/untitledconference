@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "conference_slug_unique" ON "conference" USING btree ("slug");
