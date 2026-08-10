@@ -24,7 +24,7 @@ concurrency:
 jobs:
   deploy:
     name: Migrate and deploy
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # Never deploy a red main.
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
