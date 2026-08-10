@@ -1,5 +1,9 @@
 import { normalizeRecordingUrl } from '$lib/conference/recording-url';
 import { requireOrganizer } from '$lib/server/conference/access';
+import {
+	decisionNotificationStatuses,
+	notifySubmissionDecisions
+} from '$lib/server/conference/decision-notifications';
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
 import { submissionDetail } from '$lib/server/conference/organizer-submissions';
 import { setRecordingUrl } from '$lib/server/conference/recordings';
@@ -19,8 +23,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
 	if (!submission) throw error(404, 'Submission not found');
+	const notificationStatuses = await decisionNotificationStatuses(conference.id, [submission]);
 
-	return { submission };
+	return { submission, notificationStatus: notificationStatuses[submission.id] ?? null };
 };
 
 export const actions: Actions = {
@@ -39,6 +44,13 @@ export const actions: Actions = {
 			decision as Decision
 		);
 		return { decision, result };
+	},
+
+	notify: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		return {
+			notificationResult: await notifySubmissionDecisions(conference, [submissionId(params.id)])
+		};
 	},
 
 	/**
