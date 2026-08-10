@@ -271,6 +271,46 @@ describe('action tasks', () => {
 		expect(await setActionTaskDone(speakerUserId, fileTaskId, true)).toBe(false);
 	});
 
+	it('refuses a file handed in against an action task', async () => {
+		// Walked the way the `?/upload` handler walks it, because that is how it was
+		// found: the page hides the upload form for an action task, and a form posted
+		// straight at the action never sees the page. Left unrefused, this task would
+		// carry a deliverable, and then its status has two authors — the owner's tick
+		// and the newest file's approval.
+		const [before] = await db
+			.select({ status: taskTable.status })
+			.from(taskTable)
+			.where(eq(taskTable.id, actionTaskId));
+
+		const version = await nextVersion(actionTaskId);
+		const recorded = await recordDeliverable({
+			taskId: actionTaskId,
+			userId: speakerUserId,
+			fileUrl: `conference/x/task/${actionTaskId}/v${version}/notes.pdf`,
+			filename: 'notes.pdf',
+			contentType: 'application/pdf',
+			sizeBytes: 1024,
+			version
+		});
+
+		expect(recorded).toBeNull();
+
+		// Refused has to mean nothing was written. Without both assertions the row
+		// could land and only the return value be wrong, which is the worse bug: the
+		// caller reports a failure the database disagrees with.
+		const files = await db
+			.select({ id: deliverableTable.id })
+			.from(deliverableTable)
+			.where(eq(deliverableTable.taskId, actionTaskId));
+		expect(files).toHaveLength(0);
+
+		const [after] = await db
+			.select({ status: taskTable.status })
+			.from(taskTable)
+			.where(eq(taskTable.id, actionTaskId));
+		expect(after.status).toBe(before.status);
+	});
+
 	it('refuses to tick off someone else’s task', async () => {
 		// The owner can, so the refusal below is about ownership and nothing else.
 		expect(await setActionTaskDone(strangerUserId, otherPersonsTaskId, true)).toBe(true);
