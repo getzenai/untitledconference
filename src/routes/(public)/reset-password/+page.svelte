@@ -2,26 +2,18 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { authClient } from '$lib/auth-client';
+	import AuthShell from '$lib/components/app/auth/auth-shell.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import {
-		Card,
-		CardContent,
-		CardDescription,
-		CardHeader,
-		CardTitle
-	} from '$lib/components/ui/card';
 	import * as Form from '$lib/components/ui/form';
-	import { Input } from '$lib/components/ui/input';
+	import PasswordInput from '$lib/components/ui/password-input.svelte';
 	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { getPasswordRequirementsFromSchema } from '$lib/validators/password';
-	import { Eye, EyeOff } from 'lucide-svelte';
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { resetPasswordSchema } from './schema';
 
 	const token = $derived(page.url.searchParams.get('token') || '');
 
-	let showPassword = $state(false);
 	let didReset = $state(false);
 
 	const form = superForm(
@@ -83,109 +75,75 @@
 	});
 </script>
 
-<div
-	class="relative container grid min-h-screen flex-col items-center justify-center lg:max-w-none lg:grid-cols-2 lg:px-0"
->
-	<div class="bg-muted relative hidden h-full flex-col p-10 text-white lg:flex dark:border-r">
-		<div class="absolute inset-0 bg-zinc-900"></div>
-	</div>
-	<div class="flex h-full items-center p-4 lg:p-8">
-		<div class="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-			<Card>
-				<CardHeader>
-					<CardTitle>Reset password</CardTitle>
-					<CardDescription>Enter a new password for your account.</CardDescription>
-				</CardHeader>
-				<CardContent>
-					{#if didReset}
-						<div class="space-y-4 text-center">
-							<p class="text-base font-medium">Your password has been updated.</p>
-							<p class="text-muted-foreground text-sm">
-								You can now sign in with your new password.
-							</p>
-							<Button type="button" class="w-full" onclick={() => goto('/login')}>
-								Return to login
-							</Button>
-						</div>
-					{:else if !token}
-						<div class="space-y-4 text-center">
-							<p class="text-destructive text-base font-medium">
-								This reset link is invalid or has expired.
-							</p>
-							<p class="text-muted-foreground text-sm">
-								Request a fresh link to continue resetting your password.
-							</p>
-							<Button type="button" class="w-full" onclick={() => goto('/forgot-password')}>
-								Request new link
-							</Button>
-						</div>
-					{:else}
-						<form use:enhance class="space-y-4">
-							<input type="hidden" name="token" value={token} />
-
-							<Form.Field {form} name="password">
-								<Form.Control>
-									{#snippet children({ props })}
-										<Form.Label>New password</Form.Label>
-										<div class="relative">
-											<Input
-												{...props}
-												type={showPassword ? 'text' : 'password'}
-												autocomplete="new-password"
-												placeholder="Enter a secure password"
-												bind:value={$formData.password}
-												disabled={$submitting}
-												class="pr-10"
-											/>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												class="text-muted-foreground absolute top-1/2 right-1 -translate-y-1/2"
-												aria-label={showPassword ? 'Hide password' : 'Show password'}
-												onclick={() => (showPassword = !showPassword)}
-											>
-												{#if showPassword}
-													<EyeOff class="size-4" />
-												{:else}
-													<Eye class="size-4" />
-												{/if}
-											</Button>
-										</div>
-										<PasswordStrength password={$formData.password} />
-									{/snippet}
-								</Form.Control>
-								<Form.FieldErrors />
-							</Form.Field>
-
-							{#if $errors._errors}
-								<div role="alert" class="text-sm text-red-500">
-									{#each $errors._errors as error}
-										<p>{error}</p>
-									{/each}
-								</div>
-							{/if}
-
-							<div class="text-muted-foreground text-xs">
-								<p>Password requirements:</p>
-								<ul class="mt-1 list-inside list-disc">
-									{#each passwordRequirements as req}
-										<li>{req}</li>
-									{/each}
-								</ul>
-							</div>
-
-							<Form.Button type="submit" class="w-full" disabled={$submitting}>
-								{#if $submitting}
-									Updating password...
-								{:else}
-									Update password
-								{/if}
-							</Form.Button>
-						</form>
-					{/if}
-				</CardContent>
-			</Card>
+<AuthShell title="Reset password" description="Enter a new password for your account.">
+	{#if didReset}
+		<div class="space-y-4">
+			<p class="text-base font-medium">Your password has been updated.</p>
+			<p class="text-muted-foreground text-sm">You can now sign in with your new password.</p>
+			<Button type="button" class="w-full" onclick={() => goto('/login')}>Return to login</Button>
 		</div>
-	</div>
-</div>
+	{:else if !token}
+		<div class="space-y-4">
+			<p class="text-destructive text-base font-medium">
+				This reset link is invalid or has expired.
+			</p>
+			<p class="text-muted-foreground text-sm">
+				Request a fresh link to continue resetting your password.
+			</p>
+			<Button type="button" class="w-full" onclick={() => goto('/forgot-password')}>
+				Request new link
+			</Button>
+		</div>
+	{:else}
+		<form use:enhance class="space-y-4">
+			<input type="hidden" name="token" value={token} />
+
+			<Form.Field {form} name="password">
+				<Form.Control>
+					{#snippet children({ props })}
+						<Form.Label>New password</Form.Label>
+						<!--
+							The same show/hide input the register form uses. It used to be
+							hand-rolled here, one page away from a component that already did
+							it — two toggles that could drift apart, for one behaviour.
+						-->
+						<PasswordInput
+							{...props}
+							autocomplete="new-password"
+							placeholder="Enter a secure password"
+							bind:value={$formData.password}
+							disabled={$submitting}
+						/>
+						<PasswordStrength password={$formData.password} />
+					{/snippet}
+				</Form.Control>
+				<Form.FieldErrors />
+			</Form.Field>
+
+			{#if $errors._errors}
+				<div role="alert" class="text-destructive text-sm">
+					{#each $errors._errors as error}
+						<p>{error}</p>
+					{/each}
+				</div>
+			{/if}
+
+			<div class="text-muted-foreground text-xs">
+				<p>Password requirements:</p>
+				<ul class="mt-1 list-inside list-disc">
+					{#each passwordRequirements as req}
+						<li>{req}</li>
+					{/each}
+				</ul>
+			</div>
+
+			<Form.Button type="submit" class="w-full" disabled={$submitting}>
+				{#if $submitting}
+					Updating password...
+				{:else}
+					Update password
+				{/if}
+			</Form.Button>
+		</form>
+	{/if}
+</AuthShell>

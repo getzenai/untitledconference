@@ -55,8 +55,9 @@ describe('First User Admin Assignment', () => {
 
 		registerPage.visit();
 		// The app has no "you will be the system administrator" hint on the
-		// register page; the regular description is what is shown.
-		cy.contains('Enter your details to create your account').should('be.visible');
+		// register page; the regular description is what is shown. The string is
+		// the register card's description — it moves when that copy is rewritten.
+		cy.contains('One account for organizing, speaking and reviewing.').should('be.visible');
 		cy.get('body').should(
 			'not.contain.text',
 			"You'll be the first user and will automatically become the system administrator"
