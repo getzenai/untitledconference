@@ -127,6 +127,11 @@ export async function nextVersion(taskId: number): Promise<number> {
  * The status move is part of the same transaction as the row: a deliverable
  * whose task still says "open" would send the organizer chasing something they
  * already have.
+ *
+ * Null when the task is not a `file_request` — nothing is written. That refusal
+ * is what keeps `setActionTaskDone` disjoint from this path: an action task is
+ * ticked off by its owner, a file request follows its newest deliverable, and a
+ * task that could be both would have two rules writing one status.
  */
 export async function recordDeliverable(input: {
 	taskId: number;
@@ -136,23 +141,26 @@ export async function recordDeliverable(input: {
 	contentType: string | null;
 	sizeBytes: number;
 	version: number;
-}): Promise<number> {
+}): Promise<number | null> {
 	return db.transaction(async (tx) => {
-		// The same task-row lock the organizer's decision path takes, in the same
-		// position: first statement, before anything is read or written. One lock, one
-		// order, so the two paths serialise and cannot deadlock.
+		// One statement doing two jobs, both of which have to come first.
 		//
-		// Taking it here is deliberately belt-and-braces, and honestly so: the `UPDATE`
-		// below already locks this row, and it runs after the insert, so today the
-		// decision path's lock alone is what makes the pair safe — removing this line
-		// leaves the race test green. It is here so the protocol is stated rather than
-		// implied. Reorder or drop that `UPDATE` and this becomes the only thing
-		// holding the ordering up.
-		await tx
-			.select({ id: taskTable.id })
+		// `FOR UPDATE` is the same task-row lock the organizer's decision path takes,
+		// in the same position — one lock, one order, so the two paths serialise and
+		// cannot deadlock. On its own it is belt-and-braces: the `UPDATE` further down
+		// already locks this row, so removing just the `.for('update')` leaves the race
+		// test green. It is written out so the protocol is stated rather than implied.
+		//
+		// The `kind` read is not redundant. The caller checks it too, but between that
+		// check and this transaction the row is not held by anybody, and this is the
+		// point where it is.
+		const [task] = await tx
+			.select({ kind: taskTable.kind })
 			.from(taskTable)
 			.where(eq(taskTable.id, input.taskId))
 			.for('update');
+
+		if (task?.kind !== 'file_request') return null;
 
 		const [created] = await tx
 			.insert(deliverableTable)
