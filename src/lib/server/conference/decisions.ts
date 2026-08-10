@@ -18,7 +18,7 @@ import {
 } from '$lib/server/db/conference/conference-schema';
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 
 export type Decision = 'accepted' | 'rejected' | 'waitlisted';
 
@@ -90,7 +90,11 @@ export async function decideSubmissions(
 
 		await tx
 			.update(submissionTable)
-			.set({ status: decision, decidedAt: now })
+			// Use the database wall clock so this decision boundary is strictly after
+			// any notification row committed by an earlier organizer action. A JS Date
+			// only has millisecond precision and can otherwise make two rapid actions
+			// appear simultaneous to Postgres.
+			.set({ status: decision, decidedAt: sql`clock_timestamp()` })
 			.where(inArray(submissionTable.id, ids));
 		result.decided = ids.length;
 
