@@ -242,9 +242,7 @@ async function upsertProfileForAdd(
 	organizationId: string,
 	fields: NormalizedAdd
 ): Promise<number> {
-	const existing = fields.email
-		? await findProfileByEmail(tx, organizationId, fields.email)
-		: null;
+	const existing = fields.email ? await findProfileByEmail(tx, organizationId, fields.email) : null;
 
 	if (existing == null) {
 		const [created] = await tx
@@ -281,10 +279,7 @@ async function upsertProfileForAdd(
 	if (notes !== undefined) patch.notes = notes;
 
 	if (Object.keys(patch).length > 0) {
-		await tx
-			.update(speakerProfileTable)
-			.set(patch)
-			.where(eq(speakerProfileTable.id, existing.id));
+		await tx.update(speakerProfileTable).set(patch).where(eq(speakerProfileTable.id, existing.id));
 	}
 	return existing.id;
 }
