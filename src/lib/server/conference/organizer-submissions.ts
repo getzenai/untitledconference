@@ -33,20 +33,8 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import {
-	and,
-	asc,
-	count,
-	desc,
-	eq,
-	exists,
-	ilike,
-	inArray,
-	ne,
-	notExists,
-	or,
-	sql
-} from 'drizzle-orm';
+import { and, asc, count, eq, exists, ilike, inArray, ne, notExists, or, sql } from 'drizzle-orm';
+import { orderFor, type SubmissionSort } from './submission-sort';
 
 export type SubmissionFilters = {
 	q?: string;
@@ -65,7 +53,8 @@ export type SpeakerLine = {
 	roleLabel: string | null;
 };
 
-export type SubmissionRow = {
+/** What a row is before the speakers and the score are joined onto it. */
+type SubmissionBase = {
 	id: number;
 	title: string;
 	status: Submission['status'];
@@ -75,6 +64,9 @@ export type SubmissionRow = {
 	sessionFormat: string | null;
 	/** INTERNAL (R6) — organizer views only. */
 	sponsorTier: string | null;
+};
+
+export type SubmissionRow = SubmissionBase & {
 	speakers: SpeakerLine[];
 	score: number | null;
 	reviewsSubmitted: number;
@@ -258,85 +250,41 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
  */
 export const PAGE_SIZE = 50;
 
-/**
- * How the table is ordered (ABS-10).
- *
- * `newest` is what the screen has always done. The two score orders are the reason
- * this type exists: an organizer building a programme reads the pile from the top
- * score down, and reads it from the bottom up when they are looking for what to cut.
- */
-export type SubmissionSort = 'newest' | 'score-desc' | 'score-asc';
-
-export const SUBMISSION_SORTS: readonly SubmissionSort[] = ['newest', 'score-desc', 'score-asc'];
-
-export function parseSort(raw: string | null | undefined): SubmissionSort {
-	return SUBMISSION_SORTS.includes(raw as SubmissionSort) ? (raw as SubmissionSort) : 'newest';
-}
+/** The columns both the table and the export read straight off the submission. */
+const submissionColumns = {
+	id: submissionTable.id,
+	title: submissionTable.title,
+	status: submissionTable.status,
+	contentApproval: submissionTable.contentApproval,
+	submittedAt: submissionTable.submittedAt,
+	track: trackTable.name,
+	sessionFormat: sessionFormatTable.name,
+	sponsorTier: sponsorTierTable.name
+};
 
 /**
- * The submission's aggregate score, computed in SQL.
+ * Hangs the speakers and the aggregate score onto a set of rows, in two queries.
  *
- * This is `submissionScore` from `$lib/conference/scoring` written a second time in
- * another language, which is a cost worth naming: the alternative is sorting the 50
- * rows of the current page, and a "sort by score" that only orders the page is not a
- * sort — it is a lie that looks right until page two. The ordering has to happen
- * before `LIMIT`, so it has to happen in the database.
- *
- * The arithmetic mirrors the TypeScript exactly: normalise each criterion by its own
- * `scale_max`, take the criterion-weighted mean per review, take the plain mean over
- * reviewers (people count equally, criteria do not), then scale to 1..5. Blanks and
- * unusable criteria are dropped rather than counted as zero, and a review whose
- * scores are all blank contributes nothing — it does not drag the mean down.
- *
- * An integration test pins the two implementations against each other on the same
- * rows, so the copy cannot drift silently.
+ * Shared by the table and the export so that the file an organizer downloads and the
+ * screen they are looking at cannot disagree about a score.
  */
-function scoreExpression(conferenceId: number) {
-	return sql<number | null>`(
-		select avg(per_review.value) * 5
-		from (
-			select
-				sum((${reviewScoreTable.valueNumber} / ${scorecardCriterionTable.scaleMax}) * ${scorecardCriterionTable.weight})
-					/ nullif(sum(${scorecardCriterionTable.weight}), 0) as value
-			from ${reviewTable}
-			inner join ${reviewRoundTable}
-				on ${reviewRoundTable.id} = ${reviewTable.reviewRoundId}
-			inner join ${evaluationPlanTable}
-				on ${evaluationPlanTable.id} = ${reviewRoundTable.evaluationPlanId}
-			inner join ${reviewScoreTable}
-				on ${reviewScoreTable.reviewId} = ${reviewTable.id}
-			inner join ${scorecardCriterionTable}
-				on ${scorecardCriterionTable.id} = ${reviewScoreTable.scorecardCriterionId}
-			where ${reviewTable.submissionId} = ${submissionTable.id}
-				and ${reviewTable.status} = 'submitted'
-				and ${evaluationPlanTable.conferenceId} = ${conferenceId}
-				and ${reviewScoreTable.valueNumber} is not null
-				and ${scorecardCriterionTable.scaleMax} > 0
-				and ${scorecardCriterionTable.weight} > 0
-			group by ${reviewTable.id}
-		) per_review
-	)`;
-}
+async function withSpeakersAndScores(
+	conferenceId: number,
+	rows: SubmissionBase[]
+): Promise<SubmissionRow[]> {
+	const ids = rows.map((r) => r.id);
+	const [speakers, reviews] = await Promise.all([speakersFor(ids), reviewsFor(conferenceId, ids)]);
 
-/**
- * The ORDER BY for one sort.
- *
- * `nulls last` in BOTH score directions, deliberately: an unreviewed talk has no
- * score, and "no score yet" is not "the worst one". Ascending is for finding the
- * weakest submissions, and a screen full of unscored rows would answer a different
- * question. The id is the tiebreaker everywhere, for the same reason it already is
- * on `submittedAt` — without it, two pages can show the same row twice.
- */
-function orderFor(sort: SubmissionSort, conferenceId: number) {
-	if (sort === 'newest') {
-		return [desc(submissionTable.submittedAt), asc(submissionTable.id)];
-	}
-
-	const score = scoreExpression(conferenceId);
-	return [
-		sort === 'score-desc' ? sql`${score} desc nulls last` : sql`${score} asc nulls last`,
-		asc(submissionTable.id)
-	];
+	return rows.map((row) => {
+		const rowReviews = reviews.get(row.id) ?? [];
+		return {
+			...row,
+			speakers: speakers.get(row.id) ?? [],
+			score: submissionScore(rowReviews),
+			reviewsSubmitted: rowReviews.filter((r) => r.submitted).length,
+			reviewsAssigned: rowReviews.length
+		};
+	});
 }
 
 export type SubmissionPage = {
@@ -366,16 +314,7 @@ export async function listSubmissions(
 	const page = Math.min(Math.max(requestedPage, 1), pageCount);
 
 	const rows = await db
-		.select({
-			id: submissionTable.id,
-			title: submissionTable.title,
-			status: submissionTable.status,
-			contentApproval: submissionTable.contentApproval,
-			submittedAt: submissionTable.submittedAt,
-			track: trackTable.name,
-			sessionFormat: sessionFormatTable.name,
-			sponsorTier: sponsorTierTable.name
-		})
+		.select(submissionColumns)
 		.from(submissionTable)
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
@@ -389,24 +328,61 @@ export async function listSubmissions(
 		.limit(PAGE_SIZE)
 		.offset((page - 1) * PAGE_SIZE);
 
-	const ids = rows.map((r) => r.id);
-	const [speakers, reviews] = await Promise.all([speakersFor(ids), reviewsFor(conferenceId, ids)]);
-
 	return {
-		rows: rows.map((row) => {
-			const rowReviews = reviews.get(row.id) ?? [];
-			return {
-				...row,
-				speakers: speakers.get(row.id) ?? [],
-				score: submissionScore(rowReviews),
-				reviewsSubmitted: rowReviews.filter((r) => r.submitted).length,
-				reviewsAssigned: rowReviews.length
-			};
-		}),
+		rows: await withSpeakersAndScores(conferenceId, rows),
 		matching,
 		page,
 		pageSize: PAGE_SIZE,
 		pageCount
+	};
+}
+
+/**
+ * How many rows one export may carry (ABS-13).
+ *
+ * Not a preference either: the export walks the speaker and review joins for every
+ * matching row, and a worker has a wall-clock and a memory budget. The number is far
+ * above any real conference — the largest CFPs in this space land in the low
+ * thousands — so in practice it is a fuse, not a policy. If it ever blows, the route
+ * says so out loud rather than handing over a file that is quietly short.
+ */
+export const EXPORT_LIMIT = 5000;
+
+export type SubmissionExport = {
+	rows: SubmissionRow[];
+	/** True when `EXPORT_LIMIT` cut the result — the caller must not stay quiet about it. */
+	truncated: boolean;
+};
+
+/**
+ * The whole filtered set, in the order the table is showing it (ABS-13).
+ *
+ * Same filters, same sort, no pagination: the file is the view the organizer is
+ * looking at, not the fifty rows that happened to fit on the screen. An export that
+ * silently held back page two would be worse than no export — a spreadsheet looks
+ * complete no matter what is in it.
+ */
+export async function exportSubmissions(
+	conferenceId: number,
+	filters: SubmissionFilters = {},
+	sort: SubmissionSort = 'newest'
+): Promise<SubmissionExport> {
+	const rows = await db
+		.select(submissionColumns)
+		.from(submissionTable)
+		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
+		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
+		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
+		.where(submissionWhere(conferenceId, filters))
+		.orderBy(...orderFor(sort, conferenceId))
+		// One more than the fuse, so "we hit the limit" can be told apart from "the
+		// conference happens to have exactly that many".
+		.limit(EXPORT_LIMIT + 1);
+
+	const truncated = rows.length > EXPORT_LIMIT;
+	return {
+		rows: await withSpeakersAndScores(conferenceId, truncated ? rows.slice(0, EXPORT_LIMIT) : rows),
+		truncated
 	};
 }
 
