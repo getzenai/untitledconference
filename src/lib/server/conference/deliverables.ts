@@ -138,6 +138,22 @@ export async function recordDeliverable(input: {
 	version: number;
 }): Promise<number> {
 	return db.transaction(async (tx) => {
+		// The same task-row lock the organizer's decision path takes, in the same
+		// position: first statement, before anything is read or written. One lock, one
+		// order, so the two paths serialise and cannot deadlock.
+		//
+		// Taking it here is deliberately belt-and-braces, and honestly so: the `UPDATE`
+		// below already locks this row, and it runs after the insert, so today the
+		// decision path's lock alone is what makes the pair safe — removing this line
+		// leaves the race test green. It is here so the protocol is stated rather than
+		// implied. Reorder or drop that `UPDATE` and this becomes the only thing
+		// holding the ordering up.
+		await tx
+			.select({ id: taskTable.id })
+			.from(taskTable)
+			.where(eq(taskTable.id, input.taskId))
+			.for('update');
+
 		const [created] = await tx
 			.insert(deliverableTable)
 			.values({

@@ -12,6 +12,7 @@ import { organization, user } from '$lib/server/db/auth-schema';
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import { deliverableTable, taskTable } from '$lib/server/db/conference/content-schema';
 import { eq } from 'drizzle-orm';
+import postgres from 'postgres';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	addOrganizerComment,
@@ -307,6 +308,52 @@ describe('deciding', () => {
 			.from(taskTable)
 			.where(eq(taskTable.id, accountedTaskId));
 		expect(task.status).toBe('open');
+	});
+
+	it('does not overwrite an upload that lands mid-decision', async () => {
+		// The race, made deterministic by the lock itself rather than by instrumenting
+		// the code under test.
+		//
+		// A second real connection takes the task row and holds it. The decision then
+		// blocks on that same lock — which is the whole fix; without it the decision
+		// would sail past, read the stale newest version, and only block later on the
+		// UPDATE, by which time its conclusion is already wrong. While it waits, the
+		// other connection commits a newer pending version. The decision must then see
+		// v3, not v2.
+		const other = postgres(process.env.TEST_DATABASE_URL!, { max: 1 });
+
+		try {
+			const files = await conferenceTaskFiles(conferenceId, accountedTaskId);
+			const oldest = files.at(-1)!;
+			await setDeliverableApproval(conferenceId, files[0].id, 'approved');
+
+			await other`BEGIN`;
+			await other`SELECT id FROM task WHERE id = ${accountedTaskId} FOR UPDATE`;
+
+			const decision = setDeliverableApproval(conferenceId, oldest.id, 'rejected');
+			// Long enough for the decision to reach the lock and park there. If it did
+			// not block, it has already read the versions and the test fails below —
+			// which is exactly the failure this pins.
+			await new Promise((resolve) => setTimeout(resolve, 200));
+
+			await other`
+				INSERT INTO deliverable (task_id, file_url, filename, content_type, size_bytes, version, approval_status, uploaded_by)
+				VALUES (${accountedTaskId}, ${'key/slides-v3.pdf'}, ${'slides-v3.pdf'}, ${'application/pdf'}, 100, 3, ${'pending'}, ${organizerId})`;
+			await other`UPDATE task SET status = ${'submitted'} WHERE id = ${accountedTaskId}`;
+			await other`COMMIT`;
+
+			await decision;
+
+			const [task] = await db
+				.select({ status: taskTable.status })
+				.from(taskTable)
+				.where(eq(taskTable.id, accountedTaskId));
+			// The newest version is v3 and it is pending, so the task must say so —
+			// the decision on v1 must not restore a conclusion drawn from v2.
+			expect(task.status).toBe('submitted');
+		} finally {
+			await other.end();
+		}
 	});
 
 	it('refuses to decide on another conference’s file', async () => {

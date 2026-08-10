@@ -276,6 +276,24 @@ export async function setDeliverableApproval(
 	if (!file) return false;
 
 	await db.transaction(async (tx) => {
+		// Lock the task row FIRST, before reading anything about its versions.
+		//
+		// Deriving from the newest version is only correct if nothing can add a newer
+		// one between the read and the write. It could: a speaker uploading at the same
+		// moment commits a new version and sets the task to `submitted`, and this
+		// transaction then wrote its stale conclusion over the top. Found in review with
+		// a deterministic repro, not in theory.
+		//
+		// `recordDeliverable` takes this same lock, in the same place, so the two
+		// serialise: whichever gets it first finishes, and the second one reads the
+		// world the first one left behind. One lock taken in one order also means there
+		// is no deadlock window between them.
+		await tx
+			.select({ id: taskTable.id })
+			.from(taskTable)
+			.where(eq(taskTable.id, file.taskId))
+			.for('update');
+
 		await tx
 			.update(deliverableTable)
 			.set({ approvalStatus: approval })
