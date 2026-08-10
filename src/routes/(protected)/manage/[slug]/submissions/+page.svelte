@@ -100,6 +100,37 @@
 		return `${base}/submissions${query ? `?${query}` : ''}`;
 	};
 
+	/**
+	 * The same view, ordered differently (ABS-10).
+	 *
+	 * Built from the URL on screen so the filters travel with the sort, and the page
+	 * number deliberately does NOT: row 51 of the old order has nothing to do with row
+	 * 51 of the new one, so re-sorting starts at the top of the pile.
+	 */
+	const sortHref = (next: 'newest' | 'score-desc' | 'score-asc') => {
+		const params = new SvelteURLSearchParams(currentPage.url.searchParams);
+		params.delete('page');
+		if (next === 'newest') params.delete('sort');
+		else params.set('sort', next);
+		const query = params.toString();
+		return `${base}/submissions${query ? `?${query}` : ''}`;
+	};
+
+	// One click cycles: highest first, lowest first, and back to the newest-first
+	// order the screen opens in. Three states, one control — the third click is the
+	// way out, which a two-state toggle never has.
+	const nextScoreSort = $derived(
+		data.sort === 'score-desc' ? 'score-asc' : data.sort === 'score-asc' ? 'newest' : 'score-desc'
+	);
+
+	const scoreSortLabel = $derived(
+		data.sort === 'score-desc'
+			? 'Sorted by score, highest first. Sort lowest first'
+			: data.sort === 'score-asc'
+				? 'Sorted by score, lowest first. Back to newest first'
+				: 'Sort by score, highest first'
+	);
+
 	const firstOnPage = $derived((data.pagination.page - 1) * data.pagination.pageSize + 1);
 	const lastOnPage = $derived(firstOnPage + data.submissions.length - 1);
 
@@ -139,6 +170,12 @@
 		class="mb-3 flex flex-wrap items-center gap-2"
 		data-testid="submission-filters"
 	>
+		<!-- A GET form submits only its own fields, so without this the first "Filter"
+		     click would quietly throw the chosen order away. -->
+		{#if data.sort !== 'newest'}
+			<input type="hidden" name="sort" value={data.sort} />
+		{/if}
+
 		<Input
 			name="q"
 			value={data.filters.q ?? ''}
@@ -192,8 +229,12 @@
 
 		<Button type="submit" variant="outline" size="sm">Filter</Button>
 		{#if filtered}
+			<!-- Clears the filters and keeps the order: the button says "Clear", and the
+			     organizer means the boxes above it, not the column they just sorted by. -->
 			<a
-				href="{base}/submissions"
+				href={data.sort === 'newest'
+					? `${base}/submissions`
+					: `${base}/submissions?sort=${data.sort}`}
 				class="text-muted-foreground hover:text-foreground text-sm underline underline-offset-4"
 			>
 				Clear
@@ -320,7 +361,34 @@
 							<th class="py-2 pr-4 font-medium">Track</th>
 							<th class="py-2 pr-4 font-medium">Format</th>
 							<th class="py-2 pr-4 font-medium">Sponsor</th>
-							<th class="py-2 pr-4 font-medium">Score</th>
+							<!-- The only sortable column, and it says so with the arrow rather than
+							     with a legend: `aria-sort` tells a screen reader the same thing the
+							     arrow tells everyone else. It is a link, not a button, because the
+							     order lives in the URL — middle-click and back both work. -->
+							<th
+								class="py-2 pr-4 font-medium"
+								aria-sort={data.sort === 'score-desc'
+									? 'descending'
+									: data.sort === 'score-asc'
+										? 'ascending'
+										: 'none'}
+							>
+								<a
+									href={sortHref(nextScoreSort)}
+									data-testid="sort-by-score"
+									aria-label={scoreSortLabel}
+									title={scoreSortLabel}
+									class="hover:text-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-sm focus-visible:ring-[3px] focus-visible:outline-none {data.sort ===
+									'newest'
+										? ''
+										: 'text-foreground'}"
+								>
+									Score
+									<span aria-hidden="true" class="text-[0.9em] leading-none">
+										{data.sort === 'score-desc' ? '↓' : data.sort === 'score-asc' ? '↑' : '↕'}
+									</span>
+								</a>
+							</th>
 							<th class="py-2 pr-4 font-medium">Status</th>
 						</tr>
 					</thead>

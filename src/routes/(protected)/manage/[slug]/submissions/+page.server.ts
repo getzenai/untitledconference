@@ -2,6 +2,7 @@ import { requireOrganizer } from '$lib/server/conference/access';
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
 import {
 	listSubmissions,
+	parseSort,
 	submissionFacets,
 	submissionTotals
 } from '$lib/server/conference/organizer-submissions';
@@ -39,9 +40,13 @@ function parsePage(url: URL) {
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 	const filters = parseFilters(url);
+	// An unknown `?sort=` falls back to the default rather than failing: the sort is
+	// part of a URL organizers paste to each other, and a broken link should still
+	// show the table.
+	const sort = parseSort(url.searchParams.get('sort'));
 
 	const [page, facets, counts] = await Promise.all([
-		listSubmissions(conference.id, filters, parsePage(url)),
+		listSubmissions(conference.id, filters, parsePage(url), sort),
 		submissionFacets(conference.id),
 		submissionTotals(conference.id)
 	]);
@@ -56,6 +61,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		},
 		facets,
 		filters,
+		sort,
 		counts
 	};
 };
