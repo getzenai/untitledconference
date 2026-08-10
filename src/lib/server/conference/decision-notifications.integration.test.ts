@@ -105,6 +105,18 @@ async function addSubmission(
 	return submission;
 }
 
+async function currentSubmission(id: number) {
+	const [submission] = await db
+		.select({
+			id: submissionTable.id,
+			status: submissionTable.status,
+			decidedAt: submissionTable.decidedAt
+		})
+		.from(submissionTable)
+		.where(eq(submissionTable.id, id));
+	return submission;
+}
+
 describe('explicit decision notifications', () => {
 	it('leaves an acceptance unsent until the organizer explicitly notifies it', async () => {
 		const submission = await addSubmission(conference, 'Deliberate release', 'submitted');
@@ -241,6 +253,39 @@ describe('explicit decision notifications', () => {
 			'decision_accepted',
 			'decision_accepted',
 			'decision_rejected'
+		]);
+	});
+
+	it('starts a fresh notification occurrence when a decision returns to an earlier value', async () => {
+		const submission = await addSubmission(conference, 'Round-trip decision', 'submitted');
+
+		await decideSubmissions(conference, [submission.id], 'accepted');
+		await notifySubmissionDecisions(conference, [submission.id]);
+		expect(
+			await decisionNotificationStatuses(conference.id, [await currentSubmission(submission.id)])
+		).toEqual({ [submission.id]: 'queued' });
+
+		await decideSubmissions(conference, [submission.id], 'rejected');
+		expect(
+			await decisionNotificationStatuses(conference.id, [await currentSubmission(submission.id)])
+		).toEqual({ [submission.id]: null });
+		await notifySubmissionDecisions(conference, [submission.id]);
+
+		await decideSubmissions(conference, [submission.id], 'accepted');
+		expect(
+			await decisionNotificationStatuses(conference.id, [await currentSubmission(submission.id)])
+		).toEqual({ [submission.id]: null });
+		const returnedAcceptance = await notifySubmissionDecisions(conference, [submission.id]);
+		expect(returnedAcceptance).toMatchObject({ notified: 1, alreadyNotified: 0, emailsQueued: 1 });
+
+		const emails = await db
+			.select({ template: emailLogTable.template })
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, submission.id));
+		expect(emails.map((email) => email.template)).toEqual([
+			'decision_accepted',
+			'decision_rejected',
+			'decision_accepted'
 		]);
 	});
 });

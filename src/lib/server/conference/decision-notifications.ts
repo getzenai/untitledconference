@@ -59,7 +59,14 @@ function bodyFor(value: Decision, conference: Conference, title: string): string
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-type NotificationTarget = { id: number; title: string; decision: Decision };
+type NotificationTarget = {
+	id: number;
+	title: string;
+	decision: Decision;
+	decidedAt: Date | null;
+};
+
+type ExpectedNotification = { template: string; decidedAt: Date | null };
 
 function visibleStatus(values: EmailLog['status'][]): EmailLog['status'] {
 	if (values.includes('failed')) return 'failed';
@@ -67,30 +74,48 @@ function visibleStatus(values: EmailLog['status'][]): EmailLog['status'] {
 	return 'sent';
 }
 
-function expectedTemplates(submissions: { id: number; status: string }[]) {
+function expectedTemplates(submissions: { id: number; status: string; decidedAt?: Date | null }[]) {
 	const statuses: Record<number, DecisionNotificationStatus> = {};
-	const expected = new Map<number, string>();
+	const expected = new Map<number, ExpectedNotification>();
 	for (const submission of submissions) {
 		const current = decision(submission.status);
 		statuses[submission.id] = null;
-		if (current) expected.set(submission.id, EMAIL_TEMPLATE[current]);
+		if (current) {
+			expected.set(submission.id, {
+				template: EMAIL_TEMPLATE[current],
+				decidedAt: submission.decidedAt ?? null
+			});
+		}
 	}
 	return { statuses, expected };
 }
 
+function isCurrentDecisionEmail(createdAt: Date, decidedAt: Date | null) {
+	return decidedAt === null || createdAt >= decidedAt;
+}
+
 function applyStatuses(
 	statuses: Record<number, DecisionNotificationStatus>,
-	expected: Map<number, string>,
+	expected: Map<number, ExpectedNotification>,
 	rows: {
 		relatedId: number | null;
 		template: string;
 		toEmail: string;
 		status: EmailLog['status'];
+		createdAt: Date;
 	}[]
 ) {
 	const recipients = new Map<number, Map<string, EmailLog['status']>>();
 	for (const row of rows) {
-		if (row.relatedId === null || expected.get(row.relatedId) !== row.template) continue;
+		if (row.relatedId === null) continue;
+		const current = expected.get(row.relatedId);
+		if (
+			current === undefined ||
+			current.template !== row.template ||
+			!isCurrentDecisionEmail(row.createdAt, current.decidedAt)
+		) {
+			continue;
+		}
 		const recipientStatuses = recipients.get(row.relatedId) ?? new Map();
 		recipientStatuses.set(row.toEmail, row.status);
 		recipients.set(row.relatedId, recipientStatuses);
@@ -108,7 +133,7 @@ function applyStatuses(
  */
 export async function decisionNotificationStatuses(
 	conferenceId: number,
-	submissions: { id: number; status: string }[]
+	submissions: { id: number; status: string; decidedAt?: Date | null }[]
 ): Promise<Record<number, DecisionNotificationStatus>> {
 	const { statuses, expected } = expectedTemplates(submissions);
 	if (expected.size === 0) return statuses;
@@ -118,7 +143,8 @@ export async function decisionNotificationStatuses(
 			relatedId: emailLogTable.relatedId,
 			template: emailLogTable.template,
 			toEmail: emailLogTable.toEmail,
-			status: emailLogTable.status
+			status: emailLogTable.status,
+			createdAt: emailLogTable.createdAt
 		})
 		.from(emailLogTable)
 		.where(
@@ -139,7 +165,8 @@ async function targetsFor(tx: Tx, conferenceId: number, submissionIds: number[])
 		.select({
 			id: submissionTable.id,
 			title: submissionTable.title,
-			status: submissionTable.status
+			status: submissionTable.status,
+			decidedAt: submissionTable.decidedAt
 		})
 		.from(submissionTable)
 		.where(
@@ -179,13 +206,16 @@ async function recipientEmails(tx: Tx, targetIds: number[]) {
 	return bySubmission;
 }
 
-async function activeNotifications(tx: Tx, conferenceId: number, targetIds: number[]) {
+async function activeNotifications(tx: Tx, conferenceId: number, targets: NotificationTarget[]) {
+	const targetIds = targets.map((target) => target.id);
+	const decidedAt = new Map(targets.map((target) => [target.id, target.decidedAt]));
 	const existing = await tx
 		.select({
 			relatedId: emailLogTable.relatedId,
 			template: emailLogTable.template,
 			toEmail: emailLogTable.toEmail,
-			status: emailLogTable.status
+			status: emailLogTable.status,
+			createdAt: emailLogTable.createdAt
 		})
 		.from(emailLogTable)
 		.where(
@@ -198,7 +228,12 @@ async function activeNotifications(tx: Tx, conferenceId: number, targetIds: numb
 		);
 	return new Set(
 		existing
-			.filter((mail) => mail.status !== 'failed')
+			.filter(
+				(mail) =>
+					mail.relatedId !== null &&
+					mail.status !== 'failed' &&
+					isCurrentDecisionEmail(mail.createdAt, decidedAt.get(mail.relatedId) ?? null)
+			)
 			.map((mail) => `${mail.relatedId}:${mail.template}:${mail.toEmail}`)
 	);
 }
@@ -253,7 +288,7 @@ async function queueNotifications(
 	if (selected.targets.length === 0) return;
 	const targetIds = selected.targets.map((target) => target.id);
 	const recipients = await recipientEmails(tx, targetIds);
-	const active = await activeNotifications(tx, conference.id, targetIds);
+	const active = await activeNotifications(tx, conference.id, selected.targets);
 	const mails = buildMails(conference, selected.targets, recipients, active, result);
 	if (mails.length > 0) await tx.insert(emailLogTable).values(mails);
 }
@@ -261,9 +296,9 @@ async function queueNotifications(
 /**
  * Queues the CURRENT decisions for one or many submissions.
  *
- * Queued and sent rows are idempotent per recipient and decision. A failed row may
- * be retried; a changed decision uses a different template and therefore becomes a
- * new, unsent notification.
+ * Queued and sent rows are idempotent per recipient and decision occurrence. A
+ * failed row may be retried; changing away from and later returning to a decision
+ * starts a new occurrence even though it uses the same template again.
  */
 export async function notifySubmissionDecisions(
 	conference: Conference,
