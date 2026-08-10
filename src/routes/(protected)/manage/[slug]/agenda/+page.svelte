@@ -15,7 +15,6 @@
 	import { enhance } from '$app/forms';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { formatDayLong } from '$lib/conference/public-view';
 
 	let { data, form } = $props();
@@ -148,8 +147,14 @@
 
 	{#if board.days.length === 0 || board.rooms.length === 0}
 		<p class="border-border bg-muted/40 rounded-lg border p-4 text-sm">
-			A grid needs at least one day and one room. Add them in
-			<a class="underline" href="{base}/settings">settings</a>, or add a room below.
+			A grid needs at least one day and one room.
+			{#if board.rooms.length === 0}
+				Add rooms in
+				<a class="underline" href="{base}/settings">settings</a>.
+			{/if}
+			{#if board.days.length === 0}
+				Conference days come from the event date range (settings once that is wired).
+			{/if}
 		</p>
 	{/if}
 
@@ -219,35 +224,15 @@
 			{/if}
 
 			<div class="border-border mt-4 space-y-3 border-t pt-4">
-				<form
-					method="POST"
-					action="?/addRoom"
-					use:enhance={submitting}
-					class="flex items-end gap-2"
-				>
-					<label class="flex-1 text-xs">
-						<span class="text-muted-foreground">New room</span>
-						<Input name="name" class="mt-1 h-8 text-sm" placeholder="Room 3C" />
-					</label>
-					<Button type="submit" variant="outline" size="sm" disabled={busy}>Add</Button>
-				</form>
-				<form
-					method="POST"
-					action="?/addTrack"
-					use:enhance={submitting}
-					class="flex items-end gap-2"
-				>
-					<label class="flex-1 text-xs">
-						<span class="text-muted-foreground">New track</span>
-						<Input name="name" class="mt-1 h-8 text-sm" placeholder="Security" />
-					</label>
-					<Button type="submit" variant="outline" size="sm" disabled={busy}>Add</Button>
-				</form>
 				{#if board.tracks.length > 0}
 					<p class="text-muted-foreground text-xs">
 						Tracks: {board.tracks.map((t) => t.name).join(', ')}
 					</p>
 				{/if}
+				<p class="text-muted-foreground text-xs">
+					Rooms, tracks and formats live in
+					<a class="underline" href="{base}/settings">settings</a>.
+				</p>
 			</div>
 		</section>
 
