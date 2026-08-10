@@ -50,6 +50,21 @@ describe('urls and snippets', () => {
 		expect(snippet.trimEnd().endsWith('</iframe>')).toBe(true);
 	});
 
+	// The snippet is HTML we hand somebody to paste into a page we do not
+	// control, so Svelte's escaping never sees it — the browser parses it on
+	// their site, not ours. Slug and origin are the values that come from
+	// outside, and neither may close the attribute.
+	it('cannot be escaped out of by a hostile slug or origin', () => {
+		const surface = EMBEDDABLE_SURFACES[0];
+		const snippet = embedSnippet(ORIGIN, '"><script>alert(1)</script>', surface);
+
+		expect(snippet).not.toContain('<script>');
+		expect(snippet).toContain('&quot;&gt;&lt;script&gt;');
+
+		const fromOrigin = embedSnippet('https://evil"onload="x', 'devflow-conf-2027', surface);
+		expect(fromOrigin).not.toContain('onload="x');
+	});
+
 	it('leaves a link alone outside an embed', () => {
 		expect(withEmbed('/c/x/speakers/7', false)).toBe('/c/x/speakers/7');
 		expect(withEmbed('/c/x/speakers/7', true)).toBe('/c/x/speakers/7?embed=1');

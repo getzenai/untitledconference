@@ -77,6 +77,25 @@ export function embedUrl(origin: string, slug: string, path: string): string {
 }
 
 /**
+ * Escapes a value that is about to sit inside a double-quoted HTML attribute.
+ *
+ * This function builds a string of HTML that we hand to somebody to paste into
+ * a page we do not control, and Svelte's own escaping does not reach it: the
+ * page renders the snippet as text, and the browser only parses it later, on
+ * someone else's site. Slug and origin are the two values that come from
+ * outside — the origin from the request's host header, the slug from whatever
+ * a conference is one day allowed to be named. Neither can end the attribute
+ * here.
+ */
+function attr(value: string | number): string {
+	return String(value)
+		.replace(/&/g, '&amp;')
+		.replace(/"/g, '&quot;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;');
+}
+
+/**
  * The snippet an organizer pastes into their own site.
  *
  * `title` because a frame without one is a hole in a screen reader's outline,
@@ -85,9 +104,9 @@ export function embedUrl(origin: string, slug: string, path: string): string {
  */
 export function embedSnippet(origin: string, slug: string, surface: EmbeddableSurface): string {
 	return [
-		`<iframe src="${embedUrl(origin, slug, surface.path)}"`,
-		`        title="${surface.label}"`,
-		`        width="100%" height="${surface.height}"`,
+		`<iframe src="${attr(embedUrl(origin, slug, surface.path))}"`,
+		`        title="${attr(surface.label)}"`,
+		`        width="100%" height="${attr(surface.height)}"`,
 		`        style="border:0" loading="lazy"></iframe>`
 	].join('\n');
 }
