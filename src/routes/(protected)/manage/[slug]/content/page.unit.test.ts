@@ -12,12 +12,12 @@ const conference = {
 	organizationId: 'org-test',
 	name: 'Test Conf',
 	slug: 'test-conf',
-	status: 'published',
+	status: 'published' as const,
 	venue: null,
 	startsOn: null,
 	endsOn: null,
 	cfpIntro: null,
-	reviewVisibility: 'open',
+	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
@@ -53,7 +53,7 @@ const renderWith = (count: number) =>
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
 				speakers: Array.from({ length: count }, (_, i) => speaker(i + 1)),
-				totals: { open: count, waiting: 0, done: 0, overdue: 0 }
+				totals: { speakers: count, open: count, waiting: 0, done: 0, overdue: 0 }
 			}
 		}
 	}).body;
