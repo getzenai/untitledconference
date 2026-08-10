@@ -270,6 +270,45 @@ describe('deciding', () => {
 		expect(task.completedAt).toBeNull();
 	});
 
+	it('does not let a decision on an old version rewrite the task', async () => {
+		// The bug this pins, found in review: every version carries its own decision
+		// form, so an organizer can approve the newest file and then act on an older
+		// one. Deriving the task status from the clicked file left the task `open`
+		// while the current version said `approved` — the status and the file
+		// contradicting each other, which is the one thing this must never do.
+		const files = await conferenceTaskFiles(conferenceId, accountedTaskId);
+		const newest = files[0];
+		const oldest = files.at(-1)!;
+		expect(newest.id).not.toBe(oldest.id);
+
+		await setDeliverableApproval(conferenceId, newest.id, 'approved');
+		await setDeliverableApproval(conferenceId, oldest.id, 'rejected');
+
+		const [task] = await db
+			.select({ status: taskTable.status, completedAt: taskTable.completedAt })
+			.from(taskTable)
+			.where(eq(taskTable.id, accountedTaskId));
+		expect(task.status).toBe('done');
+		expect(task.completedAt).not.toBeNull();
+
+		// And the old version really did record the rejection — the task ignoring it
+		// must not mean the decision was silently dropped.
+		const after = await conferenceTaskFiles(conferenceId, accountedTaskId);
+		expect(after.find((f) => f.id === oldest.id)?.approvalStatus).toBe('rejected');
+		expect(after.find((f) => f.id === newest.id)?.approvalStatus).toBe('approved');
+	});
+
+	it('follows the newest version when that one is decided', async () => {
+		const files = await conferenceTaskFiles(conferenceId, accountedTaskId);
+		await setDeliverableApproval(conferenceId, files[0].id, 'rejected');
+
+		const [task] = await db
+			.select({ status: taskTable.status })
+			.from(taskTable)
+			.where(eq(taskTable.id, accountedTaskId));
+		expect(task.status).toBe('open');
+	});
+
 	it('refuses to decide on another conference’s file', async () => {
 		expect(await setDeliverableApproval(conferenceId, foreignFileId, 'approved')).toBe(false);
 	});

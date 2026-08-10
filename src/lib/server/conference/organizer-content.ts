@@ -281,11 +281,26 @@ export async function setDeliverableApproval(
 			.set({ approvalStatus: approval })
 			.where(eq(deliverableTable.id, deliverableId));
 
-		const status =
-			approval === 'approved' ? 'done' : approval === 'rejected' ? 'open' : 'submitted';
+		// The task follows the NEWEST version, not the one that was just clicked.
+		//
+		// Deriving it from the clicked file was wrong in a way the screen made easy to
+		// hit: every version carries its own decision form, so approving v2 and then
+		// rejecting v1 left the task `open` while the current file said `approved` —
+		// the exact disagreement this function exists to prevent. Re-reading the
+		// newest row inside the transaction makes the invariant true by construction,
+		// whichever version the organizer decided on.
+		const [newest] = await tx
+			.select({ approvalStatus: deliverableTable.approvalStatus })
+			.from(deliverableTable)
+			.where(eq(deliverableTable.taskId, file.taskId))
+			.orderBy(desc(deliverableTable.version))
+			.limit(1);
+
+		const current = newest?.approvalStatus ?? approval;
+		const status = current === 'approved' ? 'done' : current === 'rejected' ? 'open' : 'submitted';
 		await tx
 			.update(taskTable)
-			.set({ status, completedAt: approval === 'approved' ? new Date() : null })
+			.set({ status, completedAt: current === 'approved' ? new Date() : null })
 			.where(eq(taskTable.id, file.taskId));
 	});
 

@@ -121,42 +121,51 @@
 						</ul>
 					{/if}
 
-					<form method="POST" action="?/decide" use:enhance={submitting} class="mt-3">
-						<input type="hidden" name="deliverableId" value={file.id} />
-						<Textarea
-							name="note"
-							rows={2}
-							placeholder="What should they change? The speaker sees this."
-							class="text-sm"
-						/>
-						<div class="mt-2 flex flex-wrap gap-2">
-							<Button type="submit" name="approval" value="approved" size="sm" disabled={busy}>
-								Approve
-							</Button>
-							<Button
-								type="submit"
-								name="approval"
-								value="rejected"
-								size="sm"
-								variant="outline"
-								disabled={busy}
-							>
-								Ask for changes
-							</Button>
-							{#if file.approvalStatus !== 'pending'}
+					<!--
+						The decision sits on the newest version only. The task follows that
+						version (the server derives it, so an older one cannot rewrite the
+						status), and offering the buttons on every version invited a click
+						that looked like it did nothing. Comments stay available on all of
+						them — talking about an earlier file is a normal thing to do.
+					-->
+					{#if i === 0}
+						<form method="POST" action="?/decide" use:enhance={submitting} class="mt-3">
+							<input type="hidden" name="deliverableId" value={file.id} />
+							<Textarea
+								name="note"
+								rows={2}
+								placeholder="What should they change? The speaker sees this."
+								class="text-sm"
+							/>
+							<div class="mt-2 flex flex-wrap gap-2">
+								<Button type="submit" name="approval" value="approved" size="sm" disabled={busy}>
+									Approve
+								</Button>
 								<Button
 									type="submit"
 									name="approval"
-									value="pending"
+									value="rejected"
 									size="sm"
-									variant="ghost"
+									variant="outline"
 									disabled={busy}
 								>
-									Undecide
+									Ask for changes
 								</Button>
-							{/if}
-						</div>
-					</form>
+								{#if file.approvalStatus !== 'pending'}
+									<Button
+										type="submit"
+										name="approval"
+										value="pending"
+										size="sm"
+										variant="ghost"
+										disabled={busy}
+									>
+										Undecide
+									</Button>
+								{/if}
+							</div>
+						</form>
+					{/if}
 				</li>
 			{/each}
 		</ul>
