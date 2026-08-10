@@ -51,7 +51,7 @@ jobs:
   # Code quality checks - format, lint, and type checking
   code-quality:
     name: Code Quality Checks
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,7 +80,7 @@ jobs:
   # Build the application
   build:
     name: Build Application
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [code-quality]
     steps:
       - name: Checkout repository
@@ -114,7 +114,7 @@ jobs:
   # Unit tests - no database required
   unit-tests:
     name: Unit Tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [code-quality]
     steps:
       - name: Checkout repository
@@ -146,7 +146,7 @@ jobs:
   #     against a database that lacks its columns.
   migration-check:
     name: Migration Check
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [code-quality]
 
     services:
@@ -204,7 +204,7 @@ jobs:
   # this job's minutes is the cheaper mistake.
   integration-tests:
     name: Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
 
     services:
       postgres:
@@ -255,7 +255,7 @@ jobs:
   # eval harness is the real acceptance test and Cypress is the safety net on main.
   e2e-tests:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [build, unit-tests, integration-tests]
     if: github.event_name != 'pull_request'
 
