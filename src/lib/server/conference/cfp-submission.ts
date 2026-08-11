@@ -36,7 +36,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { publishedFormFor } from './cfp-form';
 
 /** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
@@ -283,12 +283,55 @@ function statedProfileFields(speaker: SpeakerInput, submitting: boolean) {
 }
 
 /**
+ * The one profile in this organization that already stands for this person, with
+ * no account attached to it yet.
+ *
+ * The organizer's roster (`upsertProfileForAdd`) and the co-speaker path
+ * (`upsertCoSpeaker`) both identify a speaker by `(organization, email)` and both
+ * leave `userId` null, because neither knows whether that person has signed up.
+ * Looking a submitter up by user id alone therefore misses the profile that was
+ * created *for* them, and the submitter gets a second one.
+ *
+ * The address compared here is the account's, never the one typed into the
+ * proposal form: the form field is free text in the same request, so matching on
+ * it would let anyone claim an invited speaker by typing their address. Matching
+ * the account's address means the claim is only as strong as the deployment's
+ * signup checks — with `REQUIRE_EMAIL_VERIFICATION` on, it is proof of control of
+ * that mailbox.
+ *
+ * Oldest first, so two unclaimed duplicates resolve the same way on every call.
+ */
+async function unclaimedProfileForEmail(
+	tx: Tx,
+	organizationId: string,
+	email: string | null
+): Promise<number | null> {
+	if (!email) return null;
+
+	const [row] = await tx
+		.select({ id: speakerProfileTable.id })
+		.from(speakerProfileTable)
+		.where(
+			and(
+				eq(speakerProfileTable.organizationId, organizationId),
+				eq(speakerProfileTable.email, email),
+				isNull(speakerProfileTable.userId)
+			)
+		)
+		.orderBy(asc(speakerProfileTable.id))
+		.limit(1);
+
+	return row?.id ?? null;
+}
+
+/**
  * The submitter's own speaker profile in the conference's organization.
  *
- * Looked up by user rather than by email so that changing your address does not
- * fork your profile, and updated on every save so the organizer sees the job title
- * and company the submitter last stated — EMB-01 and EMB-09 read those columns
- * literally.
+ * Looked up by user first so that changing your address does not fork your
+ * profile, then by the account's address so that being invited before you signed
+ * up does not fork it either. Updated on every save so the organizer sees the job
+ * title and company the submitter last stated — EMB-01 and EMB-09 read those
+ * columns literally.
  */
 async function upsertOwnProfile(
 	tx: Tx,
@@ -329,6 +372,18 @@ async function upsertOwnProfile(
 		.where(eq(user.id, userId))
 		.limit(1);
 	const fallbackName = account?.name?.trim() || account?.email || 'Unnamed speaker';
+
+	const claimable = await unclaimedProfileForEmail(tx, organizationId, account?.email ?? null);
+	if (claimable !== null) {
+		// Claim it rather than fork it. Identity columns the organizer typed are left
+		// alone — only `userId` and whatever this submission stated are written, the
+		// same restraint `upsertProfileForAdd` shows when it reuses a profile.
+		await tx
+			.update(speakerProfileTable)
+			.set({ userId, ...stated })
+			.where(eq(speakerProfileTable.id, claimable));
+		return claimable;
+	}
 
 	const [created] = await tx
 		.insert(speakerProfileTable)
