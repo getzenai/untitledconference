@@ -95,7 +95,10 @@
 			</Button>
 		</div>
 	{:else}
-		<form use:enhance class="space-y-4">
+		<!-- POST, although superForm cancels the native submit: before hydration
+		     nothing cancels it, and a bare <form> then defaults to GET — with the
+		     credentials in the query string. -->
+		<form method="POST" use:enhance class="space-y-4">
 			<input type="hidden" name="token" value={token} />
 
 			<Form.Field {form} name="password">

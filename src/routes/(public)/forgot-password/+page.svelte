@@ -57,7 +57,10 @@
 	{#if showSuccessMessage}
 		<p class="text-muted-foreground text-sm">{confirmationCopy}</p>
 	{:else}
-		<form use:enhance class="space-y-4">
+		<!-- POST, although superForm cancels the native submit: before hydration
+		     nothing cancels it, and a bare <form> then defaults to GET — with the
+		     credentials in the query string. -->
+		<form method="POST" use:enhance class="space-y-4">
 			<Form.Field {form} name="email">
 				<Form.Control>
 					{#snippet children({ props })}
