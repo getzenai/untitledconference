@@ -1,11 +1,15 @@
 # Postgres 18 to match production (Neon 18.4). CI runs the same major.
 #
+# The mount is /var/lib/postgresql, not /var/lib/postgresql/data: from 18 on the
+# image keeps its data in a major-version subdirectory and refuses to start when
+# something is mounted over the old path — a fresh, empty volume there is enough
+# to trip it ("there appears to be PostgreSQL data in /var/lib/postgresql/data
+# (unused mount/volume)").
+#
 # ONE-TIME STEP WHEN YOU PULL THIS: a volume initialised by an older major will
-# not start under 18 — the container exits with "This is usually the result of
-# upgrading the Docker image without upgrading the underlying database using
-# pg_upgrade". Both databases here are disposable (schema from `npm run db:push`,
-# contents from the seed scripts), so the fix is to throw them away rather than
-# upgrade them:
+# not start under 18 either. Both databases here are disposable (schema from
+# `npm run db:push`, contents from the seed scripts), so the fix is to throw them
+# away rather than upgrade them:
 #
 #   docker compose down -v && docker compose up -d && npm run db:push
 #
@@ -21,7 +25,7 @@ services:
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: dev
     volumes:
-      - postgres_dev_data:/var/lib/postgresql/data
+      - postgres_dev_data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U root -d dev']
       interval: 2s
@@ -39,7 +43,7 @@ services:
       POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: test
     volumes:
-      - postgres_test_data:/var/lib/postgresql/data
+      - postgres_test_data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U root -d test']
       interval: 2s
