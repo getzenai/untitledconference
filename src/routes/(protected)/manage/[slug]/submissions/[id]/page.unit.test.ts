@@ -2,7 +2,7 @@
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
-import type { PageData } from './$types';
+import type { ActionData, PageData } from './$types';
 import Page from './+page.svelte';
 
 const conference = {
@@ -20,13 +20,22 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
+/** Anything the content-editor tests need to vary, kept out of the positional list. */
+type Extras = {
+	contentEdit?: { editedAt: Date; editorName: string | null } | null;
+	form?: ActionData;
+	keyTakeaway?: string | null;
+	audienceLevel?: string | null;
+};
+
 function renderPage(
 	status: 'accepted' | 'submitted',
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
 	rounds: 'one' | 'none' = 'one',
-	notificationResult: NotificationResult | null = null
+	notificationResult: NotificationResult | null = null,
+	extras: Extras = {}
 ) {
 	return render(Page, {
 		props: {
@@ -39,8 +48,8 @@ function renderPage(
 					id: 1,
 					title: 'A deliberate decision',
 					abstract: 'An abstract.',
-					keyTakeaway: null,
-					audienceLevel: null,
+					keyTakeaway: extras.keyTakeaway ?? null,
+					audienceLevel: extras.audienceLevel ?? null,
 					status,
 					contentApproval: 'pending',
 					submittedAt: new Date('2027-01-02T00:00:00Z'),
@@ -75,9 +84,10 @@ function renderPage(
 									]
 								}
 							],
-				ownReview
+				ownReview,
+				contentEdit: extras.contentEdit ?? null
 			} as PageData,
-			form: notificationResult ? { notificationResult } : null
+			form: (extras.form ?? (notificationResult ? { notificationResult } : null)) as ActionData
 		}
 	}).body;
 }
@@ -187,5 +197,85 @@ describe('the organizer own-review door', () => {
 
 		expect(noRounds).toContain('create a review round.');
 		expect(noRounds).not.toContain('assign yourself to a round');
+	});
+});
+
+/**
+ * The organizer's own edit of the talk's text.
+ *
+ * The screen owes three things beyond the form: it must not open by default (the
+ * common visit is reading, not rewriting), it must keep a refused edit on screen
+ * instead of restoring the stored text underneath the error, and it must say when
+ * someone other than the speaker last changed these words.
+ */
+describe('the organizer talk editor', () => {
+	it('reads as prose until the organizer asks to edit', () => {
+		const body = renderPage('accepted');
+
+		expect(body).toContain('An abstract.');
+		expect(body).toContain('Edit talk');
+		expect(body).not.toContain('action="?/content"');
+	});
+
+	it('posts the four content fields under the names the action reads', () => {
+		const body = renderPage('accepted', null, null, null, 'one', null, {
+			form: {
+				contentErrors: { title: 'A title is required.' },
+				contentValues: {
+					title: '',
+					abstract: 'An abstract.',
+					keyTakeaway: null,
+					audienceLevel: null
+				}
+			}
+		});
+
+		expect(body).toContain('action="?/content"');
+		expect(body).toContain('name="title"');
+		expect(body).toContain('name="abstract"');
+		expect(body).toContain('name="keyTakeaway"');
+		expect(body).toContain('name="audienceLevel"');
+		expect(body).toContain('A title is required.');
+		// The panel stays open on a refusal, or the error names a field nobody can see.
+		expect(body).not.toContain('>Edit talk<');
+	});
+
+	it('shows the rejected text back, not the stored text', () => {
+		const body = renderPage('accepted', null, null, null, 'one', null, {
+			form: {
+				contentErrors: { abstract: 'A submitted talk needs an abstract.' },
+				contentValues: {
+					title: 'A rewritten title',
+					abstract: '',
+					keyTakeaway: 'Kept',
+					audienceLevel: null
+				}
+			}
+		});
+
+		expect(body).toContain('value="A rewritten title"');
+		expect(body).toContain('value="Kept"');
+		expect(body).toContain('A submitted talk needs an abstract.');
+		// The heading still carries the saved title — the field must not.
+		expect(body).not.toContain('value="A deliberate decision"');
+		expect(body).toContain('<textarea');
+	});
+
+	it('names who last rewrote the speaker’s words', () => {
+		const body = renderPage('accepted', null, null, null, 'one', null, {
+			contentEdit: { editedAt: new Date('2027-02-01T00:00:00Z'), editorName: 'Jordan' }
+		});
+
+		expect(body).toContain('data-testid="content-edit-trail"');
+		expect(body).toContain('Jordan');
+		expect(body).toContain('1 Feb 2027');
+	});
+
+	it('falls back to the role when the editing account is gone', () => {
+		const body = renderPage('accepted', null, null, null, 'one', null, {
+			contentEdit: { editedAt: new Date('2027-02-01T00:00:00Z'), editorName: null }
+		});
+
+		expect(body).toContain('an organizer');
 	});
 });

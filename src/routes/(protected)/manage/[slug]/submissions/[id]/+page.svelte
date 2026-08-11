@@ -19,6 +19,8 @@
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Label } from '$lib/components/ui/label';
+	import { Textarea } from '$lib/components/ui/textarea';
 
 	let { data, form } = $props();
 
@@ -26,6 +28,30 @@
 	const s = $derived(data.submission);
 
 	let busy = $state(false);
+
+	/**
+	 * Open when the last save was refused, so a rejected edit is still on screen to
+	 * correct rather than thrown away behind a closed panel.
+	 *
+	 * Reading `form` once, at mount, is the point and not an oversight: with JS the
+	 * panel is already open when the refusal arrives, and without it the page mounts
+	 * fresh with the errors in hand. A derived value would instead re-open the panel
+	 * the moment Cancel closed it, since the failed `form` is still there.
+	 */
+	// svelte-ignore state_referenced_locally
+	let editing = $state(!!form?.contentErrors);
+
+	/**
+	 * What the fields show: the rejected text after a refused save, the stored talk
+	 * otherwise. Reading straight from `s` would answer "fix the title" by silently
+	 * restoring the old one.
+	 */
+	const draft = $derived({
+		title: form?.contentValues?.title ?? s.title,
+		abstract: form?.contentValues?.abstract ?? s.abstract ?? '',
+		keyTakeaway: form?.contentValues?.keyTakeaway ?? s.keyTakeaway ?? '',
+		audienceLevel: form?.contentValues?.audienceLevel ?? s.audienceLevel ?? ''
+	});
 
 	const stamp = (value: Date | string | null) =>
 		value
@@ -162,11 +188,97 @@
 
 <div class="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
 	<div class="space-y-4">
-		<section class="border-border bg-card rounded-lg border p-5">
-			<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Abstract</h2>
-			<p class="mt-2 leading-relaxed whitespace-pre-line">{s.abstract ?? 'No abstract.'}</p>
+		<section class="border-border bg-card rounded-lg border p-5" data-testid="talk-content">
+			<div class="flex items-baseline justify-between gap-3">
+				<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+					Abstract
+				</h2>
+				{#if !editing}
+					<Button size="sm" variant="outline" onclick={() => (editing = true)}>Edit talk</Button>
+				{/if}
+			</div>
 
-			{#if s.keyTakeaway || s.audienceLevel}
+			{#if editing}
+				<!--
+					The speaker's own form is closed once the call closes or the talk is
+					decided — which is exactly when a typo on the public programme is worth
+					fixing. So the organizer gets the four content fields here, and every
+					save leaves a revision behind saying who changed what.
+				-->
+				<form
+					method="POST"
+					action="?/content"
+					class="mt-3 space-y-3"
+					use:enhance={() => {
+						busy = true;
+						return async ({ update, result }) => {
+							try {
+								await update();
+								if (result.type === 'success') editing = false;
+							} finally {
+								busy = false;
+							}
+						};
+					}}
+				>
+					<div class="space-y-1">
+						<Label for="talk-title">Title</Label>
+						<Input id="talk-title" name="title" value={draft.title} required />
+						{#if form?.contentErrors?.title}
+							<p class="text-status-bad text-sm" role="alert">{form.contentErrors.title}</p>
+						{/if}
+					</div>
+					<div class="space-y-1">
+						<Label for="talk-abstract">Abstract</Label>
+						<Textarea id="talk-abstract" name="abstract" rows={8} value={draft.abstract} />
+						{#if form?.contentErrors?.abstract}
+							<p class="text-status-bad text-sm" role="alert">{form.contentErrors.abstract}</p>
+						{/if}
+					</div>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<div class="space-y-1">
+							<Label for="talk-takeaway">Key takeaway</Label>
+							<Input id="talk-takeaway" name="keyTakeaway" value={draft.keyTakeaway} />
+						</div>
+						<div class="space-y-1">
+							<Label for="talk-audience">Audience level</Label>
+							<Input
+								id="talk-audience"
+								name="audienceLevel"
+								value={draft.audienceLevel}
+								placeholder="Beginner, intermediate, advanced"
+							/>
+						</div>
+					</div>
+					<div class="flex items-center gap-3">
+						<Button type="submit" size="sm" disabled={busy}>Save talk</Button>
+						<Button
+							type="button"
+							size="sm"
+							variant="ghost"
+							disabled={busy}
+							onclick={() => (editing = false)}
+						>
+							Cancel
+						</Button>
+						<span class="text-muted-foreground text-xs">
+							The speaker is not notified of this change.
+						</span>
+					</div>
+				</form>
+			{:else}
+				<p class="mt-2 leading-relaxed whitespace-pre-line">{s.abstract ?? 'No abstract.'}</p>
+				{#if form?.contentSaved}
+					<p class="text-status-good mt-2 text-sm" role="status">{form.contentSaved}</p>
+				{:else if data.contentEdit}
+					<p class="text-muted-foreground mt-2 text-xs" data-testid="content-edit-trail">
+						Edited by {data.contentEdit.editorName ?? 'an organizer'} on
+						{stamp(data.contentEdit.editedAt)}.
+					</p>
+				{/if}
+			{/if}
+
+			{#if !editing && (s.keyTakeaway || s.audienceLevel)}
 				<dl class="border-border mt-4 grid gap-3 border-t pt-4 text-sm sm:grid-cols-2">
 					{#if s.keyTakeaway}
 						<div>
