@@ -118,7 +118,7 @@
 							{/if}
 							{#if peer.scores.length > 0}
 								<dl class="text-muted-foreground mt-2 flex flex-wrap gap-x-4 text-xs">
-									{#each peer.scores as score (score.criterion)}
+									{#each peer.scores as score, si (si)}
 										<div class="flex gap-1">
 											<dt>{score.criterion}:</dt>
 											<dd class="tabular-nums">{score.valueText ?? score.value ?? '—'}</dd>
@@ -190,7 +190,7 @@
 				{:else if criterion.kind === 'select'}
 					<select name="criterion-{criterion.id}" class="{inputClass} mt-1 w-full">
 						<option value="">—</option>
-						{#each parseOptions(criterion.options) as option (option)}
+						{#each parseOptions(criterion.options) as option, oi (oi)}
 							<option value={option} selected={criterion.valueText === option}>{option}</option>
 						{/each}
 					</select>

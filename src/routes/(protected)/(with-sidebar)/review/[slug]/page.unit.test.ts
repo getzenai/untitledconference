@@ -16,17 +16,23 @@ vi.mock('$app/state', () => ({
 	page: { url: new URL('https://example.test/review/test-conf') }
 }));
 
-const row = (submissionId: number, title: string, reviewsSubmitted: number) => ({
+const row = (
+	submissionId: number,
+	title: string,
+	reviewsSubmitted: number,
+	rounds: string[] = ['Round 1']
+) => ({
 	submissionId,
 	title,
 	track: 'Platform',
+	rounds,
 	reviewsSubmitted,
 	reviewsAssigned: 3,
 	score: 4.2,
 	ownReviewSubmitted: false
 });
 
-function renderPage(sort: 'coverage' | 'score' = 'coverage') {
+function renderQueue(queue: ReturnType<typeof row>[], sort: 'coverage' | 'score' = 'coverage') {
 	return render(Page, {
 		props: {
 			data: {
@@ -39,11 +45,15 @@ function renderPage(sort: 'coverage' | 'score' = 'coverage') {
 					slug: 'test-conf',
 					reviewVisibility: 'open'
 				},
-				queue: [row(1, 'A talk', 0), row(2, 'Another talk', 2)],
+				queue,
 				sort
 			} as unknown as PageData
 		}
 	}).body;
+}
+
+function renderPage(sort: 'coverage' | 'score' = 'coverage') {
+	return renderQueue([row(1, 'A talk', 0), row(2, 'Another talk', 2)], sort);
 }
 
 describe('the review queue sorts from its column headers', () => {
@@ -78,5 +88,17 @@ describe('the review queue sorts from its column headers', () => {
 		// what the reader is looking at.
 		expect(body.match(/Fewest reviews first/g) ?? []).toHaveLength(1);
 		expect(body).toContain('The working list');
+	});
+});
+
+describe('a submission held in more than one round', () => {
+	it('names the rounds on the row, so one filed review does not look like done', () => {
+		const body = renderQueue([row(1, 'Held twice', 0, ['Round 1', 'Blind round'])]);
+
+		expect(body).toContain('Round 1 · Blind round');
+	});
+
+	it('stays quiet when there is only one round to name', () => {
+		expect(renderQueue([row(1, 'Held once', 0)])).not.toContain('Round 1 ·');
 	});
 });

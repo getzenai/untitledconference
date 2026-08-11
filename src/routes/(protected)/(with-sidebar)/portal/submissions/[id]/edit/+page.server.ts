@@ -23,10 +23,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 
 	const id = submissionId(params.id);
 
-	// One 404 for all three refusals — no such submission, not yours, no longer a
-	// draft. Distinguishing them would tell a stranger which one applied.
+	// One 404 for all three refusals — no such submission, not yours, already
+	// decided. Distinguishing them would tell a stranger which one applied.
 	const editable = await editableDraft(locals.user.id, id);
-	if (!editable) error(404, 'No such draft');
+	if (!editable) error(404, 'This proposal cannot be edited');
 
 	const call = await openCall(editable.conferenceSlug);
 	if (!call) error(404, 'This conference is not accepting proposals');
@@ -48,7 +48,7 @@ async function save(userId: string | undefined, idRaw: string, data: FormData, s
 
 	const id = submissionId(idRaw);
 	const editable = await editableDraft(userId, id);
-	if (!editable) error(404, 'No such draft');
+	if (!editable) error(404, 'This proposal cannot be edited');
 
 	const result = await saveSubmission(userId, editable.conferenceSlug, readProposal(data), {
 		submit,
@@ -60,9 +60,9 @@ async function save(userId: string | undefined, idRaw: string, data: FormData, s
 			return fail(400, { errors: result.errors, fieldErrors: result.fieldErrors });
 		}
 		if (result.reason === 'closed') return fail(409, { closed: true });
-		// `forbidden` and `not_found` both mean "not a draft of yours by the time we
+		// `forbidden` and `not_found` both mean "not yours to rewrite by the time we
 		// wrote" — the same answer the loader gives.
-		error(404, 'No such draft');
+		error(404, 'This proposal cannot be edited');
 	}
 
 	redirect(303, `/portal/submissions/${id}`);
