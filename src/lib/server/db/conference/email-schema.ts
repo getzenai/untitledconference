@@ -4,9 +4,8 @@
  * Implements section 8 of DATA_MODEL.md (kill-my-saas-ux @ adba9f7).
  *
  * Mail is not a cut feature — criteria sit in four areas (CFP-08/14, SPK-06/13/16,
- * CNT-08). But the judging agent has no inbox, so THIS TABLE is the evidence, not the
- * delivery. Every `side-effect` criterion is satisfied by a visible, queryable send
- * record; anything else would cost more and prove less.
+ * CNT-08). This table is both the visible audit trail and the durable delivery
+ * outbox. Queued rows retain their terminal sent/failed state after dispatch.
  */
 import { index, integer, pgEnum, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 import { conferenceTable } from './conference-schema';

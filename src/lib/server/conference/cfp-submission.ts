@@ -38,6 +38,7 @@ import {
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { publishedFormFor } from './cfp-form';
+import { dispatchConferenceEmails } from './email-dispatcher';
 
 /** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
 export type CallState = 'open' | 'not_yet_open' | 'closed';
@@ -673,6 +674,7 @@ export async function saveSubmission(
 	if (refusal) return refusal;
 
 	const submissionId = await db.transaction((tx) => persist(tx, userId, call, input, options));
+	if (options.submit) await dispatchConferenceEmails(call.conference.id);
 
 	return { ok: true, submissionId, status: options.submit ? 'submitted' : 'draft' };
 }

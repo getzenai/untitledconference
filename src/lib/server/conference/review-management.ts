@@ -15,6 +15,7 @@ import {
 	type Review
 } from '$lib/server/db/conference/review-schema';
 import { and, asc, count, eq, inArray, ne, or, sql } from 'drizzle-orm';
+import { dispatchConferenceEmails } from './email-dispatcher';
 
 export type AssignmentReviewer = {
 	userId: string;
@@ -362,8 +363,7 @@ export async function reviewerProgress(conferenceId: number): Promise<ReviewerPr
 
 export type ReminderResult = 'queued' | 'already_queued' | 'nothing_outstanding' | 'no_email';
 
-/** Queues one reminder and ignores a repeated click while a successful row exists. */
-export async function queueReviewReminder(
+async function queueReviewReminderRow(
 	conference: Conference,
 	reviewerUserId: string
 ): Promise<ReminderResult> {
@@ -415,4 +415,14 @@ export async function queueReviewReminder(
 		});
 		return 'queued';
 	});
+}
+
+/** Queues one reminder and ignores a repeated click while a successful row exists. */
+export async function queueReviewReminder(
+	conference: Conference,
+	reviewerUserId: string
+): Promise<ReminderResult> {
+	const result = await queueReviewReminderRow(conference, reviewerUserId);
+	if (result === 'queued') await dispatchConferenceEmails(conference.id);
+	return result;
 }

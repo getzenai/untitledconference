@@ -17,6 +17,13 @@
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const filtered = $derived(Boolean(data.filters.q || data.filters.status));
+	const mailRecipients = $derived(
+		new Set(
+			data.speakers
+				.map((speaker: { email: string | null }) => speaker.email?.toLowerCase())
+				.filter(Boolean)
+		).size
+	);
 
 	let busy = $state(false);
 	let editingId = $state<number | null>(null);
@@ -154,6 +161,62 @@
 			</a>
 		{/each}
 	</div>
+
+	<!-- Organizer-authored mail follows the same URL filters as the roster. -->
+	<section
+		class="border-border bg-card max-w-3xl rounded-lg border p-4"
+		data-testid="speaker-mail-compose"
+	>
+		<h2 class="text-sm font-semibold">Email filtered speakers</h2>
+		<p class="text-muted-foreground mt-0.5 text-xs">
+			{mailRecipients} recipient{mailRecipients === 1 ? '' : 's'} with an email address
+			{#if filtered}
+				in the current filter{/if}. Delivery is recorded in the conference mail log.
+		</p>
+		<form method="POST" action="?/compose" use:enhance={submitting} class="mt-3 grid gap-3">
+			<input type="hidden" name="q" value={data.filters.q ?? ''} />
+			<input type="hidden" name="status" value={data.filters.status ?? ''} />
+			<div>
+				<label
+					class="text-muted-foreground mb-1 block text-xs font-medium"
+					for="speaker-mail-subject"
+				>
+					Subject
+				</label>
+				<Input
+					id="speaker-mail-subject"
+					name="subject"
+					maxlength={200}
+					required
+					data-testid="speaker-mail-subject"
+				/>
+			</div>
+			<div>
+				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="speaker-mail-body">
+					Message
+				</label>
+				<textarea
+					id="speaker-mail-body"
+					name="body"
+					rows="5"
+					maxlength="10000"
+					required
+					class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+					data-testid="speaker-mail-body"
+				></textarea>
+			</div>
+			<div>
+				<Button
+					type="submit"
+					size="sm"
+					disabled={busy || mailRecipients === 0}
+					data-testid="speaker-mail-submit"
+				>
+					Send to {mailRecipients} speaker{mailRecipients === 1 ? '' : 's'}
+				</Button>
+			</div>
+		</form>
+	</section>
 
 	<!-- Add speaker -->
 	<section class="border-border bg-card max-w-3xl rounded-lg border p-4" data-testid="speakers-add">
