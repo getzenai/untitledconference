@@ -80,6 +80,21 @@ export const cfpFormTable = pgTable('cfp_form', {
 	opensAt: timestamp('opens_at', { withTimezone: true }),
 	/** CFP-04 and CFP-16: the public portal closes and editing locks once this passes. */
 	closesAt: timestamp('closes_at', { withTimezone: true }),
+	/**
+	 * Which of the form's built-in questions this call does NOT ask (#159), as a
+	 * JSON array of keys from `$lib/conference/fixed-questions`.
+	 *
+	 * The removals rather than the inclusions, so that null — every row written
+	 * before #159, and every row a future column default forgets about — means
+	 * "asks all of them", which is what those calls do. Storing the inclusions
+	 * would make an empty value mean an empty form, and the migration would have
+	 * to guess for every existing conference.
+	 *
+	 * Not a join table: these are not rows anywhere else, they are named controls
+	 * in one component, and a table would invite a foreign key to a field that
+	 * only exists in the markup.
+	 */
+	hiddenFixedFields: text('hidden_fixed_fields'),
 	status: cfpFormStatus('status').notNull().default('draft'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

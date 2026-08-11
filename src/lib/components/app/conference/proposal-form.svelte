@@ -16,6 +16,11 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import {
+		ALL_FIXED_QUESTIONS_SHOWN,
+		asks,
+		type FixedQuestionVisibility
+	} from '$lib/conference/fixed-questions';
+	import {
 		parseOptions,
 		visibleFields,
 		type AnswerContext,
@@ -25,6 +30,12 @@
 
 	type Props = {
 		fields: FieldDefinition[];
+		/**
+		 * Which built-in questions this call asks (#159). Defaults to all of them,
+		 * so a caller that has no conference in hand still renders the whole form
+		 * rather than an empty one.
+		 */
+		fixed?: FixedQuestionVisibility;
 		formats: { id: number; name: string; minutes: number | null }[];
 		tracks: { id: number; name: string }[];
 		initial: ProposalDraft;
@@ -47,6 +58,7 @@
 
 	let {
 		fields,
+		fixed = ALL_FIXED_QUESTIONS_SHOWN,
 		formats,
 		tracks,
 		initial,
@@ -71,6 +83,24 @@
 
 	const context = $derived<AnswerContext>({ sessionFormatId, trackId, answers });
 	const shown = $derived(visibleFields(fields, context));
+
+	/**
+	 * Whether this call asks a given built-in question.
+	 *
+	 * A removed control is not rendered at all rather than hidden with CSS: the
+	 * server drops answers to questions it does not ask, so a control that still
+	 * posted would look like it collected something and silently would not.
+	 */
+	const asked = $derived((key: string) => asks(fixed, key));
+
+	/**
+	 * The two-up rows collapse to one column when only one of their pair is left.
+	 *
+	 * `sm:grid-cols-2` on a row holding a single control leaves the other half
+	 * empty, which reads as a control that failed to render rather than one the
+	 * organizer removed.
+	 */
+	const pairClass = (both: boolean) => (both ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4');
 
 	/**
 	 * The sort key is a guess until someone corrects it, and it stops being one the
@@ -129,61 +159,75 @@
 			{/if}
 		</label>
 
-		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Abstract *</span>
-			<Textarea name="abstract" rows={6} class="mt-1" value={initial.abstract} />
-			{#if form?.errors?.abstract}
-				<span class="text-status-bad mt-1 block text-xs">{form.errors.abstract}</span>
-			{/if}
-		</label>
-
-		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Key takeaway</span>
-			<Input name="keyTakeaway" class="mt-1" value={initial.keyTakeaway} />
-		</label>
-
-		<div class="grid gap-4 sm:grid-cols-2">
+		{#if asked('abstract')}
 			<label class="block text-sm">
-				<span class="text-muted-foreground text-xs">Session format</span>
-				<select
-					name="sessionFormatId"
-					class="{selectClass} mt-1 w-full"
-					onchange={(e) => (sessionFormatId = Number(e.currentTarget.value) || null)}
-				>
-					<option value="">—</option>
-					{#each formats as format (format.id)}
-						<option value={format.id} selected={format.id === initial.sessionFormatId}>
-							{format.name}{#if format.minutes}
-								({format.minutes} min){/if}
-						</option>
-					{/each}
-				</select>
+				<span class="text-muted-foreground text-xs">Abstract *</span>
+				<Textarea name="abstract" rows={6} class="mt-1" value={initial.abstract} />
+				{#if form?.errors?.abstract}
+					<span class="text-status-bad mt-1 block text-xs">{form.errors.abstract}</span>
+				{/if}
 			</label>
+		{/if}
 
+		{#if asked('keyTakeaway')}
 			<label class="block text-sm">
-				<span class="text-muted-foreground text-xs">Track</span>
-				<select
-					name="trackId"
-					class="{selectClass} mt-1 w-full"
-					onchange={(e) => (trackId = Number(e.currentTarget.value) || null)}
-				>
-					<option value="">—</option>
-					{#each tracks as track (track.id)}
-						<option value={track.id} selected={track.id === initial.trackId}>{track.name}</option>
-					{/each}
-				</select>
+				<span class="text-muted-foreground text-xs">Key takeaway</span>
+				<Input name="keyTakeaway" class="mt-1" value={initial.keyTakeaway} />
 			</label>
-		</div>
+		{/if}
 
-		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Audience level</span>
-			<Input
-				name="audienceLevel"
-				class="mt-1"
-				value={initial.audienceLevel}
-				placeholder="Beginner, intermediate, advanced"
-			/>
-		</label>
+		{#if asked('sessionFormatId') || asked('trackId')}
+			<div class={pairClass(asked('sessionFormatId') && asked('trackId'))}>
+				{#if asked('sessionFormatId')}
+					<label class="block text-sm">
+						<span class="text-muted-foreground text-xs">Session format</span>
+						<select
+							name="sessionFormatId"
+							class="{selectClass} mt-1 w-full"
+							onchange={(e) => (sessionFormatId = Number(e.currentTarget.value) || null)}
+						>
+							<option value="">—</option>
+							{#each formats as format (format.id)}
+								<option value={format.id} selected={format.id === initial.sessionFormatId}>
+									{format.name}{#if format.minutes}
+										({format.minutes} min){/if}
+								</option>
+							{/each}
+						</select>
+					</label>
+				{/if}
+
+				{#if asked('trackId')}
+					<label class="block text-sm">
+						<span class="text-muted-foreground text-xs">Track</span>
+						<select
+							name="trackId"
+							class="{selectClass} mt-1 w-full"
+							onchange={(e) => (trackId = Number(e.currentTarget.value) || null)}
+						>
+							<option value="">—</option>
+							{#each tracks as track (track.id)}
+								<option value={track.id} selected={track.id === initial.trackId}
+									>{track.name}</option
+								>
+							{/each}
+						</select>
+					</label>
+				{/if}
+			</div>
+		{/if}
+
+		{#if asked('audienceLevel')}
+			<label class="block text-sm">
+				<span class="text-muted-foreground text-xs">Audience level</span>
+				<Input
+					name="audienceLevel"
+					class="mt-1"
+					value={initial.audienceLevel}
+					placeholder="Beginner, intermediate, advanced"
+				/>
+			</label>
+		{/if}
 	</section>
 
 	{#if shown.length > 0}
@@ -246,7 +290,7 @@
 	<section class="space-y-4">
 		<h3 class="text-sm font-medium">About you</h3>
 
-		<div class="grid gap-4 sm:grid-cols-2">
+		<div class={pairClass(asked('speakerSortName'))}>
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Name *</span>
 				<Input
@@ -260,24 +304,26 @@
 				{/if}
 			</label>
 
-			<label class="block text-sm">
-				<span class="text-muted-foreground text-xs">Sort as</span>
-				<Input
-					name="speakerSortName"
-					class="mt-1"
-					value={sortName}
-					oninput={(e) => {
-						sortNameTouched = true;
-						sortName = e.currentTarget.value;
-					}}
-				/>
-				<span class="text-muted-foreground mt-1 block text-xs">
-					How your name is filed in alphabetical lists. Correct it if the guess is wrong.
-				</span>
-			</label>
+			{#if asked('speakerSortName')}
+				<label class="block text-sm">
+					<span class="text-muted-foreground text-xs">Sort as</span>
+					<Input
+						name="speakerSortName"
+						class="mt-1"
+						value={sortName}
+						oninput={(e) => {
+							sortNameTouched = true;
+							sortName = e.currentTarget.value;
+						}}
+					/>
+					<span class="text-muted-foreground mt-1 block text-xs">
+						How your name is filed in alphabetical lists. Correct it if the guess is wrong.
+					</span>
+				</label>
+			{/if}
 		</div>
 
-		<div class="grid gap-4 sm:grid-cols-2">
+		<div class={pairClass(asked('speakerJobTitle'))}>
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Email *</span>
 				<Input name="speakerEmail" type="email" class="mt-1" value={initial.speaker.email} />
@@ -286,57 +332,65 @@
 				{/if}
 			</label>
 
-			<label class="block text-sm">
-				<span class="text-muted-foreground text-xs">Job title</span>
-				<Input name="speakerJobTitle" class="mt-1" value={initial.speaker.jobTitle} />
-			</label>
+			{#if asked('speakerJobTitle')}
+				<label class="block text-sm">
+					<span class="text-muted-foreground text-xs">Job title</span>
+					<Input name="speakerJobTitle" class="mt-1" value={initial.speaker.jobTitle} />
+				</label>
+			{/if}
 		</div>
 
-		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Company</span>
-			<Input name="speakerCompany" class="mt-1" value={initial.speaker.company} />
-		</label>
+		{#if asked('speakerCompany')}
+			<label class="block text-sm">
+				<span class="text-muted-foreground text-xs">Company</span>
+				<Input name="speakerCompany" class="mt-1" value={initial.speaker.company} />
+			</label>
+		{/if}
 
-		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Short bio</span>
-			<Textarea name="speakerBio" rows={4} class="mt-1" value={initial.speaker.bio} />
-		</label>
+		{#if asked('speakerBio')}
+			<label class="block text-sm">
+				<span class="text-muted-foreground text-xs">Short bio</span>
+				<Textarea name="speakerBio" rows={4} class="mt-1" value={initial.speaker.bio} />
+			</label>
+		{/if}
 	</section>
 
-	<section class="space-y-3">
-		<h3 class="text-sm font-medium">Co-presenters</h3>
-		<p class="text-muted-foreground text-sm">
-			Anyone presenting this talk with you. They appear on the programme alongside you.
-		</p>
+	{#if asked('coSpeakers')}
+		<section class="space-y-3">
+			<h3 class="text-sm font-medium">Co-presenters</h3>
+			<p class="text-muted-foreground text-sm">
+				Anyone presenting this talk with you. They appear on the programme alongside you.
+			</p>
 
-		{#each coSpeakers as co (co.key)}
-			<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-				<Input name="co-name" placeholder="Name" value={co.name} />
-				<Input name="co-email" type="email" placeholder="Email" value={co.email} />
-				<div class="flex gap-2">
-					<Input name="co-role" placeholder="Role" class="sm:w-28" value={co.roleLabel} />
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onclick={() => (coSpeakers = coSpeakers.filter((c) => c.key !== co.key))}
-					>
-						Remove
-					</Button>
+			{#each coSpeakers as co (co.key)}
+				<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+					<Input name="co-name" placeholder="Name" value={co.name} />
+					<Input name="co-email" type="email" placeholder="Email" value={co.email} />
+					<div class="flex gap-2">
+						<Input name="co-role" placeholder="Role" class="sm:w-28" value={co.roleLabel} />
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onclick={() => (coSpeakers = coSpeakers.filter((c) => c.key !== co.key))}
+						>
+							Remove
+						</Button>
+					</div>
 				</div>
-			</div>
-		{/each}
+			{/each}
 
-		<Button
-			type="button"
-			variant="outline"
-			size="sm"
-			onclick={() =>
-				(coSpeakers = [...coSpeakers, { key: nextKey++, name: '', email: '', roleLabel: '' }])}
-		>
-			Add a co-presenter
-		</Button>
-	</section>
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				onclick={() =>
+					(coSpeakers = [...coSpeakers, { key: nextKey++, name: '', email: '', roleLabel: '' }])}
+			>
+				Add a co-presenter
+			</Button>
+		</section>
+	{/if}
 
 	{#if signedIn}
 		<div class="flex flex-wrap items-center gap-3 border-t pt-6">

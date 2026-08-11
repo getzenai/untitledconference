@@ -13,6 +13,7 @@
 	 * preview.
 	 */
 	import { enhance } from '$app/forms';
+	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import {
 		FIELD_KINDS,
 		parseOptions,
@@ -75,6 +76,13 @@
 	};
 
 	const fields = $derived(data.fields as unknown as FieldDefinition[]);
+
+	/**
+	 * Which built-in questions this call still asks (#159), read from the stored
+	 * column through the same function the public form uses. Two readers of one
+	 * value, never two interpretations of it.
+	 */
+	const fixedVisibility = $derived(fixedQuestionVisibility(data.form?.hiddenFixedFields));
 
 	// Preview state. Deliberately not persisted: it is a what-if, not a draft.
 	let previewFormat = $state<number | null>(null);
@@ -249,7 +257,7 @@
 					</form>
 				</section>
 
-				<FixedQuestionsList />
+				<FixedQuestionsList visibility={fixedVisibility} {busy} />
 
 				<section class="border-border bg-card rounded-lg border p-4">
 					<h2 class="text-sm font-semibold">
@@ -365,6 +373,7 @@
 					<FixedQuestionsPreview
 						formats={data.formats}
 						tracks={data.tracks}
+						visibility={fixedVisibility}
 						onFormat={(id) => (previewFormat = id)}
 						onTrack={(id) => (previewTrack = id)}
 					/>

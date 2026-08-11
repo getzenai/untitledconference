@@ -98,6 +98,7 @@
 
 		<ProposalForm
 			fields={call.fields}
+			fixed={call.fixed}
 			formats={call.formats}
 			tracks={call.tracks}
 			initial={emptyProposal()}

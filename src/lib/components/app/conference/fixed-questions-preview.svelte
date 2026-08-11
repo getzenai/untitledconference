@@ -8,17 +8,29 @@
 	 * beside the builder is interactive at all.
 	 */
 	import AppSelect from '$lib/components/app/app-select.svelte';
-	import { FIXED_QUESTION_GROUPS } from '$lib/conference/fixed-questions';
+	import {
+		asks,
+		FIXED_QUESTION_GROUPS,
+		type FixedQuestionVisibility
+	} from '$lib/conference/fixed-questions';
 	import { Input } from '$lib/components/ui/input';
 
 	let {
 		formats,
 		tracks,
+		visibility,
 		onFormat,
 		onTrack
 	}: {
 		formats: { id: number; name: string }[];
 		tracks: { id: number; name: string }[];
+		/**
+		 * The removals the organizer has made (#159). The preview answers "what
+		 * will they see", so a question this call no longer asks must be gone from
+		 * it — a picture that still shows a removed control is the same lie the
+		 * read-only list used to tell.
+		 */
+		visibility: FixedQuestionVisibility;
 		onFormat: (id: number | null) => void;
 		onTrack: (id: number | null) => void;
 	} = $props();
@@ -34,11 +46,14 @@
 </script>
 
 {#each FIXED_QUESTION_GROUPS as group (group.title)}
-	<h3 class="text-muted-foreground pt-1 text-xs font-semibold tracking-wide uppercase">
-		{group.title}
-	</h3>
+	{@const questions = group.questions.filter((question) => asks(visibility, question.key))}
+	{#if questions.length > 0}
+		<h3 class="text-muted-foreground pt-1 text-xs font-semibold tracking-wide uppercase">
+			{group.title}
+		</h3>
+	{/if}
 
-	{#each group.questions as question (question.label)}
+	{#each questions as question (question.key)}
 		<div class="block text-sm">
 			<span class="text-muted-foreground text-xs">
 				{question.label}{#if question.required}<span class="text-status-bad"> *</span>{/if}

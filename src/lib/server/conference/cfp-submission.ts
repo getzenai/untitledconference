@@ -16,6 +16,11 @@
  *     the way to `submitted`, never on the way to `draft`.
  */
 import {
+	asks,
+	fixedQuestionVisibility,
+	type FixedQuestionVisibility
+} from '$lib/conference/fixed-questions';
+import {
 	validateAnswers,
 	visibleFields,
 	type AnswerContext,
@@ -64,6 +69,15 @@ export type OpenCall = {
 	fields: FieldDefinition[];
 	formats: { id: number; name: string; minutes: number | null }[];
 	tracks: { id: number; name: string }[];
+	/**
+	 * Which built-in questions this call asks (#159), already resolved from the
+	 * stored column.
+	 *
+	 * Resolved here rather than handed over raw so that the two pages rendering
+	 * the form, and the submit handler validating it, cannot each parse it their
+	 * own way. That is the same reason `visibleFields` is shared.
+	 */
+	fixed: FixedQuestionVisibility;
 };
 
 function callState(opensAt: Date | null, closesAt: Date | null, closed: boolean, now: Date) {
@@ -143,7 +157,8 @@ export async function openCall(slug: string, now = new Date()): Promise<OpenCall
 		),
 		fields: published.fields,
 		formats,
-		tracks
+		tracks,
+		fixed: fixedQuestionVisibility(published.form.hiddenFixedFields)
 	};
 }
 
@@ -231,11 +246,53 @@ export function guessSortName(name: string): string {
 	return `${last}, ${parts.slice(0, -1).join(' ')}`;
 }
 
+/**
+ * The proposal with every answer to a question this call does not ask treated as
+ * if it had never been sent (#159).
+ *
+ * The same rule the conditional fields already follow, applied to the built-in
+ * ones: a control that was not rendered is inconsequential on the server. A POST
+ * is not a form, and nothing stops one carrying the field the screen no longer
+ * draws.
+ *
+ * **Ignored means not written, never written as empty.** The two are easy to
+ * confuse and only one is right: an organizer who removes the abstract has said
+ * what their form asks from now on, not that the abstracts already sitting on
+ * submitted proposals should be deleted the next time each speaker fixes a typo.
+ * The builder's own wording promises exactly that — "answers already given to it
+ * stay on their submissions" — so the columns for unasked questions are left out
+ * of the write entirely (`submissionValues`), and the speaker's profile columns
+ * are skipped rather than cleared (`statedProfileFields`).
+ *
+ * What is blanked here is what has no column to be left alone: a sort key falls
+ * back to the guess made from the name, and co-presenters nobody was asked for
+ * are simply not there.
+ */
+function askedOnly(input: SubmissionInput, fixed: FixedQuestionVisibility): SubmissionInput {
+	return {
+		...input,
+		speaker: {
+			...input.speaker,
+			sortName: asks(fixed, 'speakerSortName') ? input.speaker.sortName : ''
+		},
+		coSpeakers: asks(fixed, 'coSpeakers') ? input.coSpeakers : []
+	};
+}
+
 /** Everything a submission needs before it can leave `draft`. */
-function validateForSubmit(input: SubmissionInput, fields: FieldDefinition[]) {
+function validateForSubmit(
+	input: SubmissionInput,
+	fields: FieldDefinition[],
+	fixed: FixedQuestionVisibility
+) {
 	const errors: Record<string, string> = {};
 	if (!input.title.trim()) errors.title = 'A title is required.';
-	if (!input.abstract?.trim()) errors.abstract = 'An abstract is required.';
+	// A question that is not asked is never required. The abstract is the only
+	// built-in that both is required and can be removed — the other two required
+	// ones identify the speaker and cannot be.
+	if (asks(fixed, 'abstract') && !input.abstract?.trim()) {
+		errors.abstract = 'An abstract is required.';
+	}
 	if (!input.speaker.name.trim()) errors.speakerName = 'Your name is required.';
 	if (!input.speaker.email.trim()) errors.speakerEmail = 'An email address is required.';
 
@@ -260,7 +317,11 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
  * first one recorded — the organizer would be looking at a nameless speaker with
  * no way to know why.
  */
-function statedProfileFields(speaker: SpeakerInput, submitting: boolean) {
+function statedProfileFields(
+	speaker: SpeakerInput,
+	submitting: boolean,
+	fixed: FixedQuestionVisibility
+) {
 	const stated: Record<string, string | null> = {};
 	const name = speaker.name.trim();
 	const sortName = speaker.sortName.trim();
@@ -274,7 +335,13 @@ function statedProfileFields(speaker: SpeakerInput, submitting: boolean) {
 	// treating it as a decision would erase what the previous save recorded.
 	// `name`, `sortName` and `email` are never cleared — they are required to
 	// submit at all, so empty there is a form error, not an intention.
+	//
+	// A question this call does not ask (#159) is never a decision either. The
+	// speaker profile belongs to the organization, not to one call: a conference
+	// that stops asking for a company would otherwise erase the company its
+	// speakers gave on the roster or on another call's form.
 	for (const key of ['jobTitle', 'company', 'bio'] as const) {
+		if (!asks(fixed, `speaker${key[0].toUpperCase()}${key.slice(1)}`)) continue;
 		const value = speaker[key];
 		if (value) stated[key] = value;
 		else if (submitting) stated[key] = null;
@@ -339,9 +406,10 @@ async function upsertOwnProfile(
 	organizationId: string,
 	userId: string,
 	speaker: SpeakerInput,
-	submitting: boolean
+	submitting: boolean,
+	fixed: FixedQuestionVisibility
 ): Promise<number> {
-	const stated = statedProfileFields(speaker, submitting);
+	const stated = statedProfileFields(speaker, submitting, fixed);
 
 	const [existing] = await tx
 		.select({ id: speakerProfileTable.id })
@@ -559,7 +627,7 @@ async function refuseSave(
 	if (call.state !== 'open') return { ok: false, reason: 'closed' };
 
 	if (options.submit) {
-		const { errors, fieldErrors } = validateForSubmit(input, call.fields);
+		const { errors, fieldErrors } = validateForSubmit(input, call.fields, call.fixed);
 		if (Object.keys(errors).length > 0 || Object.keys(fieldErrors).length > 0) {
 			return { ok: false, reason: 'invalid', errors, fieldErrors };
 		}
@@ -632,15 +700,22 @@ function submissionValues(
 ) {
 	const arrived = alreadyIn(prior);
 
+	// A question this call does not ask contributes no column at all (#159). On an
+	// insert that leaves it null, which is what an unasked question means; on an
+	// update it leaves whatever the proposal already said, which is what the
+	// builder promised when the organizer removed the question.
+	const asked = <T>(key: string, value: T) =>
+		asks(call.fixed, key) ? ({ [key]: value } as Record<string, T>) : {};
+
 	return {
 		conferenceId: call.conference.id,
 		cfpFormId: call.form.id,
 		title: input.title.trim(),
-		abstract: input.abstract,
-		keyTakeaway: input.keyTakeaway,
-		audienceLevel: input.audienceLevel,
-		sessionFormatId: input.sessionFormatId,
-		trackId: input.trackId,
+		...asked('abstract', input.abstract),
+		...asked('keyTakeaway', input.keyTakeaway),
+		...asked('audienceLevel', input.audienceLevel),
+		...asked('sessionFormatId', input.sessionFormatId),
+		...asked('trackId', input.trackId),
 		// An edit keeps whatever standing the proposal already has — `in_review`
 		// stays `in_review`, `submitted` stays `submitted`. Only a first submit
 		// moves a draft forward.
@@ -662,7 +737,8 @@ async function persist(
 		call.conference.organizationId,
 		userId,
 		input.speaker,
-		options.submit
+		options.submit,
+		call.fixed
 	);
 
 	// Read inside the transaction rather than reusing what `refuseSave` saw: the
@@ -727,10 +803,15 @@ export async function saveSubmission(
 	const call = await openCall(slug);
 	if (!call) return { ok: false, reason: 'not_found' };
 
-	const refusal = await refuseSave(userId, call, input, options);
+	// Scrubbed once, at the door, so validation and the write see the same
+	// proposal. Anything answering a question this call does not ask is gone from
+	// here on.
+	const asked = askedOnly(input, call.fixed);
+
+	const refusal = await refuseSave(userId, call, asked, options);
 	if (refusal) return refusal;
 
-	const submissionId = await db.transaction((tx) => persist(tx, userId, call, input, options));
+	const submissionId = await db.transaction((tx) => persist(tx, userId, call, asked, options));
 	if (options.submit) await dispatchConferenceEmails(call.conference.id);
 
 	return { ok: true, submissionId, status: options.submit ? 'submitted' : 'draft' };
