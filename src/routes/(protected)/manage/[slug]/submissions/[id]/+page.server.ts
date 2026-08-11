@@ -12,6 +12,7 @@ import {
 	setReviewAssignment,
 	type AssignmentResult
 } from '$lib/server/conference/review-management';
+import { ownReviewAccess } from '$lib/server/conference/reviewer';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -35,15 +36,20 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
 	if (!submission) throw error(404, 'Submission not found');
-	const [notificationStatuses, assignmentRounds] = await Promise.all([
+	const [notificationStatuses, assignmentRounds, ownReview] = await Promise.all([
 		decisionNotificationStatuses(conference.id, [submission]),
-		reviewAssignmentMatrix(conference.id, submission.id)
+		reviewAssignmentMatrix(conference.id, submission.id),
+		// An organizer who also holds a reviewer seat writes their review on the
+		// reviewer surface, not here — this only says whether that door is open for
+		// them, and it asks the same two questions that surface would.
+		ownReviewAccess(conference.id, locals.user!.id, submission.id)
 	]);
 
 	return {
 		submission,
 		notificationStatus: notificationStatuses[submission.id] ?? null,
-		assignmentRounds
+		assignmentRounds,
+		ownReview
 	};
 };
 

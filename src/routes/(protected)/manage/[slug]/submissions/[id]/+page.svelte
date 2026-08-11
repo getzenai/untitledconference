@@ -223,6 +223,52 @@
 				</ul>
 			{/if}
 
+			<!--
+			The organizer's own review, when they have one.
+
+			Reviews are not written here and should not be: the reviewer form carries
+			the round's criteria, the blind-mode rules and the recusal path, and a
+			second copy of it on this screen would be a second implementation of
+			#33's guarantees. What was missing was the door — an organizer assigned to
+			their own conference had to remember that /review exists and navigate to
+			it by hand.
+
+			The line stays honest in the other direction too: when there is no door,
+			it says what would open one instead of silently offering nothing.
+		-->
+			<div class="border-border mt-4 border-t pt-4" data-testid="own-review">
+				{#if data.ownReview}
+					<div class="flex flex-wrap items-center justify-between gap-3">
+						<p class="text-sm">
+							{data.ownReview.status === 'submitted'
+								? 'You have reviewed this submission.'
+								: 'This submission is assigned to you for review.'}
+						</p>
+						<Button
+							href="/review/{data.conference.slug}/{s.id}"
+							variant={data.ownReview.status === 'submitted' ? 'outline' : 'default'}
+							size="sm"
+						>
+							{data.ownReview.status === 'submitted' ? 'Open your review' : 'Write your review'}
+						</Button>
+					</div>
+				{:else}
+					<p class="text-muted-foreground text-sm">
+						Reviews are written by the reviewers assigned below. To write one yourself, take a
+						reviewer seat in
+						<a class="underline underline-offset-4" href="{base}/people">Team &amp; reviewers</a>
+						<!--
+							The second half names the step that is actually next: with no round
+							yet, "assign yourself to a round" points at a control that is not
+							there — and the block below already says so.
+						-->
+						{data.assignmentRounds.length === 0
+							? 'and create a review round.'
+							: 'and assign yourself to a round here.'}
+					</p>
+				{/if}
+			</div>
+
 			<div class="border-border mt-4 border-t pt-4" data-testid="review-assignments">
 				<div class="flex flex-wrap items-baseline justify-between gap-2">
 					<h3 class="text-sm font-semibold">Reviewer assignments</h3>
