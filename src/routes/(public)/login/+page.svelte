@@ -4,6 +4,7 @@
 	import { EventNames, identifyUser, trackEvent } from '$lib/analytics/posthog';
 	import { authClient } from '$lib/auth-client';
 	import AuthShell from '$lib/components/app/auth/auth-shell.svelte';
+	import { markGooseWelcome } from '$lib/goose-welcome';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Form from '$lib/components/ui/form';
 	import { Input } from '$lib/components/ui/input';
@@ -79,6 +80,12 @@
 						const rawReturnTo = page.url.searchParams.get('returnTo') || '/home';
 						const returnTo =
 							rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/home';
+
+						// Goose easter egg: one-time "welcome back" toast, consumed by the
+						// protected layout on mount. sessionStorage rather than a query
+						// param so it survives the redirect without showing up in the URL.
+						markGooseWelcome(sessionStorage);
+
 						await goto(returnTo);
 					} else {
 						errors.set({ _errors: ['Login failed. Please try again.'] });

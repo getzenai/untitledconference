@@ -54,7 +54,10 @@ async function save(
 		error(404, 'This conference is not accepting proposals');
 	}
 
-	redirect(303, `/portal/submissions/${result.submissionId}`);
+	// `justSubmitted` is a transient signal for the goose-feather confetti, not
+	// part of the page's truth — the confirmation banner below still reads off
+	// the submission's status, not this param, and the page strips it on mount.
+	redirect(303, `/portal/submissions/${result.submissionId}${submit ? '?justSubmitted=1' : ''}`);
 }
 
 export const actions: Actions = {
