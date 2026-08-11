@@ -558,7 +558,7 @@
 														</Badge>
 													</span>
 
-													{#each clashes as clash (clash)}
+													{#each clashes as clash, ci (ci)}
 														<span
 															data-testid="agenda-conflict"
 															class="text-status-bad block text-xs font-medium"

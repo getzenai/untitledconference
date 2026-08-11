@@ -117,6 +117,14 @@
 							>
 								{row.title}
 							</a>
+							<!-- Which rounds this talk sits in for me. One row per submission, so
+							     without this a reviewer holding it in two rounds cannot tell that
+							     finishing one leaves the other open. -->
+							{#if row.rounds.length > 1}
+								<span class="text-muted-foreground mt-0.5 block text-xs">
+									{row.rounds.join(' · ')}
+								</span>
+							{/if}
 						</td>
 						<td class="text-muted-foreground py-2 pr-4">{row.track ?? '—'}</td>
 						<td class="py-2 pr-4 tabular-nums">{row.reviewsSubmitted}/{row.reviewsAssigned}</td>

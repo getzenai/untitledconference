@@ -111,7 +111,7 @@
 			aria-label="Submissions per day over the last {days.length} days, {total} in total"
 		>
 			<!-- Solid hairlines a step off the surface: a grid is orientation, not data. -->
-			{#each ticks as tick (tick)}
+			{#each ticks as tick, ti (ti)}
 				<line
 					x1={PAD.left}
 					x2={W - PAD.right}
