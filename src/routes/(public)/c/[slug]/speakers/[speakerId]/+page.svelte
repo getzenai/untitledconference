@@ -46,6 +46,26 @@
 			<p class="mt-6 text-sm leading-relaxed">{speaker.bio}</p>
 		{/if}
 
+		{#if speaker.links.length > 0}
+			<ul class="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm">
+				<!-- Keyed on position, not on the URL: nothing stops a speaker putting the
+				     same address in two rows, and a duplicate key throws during hydration
+				     and leaves this page blank (#145 was five of these). -->
+				{#each speaker.links as link, i (i)}
+					<li>
+						<!-- `noopener` because these are addresses a speaker typed: the tab
+						     they open should not get a handle on this page. -->
+						<a
+							href={link.url}
+							rel="noopener noreferrer nofollow"
+							target="_blank"
+							class="underline underline-offset-4">{link.label}</a
+						>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+
 		<h3 class="mt-8 text-sm font-medium">
 			{sessions.length === 1 ? 'Session' : 'Sessions'}
 		</h3>

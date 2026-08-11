@@ -14,6 +14,7 @@
  * Times are ISO-8601 strings, not `Date`: they cross the server/client boundary
  * and must survive serialisation unchanged.
  */
+import type { SpeakerLink } from './speaker-links';
 
 export type PublicSpeaker = {
 	id: string;
@@ -29,6 +30,8 @@ export type PublicSpeaker = {
 	company: string | null;
 	headshotUrl: string | null;
 	bio: string | null;
+	/** The speaker's own links (SPK-08), already filtered to publishable URLs. */
+	links: SpeakerLink[];
 };
 
 export type PublicSession = {

@@ -12,5 +12,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		myTasks(locals.user.id)
 	]);
 
-	return { submissions, tasks };
+	// Who this portal belongs to. The page carried no identity at all, which on a
+	// surface reached by a link in an email is exactly where someone needs to be
+	// told which of their addresses they are signed in as.
+	return { submissions, tasks, account: { name: locals.user.name, email: locals.user.email } };
 };
