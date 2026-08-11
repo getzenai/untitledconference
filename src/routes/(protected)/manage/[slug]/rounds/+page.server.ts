@@ -9,6 +9,7 @@ import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	addReviewRound,
 	deleteReviewRound,
+	renameReviewRound,
 	reviewRounds
 } from '$lib/server/conference/review-rounds';
 import { fail } from '@sveltejs/kit';
@@ -31,6 +32,22 @@ export const actions: Actions = {
 
 		if (!result.ok) return fail(400, { message: result.message });
 		return { message: 'Round added. Assign submissions to it from a submission’s page.' };
+	},
+
+	rename: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const id = Number(form.get('id'));
+
+		if (!Number.isInteger(id)) return fail(400, { message: 'Unknown round.' });
+
+		const result = await renameReviewRound(conference.id, id, {
+			name: String(form.get('name') ?? ''),
+			anonymized: form.get('anonymized') === 'on'
+		});
+
+		if (!result.ok) return fail(400, { message: result.message });
+		return { message: 'Round saved.' };
 	},
 
 	remove: async ({ locals, params, request }) => {
