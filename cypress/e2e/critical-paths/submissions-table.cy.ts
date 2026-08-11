@@ -83,6 +83,21 @@ describe('Submissions table', () => {
 		beforeEach(() => {
 			cy.viewport(WIDE.width, WIDE.height);
 			cy.visit(`/manage/${slug}/submissions`);
+			// The checkbox applies itself through `onchange` on the filter form, which
+			// only exists once Svelte has hydrated. Cypress clicks as soon as the SSR
+			// markup is on screen, and a change event fired before the handler is
+			// attached goes nowhere — `check()` does not retry, so the whole test then
+			// waits out its timeout on a URL that was never going to change. It hydrates
+			// in time on a developer machine and loses the race on a loaded CI runner,
+			// which is the worst shape a flake can have.
+			//
+			// Waiting for the marker rather than re-clicking until the URL moves, on
+			// purpose: a retry loop would also paper over the day this filter genuinely
+			// stops applying, and that is the regression this spec exists to catch.
+			//
+			// The sort tests above need none of this — a column header is a real link
+			// and works with no JavaScript at all.
+			cy.waitForHydration();
 		});
 
 		it('filters the pile down to what nobody has reviewed', () => {
