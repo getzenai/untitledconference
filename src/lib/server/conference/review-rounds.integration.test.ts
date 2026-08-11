@@ -18,7 +18,12 @@ import { conferenceTable, type Conference } from '$lib/server/db/conference/conf
 import { evaluationPlanTable, reviewTable } from '$lib/server/db/conference/review-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { addReviewRound, deleteReviewRound, reviewRounds } from './review-rounds';
+import {
+	addReviewRound,
+	deleteReviewRound,
+	renameReviewRound,
+	reviewRounds
+} from './review-rounds';
 
 const suffix = `rounds-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -176,5 +181,89 @@ describe('deleteReviewRound', () => {
 		const result = await deleteReviewRound(conference.id, mine.id);
 		expect(result.ok).toBe(false);
 		expect((await reviewRounds(otherConference.id)).map((r) => r.id)).toContain(mine.id);
+	});
+});
+
+/**
+ * A round used to be write-once: created from a form and, if the name was wrong,
+ * wrong for good — while the name is what reviewers navigate by and what the
+ * queue prints beside a talk held in two rounds.
+ */
+describe('renameReviewRound', () => {
+	it('renames a round and keeps its assignments', async () => {
+		const created = await addReviewRound(conference.id, { name: 'Rond 1', anonymized: false });
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Renamed round talk', status: 'submitted' })
+			.returning({ id: submissionTable.id });
+		await db.insert(reviewTable).values({
+			reviewRoundId: created.id,
+			submissionId: submission.id,
+			reviewerUserId: reviewerId,
+			status: 'assigned'
+		});
+
+		expect(
+			await renameReviewRound(conference.id, created.id, { name: 'Round 1', anonymized: false })
+		).toEqual({ ok: true });
+
+		const round = (await reviewRounds(conference.id)).find((r) => r.id === created.id);
+		expect(round?.name).toBe('Round 1');
+		// The distinction from remove-and-re-add, which refuses here for this reason.
+		expect(round?.assignments).toBe(1);
+	});
+
+	it('changes whether the round hides reviewers, including on reviews already filed', async () => {
+		const created = await addReviewRound(conference.id, { name: 'Open round', anonymized: false });
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		expect(
+			await renameReviewRound(conference.id, created.id, { name: 'Blind round', anonymized: true })
+		).toEqual({ ok: true });
+
+		const round = (await reviewRounds(conference.id)).find((r) => r.id === created.id);
+		expect(round?.anonymized).toBe(true);
+	});
+
+	it('refuses an empty name rather than storing one', async () => {
+		const created = await addReviewRound(conference.id, {
+			name: 'Keeps its name',
+			anonymized: false
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const result = await renameReviewRound(conference.id, created.id, {
+			name: '   ',
+			anonymized: false
+		});
+
+		expect(result.ok).toBe(false);
+		expect((await reviewRounds(conference.id)).find((r) => r.id === created.id)?.name).toBe(
+			'Keeps its name'
+		);
+	});
+
+	it('refuses a round id from another conference', async () => {
+		const theirs = await addReviewRound(otherConference.id, {
+			name: 'Theirs',
+			anonymized: false
+		});
+		expect(theirs.ok).toBe(true);
+		if (!theirs.ok) return;
+
+		const result = await renameReviewRound(conference.id, theirs.id, {
+			name: 'Renamed by a stranger',
+			anonymized: true
+		});
+
+		expect(result.ok).toBe(false);
+		const untouched = (await reviewRounds(otherConference.id)).find((r) => r.id === theirs.id);
+		expect(untouched?.name).toBe('Theirs');
+		expect(untouched?.anonymized).toBe(false);
 	});
 });

@@ -8,6 +8,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
+	import { Input } from '$lib/components/ui/input';
 	import EmptyState from '$lib/components/empty-state.svelte';
 
 	let { data, form } = $props();
@@ -93,22 +94,51 @@
 		{:else}
 			<ul class="divide-border border-border bg-card mt-3 divide-y rounded-lg border">
 				{#each data.rounds as round (round.id)}
-					<li class="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
-						<div>
-							<p class="text-sm font-medium">{round.name}</p>
-							<p class="text-muted-foreground mt-0.5 text-sm">
-								{progress(round.assignments, round.completed)}{#if round.anonymized}<span
-										class="px-1.5">·</span
-									>authors hidden{/if}
-							</p>
+					<li class="px-4 py-3">
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<!-- The name is a field, not a label: a round used to be write-once, and
+							     its name is what reviewers navigate by and what the queue prints
+							     beside a talk held in two rounds. Removing and re-adding is not the
+							     same operation — that is refused once anyone is assigned. -->
+							<form
+								method="POST"
+								action="?/rename"
+								use:enhance={submitting}
+								class="flex flex-1 flex-wrap items-center gap-2"
+							>
+								<input type="hidden" name="id" value={round.id} />
+								<Input
+									name="name"
+									value={round.name}
+									aria-label="Round name"
+									class="h-8 min-w-[10rem] flex-1 text-sm"
+									required
+								/>
+								<label class="text-muted-foreground flex items-center gap-2 text-xs">
+									<input
+										type="checkbox"
+										name="anonymized"
+										checked={round.anonymized}
+										class="accent-primary size-4"
+									/>
+									Authors hidden
+								</label>
+								<Button type="submit" size="sm" variant="outline" disabled={busy}>Save</Button>
+							</form>
+
+							{#if round.assignments === 0}
+								<form method="POST" action="?/remove" use:enhance={submitting}>
+									<input type="hidden" name="id" value={round.id} />
+									<Button type="submit" variant="ghost" disabled={busy}>Remove</Button>
+								</form>
+							{/if}
 						</div>
 
-						{#if round.assignments === 0}
-							<form method="POST" action="?/remove" use:enhance={submitting}>
-								<input type="hidden" name="id" value={round.id} />
-								<Button type="submit" variant="ghost" disabled={busy}>Remove</Button>
-							</form>
-						{/if}
+						<p class="text-muted-foreground mt-1.5 text-sm">
+							{progress(round.assignments, round.completed)}{#if round.anonymized}<span
+									class="px-1.5">·</span
+								>authors hidden{/if}
+						</p>
 					</li>
 				{/each}
 			</ul>

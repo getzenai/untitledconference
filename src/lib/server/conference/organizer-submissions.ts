@@ -9,6 +9,7 @@
  * is the one view that must show it. Reviewer and public loaders never call these
  * functions.
  */
+import { anonymousReviewerLabels } from '$lib/conference/anonymous-reviewers';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
@@ -548,8 +549,13 @@ function groupReviews(rows: ReviewRow[]) {
 		}
 	}
 
+	// Numbered here rather than at the row, because "Reviewer 1" only means
+	// anything relative to the other reviewers of the same submission.
+	const labels = anonymousReviewerLabels([...byReview.values()]);
+
 	return [...byReview.values()].map((review) => ({
 		...review,
+		reviewerName: labels.get(review.id) ?? review.reviewerName,
 		// The same weighting the table's aggregate uses — a reviewer's own average must
 		// not be computed by a second rule, or the two numbers disagree on one screen.
 		score: submissionScore([{ submitted: review.status === 'submitted', scores: review.scores }])
@@ -562,7 +568,8 @@ function emptyReview(r: ReviewRow) {
 		// ABS-07: the round can hide the reviewer's identity from their peers. The
 		// organizer still needs to know who has and has not answered, so anonymisation
 		// labels the row rather than dropping it.
-		reviewerName: r.anonymized ? `Reviewer ${r.reviewId}` : (r.reviewerName ?? 'Reviewer'),
+		anonymized: r.anonymized,
+		reviewerName: r.reviewerName ?? 'Reviewer',
 		round: r.round,
 		status: r.status,
 		comment: r.comment,
