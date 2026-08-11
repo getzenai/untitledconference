@@ -33,14 +33,16 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, count, eq, exists, ilike, inArray, ne, notExists, or, sql } from 'drizzle-orm';
-import { orderFor, type SubmissionSort } from './submission-sort';
+import { and, asc, count, eq, exists, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { orderFor, submittedReviewCount, type SubmissionSort } from './submission-sort';
 
 export type SubmissionFilters = {
 	q?: string;
 	status?: string[];
 	trackId?: number;
 	sessionFormatId?: number;
+	/** Only what still has to be reviewed (#122). */
+	needsReview?: boolean;
 };
 
 export type SpeakerLine = {
@@ -148,9 +150,31 @@ function pushScore(
 	});
 }
 
+/**
+ * Still to be reviewed: not a draft, and not one review handed in yet (#122).
+ *
+ * The most-asked-for filter on this screen, and the definition is the one already
+ * printed in the page header — the same expression feeds both, so the filter and
+ * the count above it cannot drift apart. A filter that shows 14 rows under a
+ * header saying 12 is a bug report, not a feature.
+ *
+ * Drafts are out because a draft has not been handed in at all: it is the
+ * speaker's work in progress, and putting it on the reviewers' pile would be
+ * reading somebody's notebook.
+ *
+ * Deliberately about reviews and not about the decision. A rejected talk with no
+ * review does show up here — the status checkboxes are right beside this one, and
+ * a filter that quietly folded a second rule in would make them lie.
+ */
+function needsReviewWhere(conferenceId: number) {
+	return and(ne(submissionTable.status, 'draft'), sql`${submittedReviewCount(conferenceId)} = 0`)!;
+}
+
 /** The SQL predicate behind the filter bar. */
 function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
 	const where = [eq(submissionTable.conferenceId, conferenceId)];
+
+	if (filters.needsReview) where.push(needsReviewWhere(conferenceId));
 
 	if (filters.status?.length) {
 		where.push(inArray(submissionTable.status, filters.status as Submission['status'][]));
@@ -397,29 +421,15 @@ export async function exportSubmissions(
 export async function submissionTotals(conferenceId: number) {
 	const undecided = inArray(submissionTable.status, ['submitted', 'in_review']);
 
-	// Built with the query builder rather than as raw SQL inside the `filter`: written
-	// by hand, the join conditions come out with unqualified column names and Postgres
-	// rejects the statement with "column reference id is ambiguous".
-	const hasNoReview = notExists(
-		db
-			.select({ one: sql`1` })
-			.from(reviewTable)
-			.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
-			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
-			.where(
-				and(
-					eq(reviewTable.submissionId, submissionTable.id),
-					eq(reviewTable.status, 'submitted'),
-					eq(evaluationPlanTable.conferenceId, conferenceId)
-				)
-			)
-	);
-
+	// The very predicate the "still to review" filter applies (#122), not a second
+	// spelling of it. This number is a link to that filter now, and a header that
+	// promised 12 and then showed 14 rows would be the first thing an organizer
+	// stopped trusting on this screen.
 	const [row] = await db
 		.select({
 			total: count(),
 			undecided: sql<number>`count(*) filter (where ${undecided})`,
-			unreviewed: sql<number>`count(*) filter (where ${and(ne(submissionTable.status, 'draft'), hasNoReview)})`
+			unreviewed: sql<number>`count(*) filter (where ${needsReviewWhere(conferenceId)})`
 		})
 		.from(submissionTable)
 		.where(eq(submissionTable.conferenceId, conferenceId));

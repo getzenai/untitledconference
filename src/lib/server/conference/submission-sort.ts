@@ -21,15 +21,28 @@ import { asc, desc, sql } from 'drizzle-orm';
  * `newest` is what the screen has always done. The two score orders are the reason
  * this type exists: an organizer building a programme reads the pile from the top
  * score down, and reads it from the bottom up when they are looking for what to cut.
+ *
+ * The review counts (#122) answer a different question, and it is the one asked in
+ * the user interview: not "which talk is best" but "where is the review work". Its
+ * useful direction is ascending — the talks nobody has reviewed float to the top.
  */
-export type SubmissionSort = 'newest' | 'score-desc' | 'score-asc' | 'title-asc' | 'title-desc';
+export type SubmissionSort =
+	| 'newest'
+	| 'score-desc'
+	| 'score-asc'
+	| 'title-asc'
+	| 'title-desc'
+	| 'reviews-asc'
+	| 'reviews-desc';
 
 export const SUBMISSION_SORTS: readonly SubmissionSort[] = [
 	'newest',
 	'score-desc',
 	'score-asc',
 	'title-asc',
-	'title-desc'
+	'title-desc',
+	'reviews-asc',
+	'reviews-desc'
 ];
 
 export function parseSort(raw: string | null | undefined): SubmissionSort {
@@ -84,6 +97,37 @@ export function scoreExpression(conferenceId: number) {
 }
 
 /**
+ * How many reviews of this submission have actually been handed in (#122).
+ *
+ * `submitted` only. An assignment nobody has answered is work outstanding, not a
+ * review that exists — counting it would put a talk three reviewers are sitting on
+ * level with one that is genuinely done, which is the opposite of what the column
+ * is for.
+ *
+ * Scoped through round → plan → conference like every other read of `review` here:
+ * the same submission id cannot appear under another conference's plan, but the
+ * join is what says so rather than the caller.
+ *
+ * One definition, two readers: this expression orders the table, and
+ * `organizer-submissions` builds the "still to review" filter and the header's
+ * unreviewed count out of the same SQL. A filter that disagreed with the number
+ * printed above it would be worse than no filter.
+ */
+export function submittedReviewCount(conferenceId: number) {
+	return sql<number>`(
+		select count(*)
+		from ${reviewTable}
+		inner join ${reviewRoundTable}
+			on ${reviewRoundTable.id} = ${reviewTable.reviewRoundId}
+		inner join ${evaluationPlanTable}
+			on ${evaluationPlanTable.id} = ${reviewRoundTable.evaluationPlanId}
+		where ${reviewTable.submissionId} = ${submissionTable.id}
+			and ${reviewTable.status} = 'submitted'
+			and ${evaluationPlanTable.conferenceId} = ${conferenceId}
+	)`;
+}
+
+/**
  * The ORDER BY for one sort.
  *
  * `nulls last` in BOTH score directions, deliberately: an unreviewed talk has no
@@ -109,6 +153,19 @@ export function orderFor(sort: SubmissionSort, conferenceId: number) {
 	if (sort === 'title-asc' || sort === 'title-desc') {
 		const title = sql`lower(${submissionTable.title})`;
 		return [sort === 'title-asc' ? sql`${title} asc` : sql`${title} desc`, asc(submissionTable.id)];
+	}
+
+	// No `nulls last` here, and none is needed: a submission nobody has reviewed
+	// counts zero rather than null, and zero is exactly where it belongs at the top
+	// of the ascending order. That is the difference between this column and the
+	// score — "no score yet" is not the worst score, but "no reviews yet" IS the
+	// least reviewed.
+	if (sort === 'reviews-asc' || sort === 'reviews-desc') {
+		const reviews = submittedReviewCount(conferenceId);
+		return [
+			sort === 'reviews-asc' ? sql`${reviews} asc` : sql`${reviews} desc`,
+			asc(submissionTable.id)
+		];
 	}
 
 	const score = scoreExpression(conferenceId);

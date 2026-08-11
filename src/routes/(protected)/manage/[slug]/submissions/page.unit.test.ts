@@ -61,7 +61,8 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 function renderPage(
 	notificationStatus: null | 'queued' = null,
 	sort: PageData['sort'] = 'newest',
-	query = ''
+	query = '',
+	filters: PageData['filters'] = {}
 ) {
 	currentUrl.value = new URL(`https://example.test/manage/test-conf/submissions${query}`);
 	return render(Page, {
@@ -74,7 +75,7 @@ function renderPage(
 				submissions: [submission(1, 'accepted'), submission(2, 'submitted')],
 				pagination: { matching: 2, page: 1, pageSize: 50, pageCount: 1 },
 				facets: { tracks: [], formats: [] },
-				filters: {},
+				filters,
 				sort,
 				counts: { total: 2, undecided: 1, unreviewed: 2 },
 				notificationStatuses: { 1: notificationStatus, 2: null }
@@ -157,7 +158,8 @@ describe('sortable columns', () => {
 		expect(body).toContain('href="/manage/test-conf/submissions?sort=score-desc"');
 		// Neither is active yet, and a screen reader is told so rather than left to
 		// infer it from an arrow it cannot see.
-		expect(body.match(/aria-sort="none"/g) ?? []).toHaveLength(2);
+		// Three sortable columns since #122 added Reviews.
+		expect(body.match(/aria-sort="none"/g) ?? []).toHaveLength(3);
 		expect(body).not.toContain('aria-sort="ascending"');
 	});
 
@@ -192,5 +194,63 @@ describe('sortable columns', () => {
 		// is the scroll container, and it does not scroll vertically. A dead rule that
 		// reads as a feature is worse than no feature.
 		expect(renderPage()).not.toContain('sticky top-0');
+	});
+});
+
+/**
+ * What is left to review (#122).
+ *
+ * Fabian's report and the user interview behind it name the same two things: a
+ * filter for the pile that still needs reviewing, and an order by how many reviews
+ * are in. The loader does the work; what this page owes is a way to ask for it that
+ * survives being sent to a colleague — so both live in the URL, like every other
+ * control on this screen.
+ */
+describe('the still-to-review filter and the reviews column', () => {
+	it('opens the reviews column at fewest first, which is where the work is', () => {
+		const body = renderPage();
+
+		expect(body).toContain('href="/manage/test-conf/submissions?sort=reviews-asc"');
+		expect(body).toContain('data-testid="sort-by-reviews"');
+	});
+
+	it('cycles reviews through most-first and back out to the default', () => {
+		const fewest = renderPage(null, 'reviews-asc', '?sort=reviews-asc');
+		expect(fewest).toContain('href="/manage/test-conf/submissions?sort=reviews-desc"');
+
+		const most = renderPage(null, 'reviews-desc', '?sort=reviews-desc');
+		expect(most).toContain('href="/manage/test-conf/submissions"');
+	});
+
+	/**
+	 * The count in the header IS the way into the filter. Reading "2 unreviewed" and
+	 * then having to build the query by hand is the gap the issue describes.
+	 */
+	it('makes the unreviewed count a link to the filter it counts', () => {
+		const body = renderPage();
+
+		expect(body).toContain('href="/manage/test-conf/submissions?needsReview=on"');
+		expect(body).toContain('data-testid="unreviewed-count"');
+	});
+
+	it('offers the filter as a checkbox and shows it as on when it is', () => {
+		expect(renderPage()).toContain('data-testid="filter-needs-review"');
+		expect(renderPage()).not.toContain('name="needsReview" checked');
+
+		// Checked, and the page counts itself as filtered — otherwise "Clear" is
+		// missing and the empty state says "no submissions yet" instead of "nothing
+		// matches".
+		const on = renderPage(null, 'newest', '?needsReview=on', { needsReview: true });
+		expect(on).toContain('name="needsReview" checked');
+		expect(on).toContain('match the filter');
+	});
+
+	/**
+	 * Handed in over assigned, and both halves are needed: 0/3 is three reviewers
+	 * sitting on a talk, 0/0 is a talk nobody has been asked about. One number
+	 * cannot tell those apart, and they call for different actions.
+	 */
+	it('shows reviews handed in over reviews assigned', () => {
+		expect(renderPage()).toContain('data-testid="reviews-cell"');
 	});
 });

@@ -16,14 +16,26 @@
 		clearHref
 	}: {
 		facets: { tracks: { id: number; name: string }[]; formats: { id: number; name: string }[] };
-		filters: { q?: string; status?: string[]; trackId?: number; sessionFormatId?: number };
+		filters: {
+			q?: string;
+			status?: string[];
+			trackId?: number;
+			sessionFormatId?: number;
+			needsReview?: boolean;
+		};
 		sort: string;
 		/** Where "Clear" goes — the page owns the URL, this component only links to it. */
 		clearHref: string;
 	} = $props();
 
 	const filtered = $derived(
-		Boolean(filters.q || filters.trackId || filters.sessionFormatId || filters.status?.length)
+		Boolean(
+			filters.q ||
+			filters.trackId ||
+			filters.sessionFormatId ||
+			filters.status?.length ||
+			filters.needsReview
+		)
 	);
 
 	const STATUSES = [
@@ -92,6 +104,25 @@
 			</option>
 		{/each}
 	</select>
+
+	<!--
+		The one filter the interview asked for by name (#122): what is left to review.
+
+		A checkbox rather than an eighth status box, because it is not a status — a
+		talk needs reviewing or not regardless of where it sits in the pipeline, and
+		the two compose: "submitted" plus this one is the queue an organizer chases
+		on a Monday morning.
+	-->
+	<label class="flex cursor-pointer items-center gap-1.5 pb-1.5 text-sm">
+		<input
+			type="checkbox"
+			name="needsReview"
+			checked={filters.needsReview}
+			class="border-input accent-primary size-4 rounded"
+			data-testid="filter-needs-review"
+		/>
+		<span>Still to review</span>
+	</label>
 
 	<!--
 		Checkboxes, not a `multiple` listbox. Several statuses at once is the point —
