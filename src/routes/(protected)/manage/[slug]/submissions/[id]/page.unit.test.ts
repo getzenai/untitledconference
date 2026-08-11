@@ -22,7 +22,9 @@ const conference = {
 function renderPage(
 	status: 'accepted' | 'submitted',
 	notificationStatus: null | 'sent' = null,
-	reviewerStatus: null | 'assigned' | 'submitted' = null
+	reviewerStatus: null | 'assigned' | 'submitted' = null,
+	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
+	rounds: 'one' | 'none' = 'one'
 ) {
 	return render(Page, {
 		props: {
@@ -53,21 +55,25 @@ function renderPage(
 					placements: []
 				},
 				notificationStatus,
-				assignmentRounds: [
-					{
-						id: 10,
-						name: 'Round 1',
-						reviewers: [
-							{
-								userId: 'reviewer-1',
-								name: 'Riley Reviewer',
-								email: 'riley@example.com',
-								status: reviewerStatus,
-								eligible: true
-							}
-						]
-					}
-				]
+				assignmentRounds:
+					rounds === 'none'
+						? []
+						: [
+								{
+									id: 10,
+									name: 'Round 1',
+									reviewers: [
+										{
+											userId: 'reviewer-1',
+											name: 'Riley Reviewer',
+											email: 'riley@example.com',
+											status: reviewerStatus,
+											eligible: true
+										}
+									]
+								}
+							],
+				ownReview
 			} as PageData,
 			form: null
 		}
@@ -110,5 +116,55 @@ describe('organizer submission detail decision workflow', () => {
 
 		expect(body).toContain('Submitted');
 		expect(body).not.toContain('value="unassign"');
+	});
+});
+
+/**
+ * The way from a submission to the organizer's own review of it (#57).
+ *
+ * The form itself stays on the reviewer surface — it carries the round's criteria,
+ * the blind-mode rules and the recusal path, and a second copy here would be a
+ * second implementation of #33's guarantees. What this screen owes is the door,
+ * and an honest sentence when there is none.
+ */
+describe('the organizer own-review door', () => {
+	it('offers the reviewer form when a review of theirs is waiting', () => {
+		const body = renderPage('submitted', null, null, { reviewId: 5, status: 'assigned' });
+
+		expect(body).toContain('data-testid="own-review"');
+		expect(body).toContain('href="/review/test-conf/1"');
+		expect(body).toContain('Write your review');
+		expect(body).toContain('assigned to you for review');
+	});
+
+	it('names the state instead of the action once it is filed', () => {
+		const body = renderPage('submitted', null, null, { reviewId: 5, status: 'submitted' });
+
+		expect(body).toContain('href="/review/test-conf/1"');
+		expect(body).toContain('Open your review');
+		expect(body).not.toContain('Write your review');
+	});
+
+	/**
+	 * The failure this replaces is a link that 404s: the reviewer surface wants a
+	 * seat *and* a non-recused review row, so a page that guesses from the
+	 * assignment matrix alone would offer a door into a wall.
+	 */
+	it('links nowhere when the organizer may not review, and says what would change that', () => {
+		const body = renderPage('submitted');
+
+		expect(body).toContain('data-testid="own-review"');
+		expect(body).not.toContain('href="/review/test-conf/1"');
+		expect(body).toContain('reviewer seat');
+		expect(body).toContain('/manage/test-conf/people');
+		// A round exists in this fixture, so the next step is the assignment.
+		expect(body).toContain('assign yourself to a round');
+	});
+
+	it('names the round as the missing step when there is none', () => {
+		const noRounds = renderPage('submitted', null, null, null, 'none');
+
+		expect(noRounds).toContain('create a review round.');
+		expect(noRounds).not.toContain('assign yourself to a round');
 	});
 });

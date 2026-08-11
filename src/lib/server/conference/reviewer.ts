@@ -39,7 +39,8 @@ import {
 	reviewRoundTable,
 	reviewScoreTable,
 	reviewTable,
-	scorecardCriterionTable
+	scorecardCriterionTable,
+	type Review
 } from '$lib/server/db/conference/review-schema';
 import { error } from '@sveltejs/kit';
 import { and, asc, eq, inArray, ne } from 'drizzle-orm';
@@ -73,20 +74,62 @@ export async function requireReviewer(userId: string, slug: string): Promise<Rev
 	if (!conference) throw error(404, 'Conference not found');
 
 	const roundIds = await roundsOf(conference.id);
+	if (!(await hasReviewerSeat(conference.id, roundIds, userId))) {
+		throw error(404, 'Conference not found');
+	}
+
+	return { conference, roundIds };
+}
+
+/**
+ * Does this user hold a reviewer seat for this conference — at conference scope or
+ * in one of its rounds?
+ *
+ * Split out of `requireReviewer` so a caller that must not throw can ask the same
+ * question the reviewer surface answers with a 404. Two places deciding "may this
+ * person review here" by different rules is how a link that leads to a 404 gets
+ * shipped.
+ */
+async function hasReviewerSeat(
+	conferenceId: number,
+	roundIds: number[],
+	userId: string
+): Promise<boolean> {
 	const seats = await db
 		.select({ scopeType: membershipTable.scopeType, scopeId: membershipTable.scopeId })
 		.from(membershipTable)
 		.where(and(eq(membershipTable.userId, userId), eq(membershipTable.role, 'reviewer')));
 
-	const scoped = seats.filter(
+	return seats.some(
 		(s) =>
-			(s.scopeType === 'conference' && s.scopeId === conference.id) ||
+			(s.scopeType === 'conference' && s.scopeId === conferenceId) ||
 			(s.scopeType === 'round' && roundIds.includes(s.scopeId))
 	);
+}
 
-	if (scoped.length === 0) throw error(404, 'Conference not found');
+export type OwnReviewAccess = { reviewId: number; status: Review['status'] };
 
-	return { conference, roundIds };
+/**
+ * The reviewer form this user may open for this submission, or `null`.
+ *
+ * Both halves are load-bearing and they are checked against each other on purpose:
+ * the seat is what `requireReviewer` demands, the non-recused review row is what
+ * `reviewerSubmission` demands, and the page needs *both* before it may offer a
+ * link. An assignment can outlive the seat that produced it — the assignment matrix
+ * carries such a reviewer as `eligible: false` — and offering that person a way in
+ * would hand them a 404 for a thing the screen just told them they could do.
+ */
+export async function ownReviewAccess(
+	conferenceId: number,
+	userId: string,
+	submissionId: number
+): Promise<OwnReviewAccess | null> {
+	const roundIds = await roundsOf(conferenceId);
+	if (roundIds.length === 0) return null;
+	if (!(await hasReviewerSeat(conferenceId, roundIds, userId))) return null;
+
+	const own = await ownReview(conferenceId, userId, submissionId);
+	return own ? { reviewId: own.reviewId, status: own.status } : null;
 }
 
 /** The conferences this user reviews for, for the picker. */
