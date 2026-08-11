@@ -48,6 +48,11 @@ export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-e2e-local-secret-not-a-real-cre
 export ENABLE_TEST_ENDPOINTS=true
 export REQUIRE_EMAIL_VERIFICATION=false
 export SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=false
+# A developer may have loaded the production-shaped Resend variables before
+# starting this script. E2E mail addresses are invented and the outbox state is
+# what the specs assert, so a test run must never cross the real provider boundary.
+unset RESEND_API_KEY
+unset RESEND_FROM
 export AI_PROVIDER="${AI_PROVIDER:-mock}"
 export LOG_LEVEL="${LOG_LEVEL:-warn}"
 export NODE_ENV=test
