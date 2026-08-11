@@ -2,9 +2,9 @@
  * The agenda may be wide — it is a grid — but it must not be flush against the rail,
  * and twenty rooms must not mean twenty cards with no way to narrow them.
  */
+import type { BoardSession, Conflict } from '$lib/server/conference/agenda';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
-import type { BoardSession, Conflict } from '$lib/server/conference/agenda';
 import Page from './+page.svelte';
 
 const conference = {
