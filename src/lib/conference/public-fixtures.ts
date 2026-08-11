@@ -60,7 +60,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: null,
 			company: null,
 			headshotUrl: '/speakers/bartik.svg',
-			bio: 'One of the six original programmers of the ENIAC. Spends most of her time now on the question of how a team hands work to the next team without losing what it knew.'
+			bio: 'One of the six original programmers of the ENIAC. Spends most of her time now on the question of how a team hands work to the next team without losing what it knew.',
+			links: []
 		},
 		{
 			id: 'spk-berners-lee',
@@ -69,7 +70,11 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Founder',
 			company: 'Web Foundation',
 			headshotUrl: '/speakers/berners-lee.svg',
-			bio: 'Proposed a way to link documents across machines and has been arguing about the consequences ever since. Talks here about what a protocol owes the people who did not choose it.'
+			bio: 'Proposed a way to link documents across machines and has been arguing about the consequences ever since. Talks here about what a protocol owes the people who did not choose it.',
+			links: [
+				{ label: 'w3.org', url: 'https://www.w3.org/People/Berners-Lee/' },
+				{ label: 'Mastodon', url: 'https://mastodon.social/@timbl' }
+			]
 		},
 		{
 			id: 'spk-hamilton',
@@ -78,7 +83,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Director of Software Engineering',
 			company: 'Apollo Guidance',
 			headshotUrl: '/speakers/hamilton.svg',
-			bio: 'Coined the phrase "software engineering" while people were still laughing at it. Her interest is error handling under load: what a system should do when it is asked to do more than it can.'
+			bio: 'Coined the phrase "software engineering" while people were still laughing at it. Her interest is error handling under load: what a system should do when it is asked to do more than it can.',
+			links: []
 		},
 		{
 			id: 'spk-hopper',
@@ -87,7 +93,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Distinguished Engineer',
 			company: 'COBOL Foundation',
 			headshotUrl: '/speakers/hopper.svg',
-			bio: 'Built the first compiler against the advice of everyone who mattered. Keeps a nanosecond in her pocket and hands it to anyone who says a delay is too small to care about.'
+			bio: 'Built the first compiler against the advice of everyone who mattered. Keeps a nanosecond in her pocket and hands it to anyone who says a delay is too small to care about.',
+			links: []
 		},
 		{
 			id: 'spk-johnson',
@@ -96,7 +103,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Flight Dynamics Lead',
 			company: 'Orbital',
 			headshotUrl: '/speakers/johnson.svg',
-			bio: 'Computes trajectories, and checks the machine that computes trajectories. Her talk is about the difference between a number a system produced and a number somebody is willing to stake a life on.'
+			bio: 'Computes trajectories, and checks the machine that computes trajectories. Her talk is about the difference between a number a system produced and a number somebody is willing to stake a life on.',
+			links: []
 		},
 		{
 			id: 'spk-liskov',
@@ -105,7 +113,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Professor of Computer Science',
 			company: 'MIT',
 			headshotUrl: null,
-			bio: 'Works on abstraction: what a caller is allowed to assume, and what happens to a system when a substitute quietly assumes something else.'
+			bio: 'Works on abstraction: what a caller is allowed to assume, and what happens to a system when a substitute quietly assumes something else.',
+			links: []
 		},
 		{
 			id: 'spk-lovelace',
@@ -114,7 +123,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Principal Engineer',
 			company: 'Analytical Systems',
 			headshotUrl: '/speakers/lovelace.svg',
-			bio: 'Wrote the first program for a machine that was never built, which is either the earliest software project or the earliest one to ship late. Interested in what a machine can and cannot originate.'
+			bio: 'Wrote the first program for a machine that was never built, which is either the earliest software project or the earliest one to ship late. Interested in what a machine can and cannot originate.',
+			links: []
 		},
 		{
 			id: 'spk-perlman',
@@ -123,7 +133,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Fellow',
 			company: 'Network Systems',
 			headshotUrl: '/speakers/perlman.svg',
-			bio: 'Designed the spanning tree protocol and dislikes being called the mother of the internet. Talks about designing for the case where part of the network is lying to you.'
+			bio: 'Designed the spanning tree protocol and dislikes being called the mother of the internet. Talks about designing for the case where part of the network is lying to you.',
+			links: []
 		},
 		{
 			id: 'spk-turing',
@@ -132,7 +143,8 @@ export const FIXTURE_CONFERENCE: PublicConference = {
 			jobTitle: 'Head of Research',
 			company: 'Bletchley Labs',
 			headshotUrl: '/speakers/turing.svg',
-			bio: 'Interested in what can be decided and what cannot, and in the practical version of that question: which parts of a workflow should never be automated because nobody could check the answer.'
+			bio: 'Interested in what can be decided and what cannot, and in the practical version of that question: which parts of a workflow should never be automated because nobody could check the answer.',
+			links: []
 		}
 	],
 

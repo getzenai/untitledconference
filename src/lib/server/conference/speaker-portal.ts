@@ -47,7 +47,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
  * deployment's signup check — see `upsertOwnProfile`, which makes the same trade
  * on the write side.
  */
-async function claimProfilesForAccount(userId: string): Promise<void> {
+export async function claimProfilesForAccount(userId: string): Promise<void> {
 	const [account] = await db
 		.select({ email: user.email })
 		.from(user)

@@ -7,6 +7,7 @@
 	 * deadline, not by curiosity about their own back catalogue.
 	 */
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
 
 	let { data } = $props();
@@ -51,10 +52,22 @@
 </svelte:head>
 
 <div class="mx-auto max-w-4xl px-6 py-8">
-	<h1 class="text-2xl font-semibold tracking-tight">Speaker portal</h1>
-	<p class="text-muted-foreground mt-1 text-sm">
-		Your deadlines and your proposals, across every conference you have submitted to.
-	</p>
+	<div class="flex flex-wrap items-start justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-semibold tracking-tight">Speaker portal</h1>
+			<p class="text-muted-foreground mt-1 text-sm">
+				Your deadlines and your proposals, across every conference you have submitted to.
+			</p>
+			<p class="text-muted-foreground mt-1 text-sm">
+				Signed in as <span class="text-foreground font-medium"
+					>{data.account.name || data.account.email}</span
+				>
+				{#if data.account.name}<span class="px-1">·</span>{data.account.email}{/if}
+			</p>
+		</div>
+
+		<Button href="/portal/profile" variant="outline" size="sm">Edit your profile</Button>
+	</div>
 
 	<section class="mt-8">
 		<h2 class="text-sm font-medium">What is due</h2>
