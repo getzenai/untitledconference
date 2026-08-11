@@ -4,11 +4,13 @@
  * Filters live in the URL so a search is shareable and survives a reload.
  * Writes go through the speakers module, which owns org-scoping.
  */
+import { importedMessage, readSpeakerCsv } from '$lib/conference/speaker-csv';
 import { requireOrganizer } from '$lib/server/conference/access';
 import { dispatchConferenceEmails } from '$lib/server/conference/email-dispatcher';
 import { queueSpeakerMail } from '$lib/server/conference/speaker-mail';
 import {
 	addSpeakerToConference,
+	importSpeakers,
 	isSpeakerStatus,
 	listConferenceSpeakers,
 	SPEAKER_STATUSES,
@@ -20,6 +22,15 @@ import {
 } from '$lib/server/conference/speakers';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+
+/**
+ * The biggest file this form accepts, in bytes.
+ *
+ * A roster of 500 rows is tens of kilobytes; a megabyte is already something
+ * other than a speaker list. Refused before it is read rather than after, because
+ * the alternative is holding an arbitrary upload in a worker's memory to find out.
+ */
+const MAX_CSV_BYTES = 1024 * 1024;
 
 function parseFilters(url: URL): SpeakerRosterFilters {
 	const q = url.searchParams.get('q')?.trim() || undefined;
@@ -119,6 +130,46 @@ export const actions: Actions = {
 		}
 
 		return { message: 'Speaker added to the roster.' };
+	},
+
+	/**
+	 * A whole spreadsheet onto the roster (SPK-03 / CRM-05).
+	 *
+	 * Two ways in, one path afterwards: an organizer picks the file their committee
+	 * has been editing, and anybody without a file to hand — an agent, or somebody
+	 * copying two columns out of a mail — pastes the same text. Whichever arrives is
+	 * text by the time it reaches the reader, so there is one set of rules to get
+	 * right instead of two.
+	 *
+	 * Every failure names a row and changes nothing. That pairing is the whole
+	 * design: it is what makes "fix the file and send it again" safe advice, which
+	 * is the only instruction anyone will actually follow.
+	 */
+	import: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+
+		const upload = form.get('file');
+		const hasFile = upload instanceof File && upload.size > 0;
+		if (hasFile && upload.size > MAX_CSV_BYTES) {
+			return fail(413, {
+				scope: 'import',
+				error: `That file is ${Math.round(upload.size / 1024)} KB. A speaker list is a few dozen — this one is something else.`
+			});
+		}
+
+		const csv = hasFile ? await upload.text() : text(form, 'csv');
+		if (!csv.trim()) {
+			return fail(400, { scope: 'import', error: 'Choose a CSV file, or paste the rows.' });
+		}
+
+		const parsed = readSpeakerCsv(csv);
+		if (!parsed.ok) return fail(400, { scope: 'import', error: parsed.problem });
+
+		const result = await importSpeakers(conference, parsed.rows);
+		if (!result.ok) return fail(400, { scope: 'import', error: result.problem });
+
+		return { scope: 'import', message: importedMessage(result.added, result.skipped) };
 	},
 
 	updateProfile: async ({ locals, params, request }) => {
