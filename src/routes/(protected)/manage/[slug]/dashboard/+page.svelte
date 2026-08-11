@@ -35,6 +35,22 @@
 		if (d.mail.failed > 0) parts.push(`${d.mail.failed} emails failed`);
 		return parts.length > 0 ? parts.join(' · ') : 'Nothing is waiting on you right now.';
 	});
+
+	/**
+	 * Reviewers, most outstanding work first.
+	 *
+	 * The query hands them back alphabetically, which is the right default for a
+	 * general-purpose function and the wrong order for this box: the whole reason an
+	 * organizer opens it is to find who to chase, and alphabetical puts that person
+	 * anywhere. Sorted here rather than in `reviewerProgress` because it is a property
+	 * of this screen, not of the data — the name stays the tiebreaker so the order is
+	 * stable between two reviewers who owe the same amount.
+	 */
+	const reviewers = $derived(
+		[...d.reviews.items].sort(
+			(a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name)
+		)
+	);
 </script>
 
 <svelte:head>
@@ -194,14 +210,44 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each d.reviews.items as reviewer (reviewer.userId)}
+						{#each reviewers as reviewer (reviewer.userId)}
 							<tr class="border-border border-t">
 								<td class="py-2 pr-4">
 									<p class="font-medium">{reviewer.name}</p>
 									<p class="text-muted-foreground text-xs">{reviewer.email}</p>
 								</td>
-								<td class="py-2 pr-4 tabular-nums">
-									{reviewer.submitted}/{reviewer.assigned} submitted
+								<td class="w-1/2 py-2 pr-4">
+									<!--
+										The bar is the comparison; the numbers are the answer.
+										Side by side down a column, a dozen bars say "these four are the
+										problem" in one glance, which a dozen "3/8 submitted" lines never
+										do — but a bar alone cannot be read out, printed in greyscale or
+										trusted to the pixel, so the count stays and the bar is
+										`aria-hidden`. Same reason the chart above keeps its table.
+									-->
+									<p class="tabular-nums">
+										{reviewer.submitted}/{reviewer.assigned} submitted
+										{#if reviewer.outstanding > 0}
+											<span class="text-muted-foreground">· {reviewer.outstanding} to go</span>
+										{/if}
+									</p>
+									<div
+										class="bg-muted mt-1 h-1.5 w-full overflow-hidden rounded-full"
+										aria-hidden="true"
+									>
+										<!--
+											`assigned` is never 0 here — a reviewer only appears in this
+											table because a review row exists — but the guard stays,
+											because the day a recused-only reviewer slips through, a
+											0/0 row should render an empty bar, not `NaN%`.
+										-->
+										<div
+											class="bg-status-good h-full rounded-full"
+											style="width: {reviewer.assigned > 0
+												? (reviewer.submitted / reviewer.assigned) * 100
+												: 0}%"
+										></div>
+									</div>
 								</td>
 								<td class="py-2 text-right">
 									{#if reviewer.outstanding === 0}

@@ -9,6 +9,7 @@
 	import { QUEUE_SORTS } from '$lib/conference/review-visibility';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { page } from '$app/state';
 
@@ -18,6 +19,21 @@
 	const done = $derived(data.queue.filter((row) => row.ownReviewSubmitted).length);
 	const blind = $derived(data.conference.reviewVisibility === 'blind_until_reviewed');
 	const current = $derived(QUEUE_SORTS.find((s) => s.value === data.sort) ?? QUEUE_SORTS[0]);
+
+	/**
+	 * The two sorts, moved onto the columns they order.
+	 *
+	 * They used to be a separate row of tabs above the table, which meant the screen
+	 * said "ordered by coverage" in one place and showed a Reviews column in another,
+	 * and the reader had to connect them. On the header the control IS the column: one
+	 * representation, and the same convention the organizer's table already uses.
+	 *
+	 * Only two sorts exist server-side and neither is a direction — `coverage` is
+	 * fewest reviews first, `score` is highest first — so these are not toggles. A
+	 * click picks a sort; the active one has no "off", because a table has to come out
+	 * of the loader in some order and there is no third one to fall back to.
+	 */
+	const sortHref = (value: (typeof QUEUE_SORTS)[number]['value']) => `${base}?sort=${value}`;
 </script>
 
 <svelte:head>
@@ -35,23 +51,11 @@
 		</p>
 	</div>
 
-	<nav class="flex gap-1 text-sm" aria-label="Sort">
-		{#each QUEUE_SORTS as sort (sort.value)}
-			<a
-				href="{base}?sort={sort.value}"
-				aria-current={data.sort === sort.value ? 'true' : undefined}
-				title={sort.hint}
-				class="rounded-md px-2 py-1 {data.sort === sort.value
-					? 'bg-primary text-primary-foreground font-medium'
-					: 'text-muted-foreground hover:bg-muted'}"
-			>
-				{sort.label}
-			</a>
-		{/each}
-	</nav>
+	<p class="text-muted-foreground text-sm">
+		<span class="text-foreground font-medium">{current.label}.</span>
+		{current.hint}
+	</p>
 </div>
-
-<p class="text-muted-foreground mt-1 text-xs">{current.hint}</p>
 
 {#if data.queue.length === 0}
 	<EmptyState
@@ -60,14 +64,44 @@
 		description="When an organizer assigns you submissions in a review round, they appear here."
 	/>
 {:else}
-	<div class="border-border mt-4 overflow-hidden rounded-lg border">
-		<table class="w-full text-left text-sm">
+	{#snippet sortable(
+		label: string,
+		value: (typeof QUEUE_SORTS)[number]['value'],
+		hint: string,
+		direction: 'ascending' | 'descending'
+	)}
+		{@const active = data.sort === value}
+		<!-- The direction is a property of the sort, not of a toggle: `coverage` means
+		     fewest reviews first (ascending) and `score` means highest first
+		     (descending), and `aria-sort` has to say which — an arrow that always points
+		     down would be lying on one of the two columns. -->
+		<th class="py-2 pr-4 font-medium" aria-sort={active ? direction : 'none'}>
+			<a
+				href={sortHref(value)}
+				data-testid="sort-by-{value}"
+				aria-label={active ? `Sorted: ${hint}` : `Sort: ${hint}`}
+				title={hint}
+				aria-current={active ? 'true' : undefined}
+				class="hover:text-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-sm focus-visible:ring-[3px] focus-visible:outline-none {active
+					? 'text-foreground'
+					: ''}"
+			>
+				{label}
+				<span aria-hidden="true" class="text-[0.9em] leading-none">
+					{active ? (direction === 'ascending' ? '↑' : '↓') : '↕'}
+				</span>
+			</a>
+		</th>
+	{/snippet}
+
+	<ScrollTable class="mt-4" label="Scroll sideways for score and your own status">
+		<table class="w-full min-w-lg text-left text-sm">
 			<thead class="bg-muted text-muted-foreground text-xs">
 				<tr>
 					<th class="py-2 pr-4 pl-4 font-medium">Title</th>
 					<th class="py-2 pr-4 font-medium">Track</th>
-					<th class="py-2 pr-4 font-medium">Reviews</th>
-					<th class="py-2 pr-4 font-medium">Score</th>
+					{@render sortable('Reviews', 'coverage', 'fewest reviews first', 'ascending')}
+					{@render sortable('Score', 'score', 'highest score first', 'descending')}
 					<th class="py-2 pr-4 font-medium">Mine</th>
 				</tr>
 			</thead>
@@ -105,7 +139,7 @@
 				{/each}
 			</tbody>
 		</table>
-	</div>
+	</ScrollTable>
 {/if}
 
 <p class="text-muted-foreground mt-3 text-xs">

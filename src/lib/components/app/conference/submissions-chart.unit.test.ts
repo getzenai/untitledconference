@@ -59,6 +59,22 @@ describe('submissions over time', () => {
 		expect(busy).toContain('>5</text>');
 	});
 
+	/**
+	 * The one peak the readable-ladder rungs cannot serve: 5 is on the ladder, and
+	 * half of 5 is 2.5 — a fraction on an axis that counts whole submissions.
+	 */
+	it('never puts a fraction on a counting axis', () => {
+		const body = render(Chart, { props: { days: days([5]) } }).body;
+
+		expect(body).not.toContain('2.5');
+		// One rung of slack: 6, halved cleanly.
+		expect(body).toContain('>6</text>');
+		expect(body).toContain('>3</text>');
+		// And the peak still has room above it, which was the point of rounding up
+		// in the first place.
+		expect(body).not.toContain('>5</text>');
+	});
+
 	it('survives a conference where nothing has come in yet', () => {
 		const { body } = render(Chart, { props: { days: [] } });
 

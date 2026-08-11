@@ -4,8 +4,18 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PageData } from './$types';
 import Page from './+page.svelte';
 
+// Mutable, because the sort links are built from the URL that is on screen: a fixed
+// mock could not tell "the sort carries the filters" from "the sort drops them".
+const currentUrl = vi.hoisted(() => ({
+	value: new URL('https://example.test/manage/test-conf/submissions')
+}));
+
 vi.mock('$app/state', () => ({
-	page: { url: new URL('https://example.test/manage/test-conf/submissions') }
+	page: {
+		get url() {
+			return currentUrl.value;
+		}
+	}
 }));
 
 const conference = {
@@ -48,7 +58,12 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	reviewsAssigned: 0
 });
 
-function renderPage(notificationStatus: null | 'queued' = null) {
+function renderPage(
+	notificationStatus: null | 'queued' = null,
+	sort: PageData['sort'] = 'newest',
+	query = ''
+) {
+	currentUrl.value = new URL(`https://example.test/manage/test-conf/submissions${query}`);
 	return render(Page, {
 		props: {
 			data: {
@@ -60,7 +75,7 @@ function renderPage(notificationStatus: null | 'queued' = null) {
 				pagination: { matching: 2, page: 1, pageSize: 50, pageCount: 1 },
 				facets: { tracks: [], formats: [] },
 				filters: {},
-				sort: 'newest',
+				sort,
 				counts: { total: 2, undecided: 1, unreviewed: 2 },
 				notificationStatuses: { 1: notificationStatus, 2: null }
 			} as PageData,
@@ -124,5 +139,58 @@ describe('submission filters', () => {
 	/** One control in the shell now; two copies of it were one too many. */
 	it('leaves the public-site link to the shell', () => {
 		expect(renderPage()).not.toContain('View the public site');
+	});
+});
+
+/**
+ * Sortable columns (#82). Two columns now, and the interesting part is not that they
+ * sort — the loader does that — but the state machine on the header: three clicks
+ * return to the order the screen opened in, and the URL keeps everything else.
+ */
+describe('sortable columns', () => {
+	it('offers the alphabet on Title and the ranking on Score, each opening its own way', () => {
+		const body = renderPage();
+
+		// The direction of the first click differs per column on purpose: nobody
+		// starts at the lowest score, and nobody starts at Z.
+		expect(body).toContain('href="/manage/test-conf/submissions?sort=title-asc"');
+		expect(body).toContain('href="/manage/test-conf/submissions?sort=score-desc"');
+		// Neither is active yet, and a screen reader is told so rather than left to
+		// infer it from an arrow it cannot see.
+		expect(body.match(/aria-sort="none"/g) ?? []).toHaveLength(2);
+		expect(body).not.toContain('aria-sort="ascending"');
+	});
+
+	it('cycles the third click back to the newest-first order', () => {
+		const ascending = renderPage(null, 'title-asc', '?sort=title-asc');
+		expect(ascending).toContain('aria-sort="ascending"');
+		expect(ascending).toContain('href="/manage/test-conf/submissions?sort=title-desc"');
+
+		const descending = renderPage(null, 'title-desc', '?sort=title-desc');
+		expect(descending).toContain('aria-sort="descending"');
+		// The way out: no `sort` in the URL at all, not `sort=newest`. Anything else
+		// leaves the organizer with a two-state toggle and no way back.
+		expect(descending).toContain('href="/manage/test-conf/submissions"');
+	});
+
+	/**
+	 * The regression this really guards: a sort link built from anything other than
+	 * the URL on screen throws the filters away, and the organizer discovers it by
+	 * losing a filtered pile they had spent ten minutes narrowing.
+	 */
+	it('carries the filters into the sort and leaves the page number behind', () => {
+		const body = renderPage(null, 'newest', '?q=graph&status=submitted&page=3');
+
+		expect(body).toContain(
+			'href="/manage/test-conf/submissions?q=graph&amp;status=submitted&amp;sort=title-asc"'
+		);
+		expect(body).not.toContain('sort=title-asc&amp;page=3');
+	});
+
+	it('drops the header that never stuck', () => {
+		// `sticky top-0` sat on this thead and could not work: the box around the table
+		// is the scroll container, and it does not scroll vertically. A dead rule that
+		// reads as a feature is worse than no feature.
+		expect(renderPage()).not.toContain('sticky top-0');
 	});
 });
