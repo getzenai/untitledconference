@@ -58,7 +58,17 @@ export const actions: Actions = {
 			submit: form.get('intent') === 'submit'
 		});
 
-		if (!saved) return fail(404, { message: 'This submission is not assigned to you.' });
+		if (!saved.ok) {
+			// Two different failures, two different answers. Calling an empty submit
+			// "not assigned to you" would send the reviewer looking for a permission
+			// problem they do not have.
+			return saved.reason === 'not_assigned'
+				? fail(404, { message: 'This submission is not assigned to you.' })
+				: fail(400, {
+						message:
+							'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
+					});
+		}
 
 		return {
 			message:
