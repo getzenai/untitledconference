@@ -8,6 +8,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
+	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -80,7 +81,9 @@
 </div>
 
 <div class="space-y-6 px-6 py-5">
-	{#if form?.error}
+	{#if form?.scope === 'import'}
+		<!-- Nothing here: the import answers inside its own section, below. -->
+	{:else if form?.error}
 		<p
 			class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
 			role="alert"
@@ -293,6 +296,7 @@
 			</div>
 		</form>
 	</section>
+	<SpeakerImport {busy} enhanceForm={submitting} {form} />
 
 	<!-- Roster table -->
 	{#if data.speakers.length === 0}

@@ -44,6 +44,17 @@ const speaker = {
 	hasAccount: false
 };
 
+const baseData = {
+	user: { id: 'organizer-1', name: 'Jordan' },
+	impersonating: null,
+	analytics: { apiKey: undefined, host: undefined },
+	conference,
+	speakers: [],
+	filters: {},
+	counts: { total: 0, invited: 0, confirmed: 0, declined: 0, cancelled: 0 },
+	statuses: ['invited', 'confirmed', 'declined', 'cancelled']
+};
+
 describe('speaker roster page', () => {
 	it('lists speakers with identity and status controls, plus add form', () => {
 		const { body } = render(Page, {
@@ -142,5 +153,44 @@ describe('speaker roster page', () => {
 		expect(body).toContain('A name is required.');
 		expect(body).not.toContain('data-testid="speakers-message"');
 		expect(body).not.toContain('text-status-good');
+	});
+	it('offers both ways into an import: a file and a paste box, one action', () => {
+		const { body } = render(Page, {
+			props: { data: baseData as never, form: null }
+		});
+
+		expect(body).toContain('data-testid="speakers-import"');
+		expect(body).toContain('action="?/import"');
+		expect(body).toContain('enctype="multipart/form-data"');
+		expect(body).toContain('data-testid="import-file"');
+		expect(body).toContain('data-testid="import-csv"');
+	});
+
+	it('answers an import inside the import section, not a screen away at the top', () => {
+		const { body } = render(Page, {
+			props: {
+				data: baseData as never,
+				form: { scope: 'import', message: 'Imported 12 speakers.' }
+			}
+		});
+
+		expect(body).toContain('data-testid="import-message"');
+		expect(body).toContain('Imported 12 speakers.');
+		// The page-level banner stays out of it: two confirmations of one submit,
+		// one of them off-screen, is what sends somebody reloading to check.
+		expect(body).not.toContain('data-testid="speakers-message"');
+	});
+
+	it('renders a refused import as an alert in the same place', () => {
+		const { body } = render(Page, {
+			props: {
+				data: baseData as never,
+				form: { scope: 'import', error: 'Row 7 has no name. Every speaker needs one.' }
+			}
+		});
+
+		expect(body).toContain('data-testid="import-error"');
+		expect(body).toContain('Row 7 has no name.');
+		expect(body).not.toContain('data-testid="speakers-error"');
 	});
 });

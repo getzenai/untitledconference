@@ -5,6 +5,7 @@
  * boundaries: a foreign org's profile cannot be edited, and a status change on
  * conference A leaves conference B alone.
  */
+import { readSpeakerCsv } from '$lib/conference/speaker-csv';
 import { db } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
 import {
@@ -19,6 +20,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { queueSpeakerMail } from './speaker-mail';
 import {
 	addSpeakerToConference,
+	importSpeakers,
 	listConferenceSpeakers,
 	speakerRosterTotals,
 	updateSpeakerProfile,
@@ -409,5 +411,115 @@ describe('queueSpeakerMail (SPK-13)', () => {
 			status: 'queued',
 			relatedType: 'speaker'
 		});
+	});
+});
+
+describe('importSpeakers', () => {
+	const rows = (csv: string) => {
+		const parsed = readSpeakerCsv(csv);
+		if (!parsed.ok) throw new Error(`fixture does not parse: ${parsed.problem}`);
+		return parsed.rows;
+	};
+
+	it('lands every row as a profile plus a roster membership', async () => {
+		const result = await importSpeakers(
+			conference,
+			rows(
+				`name,email,job title,company,status\n` +
+					`Ada Bennett,ada-${suffix}@example.com,CTO,Globex,confirmed\n` +
+					`Priya Raman,priya-${suffix}@example.com,Staff Engineer,Acme,invited\n`
+			)
+		);
+
+		expect(result).toEqual({ ok: true, added: 2, skipped: [] });
+
+		const roster = await listConferenceSpeakers(conference.id);
+		expect(roster.map((r) => [r.name, r.status, r.company])).toEqual([
+			['Ada Bennett', 'confirmed', 'Globex'],
+			['Priya Raman', 'invited', 'Acme']
+		]);
+		// Sort names are derived, so the roster orders by surname without the file
+		// having had to carry one.
+		expect(roster.map((r) => r.sortName)).toEqual(['Bennett, Ada', 'Raman, Priya']);
+	});
+
+	it('skips somebody already on the roster and names them, so re-sending a file is safe', async () => {
+		const csv =
+			`name,email\n` +
+			`Ada Bennett,ada-${suffix}@example.com\n` +
+			`Priya Raman,priya-${suffix}@example.com\n`;
+
+		expect(await importSpeakers(conference, rows(csv))).toEqual({
+			ok: true,
+			added: 2,
+			skipped: []
+		});
+		expect(await importSpeakers(conference, rows(csv))).toEqual({
+			ok: true,
+			added: 0,
+			skipped: ['Ada Bennett', 'Priya Raman']
+		});
+
+		expect((await listConferenceSpeakers(conference.id)).length).toBe(2);
+	});
+
+	it('reuses a profile the org already has rather than forking it', async () => {
+		const email = `ada-${suffix}@example.com`;
+		const first = await addSpeakerToConference(otherConference, { name: 'Ada Bennett', email });
+		expect(first.ok).toBe(true);
+		if (!first.ok) return;
+
+		const result = await importSpeakers(conference, rows(`name,email\nAda Bennett,${email}\n`));
+		expect(result).toEqual({ ok: true, added: 1, skipped: [] });
+
+		const profiles = await db
+			.select()
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.email, email)
+				)
+			);
+		expect(profiles.length).toBe(1);
+		expect(profiles[0].id).toBe(first.speakerProfileId);
+	});
+
+	it('lands a repeated email in one file once', async () => {
+		const email = `twice-${suffix}@example.com`;
+		const result = await importSpeakers(
+			conference,
+			rows(`name,email\nAda Bennett,${email}\nAda Bennett,${email}\n`)
+		);
+
+		expect(result).toEqual({ ok: true, added: 1, skipped: ['Ada Bennett'] });
+		expect((await listConferenceSpeakers(conference.id)).length).toBe(1);
+	});
+
+	it('writes nothing at all when one row carries an unusable status', async () => {
+		const result = await importSpeakers(
+			conference,
+			rows(
+				`name,email,status\n` +
+					`Ada Bennett,ada-${suffix}@example.com,confirmed\n` +
+					`Priya Raman,priya-${suffix}@example.com,maybe\n`
+			)
+		);
+
+		expect(result).toMatchObject({ ok: false });
+		expect(!result.ok && result.problem).toContain('Row 3');
+		// The point of refusing whole: the corrected file can simply be sent again,
+		// and Ada is not on the roster twice afterwards.
+		expect(await listConferenceSpeakers(conference.id)).toEqual([]);
+	});
+
+	it('reads a status whatever case the spreadsheet wrote it in', async () => {
+		const result = await importSpeakers(
+			conference,
+			rows(`name,email,status\nAda Bennett,ada-${suffix}@example.com,Confirmed\n`)
+		);
+
+		expect(result).toEqual({ ok: true, added: 1, skipped: [] });
+		expect((await listConferenceSpeakers(conference.id))[0].status).toBe('confirmed');
 	});
 });
