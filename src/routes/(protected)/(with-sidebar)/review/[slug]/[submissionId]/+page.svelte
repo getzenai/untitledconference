@@ -13,6 +13,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { formatScore } from '$lib/conference/scoring';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 
@@ -188,12 +189,17 @@
 						class="{inputClass} mt-1 w-full"
 					/>
 				{:else if criterion.kind === 'select'}
-					<select name="criterion-{criterion.id}" class="{inputClass} mt-1 w-full">
-						<option value="">—</option>
-						{#each parseOptions(criterion.options) as option, oi (oi)}
-							<option value={option} selected={criterion.valueText === option}>{option}</option>
-						{/each}
-					</select>
+					<AppSelect
+						name="criterion-{criterion.id}"
+						class="mt-1"
+						aria-label={criterion.label}
+						placeholder="—"
+						value={criterion.valueText ?? ''}
+						options={parseOptions(criterion.options).map((option) => ({
+							value: option,
+							label: option
+						}))}
+					/>
 				{:else}
 					<textarea name="criterion-{criterion.id}" rows="2" class="{inputClass} mt-1 w-full"
 						>{criterion.valueText ?? ''}</textarea

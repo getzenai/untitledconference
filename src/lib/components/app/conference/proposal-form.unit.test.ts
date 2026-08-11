@@ -103,4 +103,35 @@ describe('the proposal form', () => {
 		const alone = body('["speakerSortName","speakerJobTitle","sessionFormatId","trackId"]');
 		expect(alone).not.toContain('sm:grid-cols-2');
 	});
+
+	/**
+	 * The two dropdowns are now the shadcn select (#124), which is a button plus a
+	 * hidden input rather than a `<select>`. The submitter sees a different
+	 * control; the server must not.
+	 *
+	 * Worth its own assertion because these two are not just answers — they are
+	 * the axes CFP-02 conditions are measured against, so a dropped `name` would
+	 * take the conditional questions with it and the form would still look right.
+	 */
+	it('still posts the format and the track through the app-drawn dropdowns', () => {
+		const html = render(ProposalForm, {
+			props: {
+				fields: [],
+				fixed: fixedQuestionVisibility(null),
+				formats: [{ id: 1, name: 'Talk', minutes: 30 }],
+				tracks: [{ id: 2, name: 'Platform' }],
+				initial: { ...emptyProposal(), sessionFormatId: 1, trackId: 2 },
+				signedIn: true,
+				signInHref: '/login'
+			}
+		}).body;
+
+		expect(html).toContain('data-testid="app-select-sessionFormatId"');
+		expect(html).toContain('data-testid="app-select-trackId"');
+		// The chosen values, on the inputs that carry them to the action.
+		expect(html).toMatch(/value="1"[^>]*name="sessionFormatId"/);
+		expect(html).toMatch(/value="2"[^>]*name="trackId"/);
+		// And the minutes stay in the label the submitter reads.
+		expect(html).toContain('Talk (30 min)');
+	});
 });
