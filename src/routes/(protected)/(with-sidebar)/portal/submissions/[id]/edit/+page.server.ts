@@ -65,7 +65,10 @@ async function save(userId: string | undefined, idRaw: string, data: FormData, s
 		error(404, 'This proposal cannot be edited');
 	}
 
-	redirect(303, `/portal/submissions/${id}`);
+	// `justSubmitted` is a transient signal for the goose-feather confetti, not
+	// part of the page's truth — the confirmation banner below still reads off
+	// the submission's status, not this param, and the page strips it on mount.
+	redirect(303, `/portal/submissions/${id}${submit ? '?justSubmitted=1' : ''}`);
 }
 
 export const actions: Actions = {
