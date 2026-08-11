@@ -114,6 +114,29 @@
 
 	const occupant = $derived(editing ? startingAt(editing.roomId, editing.startMinutes) : null);
 
+	/**
+	 * Who the occupant may trade places with: the rest of this day's grid.
+	 *
+	 * Breaks are left out even though the swap itself would accept them. A break has
+	 * no room — it spans all of them — so trading a talk into one would take the talk
+	 * off the room grid entirely and file it under lunch. Other days are left out too:
+	 * the organizer is looking at one day, and a list of everything would be a list
+	 * nobody reads.
+	 */
+	const swapWith = $derived(
+		occupant
+			? daySessions
+					.filter((s) => s.roomId !== null && s.placementId !== occupant.placementId)
+					.sort(byStart)
+					.map((s) => ({
+						placementId: s.placementId,
+						title: s.title,
+						startMinutes: s.startMinutes,
+						roomName: board.rooms.find((r) => r.id === s.roomId)?.name ?? ''
+					}))
+			: []
+	);
+
 	const openSlot = (room: { id: number; name: string }, startMinutes: number) => {
 		editing = { roomId: room.id, roomName: room.name, startMinutes };
 	};
@@ -399,6 +422,7 @@
 	<SlotEditor
 		target={editing}
 		{occupant}
+		{swapWith}
 		tray={board.tray}
 		days={board.days}
 		rooms={board.rooms}

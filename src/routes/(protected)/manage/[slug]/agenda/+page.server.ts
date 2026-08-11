@@ -15,6 +15,7 @@ import {
 	setAgendaPublished,
 	setPlacementStatus,
 	slotOptions,
+	swapPlacements,
 	unplaceSession
 } from '$lib/server/conference/agenda';
 import { fail } from '@sveltejs/kit';
@@ -61,6 +62,29 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { error: result.reason });
 
 		return { placed: true };
+	},
+
+	/**
+	 * A third write path, and it earns its place rather than duplicating `place`.
+	 *
+	 * Everything else here moves one row. This one moves two, and the whole point is
+	 * that it moves them together — expressing it as two `?/place` posts would put a
+	 * session in the tray between the requests, where an abandoned form leaves it.
+	 */
+	swap: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+
+		const placementId = id(form.get('placementId'));
+		const withPlacementId = id(form.get('withPlacementId'));
+		if (!placementId || !withPlacementId) {
+			return fail(400, { error: 'Pick the session to swap with.' });
+		}
+
+		const result = await swapPlacements(conference.id, placementId, withPlacementId);
+		if (!result.ok) return fail(400, { error: result.reason });
+
+		return { swapped: true };
 	},
 
 	unplace: async ({ locals, params, request }) => {
