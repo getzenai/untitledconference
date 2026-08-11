@@ -24,7 +24,8 @@ import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conferen
 import {
 	conferenceDayTable,
 	conferenceTable,
-	speakerProfileTable
+	speakerProfileTable,
+	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import {
 	evaluationPlanTable,
@@ -54,6 +55,14 @@ type FixtureRequest = {
 	 * honest way to have both.
 	 */
 	reviewed?: string[];
+	/**
+	 * Tracks to create, the first of which is put on the first session.
+	 *
+	 * A filter needs something to filter by AND something to leave out, so one
+	 * track on one of several submissions is the smallest fixture that can tell a
+	 * working track filter from one that does nothing.
+	 */
+	tracks?: string[];
 };
 
 const DEFAULT_DAYS = ['2028-05-10', '2028-05-11'];
@@ -70,6 +79,18 @@ async function organizationOf(userId: string): Promise<string | null> {
 	return seat?.organizationId ?? null;
 }
 
+/** The conference's tracks, in the order they were asked for. */
+async function addTracks(conferenceId: number, names: string[]): Promise<number[]> {
+	if (names.length === 0) return [];
+
+	const rows = await db
+		.insert(trackTable)
+		.values(names.map((name, position) => ({ conferenceId, name, position })))
+		.returning({ id: trackTable.id });
+
+	return rows.map((row) => row.id);
+}
+
 /**
  * One accepted submission with a speaker on it.
  *
@@ -81,11 +102,12 @@ async function addAcceptedSession(
 	conferenceId: number,
 	organizationId: string,
 	title: string,
-	index: number
+	index: number,
+	trackId: number | null = null
 ): Promise<void> {
 	const [submission] = await db
 		.insert(submissionTable)
-		.values({ conferenceId, title, status: 'accepted', decidedAt: new Date() })
+		.values({ conferenceId, title, status: 'accepted', decidedAt: new Date(), trackId })
 		.returning();
 
 	const [speaker] = await db
@@ -154,6 +176,7 @@ type Fixture = {
 	days: string[];
 	sessions: string[];
 	reviewed: string[];
+	tracks: string[];
 };
 
 /** Everything defaulted, so the handler below reads as a sequence of writes. */
@@ -166,7 +189,8 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		name: body.name ?? 'Fixture Conference',
 		days: body.days ?? DEFAULT_DAYS,
 		sessions: body.sessions ?? DEFAULT_SESSIONS,
-		reviewed: body.reviewed ?? []
+		reviewed: body.reviewed ?? [],
+		tracks: body.tracks ?? []
 	};
 }
 
@@ -200,8 +224,18 @@ export const POST: RequestHandler = async ({ request }) => {
 			.values(days.map((date, position) => ({ conferenceId: conference.id, date, position })));
 	}
 
+	const trackIds = await addTracks(conference.id, fixture.tracks);
+
 	for (const [index, title] of sessions.entries()) {
-		await addAcceptedSession(conference.id, organizationId, title, index);
+		// Only the first session gets the first track, so a filter that ignores its
+		// parameter and returns everything is distinguishable from one that works.
+		await addAcceptedSession(
+			conference.id,
+			organizationId,
+			title,
+			index,
+			index === 0 ? (trackIds[0] ?? null) : null
+		);
 	}
 
 	if (fixture.reviewed.length > 0) {

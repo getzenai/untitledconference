@@ -59,6 +59,35 @@ function trimmed(value: string | null): string | null {
 	return text || null;
 }
 
+/** True when this save would write the same four values the row already holds. */
+function same(before: SubmissionContentInput, next: SubmissionContentInput): boolean {
+	return (
+		before.title === next.title &&
+		before.abstract === next.abstract &&
+		before.keyTakeaway === next.keyTakeaway &&
+		before.audienceLevel === next.audienceLevel
+	);
+}
+
+/** The sentences the organizer reads, keyed by the field they belong beside. */
+function rejections(
+	next: SubmissionContentInput,
+	current: SubmissionContentInput & { status: string }
+): Record<string, string> {
+	const errors: Record<string, string> = {};
+
+	if (!next.title) errors.title = 'A title is required.';
+	// Deleting the speaker's abstract, not merely lacking one: a talk that reached
+	// `submitted` through the CFP form always had one, so an empty field there is an
+	// edit that removes it. A talk that somehow has none already is not made worse by
+	// a title fix, and refusing that would block the repair over an unrelated hole.
+	if (!next.abstract && current.abstract && current.status !== 'draft') {
+		errors.abstract = 'A submitted talk needs an abstract.';
+	}
+
+	return errors;
+}
+
 /**
  * Rewrites the four content fields of one submission.
  *
@@ -97,28 +126,15 @@ export async function editSubmissionContent(
 
 		if (!current) return { ok: false, reason: 'not_found' } as const;
 
-		const errors: Record<string, string> = {};
-		if (!title) errors.title = 'A title is required.';
-		// Deleting the speaker's abstract, not merely lacking one: a talk that reached
-		// `submitted` through the CFP form always had one, so an empty field there is an
-		// edit that removes it. A talk that somehow has none already is not made worse by
-		// a title fix, and refusing that would block the repair over an unrelated hole.
-		if (!next.abstract && current.abstract && current.status !== 'draft') {
-			errors.abstract = 'A submitted talk needs an abstract.';
-		}
+		const errors = rejections(next, current);
 		if (Object.keys(errors).length > 0) {
 			return { ok: false, reason: 'invalid', errors } as const;
 		}
 
 		const before = content(current);
-		const unchanged =
-			before.title === next.title &&
-			before.abstract === next.abstract &&
-			before.keyTakeaway === next.keyTakeaway &&
-			before.audienceLevel === next.audienceLevel;
 		// No write and no revision when nothing moved. A history of "saved again" rows
 		// is a history nobody can read.
-		if (unchanged) return { ok: true, changed: false } as const;
+		if (same(before, next)) return { ok: true, changed: false } as const;
 
 		await tx.insert(contentRevisionTable).values({
 			entityType: 'submission',

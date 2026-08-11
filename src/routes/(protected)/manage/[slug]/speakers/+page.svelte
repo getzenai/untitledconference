@@ -8,6 +8,8 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
+	import AppSelect from '$lib/components/app/app-select.svelte';
+	import { tick } from 'svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -28,6 +30,31 @@
 
 	let busy = $state(false);
 	let editingId = $state<number | null>(null);
+
+	const statusOptions = $derived(
+		data.statuses.map((status: string) => ({ value: status, label: status }))
+	);
+
+	/**
+	 * Submits the form a row's status control belongs to.
+	 *
+	 * The native `<select>` reached it through `event.currentTarget.form`, which a
+	 * shadcn select cannot offer: it is a button plus a hidden input, and the
+	 * change arrives as a value rather than as a DOM event. So the row's form
+	 * carries an id and the control names it — one indirection, and the same
+	 * "picking a status IS the save" behaviour the organizer already has.
+	 */
+	const submitOwnForm = async (id: string) => {
+		// bits-ui calls back synchronously from its value setter; the hidden input
+		// carrying that value is written on Svelte's next flush, and `use:enhance`
+		// reads the FormData synchronously. Submitting first posts the status the
+		// row had before the click — a save that changes nothing while the trigger
+		// shows the new value, and a second click on the same value never fires the
+		// setter again.
+		await tick();
+		const form = document.getElementById(id);
+		if (form instanceof HTMLFormElement) form.requestSubmit();
+	};
 
 	const submitting = () => {
 		busy = true;
@@ -125,17 +152,14 @@
 			<label class="text-muted-foreground mb-1 block text-xs font-medium" for="speakers-status">
 				Status
 			</label>
-			<select
+			<AppSelect
 				id="speakers-status"
 				name="status"
-				class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-				data-testid="speakers-status-filter"
-			>
-				<option value="" selected={!data.filters.status}>All statuses</option>
-				{#each data.statuses as status (status)}
-					<option value={status} selected={data.filters.status === status}>{status}</option>
-				{/each}
-			</select>
+				class="w-44"
+				testId="speakers-status-filter"
+				value={data.filters.status ?? ''}
+				options={[{ value: '', label: 'All statuses' }, ...statusOptions]}
+			/>
 		</div>
 		<Button type="submit" size="sm" variant="secondary">Apply</Button>
 		{#if filtered}
@@ -255,16 +279,13 @@
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-status">
 					Status
 				</label>
-				<select
+				<AppSelect
 					id="add-status"
 					name="status"
-					class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-					data-testid="add-status"
-				>
-					{#each data.statuses as status (status)}
-						<option value={status} selected={status === 'invited'}>{status}</option>
-					{/each}
-				</select>
+					testId="add-status"
+					value="invited"
+					options={statusOptions}
+				/>
 			</div>
 			<div>
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-job">
@@ -340,6 +361,7 @@
 							</td>
 							<td class="px-3 py-3 align-top">
 								<form
+									id="speaker-status-{speaker.speakerProfileId}"
 									method="POST"
 									action="?/setStatus"
 									use:enhance={submitting}
@@ -348,21 +370,17 @@
 								>
 									<input type="hidden" name="speakerProfileId" value={speaker.speakerProfileId} />
 									<StatusBadge status={speaker.status} />
-									<select
+									<AppSelect
 										name="status"
-										class="border-input bg-background h-8 rounded-md border px-2 text-xs"
-										value={speaker.status}
-										onchange={(e) => {
-											const formEl = (e.currentTarget as HTMLSelectElement).form;
-											formEl?.requestSubmit();
-										}}
-										data-testid="speaker-status-select"
+										size="sm"
+										class="w-36"
+										testId="speaker-status-select"
 										aria-label="Status for {speaker.name}"
-									>
-										{#each data.statuses as status (status)}
-											<option value={status}>{status}</option>
-										{/each}
-									</select>
+										value={speaker.status}
+										options={statusOptions}
+										onValueChange={() =>
+											submitOwnForm(`speaker-status-${speaker.speakerProfileId}`)}
+									/>
 								</form>
 							</td>
 							<td class="px-3 py-3 text-right align-top">

@@ -12,6 +12,7 @@
 	 * organizer's preview and the submit handler use.
 	 */
 	import { enhance } from '$app/forms';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -103,6 +104,30 @@
 	const pairClass = (both: boolean) => (both ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4');
 
 	/**
+	 * The empty option stays an option, and is not folded into the placeholder.
+	 *
+	 * Neither format nor track is required, so "no answer" has to remain
+	 * reachable after one has been picked — a placeholder only shows while
+	 * nothing is chosen and offers no way back to it.
+	 */
+	const none = { value: '', label: '—' };
+
+	const formatOptions = $derived([
+		none,
+		...formats.map((format) => ({
+			value: String(format.id),
+			label: format.minutes ? `${format.name} (${format.minutes} min)` : format.name
+		}))
+	]);
+
+	const trackOptions = $derived([
+		none,
+		...tracks.map((track) => ({ value: String(track.id), label: track.name }))
+	]);
+
+	const YES_NO = [none, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }];
+
+	/**
 	 * The sort key is a guess until someone corrects it, and it stops being one the
 	 * moment they do. "Ng Wei Ling" sorts under N, not under L — showing the result
 	 * is what gives a submitter the chance to notice.
@@ -117,9 +142,6 @@
 		speakerName = value;
 		if (!sortNameTouched) sortName = suggestSortName(value);
 	}
-
-	const selectClass =
-		'border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none';
 
 	const submitting = () => {
 		busy = true;
@@ -181,37 +203,30 @@
 				{#if asked('sessionFormatId')}
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Session format</span>
-						<select
+						<AppSelect
 							name="sessionFormatId"
-							class="{selectClass} mt-1 w-full"
-							onchange={(e) => (sessionFormatId = Number(e.currentTarget.value) || null)}
-						>
-							<option value="">—</option>
-							{#each formats as format (format.id)}
-								<option value={format.id} selected={format.id === initial.sessionFormatId}>
-									{format.name}{#if format.minutes}
-										({format.minutes} min){/if}
-								</option>
-							{/each}
-						</select>
+							class="mt-1"
+							aria-label="Session format"
+							placeholder="—"
+							value={initial.sessionFormatId ? String(initial.sessionFormatId) : ''}
+							options={formatOptions}
+							onValueChange={(value) => (sessionFormatId = Number(value) || null)}
+						/>
 					</label>
 				{/if}
 
 				{#if asked('trackId')}
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Track</span>
-						<select
+						<AppSelect
 							name="trackId"
-							class="{selectClass} mt-1 w-full"
-							onchange={(e) => (trackId = Number(e.currentTarget.value) || null)}
-						>
-							<option value="">—</option>
-							{#each tracks as track (track.id)}
-								<option value={track.id} selected={track.id === initial.trackId}
-									>{track.name}</option
-								>
-							{/each}
-						</select>
+							class="mt-1"
+							aria-label="Track"
+							placeholder="—"
+							value={initial.trackId ? String(initial.trackId) : ''}
+							options={trackOptions}
+							onValueChange={(value) => (trackId = Number(value) || null)}
+						/>
 					</label>
 				{/if}
 			</div>
@@ -249,26 +264,28 @@
 							oninput={(e) => (answers[field.id] = e.currentTarget.value)}
 						/>
 					{:else if field.kind === 'select'}
-						<select
+						<AppSelect
 							name="answer:{field.id}"
-							class="{selectClass} mt-1 w-full"
-							onchange={(e) => (answers[field.id] = e.currentTarget.value)}
-						>
-							<option value="">—</option>
-							{#each parseOptions(field.options) as option (option)}
-								<option value={option} selected={answers[field.id] === option}>{option}</option>
-							{/each}
-						</select>
+							class="mt-1"
+							aria-label={field.label}
+							placeholder="—"
+							value={answers[field.id] ?? ''}
+							options={parseOptions(field.options).map((option) => ({
+								value: option,
+								label: option
+							}))}
+							onValueChange={(value) => (answers[field.id] = value)}
+						/>
 					{:else if field.kind === 'boolean'}
-						<select
+						<AppSelect
 							name="answer:{field.id}"
-							class="{selectClass} mt-1 w-full"
-							onchange={(e) => (answers[field.id] = e.currentTarget.value)}
-						>
-							<option value="">—</option>
-							<option value="true" selected={answers[field.id] === 'true'}>Yes</option>
-							<option value="false" selected={answers[field.id] === 'false'}>No</option>
-						</select>
+							class="mt-1"
+							aria-label={field.label}
+							placeholder="—"
+							value={answers[field.id] ?? ''}
+							options={YES_NO}
+							onValueChange={(value) => (answers[field.id] = value)}
+						/>
 					{:else}
 						<Input
 							name="answer:{field.id}"

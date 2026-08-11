@@ -11,6 +11,7 @@
 	 * The form posts to a route rather than an action: the answer is a file, and a
 	 * form action can only answer with a page.
 	 */
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -175,14 +176,18 @@
 				</Button>
 				<label class="text-muted-foreground flex items-center gap-2 text-xs">
 					Group by
-					<select
+					<AppSelect
 						name="group"
-						bind:value={group}
-						class="border-input bg-background h-8 rounded-md border px-2 text-xs"
-					>
-						<option value="speaker">One folder per speaker</option>
-						<option value="flat">No folders</option>
-					</select>
+						size="sm"
+						class="w-48"
+						aria-label="Group by"
+						value={group}
+						options={[
+							{ value: 'speaker', label: 'One folder per speaker' },
+							{ value: 'flat', label: 'No folders' }
+						]}
+						onValueChange={(next) => (group = next === 'flat' ? 'flat' : 'speaker')}
+					/>
 				</label>
 			</div>
 		</form>

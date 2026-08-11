@@ -7,7 +7,9 @@
 	 * share exactly one contract with the rest of the screen: every one of them is a
 	 * query parameter the loader reads, and nothing here holds state of its own.
 	 */
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Input } from '$lib/components/ui/input';
+	import { tick } from 'svelte';
 
 	let {
 		facets,
@@ -27,6 +29,17 @@
 		/** Where "Clear" goes — the page owns the URL, this component only links to it. */
 		clearHref: string;
 	} = $props();
+
+	/**
+	 * "All tracks" is an option, not a placeholder.
+	 *
+	 * The empty value is what clears the filter, so it has to be pickable — a
+	 * placeholder is only shown while nothing is chosen and gives no way back.
+	 */
+	const facetOptions = (all: string, entries: { id: number; name: string }[]) => [
+		{ value: '', label: all },
+		...entries.map((entry) => ({ value: String(entry.id), label: entry.name }))
+	];
 
 	const filtered = $derived(
 		Boolean(
@@ -59,9 +72,29 @@
 	const applyFilters = (event: Event) => {
 		(event.currentTarget as HTMLFormElement).requestSubmit();
 	};
+
+	let formEl: HTMLFormElement;
+
+	/**
+	 * The app-drawn dropdowns apply themselves, because nothing else will.
+	 *
+	 * The row applies on the form's own `change` event, which reaches it because a
+	 * native control dispatches one that bubbles. A shadcn select does not: it
+	 * sets its hidden input programmatically and dispatches nothing, so both of
+	 * these would have looked like working filters that quietly did nothing.
+	 *
+	 * `tick()` first. bits-ui calls this back synchronously from its value setter,
+	 * while the hidden input carrying that value is written on Svelte's next
+	 * flush — submitting before it lands would post the previous choice.
+	 */
+	const applyAfterFlush = async () => {
+		await tick();
+		formEl?.requestSubmit();
+	};
 </script>
 
 <form
+	bind:this={formEl}
 	method="GET"
 	class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-2"
 	data-testid="submission-filters"
@@ -81,29 +114,23 @@
 		aria-label="Search submissions"
 	/>
 
-	<select
+	<AppSelect
 		name="track"
 		aria-label="Track"
-		class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-	>
-		<option value="">All tracks</option>
-		{#each facets.tracks as track (track.id)}
-			<option value={track.id} selected={filters.trackId === track.id}>{track.name}</option>
-		{/each}
-	</select>
+		class="w-40"
+		value={filters.trackId ? String(filters.trackId) : ''}
+		options={facetOptions('All tracks', facets.tracks)}
+		onValueChange={applyAfterFlush}
+	/>
 
-	<select
+	<AppSelect
 		name="format"
 		aria-label="Format"
-		class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-	>
-		<option value="">All formats</option>
-		{#each facets.formats as format (format.id)}
-			<option value={format.id} selected={filters.sessionFormatId === format.id}>
-				{format.name}
-			</option>
-		{/each}
-	</select>
+		class="w-40"
+		value={filters.sessionFormatId ? String(filters.sessionFormatId) : ''}
+		options={facetOptions('All formats', facets.formats)}
+		onValueChange={applyAfterFlush}
+	/>
 
 	<!--
 		The one filter the interview asked for by name (#122): what is left to review.

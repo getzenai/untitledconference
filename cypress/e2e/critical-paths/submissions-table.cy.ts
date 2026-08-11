@@ -41,6 +41,9 @@ describe('Submissions table', () => {
 					slug,
 					days: ['2028-05-10'],
 					sessions: ['Zeta talk', 'Middle talk', 'Alpha talk'],
+					// One track, on 'Zeta talk' only — a track filter that ignores its
+					// parameter returns all three and is caught.
+					tracks: ['Platform'],
 					// One of the three carries a handed-in review, so the still-to-review
 					// filter (#122) has something to leave out. A pile where every row is
 					// alike would let a filter that does nothing pass.
@@ -184,5 +187,32 @@ describe('Submissions table', () => {
 			expect(csv).not.to.include('Middle talk');
 			expect(csv).not.to.include('Zeta talk');
 		});
+	});
+
+	/**
+	 * The filter row applies itself, and the app-drawn dropdown has to be part of
+	 * that (#124).
+	 *
+	 * The row has no Filter button outside `<noscript>`: every control applies on
+	 * the form's own `change` event, which reaches it because a native control
+	 * dispatches one that bubbles. A shadcn select sets its hidden input
+	 * programmatically and dispatches nothing, so this control can look perfect,
+	 * pin its name in an SSR test, and quietly do nothing at all. That is exactly
+	 * what it did on the first push of this branch.
+	 */
+	it('applies the track filter picked from the app dropdown', () => {
+		cy.visit(`/manage/${slug}/submissions`);
+		cy.waitForHydration();
+
+		cy.contains('Alpha talk').should('be.visible');
+
+		cy.get('[data-testid="app-select-track"]').click();
+		cy.get('[role="option"]').contains('Platform').click();
+
+		// The filter is a GET form, so applying it is a navigation. Both halves
+		// matter: the URL carries the choice, and the rows really narrow.
+		cy.location('search').should('contain', 'track=');
+		cy.contains('Zeta talk').should('be.visible');
+		cy.contains('Alpha talk').should('not.exist');
 	});
 });
