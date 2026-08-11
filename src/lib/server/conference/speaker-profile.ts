@@ -18,9 +18,9 @@ import { serializeSpeakerLinks, type SpeakerLink } from '$lib/conference/speaker
 import { db } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNotNull } from 'drizzle-orm';
 import { claimProfilesForAccount } from './speaker-portal';
 
 export type OwnProfile = {
@@ -183,19 +183,34 @@ export async function setOwnHeadshot(
  *
  * So the gate here is the same predicate `public-conference.ts` uses to decide
  * what the public site shows at all: a confirmed placement of an accepted,
- * content-approved submission. A speaker whose talk was rejected has a stored
- * headshot and no public page, and their photo stays unreadable — which is what
- * the comment on `selectSpeakersFor` is already careful about for bios.
+ * content-approved submission, on a conference the organizer has actually
+ * published — before publication nothing on `/c/<slug>` exists, and the photo
+ * must not lead the page it belongs to. A speaker whose talk was rejected has
+ * a stored headshot and no public page, and their photo stays unreadable —
+ * which is what the comment on `selectSpeakersFor` is already careful about
+ * for bios.
+ *
+ * `headshotUrl` itself is part of the predicate: "Remove headshot" clears the
+ * column and leaves the object in the bucket, and this clause is what makes
+ * that removal real for the public route rather than only for the pages that
+ * happen to read the column.
  */
 export async function headshotIsPublic(profileId: number): Promise<boolean> {
 	const [row] = await db
 		.select({ id: placementTable.id })
-		.from(submissionSpeakerTable)
+		.from(speakerProfileTable)
+		.innerJoin(
+			submissionSpeakerTable,
+			eq(submissionSpeakerTable.speakerProfileId, speakerProfileTable.id)
+		)
 		.innerJoin(submissionTable, eq(submissionTable.id, submissionSpeakerTable.submissionId))
+		.innerJoin(conferenceTable, eq(conferenceTable.id, submissionTable.conferenceId))
 		.innerJoin(placementTable, eq(placementTable.submissionId, submissionTable.id))
 		.where(
 			and(
-				eq(submissionSpeakerTable.speakerProfileId, profileId),
+				eq(speakerProfileTable.id, profileId),
+				isNotNull(speakerProfileTable.headshotUrl),
+				eq(conferenceTable.status, 'published'),
 				eq(placementTable.status, 'confirmed'),
 				eq(submissionTable.status, 'accepted'),
 				eq(submissionTable.contentApproval, 'approved')

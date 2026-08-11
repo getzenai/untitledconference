@@ -28,7 +28,10 @@ import {
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
-async function makeOrg(tag: string): Promise<{ organizationId: string; conference: Conference }> {
+async function makeOrg(
+	tag: string,
+	status: 'draft' | 'published' = 'published'
+): Promise<{ organizationId: string; conference: Conference }> {
 	const organizationId = `org-prof-${tag}-${stamp}`;
 	await db.insert(organization).values({
 		id: organizationId,
@@ -45,7 +48,7 @@ async function makeOrg(tag: string): Promise<{ organizationId: string; conferenc
 			slug: `conf-prof-${tag}-${stamp}`,
 			startsOn: '2027-05-12',
 			endsOn: '2027-05-12',
-			status: 'published'
+			status
 		})
 		.returning();
 
@@ -63,11 +66,12 @@ async function makeProfile(
 	organizationId: string,
 	userId: string | null,
 	email: string | null,
-	name = 'Priya Raman'
+	name = 'Priya Raman',
+	headshotUrl: string | null = null
 ): Promise<number> {
 	const [profile] = await db
 		.insert(speakerProfileTable)
-		.values({ organizationId, userId, name, sortName: 'Raman, Priya', email })
+		.values({ organizationId, userId, name, sortName: 'Raman, Priya', email, headshotUrl })
 		.returning({ id: speakerProfileTable.id });
 	return profile.id;
 }
@@ -233,18 +237,27 @@ describe('myProfiles', () => {
 describe('whether a headshot may be served publicly', () => {
 	let organizationId = '';
 	let conference: Conference;
+	let speaker: { id: string; email: string };
 	let scheduled = 0;
 	let rejected = 0;
+	let unpublished = 0;
 
 	beforeAll(async () => {
 		({ organizationId, conference } = await makeOrg('photo'));
-		const speaker = await makeUser('photo');
-		scheduled = await makeProfile(organizationId, speaker.id, speaker.email);
+		speaker = await makeUser('photo');
+		scheduled = await makeProfile(
+			organizationId,
+			speaker.id,
+			speaker.email,
+			'Priya Raman',
+			'/speaker-photo/1?v=1'
+		);
 		rejected = await makeProfile(
 			organizationId,
 			null,
 			`rejected-${stamp}@example.test`,
-			'Turned Down'
+			'Turned Down',
+			'/speaker-photo/2?v=1'
 		);
 
 		const [accepted] = await db
@@ -274,6 +287,39 @@ describe('whether a headshot may be served publicly', () => {
 			startsAt: new Date('2027-05-12T09:00:00.000Z'),
 			endsAt: new Date('2027-05-12T09:30:00.000Z')
 		});
+
+		// The same accepted-confirmed-approved chain, on a conference whose
+		// organizer has not pressed publish yet.
+		const draftOrg = await makeOrg('photo-draft', 'draft');
+		unpublished = await makeProfile(
+			draftOrg.organizationId,
+			null,
+			`draft-${stamp}@example.test`,
+			'Not Yet Public',
+			'/speaker-photo/3?v=1'
+		);
+		const [draftAccepted] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: draftOrg.conference.id,
+				title: 'A talk on a draft conference',
+				status: 'accepted',
+				contentApproval: 'approved'
+			})
+			.returning({ id: submissionTable.id });
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: draftAccepted.id,
+			speakerProfileId: unpublished,
+			isPrimary: true,
+			position: 0
+		});
+		await db.insert(placementTable).values({
+			conferenceId: draftOrg.conference.id,
+			submissionId: draftAccepted.id,
+			status: 'confirmed',
+			startsAt: new Date('2027-05-12T09:00:00.000Z'),
+			endsAt: new Date('2027-05-12T09:30:00.000Z')
+		});
 	});
 
 	it('says yes for a speaker who is on the published programme', async () => {
@@ -289,5 +335,15 @@ describe('whether a headshot may be served publicly', () => {
 	it('says no for a profile that does not exist', async () => {
 		expect(await headshotIsPublic(0)).toBe(false);
 		expect(await headshotIsPublic(999_999_999)).toBe(false);
+	});
+
+	it('says no while the conference is not published, same as the public site itself', async () => {
+		expect(await headshotIsPublic(unpublished)).toBe(false);
+	});
+
+	it('says no again once the speaker removes their headshot, even though the object stays', async () => {
+		// Runs last on purpose: it mutates the `scheduled` profile the yes-case uses.
+		expect(await setOwnHeadshot(speaker.id, scheduled, null)).toBe(true);
+		expect(await headshotIsPublic(scheduled)).toBe(false);
 	});
 });
