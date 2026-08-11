@@ -10,8 +10,16 @@
 	const conference = $derived(data.conference);
 	const base = $derived(`/c/${conference.slug}`);
 
-	// The five widgets come from the same list the organizer's share page offers
-	// for embedding, so a widget can never be on one and missing from the other.
+	// The widgets come from the same list the organizer's share page offers for
+	// embedding, so a widget can never be on one and missing from the other —
+	// with exactly one exception, made on purpose.
+	//
+	// Speakers and Gallery are the same people in two shapes. As two tabs they
+	// read as two sections and cost a visitor a restart to switch; they are one
+	// tab now, and the shape is chosen on the page itself. Both remain their own
+	// embeddable surface, because an organizer embedding a photo wall in their
+	// site is a different decision from embedding a directory — the share page
+	// keeps offering both, and both URLs still answer.
 	//
 	// The call is appended here rather than added to that list, and the difference
 	// is deliberate: a proposal form is not a thing to hand another site in an
@@ -20,15 +28,23 @@
 	// all, and a closed call still gets one, because "we are not taking proposals
 	// right now" is an answer a speaker came here for.
 	const surfaces = $derived([
-		...EMBEDDABLE_SURFACES.map(({ path, label }) => ({ path, label })),
+		...EMBEDDABLE_SURFACES.filter(({ path }) => path !== '/gallery').map(({ path, label }) => ({
+			path,
+			label
+		})),
 		...(data.call ? [{ path: '/cfp', label: 'Call for papers' }] : [])
 	]);
 
 	// Prefix match, not equality: the speaker detail page lives under /speakers
 	// and should keep its tab lit. The empty path is the index and must be exact,
-	// or it would match everything.
-	const isCurrent = (path: string) =>
-		path === '' ? page.url.pathname === base : page.url.pathname.startsWith(base + path);
+	// or it would match everything. /gallery has no tab of its own any more, so
+	// it lights the one it belongs to instead of leaving the visitor on a page
+	// the tab bar denies they are on.
+	const isCurrent = (path: string) => {
+		if (path === '') return page.url.pathname === base;
+		if (path === '/speakers' && page.url.pathname.startsWith(base + '/gallery')) return true;
+		return page.url.pathname.startsWith(base + path);
+	};
 
 	const dateRange = $derived(formatDateRange(conference));
 
