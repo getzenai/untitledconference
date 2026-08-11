@@ -26,6 +26,11 @@ import {
 	conferenceTable,
 	speakerProfileTable
 } from '$lib/server/db/conference/conference-schema';
+import {
+	evaluationPlanTable,
+	reviewRoundTable,
+	reviewTable
+} from '$lib/server/db/conference/review-schema';
 import { json, type RequestHandler } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 
@@ -39,6 +44,16 @@ type FixtureRequest = {
 	days?: string[];
 	/** Titles of the accepted submissions that should land in the tray. */
 	sessions?: string[];
+	/**
+	 * Which of those titles already carry a handed-in review (#122).
+	 *
+	 * Same reason as the days: a review cannot be produced through the UI without
+	 * walking plan → round → scorecard → assignment → submit in every spec that
+	 * wants one reviewed talk. The still-to-review filter is only worth testing
+	 * against a pile where some are and some are not, and this is the cheapest
+	 * honest way to have both.
+	 */
+	reviewed?: string[];
 };
 
 const DEFAULT_DAYS = ['2028-05-10', '2028-05-11'];
@@ -90,12 +105,55 @@ async function addAcceptedSession(
 	});
 }
 
+/**
+ * One handed-in review per named title, under this conference's own plan (#122).
+ *
+ * No scores: the still-to-review filter and the reviews order both count reviews
+ * with `status = 'submitted'`, and a scorecard would only add rows nothing here
+ * reads. The reviewer is the organizer themselves, which no rule forbids — they
+ * are not a speaker on any of these.
+ */
+async function addSubmittedReviews(
+	conferenceId: number,
+	reviewerUserId: string,
+	titles: string[]
+): Promise<void> {
+	const [plan] = await db
+		.insert(evaluationPlanTable)
+		.values({ conferenceId, name: 'Fixture plan' })
+		.returning();
+	const [round] = await db
+		.insert(reviewRoundTable)
+		.values({ evaluationPlanId: plan.id, name: 'Fixture round', position: 0 })
+		.returning();
+
+	const rows = await db
+		.select({ id: submissionTable.id, title: submissionTable.title })
+		.from(submissionTable)
+		.where(eq(submissionTable.conferenceId, conferenceId));
+
+	const wanted = new Set(titles);
+	const reviewed = rows.filter((row) => wanted.has(row.title));
+	if (reviewed.length === 0) return;
+
+	await db.insert(reviewTable).values(
+		reviewed.map((row) => ({
+			reviewRoundId: round.id,
+			submissionId: row.id,
+			reviewerUserId,
+			status: 'submitted' as const,
+			submittedAt: new Date()
+		}))
+	);
+}
+
 type Fixture = {
 	userId: string;
 	slug: string;
 	name: string;
 	days: string[];
 	sessions: string[];
+	reviewed: string[];
 };
 
 /** Everything defaulted, so the handler below reads as a sequence of writes. */
@@ -107,7 +165,8 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		slug: body.slug,
 		name: body.name ?? 'Fixture Conference',
 		days: body.days ?? DEFAULT_DAYS,
-		sessions: body.sessions ?? DEFAULT_SESSIONS
+		sessions: body.sessions ?? DEFAULT_SESSIONS,
+		reviewed: body.reviewed ?? []
 	};
 }
 
@@ -143,6 +202,10 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	for (const [index, title] of sessions.entries()) {
 		await addAcceptedSession(conference.id, organizationId, title, index);
+	}
+
+	if (fixture.reviewed.length > 0) {
+		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed);
 	}
 
 	return json({
