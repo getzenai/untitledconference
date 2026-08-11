@@ -71,6 +71,15 @@
 				{/if}
 			</p>
 		</div>
+		<div class="flex flex-wrap items-center gap-3">
+			<!--
+				The library is the same files seen the other way round: by file rather than
+				by the person who owes it. Chasing is per person, finding is per file.
+			-->
+			<Button href="{base}/content/files" size="sm" variant="secondary" data-testid="files-link">
+				All files
+			</Button>
+		</div>
 		{#if ordered.length >= FILTER_FROM}
 			<label class="w-full max-w-xs text-sm">
 				<span class="sr-only">Find a speaker</span>

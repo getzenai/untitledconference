@@ -17,10 +17,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	addOrganizerComment,
 	conferenceDeliverable,
+	conferenceFilesToPack,
 	conferenceTask,
 	conferenceTaskFiles,
 	contentOverview,
 	contentTotals,
+	listConferenceFiles,
 	setDeliverableApproval
 } from './organizer-content';
 
@@ -395,5 +397,75 @@ describe('action tasks', () => {
 		const confirm = priya.tasks.find((t) => t.id === actionTaskId)!;
 		expect(confirm.kind).toBe('action');
 		expect(confirm.fileCount).toBe(0);
+	});
+});
+
+describe('the files library (CNT-13)', () => {
+	it('lists this conference’s files and nobody else’s', async () => {
+		const files = await listConferenceFiles(conferenceId);
+		const names = files.map((f) => f.filename);
+
+		expect(names).toContain('headshot.png');
+		expect(names).toContain('slides-v1.pdf');
+		expect(names).not.toContain('secret.pdf');
+	});
+
+	it('marks exactly one newest version per task, not per conference', async () => {
+		const files = await listConferenceFiles(conferenceId);
+
+		// A re-upload is a new row, so "current" is a question about a task. The
+		// headshot is latest as well, at version 1, while the slides task is several
+		// versions deep — a rule applied across the conference would get one of them
+		// wrong. Derived from the rows rather than hard-coded: earlier tests in this
+		// file hand in further versions, and a fixed filename would only pass in order.
+		const byTask = new Map<number, typeof files>();
+		for (const file of files) {
+			byTask.set(file.taskId, [...(byTask.get(file.taskId) ?? []), file]);
+		}
+
+		for (const [, group] of byTask) {
+			const latest = group.filter((f) => f.isLatest);
+			expect(latest.length).toBe(1);
+			expect(latest[0].version).toBe(Math.max(...group.map((f) => f.version)));
+		}
+	});
+
+	it('carries the speaker and the task, which is what a file is filed under', async () => {
+		const files = await listConferenceFiles(conferenceId);
+		const headshot = files.find((f) => f.filename === 'headshot.png');
+
+		expect(headshot).toMatchObject({
+			speakerName: 'Ada Bennett',
+			taskTitle: 'Upload headshot',
+			sessionTitle: null
+		});
+	});
+});
+
+describe('conferenceFilesToPack (CNT-14)', () => {
+	it('returns the asked-for files with the key their bytes live under', async () => {
+		const all = await listConferenceFiles(conferenceId);
+
+		const packed = await conferenceFilesToPack(
+			conferenceId,
+			all.map((f) => f.id)
+		);
+
+		expect(packed.map((f) => f.id).sort()).toEqual(all.map((f) => f.id).sort());
+		expect(packed.every((f) => f.fileUrl.length > 0)).toBe(true);
+	});
+
+	it('drops an id belonging to another conference rather than packing it', async () => {
+		// The ids arrive from a form, so they are a wish. This is the whole guard: a
+		// selection that names somebody else’s file comes back without it.
+		const mine = (await listConferenceFiles(conferenceId))[0];
+
+		const packed = await conferenceFilesToPack(conferenceId, [mine.id, foreignFileId]);
+
+		expect(packed.map((f) => f.id)).toEqual([mine.id]);
+	});
+
+	it('asks for nothing when nothing was selected', async () => {
+		expect(await conferenceFilesToPack(conferenceId, [])).toEqual([]);
 	});
 });
