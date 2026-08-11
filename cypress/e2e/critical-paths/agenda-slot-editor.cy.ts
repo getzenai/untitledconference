@@ -137,6 +137,24 @@ describe('Agenda slot editor', () => {
 		// `roomConflicts` reports the start of whichever placement has the lower
 		// id, which is an ordering detail this test has no business pinning.
 		cy.contains('[data-testid="agenda-conflict"]', 'Two sessions in Hall 1 at').should('exist');
+
+		// And both of them are on screen, next to each other (#121). On a calendar
+		// two overlapping blocks occupy the same rows, so drawn full width the second
+		// would sit exactly on top of the first — a double-booking that reads as one
+		// talk on the very screen whose job is to show the overlap. Compared by
+		// position rather than by class, because what has to be true is that a human
+		// can see two blocks.
+		cy.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('be.visible')
+			.then(($a) => {
+				const a = $a[0].getBoundingClientRect();
+				cy.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk B')
+					.should('be.visible')
+					.then(($b) => {
+						const b = $b[0].getBoundingClientRect();
+						expect(a.right).to.be.at.most(b.left + 1);
+					});
+			});
 	});
 
 	it('swaps two placed talks in one action, and offers only the rest of the day', () => {

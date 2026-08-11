@@ -23,16 +23,18 @@ const waiting = (placementId: number) => ({
 	minutes: 30,
 	startMinutes: null,
 	endMinutes: null,
-	speakers: ['Robin']
+	speakers: ['Robin'],
+	status: 'tentative'
 });
 
-const placed = (placementId: number) => ({
+const placed = (placementId: number, status = 'tentative') => ({
 	placementId,
 	title: `Talk ${placementId}`,
 	minutes: 30,
 	startMinutes: 540,
 	endMinutes: 570,
-	speakers: ['Robin']
+	speakers: ['Robin'],
+	status
 });
 
 const timeLabel = (minutes: number | null) =>
@@ -137,6 +139,23 @@ describe('the slot editor', () => {
 		expect(html).not.toContain('data-testid="agenda-slot-swap"');
 		expect(html).not.toContain('action="?/swap"');
 		expect(html).toContain('data-testid="agenda-slot-remove"');
+	});
+
+	/**
+	 * Publishing one session moved here from the grid, where the block that carried
+	 * it is now only as tall as the talk is long. The button has to name the move it
+	 * makes rather than the state it is in — and post the opposite of the current
+	 * status, which is the half a label alone cannot prove.
+	 */
+	it('offers to publish a draft and to hold back a published one', () => {
+		const draft = body({ rooms, occupant: placed(7, 'tentative') });
+		expect(draft).toContain('data-testid="agenda-slot-status"');
+		expect(draft).toContain('Publish it');
+		expect(draft).toMatch(/name="status"[^>]*value="confirmed"/);
+
+		const live = body({ rooms, occupant: placed(7, 'confirmed') });
+		expect(live).toContain('Hold it back');
+		expect(live).toMatch(/name="status"[^>]*value="tentative"/);
 	});
 
 	it('says so when nothing is waiting, rather than showing an empty dropdown', () => {
