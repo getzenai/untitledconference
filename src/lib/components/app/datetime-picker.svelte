@@ -64,8 +64,10 @@
 
 	const chooseDay = (next: DateValue | undefined) => {
 		pickedDay = next ? next.toString() : '';
-		// A day with no time yet is not a moment. Defaulting the clock to 09:00
-		// would be inventing a deadline; 00:00 would be one that has passed.
+		// A day with no time posts nothing (see joinDayTime), so leaving the clock
+		// empty would silently discard the day just picked. Seed it with a time the
+		// organizer can see on the trigger and correct: 09:00, because 00:00 reads
+		// like a deadline already missed. Typed times are never overwritten.
 		if (!time) pickedTime = '09:00';
 	};
 
