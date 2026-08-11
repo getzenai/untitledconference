@@ -62,9 +62,12 @@ describe('Reviewer management', () => {
 
 					cy.visit(`/manage/${slug}/rounds`);
 					cy.waitForHydration();
-					cy.get('input[name="name"]').type('Screening');
+					// Scoped to the add form: every existing round now carries its own
+					// `name` field, because a round's name is editable in place.
+					cy.get('form[action="?/add"] input[name="name"]').type('Screening');
 					cy.contains('button[type="submit"]', 'Add round').click();
-					cy.contains('Screening').should('exist');
+					// The name lives in an input now, so it is a value rather than text.
+					cy.get('form[action="?/rename"] input[name="name"]').should('have.value', 'Screening');
 
 					cy.visit(`/manage/${slug}/submissions`);
 					cy.contains('a', 'Review me').click();

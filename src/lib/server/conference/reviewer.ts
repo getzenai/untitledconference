@@ -16,6 +16,7 @@
  * Deciding and telling people are separate acts, and a status that mails on its own
  * takes that choice away from the organizer.
  */
+import { anonymousReviewerLabelsBySubmission } from '$lib/conference/anonymous-reviewers';
 import {
 	canSeePeerReviews,
 	sortQueue,
@@ -228,6 +229,11 @@ function groupReviews(
 		PeerReview & { submissionId: number; userId: string; raw: ReviewScores }
 	>();
 
+	// From the rows, not the grouped map: the label is decided by the round, and
+	// carrying `anonymized` through the map only to strip it again would put a
+	// field on `PeerReview` that callers must remember not to read.
+	const labels = anonymousReviewerLabelsBySubmission(rows);
+
 	for (const r of rows) {
 		let review = byId.get(r.id);
 		if (!review) {
@@ -237,7 +243,7 @@ function groupReviews(
 				userId: r.reviewerUserId,
 				// ABS-07: an anonymised round labels the row instead of dropping it — who
 				// has answered is not the same secret as who they are.
-				reviewer: r.anonymized ? `Reviewer ${r.id}` : (r.reviewerName ?? 'Reviewer'),
+				reviewer: labels.get(r.id) ?? r.reviewerName ?? 'Reviewer',
 				submitted: r.status === 'submitted',
 				comment: r.comment,
 				submittedAt: r.submittedAt,
@@ -319,43 +325,69 @@ export async function reviewQueue(
 			)
 		);
 
-	// One row per submission, not per assignment. A reviewer who holds the same
-	// talk in two rounds has one job — read it and say what they think — and a
-	// queue that lists it twice invites them to do that work twice. It also broke
-	// the page outright: the template keys on `submissionId`, so the second row
-	// was a duplicate key and Svelte refused to render anything at all.
-	const bySubmission = new Map<number, (typeof assignments)[number][]>();
-	for (const row of assignments) {
-		bySubmission.set(row.submissionId, [...(bySubmission.get(row.submissionId) ?? []), row]);
-	}
-
+	const bySubmission = groupAssignments(assignments);
 	const all = groupReviews(await reviewsOn(conference.id, [...bySubmission.keys()]));
 	const mode = conference.reviewVisibility as ReviewVisibility;
 
-	const rows: QueueEntry[] = [...bySubmission.values()].map((mine) => {
-		const [first] = mine;
-		const on = all.filter((r) => r.submissionId === first.submissionId);
-		// Outstanding in any round means outstanding: the queue is a to-do list, and
-		// finishing round 1 does not answer round 2.
-		const ownSubmitted = mine.every((row) => row.status === 'submitted');
-		const visible = canSeePeerReviews(mode, ownSubmitted);
-
-		return {
-			submissionId: first.submissionId,
-			title: first.title,
-			track: first.track,
-			sessionFormat: first.sessionFormat,
-			rounds: [...mine]
-				.sort((a, b) => a.roundPosition - b.roundPosition)
-				.map((row) => row.roundName),
-			reviewsSubmitted: on.filter((r) => r.submitted).length,
-			reviewsAssigned: on.length,
-			score: visible ? scoresFor(on) : null,
-			ownReviewSubmitted: ownSubmitted
-		};
-	});
+	const rows = [...bySubmission.values()].map((mine) =>
+		queueRow(
+			mine,
+			all.filter((r) => r.submissionId === mine[0].submissionId),
+			mode
+		)
+	);
 
 	return sortQueue(rows, sort);
+}
+
+type Assignment = {
+	submissionId: number;
+	status: string;
+	roundName: string;
+	roundPosition: number;
+	title: string;
+	track: string | null;
+	sessionFormat: string | null;
+};
+
+/**
+ * One entry per submission, not per assignment.
+ *
+ * A reviewer who holds the same talk in two rounds has one job — read it and say
+ * what they think — and a queue that lists it twice invites them to do that work
+ * twice. It also broke the page outright: the template keys on `submissionId`, so
+ * the second row was a duplicate key and Svelte refused to render anything at all.
+ */
+function groupAssignments(assignments: Assignment[]): Map<number, Assignment[]> {
+	const bySubmission = new Map<number, Assignment[]>();
+	for (const row of assignments) {
+		bySubmission.set(row.submissionId, [...(bySubmission.get(row.submissionId) ?? []), row]);
+	}
+	return bySubmission;
+}
+
+/** One submission as the reviewer's queue shows it, across every round they hold it in. */
+function queueRow(
+	mine: Assignment[],
+	on: (PeerReview & { submissionId: number })[],
+	mode: ReviewVisibility
+): QueueEntry {
+	const [first] = mine;
+	// Outstanding in any round means outstanding: the queue is a to-do list, and
+	// finishing round 1 does not answer round 2.
+	const ownSubmitted = mine.every((row) => row.status === 'submitted');
+
+	return {
+		submissionId: first.submissionId,
+		title: first.title,
+		track: first.track,
+		sessionFormat: first.sessionFormat,
+		rounds: [...mine].sort((a, b) => a.roundPosition - b.roundPosition).map((row) => row.roundName),
+		reviewsSubmitted: on.filter((r) => r.submitted).length,
+		reviewsAssigned: on.length,
+		score: canSeePeerReviews(mode, ownSubmitted) ? scoresFor(on) : null,
+		ownReviewSubmitted: ownSubmitted
+	};
 }
 
 /** The aggregate over a submission's reviews, rebuilt from the grouped rows. */

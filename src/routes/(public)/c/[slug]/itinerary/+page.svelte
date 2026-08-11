@@ -28,16 +28,31 @@
 	// browsing device, not a selection.
 	const mine = $derived(view.sessions.filter((s) => starred.has(s.id)));
 
+	/**
+	 * What the attendee is told after pressing Add to calendar.
+	 *
+	 * A download is the one browser action with no visible result of its own: the
+	 * file lands somewhere the page cannot see, and on a phone it may not even
+	 * open. Pressing the button and getting nothing back reads as a broken button,
+	 * so the page says what it just handed over.
+	 */
+	let exported = $state<string | null>(null);
+
 	function exportIcs() {
 		const blob = new Blob([buildIcs(view.conference.name, mine)], {
 			type: 'text/calendar;charset=utf-8'
 		});
 		const url = URL.createObjectURL(blob);
+		const filename = `${view.conference.slug}-my-schedule.ics`;
 		const a = document.createElement('a');
 		a.href = url;
-		a.download = `${view.conference.slug}-my-schedule.ics`;
+		a.download = filename;
 		a.click();
 		URL.revokeObjectURL(url);
+
+		// The count, not just "done": it is the one thing the attendee cannot check
+		// without opening the file, and starring the wrong session is easy.
+		exported = `${mine.length} ${mine.length === 1 ? 'session' : 'sessions'} saved to ${filename}`;
 	}
 </script>
 
@@ -72,6 +87,19 @@
 		</Button>
 	</div>
 </div>
+
+{#if exported}
+	<!-- `aria-live` rather than a toast: the answer belongs next to the button that
+	     caused it, and a screen reader has to hear that something happened at all. -->
+	<p
+		class="border-status-good text-status-good mb-4 rounded-md border px-3 py-2 text-sm"
+		role="status"
+		aria-live="polite"
+		data-testid="itinerary-exported"
+	>
+		{exported}
+	</p>
+{/if}
 
 {#if sessions.length === 0}
 	<EmptyState

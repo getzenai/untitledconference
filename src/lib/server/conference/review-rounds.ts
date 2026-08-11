@@ -163,3 +163,47 @@ export async function deleteReviewRound(
 	await db.delete(reviewRoundTable).where(eq(reviewRoundTable.id, roundId));
 	return { ok: true };
 }
+
+/**
+ * Renames a round, and changes whether it hides reviewers from each other.
+ *
+ * A round was a write-once row: created from a form with a name typed in a hurry
+ * and no way to correct it, while the name is what reviewers navigate by and what
+ * the queue prints next to a talk held in two rounds. Removing and re-adding is
+ * not the same operation — it refuses once anyone is assigned, precisely because
+ * that would take their work with it.
+ *
+ * The anonymity flag is editable for the same reason, and it is the more
+ * consequential half: it decides whether `Reviewer 1` or a name appears on peer
+ * reviews. Changing it re-labels reviews that already exist, which is the point —
+ * a round switched to anonymous must hide the names already filed under it, not
+ * only the next ones.
+ */
+export async function renameReviewRound(
+	conferenceId: number,
+	roundId: number,
+	input: RoundInput
+): Promise<{ ok: true } | { ok: false; message: string }> {
+	const problem = roundProblem(input);
+	if (problem) return { ok: false, message: problem };
+
+	// The round is matched through its plan, so a round id from another
+	// conference's form selects nothing rather than being renamed.
+	const [round] = await db
+		.select({ id: reviewRoundTable.id })
+		.from(reviewRoundTable)
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.where(
+			and(eq(reviewRoundTable.id, roundId), eq(evaluationPlanTable.conferenceId, conferenceId))
+		)
+		.limit(1);
+
+	if (!round) return { ok: false, message: 'No such round.' };
+
+	await db
+		.update(reviewRoundTable)
+		.set({ name: input.name.trim().slice(0, MAX_NAME), anonymized: input.anonymized })
+		.where(eq(reviewRoundTable.id, roundId));
+
+	return { ok: true };
+}
