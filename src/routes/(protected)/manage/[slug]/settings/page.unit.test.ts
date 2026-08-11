@@ -66,14 +66,14 @@ describe('conference settings config surface', () => {
 					config: { rooms: [], tracks: [], formats: [] },
 					templates: []
 				} as never,
-				form: { error: 'Give the room a name.' }
+				form: { error: 'That start date is not a real date.', section: null }
 			}
 		});
 
 		expect(body).toContain('data-testid="settings-error"');
 		expect(body).toContain('role="alert"');
 		expect(body).toContain('text-status-bad');
-		expect(body).toContain('Give the room a name.');
+		expect(body).toContain('That start date is not a real date.');
 		// The claim is that the failure did not come back on the success channel, and
 		// this is the assertion that says exactly that. It used to be backed up by
 		// searching the whole page for `text-status-good` and `role="status"` — but the
@@ -93,14 +93,14 @@ describe('conference settings config surface', () => {
 					config: { rooms: [], tracks: [], formats: [] },
 					templates: []
 				} as never,
-				form: { message: 'Room added.' }
+				form: { message: 'Dates saved.', section: null }
 			}
 		});
 
 		expect(body).toContain('data-testid="settings-message"');
 		expect(body).toContain('role="status"');
 		expect(body).toContain('text-status-good');
-		expect(body).toContain('Room added.');
+		expect(body).toContain('Dates saved.');
 		expect(body).not.toContain('data-testid="settings-error"');
 		expect(body).not.toContain('text-status-bad');
 		expect(body).not.toContain('role="alert"');
@@ -270,5 +270,66 @@ describe('task templates on settings', () => {
 		]);
 
 		expect(body).toContain('value="2028-05-01"');
+	});
+});
+
+/**
+ * Structure setup one row per submit is what ate two thirds of the first
+ * calibration run's turn budget (#110). The fields take a whole list, and the
+ * confirmation appears next to the list it is about rather than a screen away.
+ */
+describe('adding structure a list at a time', () => {
+	const renderForm = (form: unknown) =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: { rooms: [], tracks: [], formats: [] },
+					templates: []
+				} as never,
+				form: form as never
+			}
+		}).body;
+
+	it('offers a multi-line field for rooms, tracks and formats', () => {
+		const body = renderForm(null);
+
+		// A textarea, not an input: an `<input>` drops the newlines out of a paste,
+		// so the whole batch would arrive as one very long room name.
+		expect(body).toContain('name="names"');
+		expect(body).toContain('name="formats"');
+		expect(body).not.toContain('name="minutes"');
+		expect(body.match(/<textarea/g)?.length).toBeGreaterThanOrEqual(3);
+		expect(body).toContain('one per line');
+	});
+
+	it('puts the confirmation inside the section that was submitted', () => {
+		const body = renderForm({ message: 'Added 3 rooms.', section: 'rooms' });
+
+		expect(body).toContain('Added 3 rooms.');
+		// Inside the rooms card, which is what makes it an answer rather than a
+		// notice at the other end of the page.
+		const rooms = body.slice(body.indexOf('data-testid="settings-rooms"'));
+		expect(rooms.slice(0, rooms.indexOf('</section>'))).toContain('Added 3 rooms.');
+	});
+
+	it('shows a rejected line as an alert in its own section', () => {
+		const body = renderForm({ error: 'Give the room a name.', section: 'rooms' });
+
+		expect(body).toContain('data-testid="settings-error"');
+		expect(body).not.toContain('data-testid="settings-message"');
+		const rooms = body.slice(body.indexOf('data-testid="settings-rooms"'));
+		expect(rooms.slice(0, rooms.indexOf('</section>'))).toContain('Give the room a name.');
+	});
+
+	// One message, in one place: the same text at the top and in the section would
+	// read as two things having happened.
+	it('does not repeat a sectioned message at the top of the page', () => {
+		const body = renderForm({ message: 'Added 3 rooms.', section: 'rooms' });
+
+		expect(body.match(/Added 3 rooms\./g)).toHaveLength(1);
 	});
 });

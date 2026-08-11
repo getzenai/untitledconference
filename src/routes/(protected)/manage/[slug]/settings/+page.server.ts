@@ -7,9 +7,10 @@
  * it has.
  */
 import { invalidRangeField, MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
+import { addedMessage } from '$lib/conference/structure-lines';
 import { requireOrganizer } from '$lib/server/conference/access';
 import { syncConferenceDays } from '$lib/server/conference/conference-days';
-import { addFormat, addRoom, addTrack, conferenceConfig } from '$lib/server/conference/config';
+import { addFormats, addRooms, addTracks, conferenceConfig } from '$lib/server/conference/config';
 import {
 	addTaskTemplate,
 	deleteTaskTemplate,
@@ -111,7 +112,10 @@ export const actions: Actions = {
 		const next = wantsPublished ? 'published' : 'draft';
 
 		if (conference.status === next) {
-			return { message: wantsPublished ? 'Already published.' : 'Already a draft.' };
+			return {
+				message: wantsPublished ? 'Already published.' : 'Already a draft.',
+				section: null
+			};
 		}
 
 		await db
@@ -122,7 +126,8 @@ export const actions: Actions = {
 		return {
 			message: wantsPublished
 				? `Published. /c/${conference.slug} is live and the call for papers can take submissions.`
-				: 'Back to draft. The public site and the public submission form answer 404 again.'
+				: 'Back to draft. The public site and the public submission form answer 404 again.',
+			section: null
 		};
 	},
 
@@ -139,7 +144,7 @@ export const actions: Actions = {
 		const endsOn = optional(form, 'endsOn');
 
 		const badField = invalidRangeField(startsOn, endsOn);
-		if (badField) return fail(400, { error: DATE_ERRORS[badField] });
+		if (badField) return fail(400, { error: DATE_ERRORS[badField], section: null });
 
 		// One transaction: the range and the days it implies are one fact, and a
 		// stored range whose days never followed is exactly the bug being fixed.
@@ -153,69 +158,75 @@ export const actions: Actions = {
 		});
 
 		return {
-			message: daysChangedMessage(sync.added.length, sync.removed.length, sync.keptInUse)
+			message: daysChangedMessage(sync.added.length, sync.removed.length, sync.keptInUse),
+			section: null
 		};
 	},
 
 	addRoom: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		if ((await addRoom(conference.id, text(await request.formData(), 'name'))) === null) {
-			return fail(400, { error: 'Give the room a name.' });
+		const result = await addRooms(conference.id, text(await request.formData(), 'names'));
+		if (result.added.length === 0 && result.skipped.length === 0) {
+			return fail(400, { error: 'Give the room a name.', section: 'rooms' });
 		}
-		return { message: 'Room added.' };
+		return { message: addedMessage('room', result.added, result.skipped), section: 'rooms' };
 	},
 
 	addTrack: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		if ((await addTrack(conference.id, text(await request.formData(), 'name'))) === null) {
-			return fail(400, { error: 'Give the track a name.' });
+		const result = await addTracks(conference.id, text(await request.formData(), 'names'));
+		if (result.added.length === 0 && result.skipped.length === 0) {
+			return fail(400, { error: 'Give the track a name.', section: 'tracks' });
 		}
-		return { message: 'Track added.' };
+		return { message: addedMessage('track', result.added, result.skipped), section: 'tracks' };
 	},
 
 	addFormat: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		const form = await request.formData();
-		const name = text(form, 'name');
-		const rawMinutes = String(form.get('minutes') ?? '').trim();
-		const minutes = rawMinutes === '' ? null : Number(rawMinutes);
+		const result = await addFormats(conference.id, text(await request.formData(), 'formats'));
 
-		if (minutes !== null && !Number.isInteger(minutes)) {
-			return fail(400, { error: 'Minutes must be a whole number.' });
+		if ('problem' in result) return fail(400, { error: result.problem, section: 'formats' });
+		if (result.added.length === 0 && result.skipped.length === 0) {
+			return fail(400, { error: 'Give the format a name.', section: 'formats' });
 		}
-		if ((await addFormat(conference.id, name, minutes)) === null) {
-			return fail(400, {
-				error: 'Give the format a name, and minutes between 1 and 1440 if set.'
-			});
-		}
-		return { message: 'Session format added.' };
+
+		return {
+			message: addedMessage('session format', result.added, result.skipped),
+			section: 'formats'
+		};
 	},
 
 	addTemplate: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const problem = await addTaskTemplate(conference.id, templateInput(await request.formData()));
-		if (problem) return fail(400, { error: problem });
-		return { message: 'Task added. Every talk accepted from now on gets it.' };
+		if (problem) return fail(400, { error: problem, section: 'tasks' });
+		return {
+			message: 'Task added. Every talk accepted from now on gets it.',
+			section: 'tasks'
+		};
 	},
 
 	updateTemplate: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const form = await request.formData();
 		const id = identifier(form);
-		if (id === null) return fail(400, { error: 'Unknown task.' });
+		if (id === null) return fail(400, { error: 'Unknown task.', section: 'tasks' });
 
 		const problem = await updateTaskTemplate(conference.id, id, templateInput(form));
-		if (problem) return fail(400, { error: problem });
-		return { message: 'Task saved. Tasks speakers already have are unchanged.' };
+		if (problem) return fail(400, { error: problem, section: 'tasks' });
+		return { message: 'Task saved. Tasks speakers already have are unchanged.', section: 'tasks' };
 	},
 
 	deleteTemplate: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const id = identifier(await request.formData());
-		if (id === null) return fail(400, { error: 'Unknown task.' });
+		if (id === null) return fail(400, { error: 'Unknown task.', section: 'tasks' });
 
 		const problem = await deleteTaskTemplate(conference.id, id);
-		if (problem) return fail(400, { error: problem });
-		return { message: 'Task removed. Tasks speakers already have stay where they are.' };
+		if (problem) return fail(400, { error: problem, section: 'tasks' });
+		return {
+			message: 'Task removed. Tasks speakers already have stay where they are.',
+			section: 'tasks'
+		};
 	}
 };

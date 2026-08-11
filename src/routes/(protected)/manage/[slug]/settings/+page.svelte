@@ -8,6 +8,7 @@
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 
 	let { data, form } = $props();
 
@@ -30,7 +31,85 @@
 			}
 		};
 	};
+
+	/**
+	 * The structure forms, which are typed into over and over.
+	 *
+	 * On success the cursor goes back where it was. `update()` already clears the
+	 * field — what it does not do is give it back, and being dropped out of the
+	 * form after every add is what turns "add five rooms" into five journeys across
+	 * the page. The same click that saves you leaves you ready for the next line.
+	 */
+	const addingLines = ({ formElement }: { formElement: HTMLFormElement }) => {
+		busy = true;
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: () => Promise<void>;
+		}) => {
+			try {
+				await update();
+				if (result.type === 'success') formElement.querySelector('textarea')?.focus();
+			} finally {
+				busy = false;
+			}
+		};
+	};
+
+	/**
+	 * Examples in the field itself, so the shape of a batch is visible before the
+	 * first one is typed rather than explained in prose above it.
+	 */
+	const ROOM_LINES = 'Room 3C\nMain Stage';
+	const TRACK_LINES = 'Security\nPlatform';
+	const FORMAT_LINES = 'Talk, 30\nWorkshop, 90\nPanel';
+
+	/**
+	 * Enter adds, shift+enter starts another line.
+	 *
+	 * A textarea swallows enter, and the field these replaced was a single-line
+	 * input where enter submitted. Taking that away to gain the second line would
+	 * be trading one person's speed for another's.
+	 */
+	const submitOnEnter = (event: KeyboardEvent) => {
+		if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+
+		event.preventDefault();
+		(event.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
+	};
 </script>
+
+<!--
+	Where the answer to "did that work?" appears.
+
+	At the top of the page for the things there is one of — publishing, the dates —
+	and inside the section that was submitted for the lists, which is where the eye
+	already is after pressing Add. A confirmation a screen away from the thing it
+	confirms is what sends people back to reload the page to check.
+-->
+{#snippet feedback(section: string | null)}
+	{#if (form?.section ?? null) === section}
+		{#if form?.error}
+			<p
+				class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
+				role="alert"
+				data-testid="settings-error"
+			>
+				{form.error}
+			</p>
+		{:else if form?.message}
+			<p
+				class="border-status-good text-status-good max-w-2xl rounded-md border px-3 py-2 text-sm"
+				role="status"
+				data-testid="settings-message"
+			>
+				{form.message}
+			</p>
+		{/if}
+	{/if}
+{/snippet}
 
 <svelte:head>
 	<title>Settings — {data.conference.name}</title>
@@ -46,23 +125,7 @@
 </div>
 
 <div class="space-y-6 px-6 py-5">
-	{#if form?.error}
-		<p
-			class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
-			role="alert"
-			data-testid="settings-error"
-		>
-			{form.error}
-		</p>
-	{:else if form?.message}
-		<p
-			class="border-status-good text-status-good max-w-2xl rounded-md border px-3 py-2 text-sm"
-			role="status"
-			data-testid="settings-message"
-		>
-			{form.message}
-		</p>
-	{/if}
+	{@render feedback(null)}
 
 	<!--
 		First on the page, because until this is on, half the product does not exist:
@@ -185,17 +248,25 @@
 			</ul>
 		{/if}
 
-		<form
-			method="POST"
-			action="?/addRoom"
-			use:enhance={submitting}
-			class="mt-3 flex flex-wrap items-end gap-2"
-		>
-			<label class="min-w-[12rem] flex-1 text-xs">
-				<span class="text-muted-foreground">New room</span>
-				<Input name="name" class="mt-1 h-8 text-sm" placeholder="Room 3C" required />
+		<form method="POST" action="?/addRoom" use:enhance={addingLines} class="mt-3 space-y-2">
+			<label class="block text-xs">
+				<span class="text-muted-foreground">New rooms — one per line</span>
+				<Textarea
+					name="names"
+					rows={2}
+					class="mt-1 min-h-0 py-1.5 text-sm"
+					placeholder={ROOM_LINES}
+					onkeydown={submitOnEnter}
+					required
+				/>
 			</label>
-			<Button type="submit" size="sm" disabled={busy}>Add room</Button>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button type="submit" size="sm" disabled={busy}>Add rooms</Button>
+				<span class="text-muted-foreground text-xs">
+					Enter adds, shift+enter starts another line.
+				</span>
+			</div>
+			{@render feedback('rooms')}
 		</form>
 	</section>
 
@@ -218,17 +289,25 @@
 			</ul>
 		{/if}
 
-		<form
-			method="POST"
-			action="?/addTrack"
-			use:enhance={submitting}
-			class="mt-3 flex flex-wrap items-end gap-2"
-		>
-			<label class="min-w-[12rem] flex-1 text-xs">
-				<span class="text-muted-foreground">New track</span>
-				<Input name="name" class="mt-1 h-8 text-sm" placeholder="Security" required />
+		<form method="POST" action="?/addTrack" use:enhance={addingLines} class="mt-3 space-y-2">
+			<label class="block text-xs">
+				<span class="text-muted-foreground">New tracks — one per line</span>
+				<Textarea
+					name="names"
+					rows={2}
+					class="mt-1 min-h-0 py-1.5 text-sm"
+					placeholder={TRACK_LINES}
+					onkeydown={submitOnEnter}
+					required
+				/>
 			</label>
-			<Button type="submit" size="sm" disabled={busy}>Add track</Button>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button type="submit" size="sm" disabled={busy}>Add tracks</Button>
+				<span class="text-muted-foreground text-xs">
+					Enter adds, shift+enter starts another line.
+				</span>
+			</div>
+			{@render feedback('tracks')}
 		</form>
 	</section>
 
@@ -262,28 +341,25 @@
 			</ul>
 		{/if}
 
-		<form
-			method="POST"
-			action="?/addFormat"
-			use:enhance={submitting}
-			class="mt-3 flex flex-wrap items-end gap-2"
-		>
-			<label class="min-w-[10rem] flex-1 text-xs">
-				<span class="text-muted-foreground">Name</span>
-				<Input name="name" class="mt-1 h-8 text-sm" placeholder="Talk" required />
-			</label>
-			<label class="w-28 text-xs">
-				<span class="text-muted-foreground">Minutes</span>
-				<Input
-					name="minutes"
-					type="number"
-					min="1"
-					max="1440"
-					class="mt-1 h-8 text-sm"
-					placeholder="30"
+		<form method="POST" action="?/addFormat" use:enhance={addingLines} class="mt-3 space-y-2">
+			<label class="block text-xs">
+				<span class="text-muted-foreground">New formats — one per line, length optional</span>
+				<Textarea
+					name="formats"
+					rows={2}
+					class="mt-1 min-h-0 py-1.5 text-sm"
+					placeholder={FORMAT_LINES}
+					onkeydown={submitOnEnter}
+					required
 				/>
 			</label>
-			<Button type="submit" size="sm" disabled={busy}>Add format</Button>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button type="submit" size="sm" disabled={busy}>Add formats</Button>
+				<span class="text-muted-foreground text-xs">
+					Put the minutes after a comma. Enter adds, shift+enter starts another line.
+				</span>
+			</div>
+			{@render feedback('formats')}
 		</form>
 	</section>
 
@@ -434,5 +510,7 @@
 				<Button type="submit" size="sm" disabled={busy}>Add task</Button>
 			</div>
 		</form>
+
+		{@render feedback('tasks')}
 	</section>
 </div>
