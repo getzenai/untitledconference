@@ -133,24 +133,29 @@
 			</p>
 		{:else}
 			<ul class="mt-3 space-y-3">
-				{#each data.committee as person (person.membershipId)}
+				{#each data.committee as person (person.userId)}
 					<li class="border-border rounded-md border p-3">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div>
 								<p class="text-sm font-medium">{person.name}</p>
 								<p class="text-muted-foreground text-xs">{person.email}</p>
 								<p class="text-muted-foreground mt-1 text-xs">
-									Conference reviewer · {person.submitted}/{person.assigned} submitted
+									{person.conferenceManaged
+										? 'Conference reviewer'
+										: `Round reviewer · ${person.rounds.join(', ')}`} ·
+									<span>{person.submitted}/{person.assigned} submitted</span>
 									{#if person.outstanding > 0}· {person.outstanding} outstanding{/if}
 								</p>
 							</div>
-							<form method="POST" action="?/removeReviewer" use:enhance={submitting}>
-								<input type="hidden" name="membershipId" value={person.membershipId} />
-								<Button type="submit" variant="ghost" size="sm" disabled={busy}>Remove</Button>
-							</form>
+							{#if person.conferenceManaged}
+								<form method="POST" action="?/removeReviewer" use:enhance={submitting}>
+									<input type="hidden" name="membershipId" value={person.membershipId} />
+									<Button type="submit" variant="ghost" size="sm" disabled={busy}>Remove</Button>
+								</form>
+							{/if}
 						</div>
 
-						{#if data.tracks.length > 0}
+						{#if data.tracks.length > 0 && person.conferenceManaged}
 							<form
 								method="POST"
 								action="?/updateTracks"
@@ -199,6 +204,10 @@
 									>
 								</div>
 							</form>
+						{:else if !person.conferenceManaged}
+							<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
+								This reviewer’s access is managed by their review rounds.
+							</p>
 						{/if}
 					</li>
 				{/each}

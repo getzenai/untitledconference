@@ -30,6 +30,7 @@ import {
 	reviewTable
 } from '$lib/server/db/conference/review-schema';
 import { and, asc, count, eq, inArray, ne } from 'drizzle-orm';
+import { conferenceReviewerMemberships } from './reviewer-memberships';
 
 export type CommitteeMember = {
 	membershipId: number;
@@ -37,6 +38,8 @@ export type CommitteeMember = {
 	name: string;
 	email: string;
 	role: 'reviewer';
+	conferenceManaged: boolean;
+	rounds: string[];
 	trackIds: number[];
 	tracks: string[];
 	assigned: number;
@@ -55,25 +58,13 @@ function displayName(name: string | null, email: string): string {
 	return name?.trim() || email;
 }
 
-/** The conference-scoped committee, by name. */
-async function committeeRows(conferenceId: number) {
+async function committeeRounds(conferenceId: number) {
 	return db
-		.select({
-			membershipId: membershipTable.id,
-			userId: membershipTable.userId,
-			name: user.name,
-			email: user.email
-		})
-		.from(membershipTable)
-		.innerJoin(user, eq(user.id, membershipTable.userId))
-		.where(
-			and(
-				eq(membershipTable.role, 'reviewer'),
-				eq(membershipTable.scopeType, 'conference'),
-				eq(membershipTable.scopeId, conferenceId)
-			)
-		)
-		.orderBy(asc(user.name), asc(membershipTable.id));
+		.select({ id: reviewRoundTable.id, name: reviewRoundTable.name })
+		.from(reviewRoundTable)
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.where(eq(evaluationPlanTable.conferenceId, conferenceId))
+		.orderBy(asc(reviewRoundTable.position), asc(reviewRoundTable.id));
 }
 
 async function committeeTrackRows(conferenceId: number, membershipIds: number[]) {
@@ -114,12 +105,77 @@ async function committeeAssignmentRows(conferenceId: number, userIds: string[]) 
 		.groupBy(reviewTable.reviewerUserId);
 }
 
-type CommitteeRow = Awaited<ReturnType<typeof committeeRows>>[number];
+type CommitteeRow = Awaited<ReturnType<typeof conferenceReviewerMemberships>>[number];
 type TrackRow = Awaited<ReturnType<typeof committeeTrackRows>>[number];
 type AssignmentRow = Awaited<ReturnType<typeof committeeAssignmentRows>>[number];
 
+function groupByUser(rows: CommitteeRow[]): CommitteeRow[][] {
+	const rowsByUser = new Map<string, CommitteeRow[]>();
+	for (const row of rows) {
+		const memberships = rowsByUser.get(row.userId) ?? [];
+		memberships.push(row);
+		rowsByUser.set(row.userId, memberships);
+	}
+	return [...rowsByUser.values()];
+}
+
+function trackAccess(
+	memberships: CommitteeRow[],
+	tracksByMembership: Map<number, { ids: number[]; names: string[] }>
+) {
+	const trackIds = new Set<number>();
+	const tracks = new Set<string>();
+	for (const membership of memberships) {
+		const restriction = tracksByMembership.get(membership.membershipId);
+		for (const id of restriction?.ids ?? []) trackIds.add(id);
+		for (const name of restriction?.names ?? []) tracks.add(name);
+	}
+	return { trackIds: [...trackIds], tracks: [...tracks] };
+}
+
+function roundLabels(memberships: CommitteeRow[], roundNames: Map<number, string>): string[] {
+	return memberships
+		.filter((membership) => membership.scopeType === 'round')
+		.sort(
+			(a, b) =>
+				[...roundNames.keys()].indexOf(a.scopeId) - [...roundNames.keys()].indexOf(b.scopeId)
+		)
+		.flatMap((membership) => {
+			const name = roundNames.get(membership.scopeId);
+			return name ? [name] : [];
+		});
+}
+
+function committeeMember(
+	memberships: CommitteeRow[],
+	roundNames: Map<number, string>,
+	tracksByMembership: Map<number, { ids: number[]; names: string[] }>,
+	assignmentsByUser: Map<string, AssignmentRow>
+): CommitteeMember {
+	const conferenceSeat = memberships.find((row) => row.scopeType === 'conference');
+	const row = conferenceSeat ?? memberships[0];
+	const access = trackAccess(conferenceSeat ? [conferenceSeat] : memberships, tracksByMembership);
+	const progress = assignmentsByUser.get(row.userId);
+	const assigned = Number(progress?.assigned ?? 0);
+	const submitted = Number(progress?.submitted ?? 0);
+	return {
+		membershipId: row.membershipId,
+		userId: row.userId,
+		name: displayName(row.name, row.email),
+		email: row.email,
+		role: 'reviewer',
+		conferenceManaged: Boolean(conferenceSeat),
+		rounds: roundLabels(memberships, roundNames),
+		...access,
+		assigned,
+		submitted,
+		outstanding: assigned - submitted
+	};
+}
+
 function assembleCommittee(
 	rows: CommitteeRow[],
+	roundNames: Map<number, string>,
 	restrictedTracks: TrackRow[],
 	assignments: AssignmentRow[]
 ): CommitteeMember[] {
@@ -131,28 +187,18 @@ function assembleCommittee(
 		tracksByMembership.set(row.membershipId, entry);
 	}
 	const assignmentsByUser = new Map(assignments.map((row) => [row.userId, row]));
-
-	return rows.map((row) => {
-		const restrictions = tracksByMembership.get(row.membershipId) ?? { ids: [], names: [] };
-		const progress = assignmentsByUser.get(row.userId);
-		const assigned = Number(progress?.assigned ?? 0);
-		const submitted = Number(progress?.submitted ?? 0);
-		return {
-			...row,
-			name: displayName(row.name, row.email),
-			role: 'reviewer' as const,
-			trackIds: restrictions.ids,
-			tracks: restrictions.names,
-			assigned,
-			submitted,
-			outstanding: assigned - submitted
-		};
-	});
+	return groupByUser(rows).map((memberships) =>
+		committeeMember(memberships, roundNames, tracksByMembership, assignmentsByUser)
+	);
 }
 
-/** The conference-scoped committee, by name, access and current workload. */
+/** The conference- and round-scoped committee, by name, access and current workload. */
 export async function committee(conferenceId: number): Promise<CommitteeMember[]> {
-	const rows = await committeeRows(conferenceId);
+	const rounds = await committeeRounds(conferenceId);
+	const rows = await conferenceReviewerMemberships(
+		conferenceId,
+		rounds.map((round) => round.id)
+	);
 	if (rows.length === 0) return [];
 	const [restrictedTracks, assignments] = await Promise.all([
 		committeeTrackRows(
@@ -164,7 +210,12 @@ export async function committee(conferenceId: number): Promise<CommitteeMember[]
 			rows.map((row) => row.userId)
 		)
 	]);
-	return assembleCommittee(rows, restrictedTracks, assignments);
+	return assembleCommittee(
+		rows,
+		new Map(rounds.map((round) => [round.id, round.name])),
+		restrictedTracks,
+		assignments
+	).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function reviewerTracks(conferenceId: number) {

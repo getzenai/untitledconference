@@ -17,6 +17,7 @@ import {
 } from '$lib/server/db/conference/review-schema';
 import { and, asc, count, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import { dispatchConferenceEmails } from './email-dispatcher';
+import { conferenceReviewerMemberships } from './reviewer-memberships';
 
 export type AssignmentReviewer = {
 	userId: string;
@@ -41,32 +42,6 @@ async function conferenceRounds(conferenceId: number): Promise<Round[]> {
 		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
 		.where(eq(evaluationPlanTable.conferenceId, conferenceId))
 		.orderBy(asc(reviewRoundTable.position), asc(reviewRoundTable.id));
-}
-
-function reviewerMemberships(conferenceId: number, roundIds: number[]) {
-	return db
-		.select({
-			membershipId: membershipTable.id,
-			userId: membershipTable.userId,
-			scopeType: membershipTable.scopeType,
-			scopeId: membershipTable.scopeId,
-			name: user.name,
-			email: user.email
-		})
-		.from(membershipTable)
-		.innerJoin(user, eq(user.id, membershipTable.userId))
-		.where(
-			and(
-				eq(membershipTable.role, 'reviewer'),
-				or(
-					and(
-						eq(membershipTable.scopeType, 'conference'),
-						eq(membershipTable.scopeId, conferenceId)
-					),
-					and(eq(membershipTable.scopeType, 'round'), inArray(membershipTable.scopeId, roundIds))
-				)
-			)
-		);
 }
 
 function submissionAssignments(submissionId: number, roundIds: number[]) {
@@ -124,7 +99,7 @@ async function membershipTrackRestrictions(membershipIds: number[]) {
 	return result;
 }
 
-type Membership = Awaited<ReturnType<typeof reviewerMemberships>>[number];
+type Membership = Awaited<ReturnType<typeof conferenceReviewerMemberships>>[number];
 type ExistingAssignment = Awaited<ReturnType<typeof submissionAssignments>>[number];
 
 function assignmentsByRound(assignments: ExistingAssignment[]) {
@@ -205,7 +180,7 @@ export async function reviewAssignmentMatrix(
 	if (rounds.length === 0) return [];
 	const roundIds = rounds.map((round) => round.id);
 	const [memberships, assignments, speakerIds, trackId] = await Promise.all([
-		reviewerMemberships(conferenceId, roundIds),
+		conferenceReviewerMemberships(conferenceId, roundIds),
 		submissionAssignments(submissionId, roundIds),
 		submissionSpeakerIds(submissionId),
 		submissionTrack(submissionId)
