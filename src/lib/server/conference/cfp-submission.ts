@@ -590,7 +590,7 @@ async function refuseSave(
 		const owned = await ownedSubmission(userId, options.submissionId);
 		const editable =
 			owned &&
-			(owned.status === 'draft' || owned.status === 'submitted') &&
+			(owned.status === 'draft' || owned.status === 'submitted' || owned.status === 'in_review') &&
 			owned.conferenceId === call.conference.id;
 		if (!editable) return { ok: false, reason: 'forbidden' };
 	}
@@ -599,7 +599,18 @@ async function refuseSave(
 }
 
 /** What the row said before this save, for the two columns an edit must not reset. */
-type PriorState = { status: string; submittedAt: Date | null } | null;
+type PriorState = {
+	status: (typeof submissionTable.$inferSelect)['status'];
+	submittedAt: Date | null;
+} | null;
+
+/**
+ * In front of the organizers already — submitted, or the review has begun. Both
+ * keep the speaker's right to edit while the call is open; neither is a draft.
+ */
+function alreadyIn(prior: PriorState): boolean {
+	return prior?.status === 'submitted' || prior?.status === 'in_review';
+}
 
 /**
  * The submission's own columns. `submittedAt` is the moment a draft stops being one.
@@ -619,7 +630,7 @@ function submissionValues(
 	submit: boolean,
 	prior: PriorState = null
 ) {
-	const alreadyIn = prior?.status === 'submitted';
+	const arrived = alreadyIn(prior);
 
 	return {
 		conferenceId: call.conference.id,
@@ -630,8 +641,11 @@ function submissionValues(
 		audienceLevel: input.audienceLevel,
 		sessionFormatId: input.sessionFormatId,
 		trackId: input.trackId,
-		status: submit || alreadyIn ? ('submitted' as const) : ('draft' as const),
-		submittedAt: alreadyIn ? prior!.submittedAt : submit ? new Date() : null
+		// An edit keeps whatever standing the proposal already has — `in_review`
+		// stays `in_review`, `submitted` stays `submitted`. Only a first submit
+		// moves a draft forward.
+		status: arrived ? prior!.status : submit ? ('submitted' as const) : ('draft' as const),
+		submittedAt: arrived ? prior!.submittedAt : submit ? new Date() : null
 	};
 }
 
@@ -662,7 +676,7 @@ async function persist(
 		: [];
 
 	const values = submissionValues(call, input, options.submit, prior ?? null);
-	const alreadyIn = prior?.status === 'submitted';
+	const arrived = alreadyIn(prior ?? null);
 
 	let id = options.submissionId;
 	if (id === undefined) {
@@ -680,7 +694,7 @@ async function persist(
 
 	// Only the arrival gets a receipt. An edit is not a new proposal, and mailing
 	// every co-speaker again on each wording change would train them to ignore it.
-	if (options.submit && !alreadyIn) {
+	if (options.submit && !arrived) {
 		const speakers = await tx
 			.select({ id: submissionSpeakerTable.speakerProfileId })
 			.from(submissionSpeakerTable)
