@@ -4,6 +4,7 @@ import { user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	membershipTable,
+	membershipTrackTable,
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
@@ -45,6 +46,7 @@ async function conferenceRounds(conferenceId: number): Promise<Round[]> {
 function reviewerMemberships(conferenceId: number, roundIds: number[]) {
 	return db
 		.select({
+			membershipId: membershipTable.id,
 			userId: membershipTable.userId,
 			scopeType: membershipTable.scopeType,
 			scopeId: membershipTable.scopeId,
@@ -95,6 +97,33 @@ async function submissionSpeakerIds(submissionId: number) {
 	return new Set(speakers.flatMap((speaker) => (speaker.userId ? [speaker.userId] : [])));
 }
 
+async function submissionTrack(submissionId: number): Promise<number | null> {
+	const [submission] = await db
+		.select({ trackId: submissionTable.trackId })
+		.from(submissionTable)
+		.where(eq(submissionTable.id, submissionId))
+		.limit(1);
+	return submission?.trackId ?? null;
+}
+
+async function membershipTrackRestrictions(membershipIds: number[]) {
+	if (membershipIds.length === 0) return new Map<number, Set<number>>();
+	const rows = await db
+		.select({
+			membershipId: membershipTrackTable.membershipId,
+			trackId: membershipTrackTable.trackId
+		})
+		.from(membershipTrackTable)
+		.where(inArray(membershipTrackTable.membershipId, membershipIds));
+	const result = new Map<number, Set<number>>();
+	for (const row of rows) {
+		const tracks = result.get(row.membershipId) ?? new Set<number>();
+		tracks.add(row.trackId);
+		result.set(row.membershipId, tracks);
+	}
+	return result;
+}
+
 type Membership = Awaited<ReturnType<typeof reviewerMemberships>>[number];
 type ExistingAssignment = Awaited<ReturnType<typeof submissionAssignments>>[number];
 
@@ -112,15 +141,40 @@ function belongsToRound(membership: Membership, roundId: number) {
 	return membership.scopeType === 'conference' || membership.scopeId === roundId;
 }
 
+function membershipAllowsTrack(
+	membershipId: number,
+	trackId: number | null,
+	restrictions: Map<number, Set<number>>
+) {
+	const tracks = restrictions.get(membershipId);
+	return !tracks || (trackId !== null && tracks.has(trackId));
+}
+
+function membershipIsEligible(
+	membership: Membership,
+	roundId: number,
+	speakerIds: Set<string>,
+	trackId: number | null,
+	restrictions: Map<number, Set<number>>
+) {
+	return (
+		belongsToRound(membership, roundId) &&
+		!speakerIds.has(membership.userId) &&
+		membershipAllowsTrack(membership.membershipId, trackId, restrictions)
+	);
+}
+
 function reviewersForRound(
 	round: Round,
 	memberships: Membership[],
 	assignments: Map<string, ExistingAssignment>,
-	speakerIds: Set<string>
+	speakerIds: Set<string>,
+	trackId: number | null,
+	restrictions: Map<number, Set<number>>
 ) {
 	const candidates = new Map<string, AssignmentReviewer>();
 	for (const membership of memberships) {
-		if (!belongsToRound(membership, round.id) || speakerIds.has(membership.userId)) continue;
+		if (!membershipIsEligible(membership, round.id, speakerIds, trackId, restrictions)) continue;
 		candidates.set(membership.userId, {
 			userId: membership.userId,
 			name: membership.name ?? membership.email,
@@ -150,15 +204,26 @@ export async function reviewAssignmentMatrix(
 	const rounds = await conferenceRounds(conferenceId);
 	if (rounds.length === 0) return [];
 	const roundIds = rounds.map((round) => round.id);
-	const [memberships, assignments, speakerIds] = await Promise.all([
+	const [memberships, assignments, speakerIds, trackId] = await Promise.all([
 		reviewerMemberships(conferenceId, roundIds),
 		submissionAssignments(submissionId, roundIds),
-		submissionSpeakerIds(submissionId)
+		submissionSpeakerIds(submissionId),
+		submissionTrack(submissionId)
 	]);
+	const restrictions = await membershipTrackRestrictions(
+		memberships.map((row) => row.membershipId)
+	);
 	const byRound = assignmentsByRound(assignments);
 	return rounds.map((round) => ({
 		...round,
-		reviewers: reviewersForRound(round, memberships, byRound.get(round.id) ?? new Map(), speakerIds)
+		reviewers: reviewersForRound(
+			round,
+			memberships,
+			byRound.get(round.id) ?? new Map(),
+			speakerIds,
+			trackId,
+			restrictions
+		)
 	}));
 }
 
@@ -200,41 +265,84 @@ async function validAssignmentTarget(tx: Tx, input: AssignmentInput) {
 	return Boolean(submission && round);
 }
 
+async function eligibleMemberships(tx: Tx, input: AssignmentInput) {
+	return tx
+		.select({ id: membershipTable.id })
+		.from(membershipTable)
+		.where(
+			and(
+				eq(membershipTable.userId, input.reviewerUserId),
+				eq(membershipTable.role, 'reviewer'),
+				or(
+					and(
+						eq(membershipTable.scopeType, 'conference'),
+						eq(membershipTable.scopeId, input.conferenceId)
+					),
+					and(eq(membershipTable.scopeType, 'round'), eq(membershipTable.scopeId, input.roundId))
+				)
+			)
+		);
+}
+
+async function isSubmissionSpeaker(tx: Tx, input: AssignmentInput) {
+	const [speaker] = await tx
+		.select({ id: speakerProfileTable.id })
+		.from(submissionSpeakerTable)
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+		)
+		.where(
+			and(
+				eq(submissionSpeakerTable.submissionId, input.submissionId),
+				eq(speakerProfileTable.userId, input.reviewerUserId)
+			)
+		)
+		.limit(1);
+	return Boolean(speaker);
+}
+
+async function assignmentTrack(tx: Tx, submissionId: number) {
+	const [submission] = await tx
+		.select({ trackId: submissionTable.trackId })
+		.from(submissionTable)
+		.where(eq(submissionTable.id, submissionId))
+		.limit(1);
+	return submission;
+}
+
+async function restrictionsByMembership(tx: Tx, membershipIds: number[]) {
+	const rows = await tx
+		.select({
+			membershipId: membershipTrackTable.membershipId,
+			trackId: membershipTrackTable.trackId
+		})
+		.from(membershipTrackTable)
+		.where(inArray(membershipTrackTable.membershipId, membershipIds));
+	const result = new Map<number, number[]>();
+	for (const row of rows) {
+		const tracks = result.get(row.membershipId) ?? [];
+		tracks.push(row.trackId);
+		result.set(row.membershipId, tracks);
+	}
+	return result;
+}
+
 async function eligibleReviewer(tx: Tx, input: AssignmentInput) {
-	const [[membership], [speaker]] = await Promise.all([
-		tx
-			.select({ id: membershipTable.id })
-			.from(membershipTable)
-			.where(
-				and(
-					eq(membershipTable.userId, input.reviewerUserId),
-					eq(membershipTable.role, 'reviewer'),
-					or(
-						and(
-							eq(membershipTable.scopeType, 'conference'),
-							eq(membershipTable.scopeId, input.conferenceId)
-						),
-						and(eq(membershipTable.scopeType, 'round'), eq(membershipTable.scopeId, input.roundId))
-					)
-				)
-			)
-			.limit(1),
-		tx
-			.select({ id: speakerProfileTable.id })
-			.from(submissionSpeakerTable)
-			.innerJoin(
-				speakerProfileTable,
-				eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
-			)
-			.where(
-				and(
-					eq(submissionSpeakerTable.submissionId, input.submissionId),
-					eq(speakerProfileTable.userId, input.reviewerUserId)
-				)
-			)
-			.limit(1)
+	const [memberships, speaker, submission] = await Promise.all([
+		eligibleMemberships(tx, input),
+		isSubmissionSpeaker(tx, input),
+		assignmentTrack(tx, input.submissionId)
 	]);
-	return Boolean(membership && !speaker);
+	if (speaker || !submission || memberships.length === 0) return false;
+	const restrictions = await restrictionsByMembership(
+		tx,
+		memberships.map((row) => row.id)
+	);
+	return memberships.some((membership) => {
+		const tracks = restrictions.get(membership.id);
+		return !tracks || (submission.trackId !== null && tracks.includes(submission.trackId));
+	});
 }
 
 const assignmentKey = (input: AssignmentInput) =>

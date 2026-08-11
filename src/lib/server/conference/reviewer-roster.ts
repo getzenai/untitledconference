@@ -12,22 +12,39 @@
  * Both read paths already accept either scope, and a committee that has to be
  * re-stated for every round is a chore with no question behind it.
  *
- * A reviewer must already have an account. Matching on the account's address
- * rather than inviting a stranger is the same call `speaker-portal.ts` documents:
- * a row nobody can sign in as is a roster entry that will never review anything,
- * and it reads as done.
+ * Existing accounts become reviewers immediately. Unknown addresses go through
+ * Better Auth's organization invitation flow; accepting that invite writes the
+ * conference membership, so a pending invitation never masquerades as a reviewer.
  */
 import { db } from '$lib/server/db';
-import { user } from '$lib/server/db/auth-schema';
-import { membershipTable } from '$lib/server/db/conference/conference-schema';
-import { and, asc, eq } from 'drizzle-orm';
+import { invitation, user } from '$lib/server/db/auth-schema';
+import {
+	conferenceTable,
+	membershipTable,
+	membershipTrackTable,
+	trackTable
+} from '$lib/server/db/conference/conference-schema';
+import {
+	evaluationPlanTable,
+	reviewRoundTable,
+	reviewTable
+} from '$lib/server/db/conference/review-schema';
+import { and, asc, count, eq, inArray, ne } from 'drizzle-orm';
 
 export type CommitteeMember = {
 	membershipId: number;
 	userId: string;
 	name: string;
 	email: string;
+	role: 'reviewer';
+	trackIds: number[];
+	tracks: string[];
+	assigned: number;
+	submitted: number;
+	outstanding: number;
 };
+
+export type PendingReviewerInvitation = { id: string; email: string; expiresAt: Date };
 
 export type ReviewerAddResult =
 	| { ok: true; name: string }
@@ -39,8 +56,8 @@ function displayName(name: string | null, email: string): string {
 }
 
 /** The conference-scoped committee, by name. */
-export async function committee(conferenceId: number): Promise<CommitteeMember[]> {
-	const rows = await db
+async function committeeRows(conferenceId: number) {
+	return db
 		.select({
 			membershipId: membershipTable.id,
 			userId: membershipTable.userId,
@@ -57,8 +74,204 @@ export async function committee(conferenceId: number): Promise<CommitteeMember[]
 			)
 		)
 		.orderBy(asc(user.name), asc(membershipTable.id));
+}
 
-	return rows.map((row) => ({ ...row, name: displayName(row.name, row.email) }));
+async function committeeTrackRows(conferenceId: number, membershipIds: number[]) {
+	return db
+		.select({
+			membershipId: membershipTrackTable.membershipId,
+			trackId: trackTable.id,
+			track: trackTable.name
+		})
+		.from(membershipTrackTable)
+		.innerJoin(trackTable, eq(trackTable.id, membershipTrackTable.trackId))
+		.where(
+			and(
+				inArray(membershipTrackTable.membershipId, membershipIds),
+				eq(trackTable.conferenceId, conferenceId)
+			)
+		)
+		.orderBy(asc(trackTable.position), asc(trackTable.id));
+}
+
+async function committeeAssignmentRows(conferenceId: number, userIds: string[]) {
+	return db
+		.select({
+			userId: reviewTable.reviewerUserId,
+			assigned: count(),
+			submitted: count(reviewTable.submittedAt)
+		})
+		.from(reviewTable)
+		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.where(
+			and(
+				eq(evaluationPlanTable.conferenceId, conferenceId),
+				inArray(reviewTable.reviewerUserId, userIds),
+				ne(reviewTable.status, 'recused')
+			)
+		)
+		.groupBy(reviewTable.reviewerUserId);
+}
+
+type CommitteeRow = Awaited<ReturnType<typeof committeeRows>>[number];
+type TrackRow = Awaited<ReturnType<typeof committeeTrackRows>>[number];
+type AssignmentRow = Awaited<ReturnType<typeof committeeAssignmentRows>>[number];
+
+function assembleCommittee(
+	rows: CommitteeRow[],
+	restrictedTracks: TrackRow[],
+	assignments: AssignmentRow[]
+): CommitteeMember[] {
+	const tracksByMembership = new Map<number, { ids: number[]; names: string[] }>();
+	for (const row of restrictedTracks) {
+		const entry = tracksByMembership.get(row.membershipId) ?? { ids: [], names: [] };
+		entry.ids.push(row.trackId);
+		entry.names.push(row.track);
+		tracksByMembership.set(row.membershipId, entry);
+	}
+	const assignmentsByUser = new Map(assignments.map((row) => [row.userId, row]));
+
+	return rows.map((row) => {
+		const restrictions = tracksByMembership.get(row.membershipId) ?? { ids: [], names: [] };
+		const progress = assignmentsByUser.get(row.userId);
+		const assigned = Number(progress?.assigned ?? 0);
+		const submitted = Number(progress?.submitted ?? 0);
+		return {
+			...row,
+			name: displayName(row.name, row.email),
+			role: 'reviewer' as const,
+			trackIds: restrictions.ids,
+			tracks: restrictions.names,
+			assigned,
+			submitted,
+			outstanding: assigned - submitted
+		};
+	});
+}
+
+/** The conference-scoped committee, by name, access and current workload. */
+export async function committee(conferenceId: number): Promise<CommitteeMember[]> {
+	const rows = await committeeRows(conferenceId);
+	if (rows.length === 0) return [];
+	const [restrictedTracks, assignments] = await Promise.all([
+		committeeTrackRows(
+			conferenceId,
+			rows.map((row) => row.membershipId)
+		),
+		committeeAssignmentRows(
+			conferenceId,
+			rows.map((row) => row.userId)
+		)
+	]);
+	return assembleCommittee(rows, restrictedTracks, assignments);
+}
+
+export async function reviewerTracks(conferenceId: number) {
+	return db
+		.select({ id: trackTable.id, name: trackTable.name })
+		.from(trackTable)
+		.where(eq(trackTable.conferenceId, conferenceId))
+		.orderBy(asc(trackTable.position), asc(trackTable.id));
+}
+
+export async function pendingReviewerInvitations(
+	conferenceId: number
+): Promise<PendingReviewerInvitation[]> {
+	return db
+		.select({ id: invitation.id, email: invitation.email, expiresAt: invitation.expiresAt })
+		.from(invitation)
+		.where(and(eq(invitation.conferenceId, conferenceId), eq(invitation.status, 'pending')))
+		.orderBy(asc(invitation.expiresAt));
+}
+
+/** Turns the accepted auth invitation into the conference permission it promised. */
+export async function acceptReviewerInvitation(
+	conferenceId: number,
+	organizationId: string,
+	userId: string
+): Promise<boolean> {
+	const [conference] = await db
+		.select({ id: conferenceTable.id })
+		.from(conferenceTable)
+		.where(
+			and(eq(conferenceTable.id, conferenceId), eq(conferenceTable.organizationId, organizationId))
+		)
+		.limit(1);
+	if (!conference) return false;
+
+	const [existing] = await db
+		.select({ id: membershipTable.id })
+		.from(membershipTable)
+		.where(
+			and(
+				eq(membershipTable.userId, userId),
+				eq(membershipTable.role, 'reviewer'),
+				eq(membershipTable.scopeType, 'conference'),
+				eq(membershipTable.scopeId, conferenceId)
+			)
+		)
+		.limit(1);
+	if (existing) return true;
+
+	await db.insert(membershipTable).values({
+		userId,
+		role: 'reviewer',
+		scopeType: 'conference',
+		scopeId: conferenceId
+	});
+	return true;
+}
+
+export type ReviewerTrackResult = { ok: true } | { ok: false; message: string };
+
+/** Replaces one reviewer's allow-list. No rows deliberately means every track. */
+export async function setReviewerTracks(
+	conferenceId: number,
+	membershipId: number,
+	mode: 'all' | 'selected',
+	trackIds: number[]
+): Promise<ReviewerTrackResult> {
+	const selected = [...new Set(trackIds)];
+	if (mode === 'selected' && selected.length === 0) {
+		return { ok: false, message: 'Choose at least one track, or select All tracks.' };
+	}
+
+	return db.transaction(async (tx) => {
+		const [membership] = await tx
+			.select({ id: membershipTable.id })
+			.from(membershipTable)
+			.where(
+				and(
+					eq(membershipTable.id, membershipId),
+					eq(membershipTable.role, 'reviewer'),
+					eq(membershipTable.scopeType, 'conference'),
+					eq(membershipTable.scopeId, conferenceId)
+				)
+			)
+			.limit(1);
+		if (!membership) return { ok: false, message: 'Unknown committee member.' };
+
+		if (mode === 'selected') {
+			const valid = await tx
+				.select({ id: trackTable.id })
+				.from(trackTable)
+				.where(and(eq(trackTable.conferenceId, conferenceId), inArray(trackTable.id, selected)));
+			if (valid.length !== selected.length) {
+				return { ok: false, message: 'One of those tracks does not belong to this conference.' };
+			}
+		}
+
+		await tx
+			.delete(membershipTrackTable)
+			.where(eq(membershipTrackTable.membershipId, membershipId));
+		if (mode === 'selected') {
+			await tx
+				.insert(membershipTrackTable)
+				.values(selected.map((trackId) => ({ membershipId, trackId })));
+		}
+		return { ok: true };
+	});
 }
 
 export async function addReviewer(
@@ -74,8 +287,8 @@ export async function addReviewer(
 		.where(eq(user.email, email))
 		.limit(1);
 
-	// Said plainly rather than stored hopefully: without an account there is nobody
-	// to assign, and a pending row would read like the committee had grown.
+	// The page action turns this typed result into a Better Auth invitation. Keeping
+	// pending invitations out of `membership` prevents them from appearing assignable.
 	if (!account) {
 		return {
 			ok: false,

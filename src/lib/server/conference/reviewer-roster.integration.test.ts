@@ -9,12 +9,23 @@
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { conferenceTable, type Conference } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceTable,
+	membershipTrackTable,
+	trackTable,
+	type Conference
+} from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setReviewAssignment } from './review-management';
 import { addReviewRound } from './review-rounds';
-import { addReviewer, committee, removeReviewer } from './reviewer-roster';
+import {
+	acceptReviewerInvitation,
+	addReviewer,
+	committee,
+	removeReviewer,
+	setReviewerTracks
+} from './reviewer-roster';
 
 const suffix = `roster-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -22,9 +33,13 @@ const reviewerId = `rev-${suffix}`;
 const reviewerEmail = `${reviewerId}@example.test`;
 const otherId = `rev2-${suffix}`;
 const otherEmail = `${otherId}@example.test`;
+const inviteeId = `invitee-${suffix}`;
+const inviteeEmail = `${inviteeId}@example.test`;
 
 let conference: Conference;
 let otherConference: Conference;
+let platformTrackId: number;
+let otherTrackId: number;
 
 beforeAll(async () => {
 	await db.insert(organization).values({
@@ -35,7 +50,8 @@ beforeAll(async () => {
 	});
 	await db.insert(user).values([
 		{ id: reviewerId, email: reviewerEmail, emailVerified: true, name: 'Rex Reviewer' },
-		{ id: otherId, email: otherEmail, emailVerified: true, name: 'Ines Reviewer' }
+		{ id: otherId, email: otherEmail, emailVerified: true, name: 'Ines Reviewer' },
+		{ id: inviteeId, email: inviteeEmail, emailVerified: true, name: 'New Reviewer' }
 	]);
 
 	[conference] = await db
@@ -46,12 +62,25 @@ beforeAll(async () => {
 		.insert(conferenceTable)
 		.values({ organizationId, name: 'Other Conf', slug: `${suffix}-other` })
 		.returning();
+	[platformTrackId] = (
+		await db
+			.insert(trackTable)
+			.values({ conferenceId: conference.id, name: 'Platform' })
+			.returning({ id: trackTable.id })
+	).map((row) => row.id);
+	[otherTrackId] = (
+		await db
+			.insert(trackTable)
+			.values({ conferenceId: otherConference.id, name: 'Other' })
+			.returning({ id: trackTable.id })
+	).map((row) => row.id);
 });
 
 afterAll(async () => {
 	await db.delete(organization).where(eq(organization.id, organizationId));
 	await db.delete(user).where(eq(user.id, reviewerId));
 	await db.delete(user).where(eq(user.id, otherId));
+	await db.delete(user).where(eq(user.id, inviteeId));
 });
 
 describe('addReviewer', () => {
@@ -87,6 +116,51 @@ describe('addReviewer', () => {
 
 		expect((await committee(conference.id)).map((r) => r.email)).toEqual([reviewerEmail]);
 		expect((await committee(otherConference.id)).map((r) => r.email)).toEqual([otherEmail]);
+	});
+});
+
+describe('reviewer invitation acceptance', () => {
+	it('creates the promised conference-scoped reviewer seat and checks the organization', async () => {
+		expect(await acceptReviewerInvitation(conference.id, 'wrong-org', inviteeId)).toBe(false);
+		expect(await acceptReviewerInvitation(conference.id, organizationId, inviteeId)).toBe(true);
+		expect(await acceptReviewerInvitation(conference.id, organizationId, inviteeId)).toBe(true);
+
+		const rows = (await committee(conference.id)).filter((row) => row.userId === inviteeId);
+		expect(rows).toHaveLength(1);
+	});
+});
+
+describe('reviewer track restrictions', () => {
+	it('stores an exact conference-owned allow-list and can deliberately return to all tracks', async () => {
+		const [member] = (await committee(conference.id)).filter((row) => row.userId === reviewerId);
+
+		expect(
+			await setReviewerTracks(conference.id, member.membershipId, 'selected', [otherTrackId])
+		).toEqual({ ok: false, message: 'One of those tracks does not belong to this conference.' });
+		expect(
+			await setReviewerTracks(conference.id, member.membershipId, 'selected', [platformTrackId])
+		).toEqual({ ok: true });
+		expect(
+			(await committee(conference.id)).find((row) => row.userId === reviewerId)?.trackIds
+		).toEqual([platformTrackId]);
+
+		expect(await setReviewerTracks(conference.id, member.membershipId, 'all', [])).toEqual({
+			ok: true
+		});
+		expect(
+			await db
+				.select()
+				.from(membershipTrackTable)
+				.where(eq(membershipTrackTable.membershipId, member.membershipId))
+		).toEqual([]);
+	});
+
+	it('refuses a selected mode with no tracks instead of silently widening access', async () => {
+		const [member] = (await committee(conference.id)).filter((row) => row.userId === reviewerId);
+		expect(await setReviewerTracks(conference.id, member.membershipId, 'selected', [])).toEqual({
+			ok: false,
+			message: 'Choose at least one track, or select All tracks.'
+		});
 	});
 });
 
