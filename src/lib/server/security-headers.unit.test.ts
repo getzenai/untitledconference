@@ -39,6 +39,46 @@ describe('applySecurityHeaders', () => {
 		await expect(response.text()).resolves.toBe('proxied');
 	});
 
+	it('tells the browser not to sniff past the declared type', () => {
+		// The header the app had nowhere (#43). Its value is the only one the spec
+		// defines, so it is pinned exactly rather than matched loosely.
+		const response = applySecurityHeaders(
+			new Response('{}', { headers: { 'Content-Type': 'application/json' } })
+		);
+
+		expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+		expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+	});
+
+	it('carries every always-on header onto a rewrapped immutable response', () => {
+		// The rewrap path is the one that silently drops headers: it used to copy a
+		// single one across, so anything added later would exist on ordinary
+		// responses and be missing on proxied ones.
+		const immutable = new Response('proxied', { status: 200 });
+		immutable.headers.set = () => {
+			throw new TypeError('immutable');
+		};
+
+		const response = applySecurityHeaders(immutable);
+
+		expect(response.headers.get('Strict-Transport-Security')).toBe(HSTS_HEADER_VALUE);
+		expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+		expect(response.headers.get('Referrer-Policy')).toBe('strict-origin-when-cross-origin');
+	});
+
+	it('sets nosniff on an embeddable widget without disturbing its framing rule', () => {
+		// The if/else that keeps X-Frame-Options and frame-ancestors mutually
+		// exclusive is #38's, and the new header must not reach into it.
+		const response = applySecurityHeaders(
+			new Response('<html></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } }),
+			'/c/devflow-conf-2027/agenda'
+		);
+
+		expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+		expect(response.headers.get('Content-Security-Policy')).toBe('frame-ancestors *');
+		expect(response.headers.get('X-Frame-Options')).toBeNull();
+	});
+
 	it('denies framing of HTML documents', () => {
 		const response = applySecurityHeaders(
 			new Response('<html></html>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
