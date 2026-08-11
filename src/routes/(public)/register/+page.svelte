@@ -69,13 +69,23 @@
 							}
 						}
 
-						// Check if email verification is required
-						const requiresVerification = signUpData.user && !signUpData.user.emailVerified;
-						if (requiresVerification) {
-							await goto('/verify-email');
-						} else {
-							// User is auto-signed in, redirect to home
+						// Did sign-up hand us a session, or did it stop short of one?
+						//
+						// The question is not whether the address is verified — it never is,
+						// one second after registering. It is whether this deployment gates
+						// on that. Better Auth answers it in the response: it skips
+						// auto-sign-in exactly when verification is required (or auto-sign-in
+						// is off) and returns `token: null` (api/routes/sign-up); otherwise
+						// it creates the session and returns its token.
+						//
+						// Reading `emailVerified` instead sent *every* new account to
+						// "Verify your email", including where REQUIRE_EMAIL_VERIFICATION is
+						// off — which is how production runs. The first screen after
+						// registering was a dead end asking for a mail nobody had sent.
+						if (signUpData.token) {
 							await goto('/home');
+						} else {
+							await goto('/verify-email');
 						}
 					} else {
 						errors.set({ _errors: ['Registration failed. Please try again.'] });
