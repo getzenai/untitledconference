@@ -10,6 +10,13 @@ import { invalidRangeField, MAX_CONFERENCE_DAYS } from '$lib/conference/conferen
 import { requireOrganizer } from '$lib/server/conference/access';
 import { syncConferenceDays } from '$lib/server/conference/conference-days';
 import { addFormat, addRoom, addTrack, conferenceConfig } from '$lib/server/conference/config';
+import {
+	addTaskTemplate,
+	deleteTaskTemplate,
+	taskTemplates,
+	updateTaskTemplate,
+	type TemplateInput
+} from '$lib/server/conference/task-templates';
 import { db } from '$lib/server/db';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { fail } from '@sveltejs/kit';
@@ -18,7 +25,11 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-	return { config: await conferenceConfig(conference.id) };
+	const [config, templates] = await Promise.all([
+		conferenceConfig(conference.id),
+		taskTemplates(conference.id)
+	]);
+	return { config, templates };
 };
 
 function text(form: FormData, key: string): string {
@@ -28,6 +39,30 @@ function text(form: FormData, key: string): string {
 /** A trimmed field, or null when the organizer cleared it. */
 function optional(form: FormData, key: string): string | null {
 	return text(form, key).trim() || null;
+}
+
+/** The row a template form is talking about, or null if it is not a row id. */
+function identifier(form: FormData): number | null {
+	const id = Number(form.get('id'));
+	return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * The two due fields as the form sends them: empty is "not set", never zero.
+ *
+ * `Number('')` is 0, and a zero offset is a real value — "due on the day it is
+ * accepted". Reading the blank field as a number would silently make that the
+ * default for every task nobody gave a deadline.
+ */
+function templateInput(form: FormData): TemplateInput {
+	const offset = optional(form, 'dueOffsetDays');
+	return {
+		title: text(form, 'title'),
+		instructions: optional(form, 'instructions'),
+		kind: text(form, 'kind'),
+		dueOffsetDays: offset === null ? null : Number(offset),
+		dueOn: optional(form, 'dueOn')
+	};
 }
 
 const DATE_ERRORS = {
@@ -154,5 +189,33 @@ export const actions: Actions = {
 			});
 		}
 		return { message: 'Session format added.' };
+	},
+
+	addTemplate: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const problem = await addTaskTemplate(conference.id, templateInput(await request.formData()));
+		if (problem) return fail(400, { error: problem });
+		return { message: 'Task added. Every talk accepted from now on gets it.' };
+	},
+
+	updateTemplate: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const id = identifier(form);
+		if (id === null) return fail(400, { error: 'Unknown task.' });
+
+		const problem = await updateTaskTemplate(conference.id, id, templateInput(form));
+		if (problem) return fail(400, { error: problem });
+		return { message: 'Task saved. Tasks speakers already have are unchanged.' };
+	},
+
+	deleteTemplate: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = identifier(await request.formData());
+		if (id === null) return fail(400, { error: 'Unknown task.' });
+
+		const problem = await deleteTaskTemplate(conference.id, id);
+		if (problem) return fail(400, { error: problem });
+		return { message: 'Task removed. Tasks speakers already have stay where they are.' };
 	}
 };
