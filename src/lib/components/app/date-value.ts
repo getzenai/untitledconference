@@ -39,3 +39,53 @@ export function formatDay(value: string | null | undefined): string {
 	const date = toCalendarDate(value);
 	return date ? formatter.format(date.toDate(getLocalTimeZone())) : '';
 }
+
+/**
+ * A moment on the wire: `YYYY-MM-DDTHH:mm`, local wall time, no zone suffix.
+ *
+ * This is what `<input type="datetime-local">` posted and what the CFP action
+ * still hands to `new Date(...)`, so the two halves below only ever split and
+ * rejoin that string — they never go through a `Date`, which is where the zone
+ * would creep back in.
+ */
+const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** The `HH:mm` half of a stored moment, or an empty string. */
+export function timeOf(value: string | null | undefined): string {
+	const time = value?.split('T')[1]?.slice(0, 5) ?? '';
+	return TIME.test(time) ? time : '';
+}
+
+/** The `YYYY-MM-DD` half of a stored moment, or an empty string. */
+export function dayOf(value: string | null | undefined): string {
+	const day = value?.split('T')[0] ?? '';
+	return isCalendarDate(day) ? day : '';
+}
+
+/**
+ * The two halves back into one wire value.
+ *
+ * A day without a time is not a moment, so it posts nothing rather than
+ * midnight the organizer never chose; a time without a day is nothing at all.
+ */
+export function joinDayTime(day: string, time: string): string {
+	if (!isCalendarDate(day) || !TIME.test(time)) return '';
+	return `${day}T${time}`;
+}
+
+const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
+
+/**
+ * The label on the trigger — "May 12, 2027, 9:00 AM" — or an empty string.
+ *
+ * The clock is formatted from a fixed reference day so that the hour shown is
+ * the hour typed; only the calendar half needs the local zone.
+ */
+export function formatDayTime(value: string | null | undefined): string {
+	const day = formatDay(dayOf(value));
+	const time = timeOf(value);
+	if (!day || !time) return day;
+
+	const [hours, minutes] = time.split(':').map(Number);
+	return `${day}, ${clock.format(new Date(2000, 0, 1, hours, minutes))}`;
+}
