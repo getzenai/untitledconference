@@ -35,6 +35,13 @@
 					minute: '2-digit'
 				})
 			: null;
+
+	/**
+	 * One string including its trailing space, rather than two template halves.
+	 * Svelte trims the whitespace either side of `{/if}`, which is why this used to
+	 * render "…at 04:57.A confirmation has gone…".
+	 */
+	const receivedLine = $derived(stamp(s.submittedAt) ? `Received ${stamp(s.submittedAt)}. ` : '');
 </script>
 
 <svelte:head>
@@ -60,10 +67,18 @@
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">Your proposal is in.</p>
 			<p class="text-muted-foreground mt-1">
-				{#if stamp(s.submittedAt)}Received {stamp(s.submittedAt)}.
-				{/if}A confirmation has gone to everyone listed on the talk, and you will be emailed again
-				when the organizers decide.
+				{receivedLine}A confirmation has gone to everyone listed on the talk, and you will be
+				emailed again when the organizers decide.
 			</p>
+			{#if s.status === 'submitted'}
+				<p class="text-muted-foreground mt-2">
+					You can still change it until the call closes — your place and the date above stay as they
+					are.
+				</p>
+				<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
+					Edit this proposal
+				</Button>
+			{/if}
 		</div>
 	{:else if s.status === 'draft'}
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">

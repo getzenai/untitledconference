@@ -573,8 +573,14 @@ async function refuseSave(
 	}
 
 	if (options.submissionId !== undefined) {
-		// Owning a session proves who you are, not which submission is yours — and a
-		// submitted proposal is no longer the submitter's to rewrite.
+		// Owning a session proves who you are, not which submission is yours.
+		//
+		// A proposal stays the submitter's to rewrite for as long as the call is
+		// open — that is CFP-07, and the call's own copy promises it. What ends the
+		// right is a decision, not the act of submitting: once a proposal has been
+		// accepted, rejected or waitlisted, the organizers have read the words they
+		// judged and those words stop moving. `withdrawn` is out for the same
+		// reason from the other side.
 		//
 		// The conference check is the third condition and the least obvious: without
 		// it, a draft belonging to conference A could be POSTed to B's call with its
@@ -582,15 +588,39 @@ async function refuseSave(
 		// proposal between tenants. No UI does that; the exported API allows it, and
 		// the API is what the tests legitimise.
 		const owned = await ownedSubmission(userId, options.submissionId);
-		const editable = owned && owned.status === 'draft' && owned.conferenceId === call.conference.id;
+		const editable =
+			owned &&
+			(owned.status === 'draft' || owned.status === 'submitted') &&
+			owned.conferenceId === call.conference.id;
 		if (!editable) return { ok: false, reason: 'forbidden' };
 	}
 
 	return null;
 }
 
-/** The submission's own columns. `submittedAt` is the moment a draft stops being one. */
-function submissionValues(call: OpenCall, input: SubmissionInput, submit: boolean) {
+/** What the row said before this save, for the two columns an edit must not reset. */
+type PriorState = { status: string; submittedAt: Date | null } | null;
+
+/**
+ * The submission's own columns. `submittedAt` is the moment a draft stops being one.
+ *
+ * Two things an edit must not do to a proposal that is already in, and both were
+ * possible while only drafts were editable, so neither had a way to happen:
+ *
+ * - **Demote it.** A draft-save aimed at a submitted proposal would set `draft`,
+ *   quietly withdrawing it from the organizer's list through a side door.
+ * - **Re-stamp it.** `submittedAt` is the receipt the speaker was shown and the
+ *   date the organizer sorts by. Rewording a sentence does not move the moment
+ *   the proposal arrived.
+ */
+function submissionValues(
+	call: OpenCall,
+	input: SubmissionInput,
+	submit: boolean,
+	prior: PriorState = null
+) {
+	const alreadyIn = prior?.status === 'submitted';
+
 	return {
 		conferenceId: call.conference.id,
 		cfpFormId: call.form.id,
@@ -600,8 +630,8 @@ function submissionValues(call: OpenCall, input: SubmissionInput, submit: boolea
 		audienceLevel: input.audienceLevel,
 		sessionFormatId: input.sessionFormatId,
 		trackId: input.trackId,
-		status: submit ? ('submitted' as const) : ('draft' as const),
-		submittedAt: submit ? new Date() : null
+		status: submit || alreadyIn ? ('submitted' as const) : ('draft' as const),
+		submittedAt: alreadyIn ? prior!.submittedAt : submit ? new Date() : null
 	};
 }
 
@@ -621,7 +651,18 @@ async function persist(
 		options.submit
 	);
 
-	const values = submissionValues(call, input, options.submit);
+	// Read inside the transaction rather than reusing what `refuseSave` saw: the
+	// two columns this protects are the ones being written a line later.
+	const [prior] = options.submissionId
+		? await tx
+				.select({ status: submissionTable.status, submittedAt: submissionTable.submittedAt })
+				.from(submissionTable)
+				.where(eq(submissionTable.id, options.submissionId))
+				.limit(1)
+		: [];
+
+	const values = submissionValues(call, input, options.submit, prior ?? null);
+	const alreadyIn = prior?.status === 'submitted';
 
 	let id = options.submissionId;
 	if (id === undefined) {
@@ -637,7 +678,9 @@ async function persist(
 	await writeAnswers(tx, id, call.fields, input);
 	await writeSpeakers(tx, id, call.conference.organizationId, ownProfileId, input.coSpeakers);
 
-	if (options.submit) {
+	// Only the arrival gets a receipt. An edit is not a new proposal, and mailing
+	// every co-speaker again on each wording change would train them to ignore it.
+	if (options.submit && !alreadyIn) {
 		const speakers = await tx
 			.select({ id: submissionSpeakerTable.speakerProfileId })
 			.from(submissionSpeakerTable)

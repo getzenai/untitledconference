@@ -72,12 +72,19 @@
 			This call has not opened yet. Check back nearer the date.
 		</p>
 	{:else}
-		{#if data.existingDraft}
+		{#if data.existing}
 			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
-				You already have an unfinished proposal here —
-				<a class="underline" href="/portal/submissions/{data.existingDraft.id}/edit">
-					{data.existingDraft.title}
-				</a>. Filling this form in again would create a second one.
+				{#if data.existing.status === 'submitted'}
+					You already sent a proposal to this call —
+					<a class="underline" href="/portal/submissions/{data.existing.id}/edit">
+						{data.existing.title}
+					</a>. Edit that one instead; filling this form in again would send a second.
+				{:else}
+					You already have an unfinished proposal here —
+					<a class="underline" href="/portal/submissions/{data.existing.id}/edit">
+						{data.existing.title}
+					</a>. Filling this form in again would create a second one.
+				{/if}
 			</p>
 		{/if}
 

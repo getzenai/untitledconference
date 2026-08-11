@@ -47,12 +47,16 @@ const publicConference = {
 	speakers: []
 };
 
-const renderCfp = (state: 'open' | 'closed' | 'not_yet_open', description: string | null) =>
+const renderCfp = (
+	state: 'open' | 'closed' | 'not_yet_open',
+	description: string | null,
+	existing: { id: number; title: string; status: 'draft' | 'submitted' } | null = null
+) =>
 	render(Page, {
 		props: {
 			data: {
 				call: call(state, description),
-				existingDraft: null,
+				existing,
 				// The public layout's data reaches this page's type but not its body.
 				user: undefined,
 				conference: publicConference,
@@ -101,5 +105,30 @@ describe('the public call for papers', () => {
 
 		expect(body).toContain('Call for papers');
 		expect(body).toContain('<form');
+	});
+});
+
+describe('pointing a returning submitter at what they already sent', () => {
+	it('offers to edit the submitted proposal rather than inviting a second', () => {
+		const body = renderCfp('open', null, { id: 42, title: 'Taming CI', status: 'submitted' });
+
+		// The duplicate pairs in the organizer's list came from exactly this screen:
+		// a blank form was the only way back in, so amending meant re-submitting.
+		expect(body).toContain('You already sent a proposal to this call');
+		expect(body).toContain('/portal/submissions/42/edit');
+		expect(body).toContain('would send a second');
+	});
+
+	it('words an unfinished draft differently', () => {
+		const body = renderCfp('open', null, { id: 43, title: 'Half a thought', status: 'draft' });
+
+		expect(body).toContain('You already have an unfinished proposal here');
+		expect(body).toContain('/portal/submissions/43/edit');
+	});
+
+	it('says nothing when there is nothing to point at', () => {
+		const body = renderCfp('open', null);
+
+		expect(body).not.toContain('You already');
 	});
 });
