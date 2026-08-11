@@ -32,7 +32,7 @@
 <div class="border-border bg-card border-b px-6 py-5">
 	<h1 class="text-lg font-semibold tracking-tight">Team &amp; reviewers</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
-		How the review committee works with each other.
+		Invite the committee, limit who reviews each track, and follow their assignments.
 	</p>
 </div>
 
@@ -44,6 +44,19 @@
 		>
 			{form.message}
 		</p>
+	{/if}
+	{#if form?.invitationLink}
+		<div class="border-border bg-muted mb-3 max-w-2xl rounded-md border p-3 text-sm">
+			<p class="font-medium">Share this reviewer invitation link</p>
+			<div class="mt-2 flex gap-2">
+				<input
+					readonly
+					value={form.invitationLink}
+					aria-label="Reviewer invitation link"
+					class="border-input bg-background min-w-0 flex-1 rounded-md border px-3 py-2 font-mono text-xs"
+				/>
+			</div>
+		</div>
 	{/if}
 
 	<section
@@ -83,7 +96,8 @@
 	>
 		<h2 class="text-sm font-semibold">Who reviews</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			Only people on this list can be assigned a submission. They need an account already.
+			Existing users join immediately. New users get a shareable invite and join this committee when
+			they accept it.
 		</p>
 
 		<form method="POST" action="?/addReviewer" use:enhance={submitting} class="mt-3 flex gap-2">
@@ -94,28 +108,108 @@
 				placeholder="reviewer@example.com"
 				class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
 			/>
-			<Button type="submit" size="sm" disabled={busy}>Add</Button>
+			<Button type="submit" size="sm" disabled={busy}>Add or invite</Button>
 		</form>
+
+		{#if data.pendingInvitations.length > 0}
+			<div class="border-border mt-4 border-t pt-3" data-testid="pending-reviewer-invitations">
+				<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">Pending</p>
+				<ul class="mt-1 space-y-1 text-sm">
+					{#each data.pendingInvitations as invite (invite.id)}
+						<li class="flex flex-wrap items-center justify-between gap-2">
+							<span>{invite.email}</span>
+							<a class="text-xs underline underline-offset-4" href={`/invite/${invite.id}`}
+								>Open invite</a
+							>
+						</li>
+					{/each}
+				</ul>
+			</div>
+		{/if}
 
 		{#if data.committee.length === 0}
 			<p class="text-muted-foreground mt-3 text-sm">
 				Nobody yet — submissions cannot be assigned until someone is here.
 			</p>
 		{:else}
-			<ul class="divide-border mt-3 divide-y">
+			<ul class="mt-3 space-y-3">
 				{#each data.committee as person (person.membershipId)}
-					<li class="flex flex-wrap items-center justify-between gap-3 py-2">
-						<div>
-							<p class="text-sm font-medium">{person.name}</p>
-							<p class="text-muted-foreground text-xs">{person.email}</p>
+					<li class="border-border rounded-md border p-3">
+						<div class="flex flex-wrap items-start justify-between gap-3">
+							<div>
+								<p class="text-sm font-medium">{person.name}</p>
+								<p class="text-muted-foreground text-xs">{person.email}</p>
+								<p class="text-muted-foreground mt-1 text-xs">
+									Conference reviewer · {person.submitted}/{person.assigned} submitted
+									{#if person.outstanding > 0}· {person.outstanding} outstanding{/if}
+								</p>
+							</div>
+							<form method="POST" action="?/removeReviewer" use:enhance={submitting}>
+								<input type="hidden" name="membershipId" value={person.membershipId} />
+								<Button type="submit" variant="ghost" size="sm" disabled={busy}>Remove</Button>
+							</form>
 						</div>
-						<form method="POST" action="?/removeReviewer" use:enhance={submitting}>
-							<input type="hidden" name="membershipId" value={person.membershipId} />
-							<Button type="submit" variant="ghost" size="sm" disabled={busy}>Remove</Button>
-						</form>
+
+						{#if data.tracks.length > 0}
+							<form
+								method="POST"
+								action="?/updateTracks"
+								use:enhance={submitting}
+								class="border-border mt-3 border-t pt-3"
+							>
+								<input type="hidden" name="membershipId" value={person.membershipId} />
+								<p class="text-xs font-medium">Track access</p>
+								<label class="mt-2 flex items-center gap-2 text-xs">
+									<input
+										type="radio"
+										name="trackMode"
+										value="all"
+										checked={person.trackIds.length === 0}
+									/>
+									All tracks
+								</label>
+								<label class="mt-2 flex items-center gap-2 text-xs">
+									<input
+										type="radio"
+										name="trackMode"
+										value="selected"
+										checked={person.trackIds.length > 0}
+									/>
+									Only selected tracks
+								</label>
+								<div class="mt-2 flex flex-wrap gap-x-4 gap-y-2 pl-6">
+									{#each data.tracks as track (track.id)}
+										<label class="flex items-center gap-2 text-xs">
+											<input
+												type="checkbox"
+												name="trackId"
+												value={track.id}
+												checked={person.trackIds.includes(track.id)}
+											/>
+											{track.name}
+										</label>
+									{/each}
+								</div>
+								<div class="mt-3 flex items-center justify-between gap-3">
+									<p class="text-muted-foreground text-xs">
+										No stored restriction means access to every track.
+									</p>
+									<Button type="submit" variant="outline" size="sm" disabled={busy}
+										>Save access</Button
+									>
+								</div>
+							</form>
+						{/if}
 					</li>
 				{/each}
 			</ul>
 		{/if}
+
+		<p class="text-muted-foreground mt-4 text-xs">
+			Assignments are made on each
+			<a class="underline underline-offset-4" href={`/manage/${data.conference.slug}/submissions`}
+				>submission</a
+			>. The counts above show who still has work outstanding.
+		</p>
 	</section>
 </div>

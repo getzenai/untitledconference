@@ -10,6 +10,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { organizationAccessControl, organizationRoles } from './auth/permissions';
 import { buildRateLimitConfig } from './auth/rate-limit-config';
 import { INVITATION_EXPIRY_SECONDS, SESSION_FRESH_AGE_SECONDS } from './constants';
+import { acceptReviewerInvitation } from './server/conference/reviewer-roster';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
 import { serverEnv } from './server/env';
@@ -361,8 +362,21 @@ function createAuth() {
 				// emails with nothing in its diff to explain it. Requiring
 				// verification is a product decision; make it deliberately.
 				requireEmailVerificationOnInvitation: false,
+				schema: {
+					invitation: {
+						additionalFields: {
+							conferenceId: { type: 'number', required: false, input: false }
+						}
+					}
+				},
 				ac: organizationAccessControl,
 				roles: organizationRoles,
+				organizationHooks: {
+					afterAcceptInvitation: async ({ invitation, user, organization }) => {
+						if (typeof invitation.conferenceId !== 'number') return;
+						await acceptReviewerInvitation(invitation.conferenceId, organization.id, user.id);
+					}
+				},
 				async sendInvitationEmail(data) {
 					logger.info('Invitation created', { email: data.email, id: data.id });
 				}

@@ -4,7 +4,9 @@ import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conferen
 import {
 	conferenceTable,
 	membershipTable,
+	membershipTrackTable,
 	speakerProfileTable,
+	trackTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
@@ -162,6 +164,54 @@ describe('organizer reviewer assignments', () => {
 		expect(
 			after[0].reviewers.find((reviewer) => reviewer.userId === CONFERENCE_REVIEWER)?.status
 		).toBe('assigned');
+	});
+
+	it('enforces the committee track allow-list in both the matrix and the write', async () => {
+		const [allowedTrack, blockedTrack] = await db
+			.insert(trackTable)
+			.values([
+				{ conferenceId: conference.id, name: `Allowed ${suffix}` },
+				{ conferenceId: conference.id, name: `Blocked ${suffix}` }
+			])
+			.returning();
+		const [membership] = await db
+			.select({ id: membershipTable.id })
+			.from(membershipTable)
+			.where(eq(membershipTable.userId, CONFERENCE_REVIEWER));
+		await db
+			.insert(membershipTrackTable)
+			.values({ membershipId: membership.id, trackId: allowedTrack.id });
+		await db
+			.update(submissionTable)
+			.set({ trackId: blockedTrack.id })
+			.where(eq(submissionTable.id, submissionId));
+
+		expect(
+			(await reviewAssignmentMatrix(conference.id, submissionId))[0].reviewers.map(
+				(reviewer) => reviewer.userId
+			)
+		).not.toContain(CONFERENCE_REVIEWER);
+		expect(
+			await setReviewAssignment(conference.id, submissionId, roundId, CONFERENCE_REVIEWER, true)
+		).toBe('invalid');
+
+		await db
+			.update(submissionTable)
+			.set({ trackId: allowedTrack.id })
+			.where(eq(submissionTable.id, submissionId));
+		expect(
+			(await reviewAssignmentMatrix(conference.id, submissionId))[0].reviewers.map(
+				(reviewer) => reviewer.userId
+			)
+		).toContain(CONFERENCE_REVIEWER);
+
+		await db
+			.delete(membershipTrackTable)
+			.where(eq(membershipTrackTable.membershipId, membership.id));
+		await db
+			.update(submissionTable)
+			.set({ trackId: null })
+			.where(eq(submissionTable.id, submissionId));
 	});
 
 	it('restores a recused row and removes an assignment on request', async () => {

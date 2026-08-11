@@ -71,6 +71,20 @@
 			"when": 1786372349380,
 			"tag": "0009_conference_slug_unique",
 			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1786448019672,
+			"tag": "0010_reviewer_invitation",
+			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1786448720146,
+			"tag": "0011_invitation_created_at",
+			"breakpoints": true
 		}
 	]
 }
