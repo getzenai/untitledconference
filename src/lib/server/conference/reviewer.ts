@@ -401,6 +401,7 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 		.select({
 			reviewId: reviewTable.id,
 			status: reviewTable.status,
+			submittedAt: reviewTable.submittedAt,
 			comment: reviewTable.comment,
 			roundId: reviewRoundTable.id,
 			anonymized: reviewRoundTable.anonymized
@@ -493,22 +494,66 @@ export type ReviewDraft = {
 };
 
 /**
+ * Did the reviewer actually put something down?
+ *
+ * Mirrors `writeScore` exactly, and has to: a rating outside its own scale is stored
+ * as null there, so counting it as an answer here would let "50" on a five-point
+ * scale pass for an opinion that never reaches the database.
+ *
+ * A comment counts. The issue asked for "at least one answered criterion", but a
+ * reviewer who writes a paragraph and leaves the numbers alone has formed and
+ * recorded a judgement — refusing that would reject a real review to catch nobody,
+ * since a hostile reviewer types one character either way. What this refuses is the
+ * genuinely empty submit.
+ */
+function hasSomethingToSay(criteria: Criterion[], draft: ReviewDraft): boolean {
+	if (draft.comment.trim() !== '') return true;
+
+	return criteria.some((criterion) => {
+		const raw = (draft.answers[criterion.id] ?? '').trim();
+		return criterion.kind === 'rating' ? ratingValue(raw, criterion) !== null : raw !== '';
+	});
+}
+
+export type SaveReviewResult =
+	| { ok: true }
+	/** Not this reviewer's to write — the caller owes a 404, not a validation message. */
+	| { ok: false; reason: 'not_assigned' }
+	/** Submitting nothing at all; saving nothing is still fine. */
+	| { ok: false; reason: 'empty_submit' };
+
+/**
  * Saves this reviewer's answers.
  *
  * One transaction, and no notification of any kind: a review changing state is not an
  * event anybody should be mailed about automatically. The organizer decides when
  * people are told.
+ *
+ * Two rules exist here because `blind_until_reviewed` unlocks the peers on a status
+ * flag, which makes that flag worth gaming (#33):
+ *
+ *  - **An empty review cannot be submitted.** Otherwise "submit nothing" buys every
+ *    peer's score and comment before forming an opinion — precisely the anchoring the
+ *    mode exists to prevent.
+ *  - **Submitted never goes back.** Re-locking the peers would be honest enough, but
+ *    the reviewer has already read them; what un-submitting really did was remove the
+ *    review from the coverage count, so the queue claimed fewer people had seen the
+ *    answers than actually had. Editing a submitted review stays possible — it is only
+ *    the retreat to `assigned` that is refused, and `submittedAt` keeps the FIRST
+ *    time, because that is the moment the peers became visible.
+ *
+ * Recusal is the deliberate way out and still clears both (`recuseReview`).
  */
 export async function saveReview(
 	conference: Conference,
 	userId: string,
 	submissionId: number,
 	draft: ReviewDraft
-): Promise<boolean> {
+): Promise<SaveReviewResult> {
 	// The same query the page used to decide whether this reviewer may be here at all:
 	// the assignment is the permission.
 	const own = await ownReview(conference.id, userId, submissionId);
-	if (!own) return false;
+	if (!own) return { ok: false, reason: 'not_assigned' };
 
 	const criteria = await db
 		.select({
@@ -519,6 +564,15 @@ export async function saveReview(
 		.from(scorecardCriterionTable)
 		.where(eq(scorecardCriterionTable.reviewRoundId, own.roundId));
 
+	if (draft.submit && !hasSomethingToSay(criteria, draft)) {
+		return { ok: false, reason: 'empty_submit' };
+	}
+
+	// Already filed stays filed: `draft.submit === false` on a submitted review saves
+	// the edit and leaves the status alone.
+	const alreadySubmitted = own.status === 'submitted';
+	const submitting = draft.submit || alreadySubmitted;
+
 	await db.transaction(async (tx) => {
 		for (const criterion of criteria) {
 			await writeScore(tx, own.reviewId, criterion, draft.answers[criterion.id] ?? '');
@@ -528,13 +582,15 @@ export async function saveReview(
 			.update(reviewTable)
 			.set({
 				comment: draft.comment.trim() || null,
-				status: draft.submit ? 'submitted' : 'assigned',
-				submittedAt: draft.submit ? new Date() : null
+				status: submitting ? 'submitted' : 'assigned',
+				// The first filing, not the latest edit: it dates when the peers stopped
+				// being hidden from this reviewer.
+				submittedAt: submitting ? (own.submittedAt ?? new Date()) : null
 			})
 			.where(eq(reviewTable.id, own.reviewId));
 	});
 
-	return true;
+	return { ok: true };
 }
 
 /** Recuses one exact assigned review without letting a forged id cross its boundary. */

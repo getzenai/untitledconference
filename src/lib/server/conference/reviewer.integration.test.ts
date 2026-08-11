@@ -401,6 +401,129 @@ describe('saving a review', () => {
 				comment: 'Sneaky',
 				submit: true
 			})
-		).toBe(false);
+		).toEqual({ ok: false, reason: 'not_assigned' });
+	});
+});
+
+/**
+ * #33. `blind_until_reviewed` unlocks the peers on a status flag, which makes the flag
+ * worth gaming. Both exploits are about the flag, not about the reading rule — the
+ * withholding query itself was already right.
+ */
+describe('the two ways a reviewer could buy the peers cheaply', () => {
+	/** The review row as the coverage count and the unlock condition see it. */
+	async function ownRow() {
+		const [row] = await db
+			.select({ status: reviewTable.status, submittedAt: reviewTable.submittedAt })
+			.from(reviewTable)
+			.where(eq(reviewTable.reviewerUserId, ME))
+			.orderBy(reviewTable.id);
+		return row;
+	}
+
+	it('refuses a submit with nothing in it, and the peers stay hidden', async () => {
+		const blind = await setMode('blind_until_reviewed');
+		// Without a peer to withhold, every assertion below would pass on an empty
+		// board and prove nothing.
+		await peerReviews(mine, '5');
+
+		const result = await saveReview(blind, ME, mine, {
+			answers: {},
+			comment: '   ',
+			submit: true
+		});
+
+		expect(result).toEqual({ ok: false, reason: 'empty_submit' });
+		// The refusal is worth nothing if the flag flipped anyway — this is the part
+		// that actually costs the peers their privacy.
+		expect((await ownRow()).status).not.toBe('submitted');
+		expect((await reviewerSubmission(blind, ME, mine))?.peers).toEqual([]);
+		expect((await reviewerSubmission(blind, ME, mine))?.peersWithheld).toBe(true);
+	});
+
+	it('refuses an out-of-scale rating as the only answer — it is not stored either', async () => {
+		const blind = await setMode('blind_until_reviewed');
+		await peerReviews(mine, '5');
+
+		// 50 on a five-point scale is dropped by `writeScore`. If it counted as an
+		// answer here, "submit 50" would be the empty submit wearing a number.
+		const result = await saveReview(blind, ME, mine, {
+			answers: { [criterionId]: '50' },
+			comment: '',
+			submit: true
+		});
+
+		expect(result).toEqual({ ok: false, reason: 'empty_submit' });
+		expect((await reviewerSubmission(blind, ME, mine))?.peers).toEqual([]);
+	});
+
+	it('accepts a comment with no scores — that is a judgement, not an empty submit', async () => {
+		const blind = await setMode('blind_until_reviewed');
+		await peerReviews(mine, '5');
+
+		const result = await saveReview(blind, ME, mine, {
+			answers: {},
+			comment: 'Out of scope for this track, and I would rather say why than score it.',
+			submit: true
+		});
+
+		expect(result).toEqual({ ok: true });
+		expect((await ownRow()).status).toBe('submitted');
+		expect((await reviewerSubmission(blind, ME, mine))?.peers).toHaveLength(1);
+	});
+
+	it('still lets me save an empty draft — only submitting needs an opinion', async () => {
+		const now = await conferenceNow();
+
+		expect(await saveReview(now, ME, mine, { answers: {}, comment: '', submit: false })).toEqual({
+			ok: true
+		});
+	});
+
+	it('will not let a filed review retreat to unfiled', async () => {
+		const blind = await setMode('blind_until_reviewed');
+
+		await saveReview(blind, ME, mine, {
+			answers: { [criterionId]: '4' },
+			comment: 'Filed',
+			submit: true
+		});
+		const filed = await ownRow();
+		expect(filed.status).toBe('submitted');
+		expect(filed.submittedAt).not.toBeNull();
+
+		// The un-submit trick: read the peers, then drop out of the coverage count.
+		const result = await saveReview(blind, ME, mine, {
+			answers: { [criterionId]: '4' },
+			comment: 'Second thoughts',
+			submit: false
+		});
+
+		expect(result).toEqual({ ok: true });
+		const after = await ownRow();
+		expect(after.status).toBe('submitted');
+		// The first filing is when the peers stopped being hidden; a later edit does
+		// not move that moment.
+		expect(after.submittedAt?.getTime()).toBe(filed.submittedAt?.getTime());
+	});
+
+	it('saves the edit while refusing the retreat', async () => {
+		const now = await conferenceNow();
+
+		await saveReview(now, ME, mine, {
+			answers: { [criterionId]: '2' },
+			comment: 'First',
+			submit: true
+		});
+		await saveReview(now, ME, mine, {
+			answers: { [criterionId]: '5' },
+			comment: 'Revised',
+			submit: false
+		});
+
+		// Refusing the status change must not refuse the content change with it.
+		const detail = await reviewerSubmission(now, ME, mine);
+		expect(detail?.criteria[0].value).toBe(5);
+		expect(detail?.own.comment).toBe('Revised');
 	});
 });
