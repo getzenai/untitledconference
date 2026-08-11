@@ -482,7 +482,8 @@
 			What every speaker is asked for once their talk is accepted — a slide deck, a headshot, a bio.
 			Accepting a talk creates these for its speakers; changing them here changes what the
 			<em>next</em>
-			acceptance hands out, never a task somebody already has.
+			acceptance hands out, never a task somebody already has. A task nobody has yet can be given to the
+			speakers already accepted.
 		</p>
 
 		{#if data.templates.length === 0}
@@ -557,18 +558,39 @@
 
 						<!-- Its own form: nesting it in the edit form would post the edited
 						     fields with the delete, and a browser will not nest them anyway. -->
-						<form method="POST" action="?/deleteTemplate" use:enhance={submitting} class="mt-2">
-							<input type="hidden" name="id" value={template.id} />
-							<Button
-								type="submit"
-								size="sm"
-								variant="ghost"
-								class="text-muted-foreground h-7 px-2 text-xs"
-								disabled={busy}
-							>
-								Remove
-							</Button>
-						</form>
+						<div class="mt-2 flex flex-wrap items-center gap-2">
+							<form method="POST" action="?/deleteTemplate" use:enhance={submitting}>
+								<input type="hidden" name="id" value={template.id} />
+								<Button
+									type="submit"
+									size="sm"
+									variant="ghost"
+									class="text-muted-foreground h-7 px-2 text-xs"
+									disabled={busy}
+								>
+									Remove
+								</Button>
+							</form>
+
+							<!-- Only drawn when somebody is actually missing it: a button that
+							     always says "give to 0 speakers" teaches an organizer to ignore it. -->
+							{#if (data.pending[template.id] ?? 0) > 0}
+								<form method="POST" action="?/handOutTemplate" use:enhance={submitting}>
+									<input type="hidden" name="id" value={template.id} />
+									<Button
+										type="submit"
+										size="sm"
+										variant="outline"
+										class="h-7 px-2 text-xs"
+										disabled={busy}
+									>
+										Give to {data.pending[template.id]} accepted {data.pending[template.id] === 1
+											? 'speaker'
+											: 'speakers'}
+									</Button>
+								</form>
+							{/if}
+						</div>
 					</li>
 				{/each}
 			</ul>

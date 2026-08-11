@@ -22,7 +22,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { decideSubmissions } from './decisions';
 import {
 	addTaskTemplate,
+	applyTemplateToAccepted,
 	deleteTaskTemplate,
+	pendingHandouts,
 	taskTemplates,
 	updateTaskTemplate
 } from './task-templates';
@@ -246,5 +248,123 @@ describe('what an acceptance makes of them', () => {
 		const result = await decideSubmissions(conference, [id], 'accepted');
 
 		expect(result).toMatchObject({ decided: 1, tasksCreated: 0 });
+	});
+});
+
+/**
+ * The gap this closes: a template only ever applied to the *next* acceptance, so
+ * an organizer who thought of a deliverable after deciding the programme could
+ * not ask for it at all. Re-deciding the talks is not a workaround — it would
+ * re-send decision mail.
+ */
+describe('giving a new task to speakers already accepted', () => {
+	it('counts who is missing it, and hands it to exactly them', async () => {
+		const id = await submission();
+		await decideSubmissions(conference, [id], 'accepted');
+
+		// Written after the acceptance, which is the whole problem.
+		await addTaskTemplate(conference.id, input({ title: 'Upload Session Presentation' }));
+		const [template] = await taskTemplates(conference.id);
+
+		expect(await pendingHandouts(conference.id)).toEqual({ [template.id]: 1 });
+
+		const result = await applyTemplateToAccepted(conference.id, template.id);
+		expect(result).toEqual({ ok: true, created: 1 });
+
+		const tasks = await db
+			.select()
+			.from(taskTable)
+			.where(eq(taskTable.conferenceId, conference.id));
+		expect(tasks.map((t) => t.title)).toEqual(['Upload Session Presentation']);
+		expect(tasks[0].speakerProfileId).toBe(speakerProfileId);
+		expect(tasks[0].submissionId).toBe(id);
+		expect(tasks[0].templateId).toBe(template.id);
+	});
+
+	it('is a no-op the second time, so a speaker never gets the same task twice', async () => {
+		const id = await submission();
+		await decideSubmissions(conference, [id], 'accepted');
+		await addTaskTemplate(conference.id, input({ title: 'Upload Session Presentation' }));
+		const [template] = await taskTemplates(conference.id);
+
+		await applyTemplateToAccepted(conference.id, template.id);
+		// The organizer presses it again, or two of them do at once.
+		expect(await applyTemplateToAccepted(conference.id, template.id)).toEqual({
+			ok: true,
+			created: 0
+		});
+
+		const tasks = await db
+			.select()
+			.from(taskTable)
+			.where(eq(taskTable.conferenceId, conference.id));
+		expect(tasks).toHaveLength(1);
+		expect(await pendingHandouts(conference.id)).toEqual({ [template.id]: 0 });
+	});
+
+	it('leaves a task the acceptance already created alone', async () => {
+		await addTaskTemplate(conference.id, input({ title: 'Upload your slides' }));
+		const [template] = await taskTemplates(conference.id);
+		const id = await submission();
+		await decideSubmissions(conference, [id], 'accepted');
+
+		// Nobody is missing it: the acceptance handed it out.
+		expect(await pendingHandouts(conference.id)).toEqual({ [template.id]: 0 });
+		expect(await applyTemplateToAccepted(conference.id, template.id)).toEqual({
+			ok: true,
+			created: 0
+		});
+	});
+
+	it('counts an offset from each speaker’s own acceptance, not from today', async () => {
+		const id = await submission();
+		await decideSubmissions(conference, [id], 'accepted');
+
+		// Backdate the decision: this speaker was accepted a fortnight ago.
+		const decidedAt = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+		await db.update(submissionTable).set({ decidedAt }).where(eq(submissionTable.id, id));
+
+		await addTaskTemplate(conference.id, input({ title: 'Send your bio', dueOffsetDays: 7 }));
+		const [template] = await taskTemplates(conference.id);
+		await applyTemplateToAccepted(conference.id, template.id);
+
+		const [task] = await db
+			.select()
+			.from(taskTable)
+			.where(eq(taskTable.conferenceId, conference.id));
+		// "Due 7 days after acceptance" for someone accepted 14 days ago is already
+		// overdue. Counting from now would quietly give them a fresh week.
+		expect(task.dueOn!.getTime()).toBeLessThan(Date.now());
+		expect(task.dueOn!.getTime()).toBeCloseTo(decidedAt.getTime() + 7 * 24 * 60 * 60 * 1000, -4);
+	});
+
+	it('does not reach a speaker whose talk was not accepted', async () => {
+		const accepted = await submission('Accepted talk');
+		const pending = await submission('Still submitted');
+		await decideSubmissions(conference, [accepted], 'accepted');
+
+		await addTaskTemplate(conference.id, input({ title: 'Upload Session Presentation' }));
+		const [template] = await taskTemplates(conference.id);
+
+		expect(await pendingHandouts(conference.id)).toEqual({ [template.id]: 1 });
+		await applyTemplateToAccepted(conference.id, template.id);
+
+		const tasks = await db
+			.select()
+			.from(taskTable)
+			.where(eq(taskTable.conferenceId, conference.id));
+		expect(tasks).toHaveLength(1);
+		expect(tasks[0].submissionId).toBe(accepted);
+		expect(tasks[0].submissionId).not.toBe(pending);
+	});
+
+	it('refuses a template from another conference', async () => {
+		await addTaskTemplate(otherConference.id, input({ title: 'Not yours' }));
+		const [foreign] = await taskTemplates(otherConference.id);
+
+		expect(await applyTemplateToAccepted(conference.id, foreign.id)).toEqual({
+			ok: false,
+			problem: 'That template is gone.'
+		});
 	});
 });
