@@ -20,6 +20,9 @@
 		type AnswerContext,
 		type FieldDefinition
 	} from '$lib/conference/form-definition';
+	import AppSelect from '$lib/components/app/app-select.svelte';
+	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
+	import CfpFieldEditor from '$lib/components/app/conference/cfp-field-editor.svelte';
 	import FixedQuestionsList from '$lib/components/app/conference/fixed-questions-list.svelte';
 	import FixedQuestionsPreview from '$lib/components/app/conference/fixed-questions-preview.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -53,10 +56,10 @@
 	};
 
 	/**
-	 * `datetime-local` gives wall time with no zone, and the server runs in UTC — so a
-	 * plain submit stores 14:00 CEST as 14:00Z, redisplays it as 16:00, and the next
-	 * save persists 16:00Z. Both deadlines walk by the offset on every click, and one
-	 * of them locks submissions.
+	 * The picker posts wall time with no zone — the same string `datetime-local` posted
+	 * — and the server runs in UTC, so a plain submit stores 14:00 CEST as 14:00Z,
+	 * redisplays it as 16:00, and the next save persists 16:00Z. Both deadlines walk by
+	 * the offset on every click, and one of them locks submissions.
 	 *
 	 * The browser knows the offset the organizer meant, including which side of DST
 	 * the date is on, so the conversion happens here and the server receives an
@@ -90,7 +93,7 @@
 	const kindLabel = (kind: string) =>
 		FIELD_KINDS.find((k) => k.value === kind)?.label ?? kind.replace(/_/g, ' ');
 
-	/** `<input type="datetime-local">` wants local wall time without the zone suffix. */
+	/** The picker reads local wall time without the zone suffix, as the native field did. */
 	const localInput = (value: Date | string | null) => {
 		if (!value) return '';
 		const date = new Date(value);
@@ -114,135 +117,27 @@
 		return null;
 	};
 
-	const optionsText = (field: FieldDefinition) => parseOptions(field.options).join('\n');
+	const STATUS_OPTIONS = [
+		{ value: 'draft', label: 'Draft' },
+		{ value: 'published', label: 'Published' },
+		{ value: 'closed', label: 'Closed' }
+	];
 
-	const selectClass =
-		'border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none';
+	const YES_NO_OPTIONS = [
+		{ value: '', label: '—' },
+		{ value: 'true', label: 'Yes' },
+		{ value: 'false', label: 'No' }
+	];
+
+	const choiceOptions = (field: FieldDefinition) => [
+		{ value: '', label: '—' },
+		...parseOptions(field.options).map((option) => ({ value: option, label: option }))
+	];
 </script>
 
 <svelte:head>
 	<title>Call for papers — {data.conference.name}</title>
 </svelte:head>
-
-{#snippet conditionInputs(field: FieldDefinition | null)}
-	{@const source = field?.conditionSource ?? ''}
-	<div class="flex flex-wrap items-center gap-2">
-		<select name="conditionSource" aria-label="Show this field" class={selectClass}>
-			<option value="" selected={!source}>Always shown</option>
-			<option value="session_format" selected={source === 'session_format'}>
-				Only for session format…
-			</option>
-			<option value="track" selected={source === 'track'}>Only for track…</option>
-			<option value="field" selected={source === 'field'}>Only when another answer is…</option>
-		</select>
-
-		<!-- One control per source rather than one box that means three things. The
-		     server reads the one its source names; a format or track is chosen by name,
-		     never by an id typed from memory. Irrelevant controls stay out of the way
-		     via :has() on .field-editor (see <style>) so the chosen rule is readable. -->
-		<select
-			name="conditionFieldId"
-			aria-label="Depends on field"
-			class="field-editor-when-field {selectClass}"
-		>
-			<option value="">(field)</option>
-			{#each fields as other (other.id)}
-				{#if other.id !== field?.id}
-					<option value={other.id} selected={field?.conditionFieldId === other.id}>
-						{other.label}
-					</option>
-				{/if}
-			{/each}
-		</select>
-
-		<select
-			name="conditionValueFormat"
-			aria-label="Which session format"
-			class="field-editor-when-format {selectClass}"
-		>
-			<option value="">(format)</option>
-			{#each data.formats as format (format.id)}
-				<option
-					value={format.id}
-					selected={source === 'session_format' && field?.conditionValue === String(format.id)}
-				>
-					{format.name}
-				</option>
-			{/each}
-		</select>
-
-		<select
-			name="conditionValueTrack"
-			aria-label="Which track"
-			class="field-editor-when-track {selectClass}"
-		>
-			<option value="">(track)</option>
-			{#each data.tracks as track (track.id)}
-				<option
-					value={track.id}
-					selected={source === 'track' && field?.conditionValue === String(track.id)}
-				>
-					{track.name}
-				</option>
-			{/each}
-		</select>
-
-		<div class="field-editor-when-field">
-			<Input
-				name="conditionValue"
-				value={source === 'field' ? (field?.conditionValue ?? '') : ''}
-				placeholder="answer must equal…"
-				class="w-44"
-				aria-label="Answer the rule matches"
-			/>
-		</div>
-	</div>
-{/snippet}
-
-{#snippet fieldInputs(field: FieldDefinition | null)}
-	<!--
-		.field-editor scopes the :has() rules that show only the controls that apply
-		to the current kind / visibility rule. Pure CSS so changing a select updates
-		the form without a round-trip, and without JS the initial selection still
-		hides the rest (dropdown options stay available for a no-JS Dropdown pick).
-	-->
-	<div class="field-editor space-y-2">
-		<div class="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
-			<Input
-				name="label"
-				value={field?.label ?? ''}
-				placeholder="Label"
-				aria-label="Label"
-				required
-			/>
-			<select name="kind" aria-label="Field type" class={selectClass}>
-				{#each FIELD_KINDS as kind (kind.value)}
-					<option value={kind.value} selected={field?.kind === kind.value}>{kind.label}</option>
-				{/each}
-			</select>
-			<label class="flex items-center gap-2 text-sm">
-				<input
-					type="checkbox"
-					name="required"
-					checked={field?.required ?? false}
-					class="border-input accent-primary size-4 rounded"
-				/>
-				Required
-			</label>
-		</div>
-
-		<textarea
-			name="options"
-			rows="2"
-			placeholder="Dropdown options — one per line"
-			aria-label="Dropdown options"
-			class="field-editor-options border-input bg-background focus-visible:ring-ring w-full rounded-md border px-2 py-1.5 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-			>{field ? optionsText(field) : ''}</textarea
-		>
-
-		{@render conditionInputs(field)}
-	</div>
-{/snippet}
 
 <div class="border-border bg-card border-b px-6 py-5">
 	<div class="flex flex-wrap items-start justify-between gap-4">
@@ -301,34 +196,39 @@
 							Title
 							<Input name="title" value={data.form.title} class="mt-1" />
 						</label>
-						<label class="text-muted-foreground text-xs">
-							Status
-							<select name="status" class="{selectClass} mt-1 w-full">
-								<option value="draft" selected={data.form.status === 'draft'}>Draft</option>
-								<option value="published" selected={data.form.status === 'published'}>
-									Published
-								</option>
-								<option value="closed" selected={data.form.status === 'closed'}>Closed</option>
-							</select>
-						</label>
-						<label class="text-muted-foreground text-xs">
-							Opens
-							<Input
-								type="datetime-local"
+						<!-- A trigger button is not a labelable element, so these three get a
+						     `for`/`id` pair and a plain <label> rather than a wrapping one that
+						     would look connected and do nothing on click. -->
+						<div class="text-muted-foreground text-xs">
+							<label for="cfp-status">Status</label>
+							<AppSelect
+								id="cfp-status"
+								name="status"
+								value={data.form.status}
+								options={STATUS_OPTIONS}
+								class="mt-1"
+							/>
+						</div>
+						<div class="text-muted-foreground text-xs">
+							<label for="cfp-opens-at">Opens</label>
+							<DateTimePicker
+								id="cfp-opens-at"
 								name="opensAt"
 								value={localInput(data.form.opensAt)}
+								placeholder="No opening date"
 								class="mt-1"
 							/>
-						</label>
-						<label class="text-muted-foreground text-xs">
-							Closes — after this, submissions and edits lock
-							<Input
-								type="datetime-local"
+						</div>
+						<div class="text-muted-foreground text-xs">
+							<label for="cfp-closes-at">Closes — after this, submissions and edits lock</label>
+							<DateTimePicker
+								id="cfp-closes-at"
 								name="closesAt"
 								value={localInput(data.form.closesAt)}
+								placeholder="No closing date"
 								class="mt-1"
 							/>
-						</label>
+						</div>
 						<label class="text-muted-foreground text-xs sm:col-span-2">
 							What submitters should know before they start
 							<Textarea
@@ -392,7 +292,12 @@
 											class="space-y-2"
 										>
 											<input type="hidden" name="id" value={field.id} />
-											{@render fieldInputs(field)}
+											<CfpFieldEditor
+												{field}
+												{fields}
+												formats={data.formats}
+												tracks={data.tracks}
+											/>
 											<Button type="submit" size="sm" disabled={busy}>Save field</Button>
 										</form>
 
@@ -441,7 +346,7 @@
 						class="border-border mt-4 space-y-2 border-t pt-4"
 					>
 						<h3 class="text-sm font-medium">Add a field</h3>
-						{@render fieldInputs(null)}
+						<CfpFieldEditor field={null} {fields} formats={data.formats} tracks={data.tracks} />
 						<Button type="submit" size="sm" disabled={busy}>Add field</Button>
 					</form>
 				</section>
@@ -460,7 +365,6 @@
 					<FixedQuestionsPreview
 						formats={data.formats}
 						tracks={data.tracks}
-						{selectClass}
 						onFormat={(id) => (previewFormat = id)}
 						onTrack={(id) => (previewTrack = id)}
 					/>
@@ -472,45 +376,46 @@
 					{/if}
 
 					{#each shown as field (field.id)}
-						<label class="block text-sm">
+						<!-- A picture of the field, not a copy of it: no `name`, so nothing here
+						     posts. The dropdowns still answer the preview's own question — which
+						     conditional fields a given answer reveals. -->
+						<div class="block text-sm">
 							<span class="text-muted-foreground text-xs">
 								{field.label}{#if field.required}<span class="text-status-bad"> *</span>{/if}
 							</span>
 
 							{#if field.kind === 'long_text'}
-								<textarea
-									rows="2"
-									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+								<Textarea
+									rows={2}
+									class="mt-1"
 									oninput={(e) => (previewAnswers[field.id] = e.currentTarget.value)}
-								></textarea>
+								/>
 							{:else if field.kind === 'select'}
-								<select
-									class="{selectClass} mt-1 w-full"
-									onchange={(e) => (previewAnswers[field.id] = e.currentTarget.value)}
-								>
-									<option value="">—</option>
-									{#each parseOptions(field.options) as option, oi (oi)}
-										<option value={option}>{option}</option>
-									{/each}
-								</select>
+								<AppSelect
+									options={choiceOptions(field)}
+									placeholder="—"
+									class="mt-1"
+									aria-label={field.label}
+									onValueChange={(value) => (previewAnswers[field.id] = value)}
+								/>
 							{:else if field.kind === 'boolean'}
-								<select
-									class="{selectClass} mt-1 w-full"
-									onchange={(e) => (previewAnswers[field.id] = e.currentTarget.value)}
-								>
-									<option value="">—</option>
-									<option value="true">Yes</option>
-									<option value="false">No</option>
-								</select>
+								<AppSelect
+									options={YES_NO_OPTIONS}
+									placeholder="—"
+									class="mt-1"
+									aria-label={field.label}
+									onValueChange={(value) => (previewAnswers[field.id] = value)}
+								/>
 							{:else if field.kind === 'file'}
 								<input type="file" disabled class="mt-1 w-full text-sm" />
 							{:else}
 								<Input
 									class="mt-1"
+									aria-label={field.label}
 									oninput={(e) => (previewAnswers[field.id] = e.currentTarget.value)}
 								/>
 							{/if}
-						</label>
+						</div>
 					{/each}
 
 					{#if shown.length === 0}
@@ -523,32 +428,3 @@
 		</div>
 	{/if}
 </div>
-
-<style>
-	/*
-	 * Only the controls that apply to the current kind / visibility rule are shown.
-	 * Driven by the live :checked option so changing a select updates the form
-	 * immediately (no Svelte state, works without JS for the initial selection).
-	 * Hidden controls remain in the form; the server already ignores options for
-	 * non-select kinds and condition values that do not match the chosen source.
-	 */
-	.field-editor:not(:has(select[name='kind'] > option[value='select']:checked))
-		.field-editor-options {
-		display: none;
-	}
-
-	.field-editor:not(:has(select[name='conditionSource'] > option[value='field']:checked))
-		.field-editor-when-field {
-		display: none;
-	}
-
-	.field-editor:not(:has(select[name='conditionSource'] > option[value='session_format']:checked))
-		.field-editor-when-format {
-		display: none;
-	}
-
-	.field-editor:not(:has(select[name='conditionSource'] > option[value='track']:checked))
-		.field-editor-when-track {
-		display: none;
-	}
-</style>
