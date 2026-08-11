@@ -18,13 +18,14 @@
  */
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import {
 	deliverableTable,
 	fileCommentTable,
 	taskTable
 } from '$lib/server/db/conference/content-schema';
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, max, sql } from 'drizzle-orm';
 
 export type ContentTask = {
 	id: number;
@@ -258,6 +259,127 @@ export async function conferenceDeliverable(conferenceId: number, deliverableId:
 		.limit(1);
 
 	return row ?? null;
+}
+
+export type LibraryFile = {
+	id: number;
+	filename: string;
+	contentType: string | null;
+	sizeBytes: number | null;
+	version: number;
+	isLatest: boolean;
+	approvalStatus: string;
+	uploadedAt: Date;
+	taskId: number;
+	taskTitle: string;
+	speakerProfileId: number;
+	speakerName: string;
+	/** The talk this file belongs to, when the task is about one rather than the speaker. */
+	sessionTitle: string | null;
+};
+
+/**
+ * Every file this conference holds, newest first (CNT-13).
+ *
+ * The other queries in this module start from a task and ask what came in against
+ * it. This one starts from the files, because "where is the headshot somebody sent
+ * me last week" is a question about a file, and answering it through the task list
+ * means knowing whose task it was — which is the thing being looked up.
+ *
+ * `isLatest` is computed in the query rather than by the caller. A re-upload is a
+ * new row (CNT-04), so every list of files is mostly history, and a caller that has
+ * to derive "current" from a version number will eventually derive it differently
+ * somewhere else.
+ */
+export async function listConferenceFiles(conferenceId: number): Promise<LibraryFile[]> {
+	const latest = db
+		.select({
+			taskId: deliverableTable.taskId,
+			version: max(deliverableTable.version).as('latest_version')
+		})
+		.from(deliverableTable)
+		.innerJoin(taskTable, eq(taskTable.id, deliverableTable.taskId))
+		.where(eq(taskTable.conferenceId, conferenceId))
+		.groupBy(deliverableTable.taskId)
+		.as('latest');
+
+	const rows = await db
+		.select({
+			id: deliverableTable.id,
+			filename: deliverableTable.filename,
+			contentType: deliverableTable.contentType,
+			sizeBytes: deliverableTable.sizeBytes,
+			version: deliverableTable.version,
+			latestVersion: latest.version,
+			approvalStatus: deliverableTable.approvalStatus,
+			uploadedAt: deliverableTable.uploadedAt,
+			taskId: taskTable.id,
+			taskTitle: taskTable.title,
+			speakerProfileId: speakerProfileTable.id,
+			speakerName: speakerProfileTable.name,
+			sessionTitle: submissionTable.title
+		})
+		.from(deliverableTable)
+		.innerJoin(taskTable, eq(taskTable.id, deliverableTable.taskId))
+		.innerJoin(speakerProfileTable, eq(speakerProfileTable.id, taskTable.speakerProfileId))
+		.leftJoin(submissionTable, eq(submissionTable.id, taskTable.submissionId))
+		.innerJoin(latest, eq(latest.taskId, deliverableTable.taskId))
+		.where(eq(taskTable.conferenceId, conferenceId))
+		.orderBy(desc(deliverableTable.uploadedAt), desc(deliverableTable.id));
+
+	return rows.map(({ latestVersion, ...row }) => ({
+		...row,
+		isLatest: row.version === latestVersion
+	}));
+}
+
+/** What a bulk download needs: the bytes' key, and the names to file them under. */
+export type FileToPack = {
+	id: number;
+	fileUrl: string;
+	filename: string;
+	sizeBytes: number | null;
+	uploadedAt: Date;
+	speakerName: string;
+	taskTitle: string;
+};
+
+/**
+ * The selected files, scoped to this conference (CNT-14).
+ *
+ * The scoping is the whole point of the function. The ids arrive from a form, so
+ * they are a wish rather than a fact: an id belonging to another organizer's
+ * conference has to come back as nothing, not as a file. Doing it in the WHERE
+ * clause rather than filtering afterwards is the same rule the single-file
+ * download follows, for the same reason — a filter that a later edit forgets is a
+ * leak, a join condition is not.
+ *
+ * Returns fewer rows than asked for when some ids are not this conference's. The
+ * caller decides what that means; here it is simply the truth about what exists.
+ */
+export async function conferenceFilesToPack(
+	conferenceId: number,
+	deliverableIds: number[]
+): Promise<FileToPack[]> {
+	if (deliverableIds.length === 0) return [];
+
+	return db
+		.select({
+			id: deliverableTable.id,
+			fileUrl: deliverableTable.fileUrl,
+			filename: deliverableTable.filename,
+			sizeBytes: deliverableTable.sizeBytes,
+			uploadedAt: deliverableTable.uploadedAt,
+			speakerName: speakerProfileTable.name,
+			taskTitle: taskTable.title
+		})
+		.from(deliverableTable)
+		.innerJoin(taskTable, eq(taskTable.id, deliverableTable.taskId))
+		.innerJoin(speakerProfileTable, eq(speakerProfileTable.id, taskTable.speakerProfileId))
+		.where(
+			and(eq(taskTable.conferenceId, conferenceId), inArray(deliverableTable.id, deliverableIds))
+		)
+		.orderBy(asc(speakerProfileTable.sortName), asc(deliverableTable.id));
 }
 
 /**
