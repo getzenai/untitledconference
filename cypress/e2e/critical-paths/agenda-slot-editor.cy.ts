@@ -55,11 +55,24 @@ describe('Agenda slot editor', () => {
 		cy.visit(`/manage/${slug}/settings`);
 		cy.waitForHydration();
 
+		// One submit for the whole list (#110). Shift+enter between the lines, plain
+		// enter to send — which is also the only place that keyboard handling is
+		// exercised in a real browser, so a broken one fails here rather than
+		// quietly in front of an organizer.
+		//
+		// One `.type()` per line on purpose: Cypress holds a modifier until the end
+		// of the command it appears in, so a single `{shift}{enter}`-joined string
+		// would leave shift down for the final enter and write a newline instead of
+		// submitting.
+		const field = () => cy.get('[data-testid="settings-rooms"] textarea[name="names"]');
+
+		field().clear();
+		for (const name of names.slice(0, -1)) field().type(`${name}{shift}{enter}`);
+		field().type(`${names.at(-1)}{enter}`);
+
+		// Every room listed before we leave, or the agenda below is checking a page
+		// that is still being written.
 		for (const name of names) {
-			cy.get('[data-testid="settings-rooms"] input[name="name"]').clear().type(name);
-			cy.get('[data-testid="settings-rooms"] button[type="submit"]').click();
-			// Each room has to be listed before the next one is typed, or the submits
-			// race and the count at the end is anyone's guess.
 			cy.contains('[data-testid="settings-rooms"] li', name).should('exist');
 		}
 
