@@ -63,10 +63,16 @@
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",
-			// "kill-my-saas-neon-uswest" — the us-west-2 database (#78 moved it there).
-			// The previous config still pointed at eu-central-1; deploying with that id
-			// would have quietly sent every query back across the Atlantic.
-			"id": "57c0cadd34ce4bc186e416663a8fecd7",
+			// "kill-my-saas-neon-eu" — the eu-central-1 database. #78 had moved this to
+			// "kill-my-saas-neon-uswest" (57c0cadd34ce4bc186e416663a8fecd7), which is
+			// still there for the switch back before submission.
+			//
+			// This id is the whole switch. Repointing `NEON_CONNECTION_STRING` in
+			// Infisical does nothing on its own: the Worker takes the Hyperdrive
+			// address and only falls back to `DATABASE_URL` without a binding, so a
+			// deploy with the other id keeps serving the other continent's database
+			// while every log line says the switch succeeded. Move both together.
+			"id": "c9ca2bbdd9db4bf19b9e02a19e08a4fa",
 			// Local only, and it is a real address the app now connects to: `vite dev`,
 			// `vite preview` and `wrangler dev` all hand this string to the Worker
 			// verbatim as env.HYPERDRIVE.connectionString and talk to Postgres
