@@ -14,7 +14,14 @@
 	import SubmissionsChart from '$lib/components/app/conference/submissions-chart.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import type { Snippet } from 'svelte';
+	import { submissionsTrend, TREND_WINDOW } from '$lib/conference/submissions-trend';
+	import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
+	import CheckCircleIcon from '@lucide/svelte/icons/circle-check-big';
+	import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
+	import GavelIcon from '@lucide/svelte/icons/gavel';
+	import TrendingDownIcon from '@lucide/svelte/icons/trending-down';
+	import TrendingUpIcon from '@lucide/svelte/icons/trending-up';
+	import type { Component, Snippet } from 'svelte';
 
 	let { data, form } = $props();
 
@@ -51,6 +58,8 @@
 			(a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name)
 		)
 	);
+
+	const trend = $derived(submissionsTrend(d.submissionsOverTime));
 </script>
 
 <svelte:head>
@@ -73,19 +82,54 @@
 {/snippet}
 
 <!--
-	A stat tile: label, value, one line of context, and a link to the screen where
-	the number can be acted on. The value carries the font's proportional figures —
-	`tabular-nums` gives every digit the width of a zero, which makes a large `121`
-	look like it has come loose.
+	A stat tile: an icon to find it by, the label, the value, one line of context,
+	and a link to the screen where the number can be acted on. The value carries
+	the font's proportional figures — `tabular-nums` gives every digit the width of
+	a zero, which makes a large `121` look like it has come loose.
+
+	The four sit in one panel divided by hairlines rather than as four floating
+	boxes: they are four readings of one conference, and a row of separate cards
+	says four unrelated things. `alert` tints exactly one kind of number — the one
+	that means late, not merely open. Everything here is a queue; if all four
+	shouted, none would.
 -->
-{#snippet tile(label: string, value: number, context: string, href: string)}
+{#snippet tile(
+	Icon: Component,
+	label: string,
+	value: number,
+	context: string,
+	href: string,
+	alert = false
+)}
 	<a
 		{href}
-		class="border-border bg-card hover:border-foreground/20 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+		class="bg-card hover:bg-muted/40 focus-visible:ring-ring group relative flex flex-col p-5 transition-colors focus-visible:ring-[3px] focus-visible:-outline-offset-1 focus-visible:outline-none"
 	>
-		<p class="text-muted-foreground text-xs">{label}</p>
-		<p class="mt-1 text-2xl leading-none font-semibold">{value}</p>
-		<p class="text-muted-foreground mt-1.5 text-xs">{context}</p>
+		<span class="flex items-center gap-2">
+			<!--
+				The two branches set the same three properties rather than layering an
+				override on a base: two utilities for one property have the same
+				specificity, so which wins is decided by their order in the stylesheet,
+				not by their order in this attribute.
+			-->
+			<span
+				class="flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors {alert
+					? 'border-status-bad/30 bg-status-bad-bg text-status-bad'
+					: 'border-border bg-muted/50 text-muted-foreground group-hover:text-foreground'}"
+				aria-hidden="true"
+			>
+				<Icon class="size-3.5" />
+			</span>
+			<span class="text-muted-foreground text-xs font-medium">{label}</span>
+		</span>
+		<span
+			class="mt-3 text-3xl leading-none font-semibold tracking-tight {alert
+				? 'text-status-bad'
+				: ''}"
+		>
+			{value}
+		</span>
+		<span class="text-muted-foreground mt-2 text-xs">{context}</span>
 	</a>
 {/snippet}
 
@@ -143,46 +187,100 @@
 		counts that decide what the organizer does next, which is why each tile is a
 		link rather than a figure.
 	-->
-	<div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" data-testid="dashboard-metrics">
+	<!--
+		The hairlines are the panel's own background showing through a one-pixel
+		gap, not `divide-*`. Divide utilities walk the children in document order —
+		"every one but the first gets a top border" — which is a row's logic, not a
+		grid's: at two columns they draw a line above the second tile, which is
+		beside the first, and none between the two tiles in a column.
+	-->
+	<div
+		class="border-border bg-border grid gap-px overflow-hidden rounded-lg border sm:grid-cols-2 xl:grid-cols-4"
+		data-testid="dashboard-metrics"
+	>
 		{@render tile(
+			GavelIcon,
 			'Awaiting a decision',
 			d.decisions.undecided,
 			`${d.decisions.unreviewed} with no review yet`,
 			`${base}/submissions?status=submitted&status=in_review`
 		)}
 		{@render tile(
+			CheckCircleIcon,
 			'Accepted',
 			d.scheduling.accepted,
 			`${d.scheduling.unplaced + d.scheduling.tentative} without a confirmed slot`,
 			`${base}/submissions?status=accepted`
 		)}
 		{@render tile(
+			ClipboardListIcon,
 			'Reviews outstanding',
 			d.reviews.outstanding,
 			`${d.reviews.submitted} of ${d.reviews.assigned} assigned are in`,
 			`${base}/people`
 		)}
 		{@render tile(
+			CalendarClockIcon,
 			'Speaker tasks overdue',
 			d.tasks.overdue,
 			`${d.tasks.dueSoon} more due this week`,
-			`${base}/content`
+			`${base}/content`,
+			d.tasks.overdue > 0
 		)}
 	</div>
 
-	<section class="border-border bg-card rounded-lg border p-4" data-testid="submissions-over-time">
-		<h2 class="text-sm font-semibold tracking-tight">Submissions over time</h2>
-		<p class="text-muted-foreground mt-0.5 text-xs">
-			Per day, counted when the submission was started. Quiet days are on the axis as zeroes — the
-			gaps are the point of the chart.
-		</p>
+	<section class="border-border bg-card rounded-lg border" data-testid="submissions-over-time">
+		<div class="flex flex-wrap items-start justify-between gap-4 p-4 pb-3">
+			<div>
+				<h2 class="text-sm font-semibold tracking-tight">Submissions over time</h2>
+				<p class="text-muted-foreground mt-0.5 text-xs">
+					Per day, counted when the submission was started. Quiet days are on the axis as zeroes —
+					the gaps are the point of the chart.
+				</p>
+			</div>
+			<!--
+				The line shows the shape; this says which way it points. It is the last
+				seven days against the seven before them — the comparison an organizer
+				makes in their head anyway — and it is absent rather than approximate
+				before two full weeks exist. An arrow with no number beside it would be
+				a mood, so the counts are printed and the icon is `aria-hidden`.
+			-->
+			{#if trend}
+				<p
+					class="flex items-center gap-1.5 text-xs tabular-nums {trend.direction === 'up'
+						? 'text-status-good'
+						: trend.direction === 'down'
+							? 'text-status-warn'
+							: 'text-muted-foreground'}"
+					data-testid="submissions-trend"
+				>
+					{#if trend.direction !== 'flat'}
+						{@const Arrow = trend.direction === 'up' ? TrendingUpIcon : TrendingDownIcon}
+						<Arrow class="size-3.5 shrink-0" aria-hidden="true" />
+					{/if}
+					<span>
+						{trend.recent} in the last {TREND_WINDOW} days
+						<span class="opacity-80">
+							{trend.direction === 'flat'
+								? 'and'
+								: trend.direction === 'up'
+									? 'up from'
+									: 'down from'}
+							{trend.previous} the week before
+						</span>
+					</span>
+				</p>
+			{/if}
+		</div>
 		<!--
 			Capped rather than full-bleed. The plot keeps its 640x180 box and scales
 			with its container, so on a wide screen an uncapped chart grows to four
 			hundred pixels tall and takes over a page whose subject is the queues
 			underneath it. Thirty days need width, not height.
 		-->
-		<SubmissionsChart days={d.submissionsOverTime} class="mt-3 max-w-3xl" />
+		<div class="border-border border-t p-4">
+			<SubmissionsChart days={d.submissionsOverTime} class="max-w-3xl" />
+		</div>
 	</section>
 
 	<section class="border-border bg-card rounded-lg border p-4" data-testid="reviewer-progress">
