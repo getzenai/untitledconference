@@ -37,6 +37,12 @@
 		signedIn: boolean;
 		signInHref: string;
 		submitLabel?: string;
+		/**
+		 * A proposal that is already in has no draft state to fall back to: saving it
+		 * as a draft would withdraw it from the organizer's list, so that door is not
+		 * drawn rather than being drawn and refused.
+		 */
+		allowDraft?: boolean;
 	};
 
 	let {
@@ -47,7 +53,8 @@
 		form = null,
 		signedIn,
 		signInHref,
-		submitLabel = 'Submit proposal'
+		submitLabel = 'Submit proposal',
+		allowDraft = true
 	}: Props = $props();
 
 	let sessionFormatId = $state(initial.sessionFormatId);
@@ -334,12 +341,18 @@
 	{#if signedIn}
 		<div class="flex flex-wrap items-center gap-3 border-t pt-6">
 			<Button type="submit" formaction="?/submit" disabled={busy}>{submitLabel}</Button>
-			<Button type="submit" formaction="?/draft" variant="outline" disabled={busy}>
-				Save as draft
-			</Button>
-			<span class="text-muted-foreground text-sm">
-				A draft needs only a title. You can finish it any time before the call closes.
-			</span>
+			{#if allowDraft}
+				<Button type="submit" formaction="?/draft" variant="outline" disabled={busy}>
+					Save as draft
+				</Button>
+				<span class="text-muted-foreground text-sm">
+					A draft needs only a title. You can finish it any time before the call closes.
+				</span>
+			{:else}
+				<span class="text-muted-foreground text-sm">
+					Your proposal stays in the organizers' list while you edit it.
+				</span>
+			{/if}
 		</div>
 	{:else}
 		<div class="flex flex-wrap items-center gap-3 border-t pt-6">

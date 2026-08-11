@@ -35,7 +35,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (call.state !== 'open') redirect(303, `/portal/submissions/${id}`);
 
 	const { organizationId: _organizationId, ...conference } = call.conference;
-	return { call: { ...call, conference }, draft: editable.draft, submissionId: id };
+	return {
+		call: { ...call, conference },
+		draft: editable.draft,
+		submissionId: id,
+		status: editable.status
+	};
 };
 
 async function save(userId: string | undefined, idRaw: string, data: FormData, submit: boolean) {
