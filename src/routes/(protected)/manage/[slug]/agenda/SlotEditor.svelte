@@ -3,16 +3,15 @@
 	 * The slot editor.
 	 *
 	 * One dialog, two shapes: an empty slot offers the waiting talks, a taken one
-	 * shows what is in it and offers to take it out. Both submit the same
-	 * `?/place` and `?/unplace` the board has always used — there is no second
-	 * write path, so anything the editor can do, a form post can do.
+	 * shows what is in it, offers to trade it with another session on the day, and
+	 * offers to take it out. Each submits an action the board owns — `?/place`,
+	 * `?/swap`, `?/unplace` — so anything the editor can do, a form post can do.
 	 *
-	 * Moving a session is deliberately two steps (take out, then put in) rather
-	 * than one. A single "move here" onto a taken slot would not swap and would
-	 * not refuse: `placeSession` is permissive about conflicts on purpose
-	 * (agenda.ts), so it would quietly double-book and report a clash afterwards.
-	 * Offering that as "move" would be a button that does something other than
-	 * what it says.
+	 * There is no "move here" onto a taken slot, and that absence is deliberate.
+	 * `placeSession` is permissive about conflicts on purpose (agenda.ts), so a
+	 * move would not swap and would not refuse — it would quietly double-book and
+	 * report a clash afterwards. The two honest readings of the gesture are both
+	 * offered instead: exchange the two sessions, or empty the slot first.
 	 *
 	 * It lives in its own file so the room list it renders can be tested against
 	 * props directly. That test can only prove the second half of the contract —
@@ -38,11 +37,24 @@
 		speakers: string[];
 	};
 
+	/** A session already on the grid, offered as the other half of a swap. */
+	type SwapCandidate = {
+		placementId: number;
+		title: string;
+		startMinutes: number | null;
+		roomName: string;
+	};
+
 	type Props = {
 		/** The slot being edited: which room, which minute of the day. */
 		target: { roomId: number; roomName: string; startMinutes: number };
 		/** What already starts in that slot, if anything. */
 		occupant: Session | null;
+		/**
+		 * The other scheduled sessions the occupant may trade places with. The caller
+		 * decides the set — same day, and never a break, which has no room to give.
+		 */
+		swapWith: SwapCandidate[];
 		tray: Session[];
 		days: { id: number; date: string }[];
 		rooms: { id: number; name: string }[];
@@ -59,6 +71,7 @@
 	let {
 		target,
 		occupant,
+		swapWith,
 		tray,
 		days,
 		rooms,
@@ -99,7 +112,7 @@
 
 		{#if occupant}
 			<!--
-				Taken. Shown and emptied, not overwritten: putting another session
+				Taken. Traded or emptied, never overwritten: putting another session
 				here would not swap and would not be refused, it would double-book.
 			-->
 			<p class="mt-4 text-sm font-medium">{occupant.title}</p>
@@ -109,6 +122,28 @@
 				{timeLabel(occupant.startMinutes)}–{timeLabel(occupant.endMinutes)}
 			</p>
 
+			{#if swapWith.length > 0}
+				<form method="POST" action="?/swap" use:enhance={submit} class="mt-4 space-y-3">
+					<input type="hidden" name="placementId" value={occupant.placementId} />
+					<label class="block text-sm">
+						<span class="text-muted-foreground text-xs">Swap with</span>
+						<select
+							name="withPlacementId"
+							required
+							data-testid="agenda-slot-swap-with"
+							class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+						>
+							{#each swapWith as candidate (candidate.placementId)}
+								<option value={candidate.placementId}>
+									{candidate.title} ({timeLabel(candidate.startMinutes)}, {candidate.roomName})
+								</option>
+							{/each}
+						</select>
+					</label>
+					<Button type="submit" disabled={busy} data-testid="agenda-slot-swap">Trade places</Button>
+				</form>
+			{/if}
+
 			<form method="POST" action="?/unplace" use:enhance={submit} class="mt-4">
 				<input type="hidden" name="placementId" value={occupant.placementId} />
 				<Button type="submit" variant="outline" disabled={busy} data-testid="agenda-slot-remove">
@@ -116,7 +151,7 @@
 				</Button>
 			</form>
 			<p class="text-muted-foreground mt-2 text-xs">
-				To move it, take it out and open the slot you want.
+				To move it to an empty slot, take it out and open the one you want.
 			</p>
 		{:else if tray.length === 0}
 			<p class="text-muted-foreground mt-4 text-sm">
