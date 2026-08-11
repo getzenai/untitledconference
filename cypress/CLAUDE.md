@@ -71,7 +71,9 @@ Avoid CSS class selectors and deep DOM paths — they break on styling changes.
 - **Hydration.** The app is SSR'd; typing and submitting before Svelte hydrates
   hits the raw `<form>` and triggers a native navigation. `BasePage.visit()` and
   `cy.waitForHydration()` wait for `body[data-hydrated="true"]` (set in
-  `src/routes/+layout.svelte`).
+  `src/routes/+layout.svelte`). Any form carrying credentials therefore needs an
+  explicit `method="POST"` — without it that native navigation is a GET and puts
+  the password in the query string; `credential-form-method.cy.ts` guards it.
 - **bits-ui primitives are not native inputs.** Checkbox, radio and switch render
   as `<button>` with `data-state="checked" | "unchecked"`; assert on that
   attribute, not `:checked`. `FormActions` already does.
