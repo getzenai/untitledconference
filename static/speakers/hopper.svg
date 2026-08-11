@@ -1,4 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="GH">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" role="img" aria-label="DS">
+  <!--
+    Placeholder headshot for Dmitri Sokolov (seed key: dmitri).
+    The initials must be theirs — a stand-in that shows somebody else's is worse
+    than none, because it reads as data rather than as a missing photo. The
+    filename is historical and stays: the seeded rows in production point at it.
+  -->
   <rect width="240" height="240" fill="oklch(0.93 0.03 20)"/>
-  <text x="120" y="120" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="88" font-weight="500" fill="oklch(0.35 0.02 0)">GH</text>
+  <text x="120" y="120" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, sans-serif" font-size="88" font-weight="500" fill="oklch(0.35 0.02 0)">DS</text>
 </svg>
