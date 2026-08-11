@@ -130,6 +130,88 @@ describe('dashboard metrics', () => {
 	it('sets the tile values in proportional figures', () => {
 		expect(withCounts()).not.toMatch(/tabular-nums[^"]*"[^>]*>\s*7\s*</);
 	});
+
+	/**
+	 * One tile is allowed to raise its voice, and only one: overdue means late,
+	 * where the other three mean open. Four tinted tiles would be a wall of alarm
+	 * that says nothing about where to start.
+	 */
+	it('tints the overdue tile and leaves the open ones alone', () => {
+		const tiles = withCounts()
+			.split('data-testid="dashboard-metrics"')[1]
+			.split('data-testid="submissions-over-time"')[0]
+			.split('<a ')
+			.slice(1)
+			.map((tile) => tile.split('</a>')[0]);
+
+		expect(tiles).toHaveLength(4);
+		const tinted = tiles.filter((tile) => tile.includes('text-status-bad'));
+		expect(tinted).toHaveLength(1);
+		expect(tinted[0]).toContain('/manage/test-conf/content');
+	});
+
+	it('drops the tint once nothing is overdue', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					dashboard: {
+						...emptyDashboard,
+						tasks: { open: 5, overdue: 0, dueSoon: 1, items: [] },
+						reviews: { assigned: 0, submitted: 0, outstanding: 0, items: [] }
+					}
+				} as unknown as PageData,
+				form: null
+			}
+		}).body;
+
+		expect(body).not.toContain('text-status-bad');
+	});
+});
+
+/**
+ * The chart says what the shape is; the trend line says which way it points.
+ * Both halves have to survive the empty conference, where there is no honest
+ * comparison to draw and the right answer is to print nothing.
+ */
+describe('submissions trend line', () => {
+	const withDays = (counts: number[]) =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					dashboard: {
+						...emptyDashboard,
+						reviews: { assigned: 0, submitted: 0, outstanding: 0, items: [] },
+						submissionsOverTime: counts.map((count, i) => ({
+							day: `2027-03-${String(i + 1).padStart(2, '0')}`,
+							count
+						}))
+					}
+				} as unknown as PageData,
+				form: null
+			}
+		}).body;
+
+	it('prints both weeks, not just an arrow', () => {
+		const body = withDays([1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3, 3]);
+
+		expect(body).toContain('data-testid="submissions-trend"');
+		expect(body).toContain('21 in the last 7 days');
+		expect(body).toContain('up from');
+		expect(body).toContain('7 the week before');
+	});
+
+	it('stays silent before two full weeks exist', () => {
+		expect(withDays([5, 5, 5])).not.toContain('data-testid="submissions-trend"');
+		expect(withDays([])).not.toContain('data-testid="submissions-trend"');
+	});
 });
 
 /**
