@@ -81,7 +81,7 @@
 			"localConnectionString": "postgres://root:mysecretpassword@localhost:5432/hyperdrive_spike"
 		}
 	],
-	// Non-secret configuration. Secrets (BETTER_AUTH_SECRET, SENDGRID_API_KEY, ...)
+	// Non-secret configuration. Secrets (BETTER_AUTH_SECRET, RESEND_API_KEY, ...)
 	// must be set with `wrangler secret put <NAME>` and NOT be listed here.
 	// For local `wrangler dev` they are read from `.dev.vars` (git-ignored).
 	"vars": {
@@ -93,6 +93,7 @@
 		"BETTER_AUTH_TRUSTED_ORIGINS": "https://untitledconference.com",
 		"REQUIRE_EMAIL_VERIFICATION": "false",
 		"SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG": "false",
+		"RESEND_FROM": "Untitled Conference <conference@getzenai.com>",
 		"LOG_LEVEL": "info",
 		"LOG_FORMAT": "human"
 	}

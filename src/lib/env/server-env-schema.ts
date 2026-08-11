@@ -84,6 +84,10 @@ export const serverEnvSchema = z
 		SENDGRID_API_KEY: optionalStr(),
 		/** Verified sender address. Required when SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=true. */
 		SENDGRID_FROM: optionalStr(),
+		/** Resend API key for the durable conference-mail outbox. */
+		RESEND_API_KEY: optionalStr(),
+		/** Verified Resend sender, including optional display name. */
+		RESEND_FROM: optionalStr(),
 
 		// --- Feature flags ------------------------------------------------------
 		// One `FEATURE_*` variable per flag; see src/lib/server/feature-flags.ts.

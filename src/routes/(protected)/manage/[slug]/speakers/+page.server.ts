@@ -5,6 +5,8 @@
  * Writes go through the speakers module, which owns org-scoping.
  */
 import { requireOrganizer } from '$lib/server/conference/access';
+import { dispatchConferenceEmails } from '$lib/server/conference/email-dispatcher';
+import { queueSpeakerMail } from '$lib/server/conference/speaker-mail';
 import {
 	addSpeakerToConference,
 	isSpeakerStatus,
@@ -38,6 +40,37 @@ function optionalText(form: FormData, key: string): string | null {
 function profileId(form: FormData): number {
 	const id = Number(form.get('speakerProfileId'));
 	return Number.isInteger(id) && id > 0 ? id : 0;
+}
+
+type ParsedMail =
+	| { ok: true; filters: SpeakerRosterFilters; subject: string; body: string }
+	| { ok: false; error: string };
+
+function parseMail(form: FormData): ParsedMail {
+	const q = text(form, 'q').trim() || undefined;
+	const rawStatus = text(form, 'status').trim();
+	const status = isSpeakerStatus(rawStatus) ? rawStatus : undefined;
+	const subject = text(form, 'subject').trim();
+	const body = text(form, 'body').trim();
+	if (!subject) return { ok: false, error: 'A subject is required.' };
+	if (!body) return { ok: false, error: 'A message is required.' };
+	if (subject.length > 200) return { ok: false, error: 'Subject must be 200 characters or fewer.' };
+	if (body.length > 10_000)
+		return { ok: false, error: 'Message must be 10,000 characters or fewer.' };
+	return { ok: true, filters: { q, status }, subject, body };
+}
+
+function deliveryMessage(
+	queued: { queued: number; withoutEmail: number },
+	dispatch: Awaited<ReturnType<typeof dispatchConferenceEmails>>
+) {
+	const skipped = queued.withoutEmail > 0 ? ` ${queued.withoutEmail} without email skipped.` : '';
+	if (dispatch.disabled) {
+		return `${queued.queued} email${queued.queued === 1 ? '' : 's'} queued.${skipped}`;
+	}
+	const failed = dispatch.failed > 0 ? `, ${dispatch.failed} failed` : '';
+	const remaining = dispatch.remaining > 0 ? `, ${dispatch.remaining} still queued` : '';
+	return `${dispatch.sent} email${dispatch.sent === 1 ? '' : 's'} sent${failed}${remaining}.${skipped}`;
 }
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -134,5 +167,17 @@ export const actions: Actions = {
 		}
 
 		return { message: 'Speaker status updated.' };
+	},
+
+	compose: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const mail = parseMail(await request.formData());
+		if (!mail.ok) return fail(400, { error: mail.error });
+		const queued = await queueSpeakerMail(conference.id, mail.filters, mail.subject, mail.body);
+		if (queued.queued === 0) {
+			return fail(400, { error: 'No speakers in this filter have an email address.' });
+		}
+		const dispatch = await dispatchConferenceEmails(conference.id);
+		return { message: deliveryMessage(queued, dispatch) };
 	}
 };

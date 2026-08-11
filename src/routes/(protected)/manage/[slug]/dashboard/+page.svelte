@@ -479,9 +479,16 @@
 				<ul class="space-y-2 text-sm">
 					{#each d.mail.items as item (item.id)}
 						<li class="flex items-baseline justify-between gap-2">
-							<span class="min-w-0 truncate" title={item.subject}>
-								{item.subject}
-								<span class="text-muted-foreground">· {item.toEmail}</span>
+							<span class="min-w-0">
+								<span class="block truncate" title={item.subject}>
+									{item.subject}
+									<span class="text-muted-foreground">· {item.toEmail}</span>
+								</span>
+								{#if item.error}
+									<span class="text-status-bad block truncate text-xs" title={item.error}
+										>{item.error}</span
+									>
+								{/if}
 							</span>
 							<StatusBadge status={item.status} class="shrink-0" />
 						</li>
@@ -489,10 +496,19 @@
 				</ul>
 			{/if}
 		{/snippet}
+		{#snippet mailFooter()}
+			<form method="POST" action="?/dispatchMail" class="flex items-center justify-between gap-2">
+				<span>{form?.mailMessage ?? 'Queued messages are delivered through Resend.'}</span>
+				<Button type="submit" size="sm" variant="outline" disabled={d.mail.queued === 0}>
+					Send queued
+				</Button>
+			</form>
+		{/snippet}
 		{@render card(
 			'Mail',
 			`${d.mail.queued} queued · ${d.mail.sent} sent · ${d.mail.failed} failed`,
-			mailBody
+			mailBody,
+			mailFooter
 		)}
 	</div>
 </div>
