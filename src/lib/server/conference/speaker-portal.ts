@@ -246,9 +246,10 @@ async function draftRow(userId: string, submissionId: number) {
 		.where(and(eq(submissionTable.id, submissionId), eq(speakerProfileTable.userId, userId)))
 		.limit(1);
 
-	// A submitted proposal is no longer the submitter's to rewrite, so it is not a
-	// draft for this purpose even though the row exists.
-	return row && row.status === 'draft' ? row : null;
+	// Editable for as long as the call is open — the route checks that separately,
+	// and `refuseSave` checks it again on the write. What is not editable here is a
+	// proposal that has been decided: the organizers judged those words.
+	return row && (row.status === 'draft' || row.status === 'submitted') ? row : null;
 }
 
 /** Answers keyed by field id, which is what the form's `answer:<id>` inputs need. */
@@ -317,17 +318,20 @@ async function ownProfile(
 }
 
 /**
- * A draft in the shape the proposal form fills from, or null if this user may
- * not edit it.
+ * A proposal in the shape the form fills from, or null if this user may not edit it.
  *
  * "May not edit" folds together three refusals — no such submission, not yours,
- * no longer a draft — and answers null to all of them, so the route can return
- * one 404 rather than telling a stranger which of the three applied.
+ * already decided — and answers null to all of them, so the route can return one
+ * 404 rather than telling a stranger which of the three applied.
+ *
+ * `status` comes back with it because the two editable states read differently to
+ * the person editing: an unfinished draft nobody has seen, and a proposal that is
+ * already in front of the organizers and must stay there.
  */
 export async function editableDraft(
 	userId: string,
 	submissionId: number
-): Promise<{ draft: ProposalDraft; conferenceSlug: string } | null> {
+): Promise<{ draft: ProposalDraft; conferenceSlug: string; status: string } | null> {
 	const row = await draftRow(userId, submissionId);
 	if (!row) return null;
 
@@ -351,19 +355,29 @@ export async function editableDraft(
 			.map((sp) => ({ name: sp.name, email: sp.email ?? '', roleLabel: sp.roleLabel ?? '' }))
 	};
 
-	return { draft, conferenceSlug: row.conferenceSlug };
+	return { draft, conferenceSlug: row.conferenceSlug, status: row.status };
 }
 
 /**
- * This user's unfinished draft for a conference, if there is one.
+ * What this user already has in front of this conference, if anything.
  *
  * The public call renders a blank form, so without this a submitter who already
- * started something sees no sign of it and a second save creates a second
- * proposal. Deliberately only the id and title: this is a signpost, not a load.
+ * proposed something sees no sign of it and a second save makes a second
+ * proposal. That is not hypothetical: it is where the duplicate pairs in the
+ * organizer's list came from, because re-using the form was the only way anyone
+ * could amend a talk once it was in.
+ *
+ * Deliberately only the id, title and status: this is a signpost, not a load. The
+ * status is what lets the call word it correctly — "finish it" and "you already
+ * sent this" are different sentences.
  */
-export async function draftForConference(userId: string, conferenceId: number) {
+export async function submissionForConference(userId: string, conferenceId: number) {
 	const [row] = await db
-		.select({ id: submissionTable.id, title: submissionTable.title })
+		.select({
+			id: submissionTable.id,
+			title: submissionTable.title,
+			status: submissionTable.status
+		})
 		.from(submissionTable)
 		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
 		.innerJoin(
@@ -374,10 +388,12 @@ export async function draftForConference(userId: string, conferenceId: number) {
 			and(
 				eq(submissionTable.conferenceId, conferenceId),
 				eq(speakerProfileTable.userId, userId),
-				eq(submissionTable.status, 'draft')
+				inArray(submissionTable.status, ['draft', 'submitted'])
 			)
 		)
-		.orderBy(desc(submissionTable.updatedAt))
+		// A draft first when there is both: the unfinished one is the one still
+		// asking for something.
+		.orderBy(asc(submissionTable.status), desc(submissionTable.updatedAt))
 		.limit(1);
 
 	return row ?? null;

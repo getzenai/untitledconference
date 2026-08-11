@@ -29,7 +29,7 @@ import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { guessSortName, openCall, saveSubmission, type SubmissionInput } from './cfp-submission';
-import { draftForConference, editableDraft } from './speaker-portal';
+import { editableDraft, submissionForConference } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -362,11 +362,34 @@ describe('saveSubmission', () => {
 		expect(row.title).toBe('A talk about tests');
 	});
 
-	it('refuses to let the author rewrite a proposal already submitted', async () => {
+	// This used to assert the opposite — that a submitted proposal was frozen. The
+	// call's own copy promises editing until it closes, and forcing people back
+	// through the public form to amend anything is what produced the duplicate
+	// pairs in the organizer's list, so the rule changed rather than the copy.
+	it('lets the author rewrite a proposal that is already submitted', async () => {
 		const submitted = await saveSubmission(submitterId, slug, input(), { submit: true });
 		if (!submitted.ok) throw new Error('expected a saved submission');
 
 		const result = await saveSubmission(submitterId, slug, input({ title: 'Second thoughts' }), {
+			submit: true,
+			submissionId: submitted.submissionId
+		});
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.submissionId).toBe(submitted.submissionId);
+	});
+
+	it('still refuses to rewrite one that has been decided', async () => {
+		const submitted = await saveSubmission(submitterId, slug, input(), { submit: true });
+		if (!submitted.ok) throw new Error('expected a saved submission');
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'rejected', decidedAt: new Date() })
+			.where(eq(submissionTable.id, submitted.submissionId));
+
+		const result = await saveSubmission(submitterId, slug, input({ title: 'Too late' }), {
 			submit: true,
 			submissionId: submitted.submissionId
 		});
@@ -454,7 +477,9 @@ describe('finishing a draft (CFP-07, the resume half)', () => {
 		expect(rows[0].status).toBe('submitted');
 	});
 
-	it('stops offering a draft for editing once it has been submitted', async () => {
+	// Also inverted deliberately: submitting no longer ends the right to edit, so
+	// the form must still open. What ends it is a decision, asserted below.
+	it('keeps offering it for editing once it has been submitted', async () => {
 		const saved = await saveSubmission(submitterId, slug, input({ title: 'One way' }), {
 			submit: false
 		});
@@ -464,6 +489,22 @@ describe('finishing a draft (CFP-07, the resume half)', () => {
 			submit: true,
 			submissionId: saved.submissionId
 		});
+
+		const editable = await editableDraft(submitterId, saved.submissionId);
+		expect(editable).not.toBeNull();
+		expect(editable?.status).toBe('submitted');
+	});
+
+	it('stops offering it once it has been decided', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Decided one' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a saved submission');
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'accepted', decidedAt: new Date() })
+			.where(eq(submissionTable.id, saved.submissionId));
 
 		expect(await editableDraft(submitterId, saved.submissionId)).toBeNull();
 	});
@@ -600,7 +641,7 @@ describe('the speaker profile behind a proposal', () => {
 	});
 });
 
-describe('draftForConference', () => {
+describe('submissionForConference', () => {
 	it('finds the unfinished proposal so the public form can point at it', async () => {
 		const saved = await saveSubmission(submitterId, slug, input({ title: 'Unfinished' }), {
 			submit: false
@@ -612,7 +653,7 @@ describe('draftForConference', () => {
 			.from(conferenceTable)
 			.where(eq(conferenceTable.slug, slug));
 
-		const found = await draftForConference(submitterId, conference.id);
+		const found = await submissionForConference(submitterId, conference.id);
 		expect(found?.id).toBe(saved.submissionId);
 		expect(found?.title).toBe('Unfinished');
 	});
@@ -623,6 +664,170 @@ describe('draftForConference', () => {
 			.from(conferenceTable)
 			.where(eq(conferenceTable.slug, slug));
 
-		expect(await draftForConference(strangerId, conference.id)).toBeNull();
+		expect(await submissionForConference(strangerId, conference.id)).toBeNull();
+	});
+});
+
+describe('editing a proposal that is already submitted (CFP-07)', () => {
+	it('lets the submitter rewrite it while the call is open', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'First wording' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		const edited = await saveSubmission(submitterId, slug, input({ title: 'Second wording' }), {
+			submit: true,
+			submissionId: saved.submissionId
+		});
+
+		expect(edited.ok).toBe(true);
+		if (!edited.ok) return;
+		// The same proposal, rewritten — not a second one.
+		expect(edited.submissionId).toBe(saved.submissionId);
+
+		const [row] = await db
+			.select({ title: submissionTable.title, status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+		expect(row).toMatchObject({ title: 'Second wording', status: 'submitted' });
+	});
+
+	it('keeps the original receipt time when an edit is re-submitted', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Receipt' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		const [before] = await db
+			.select({ submittedAt: submissionTable.submittedAt })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		await saveSubmission(submitterId, slug, input({ title: 'Receipt, reworded' }), {
+			submit: true,
+			submissionId: saved.submissionId
+		});
+
+		const [after] = await db
+			.select({ submittedAt: submissionTable.submittedAt })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		// The receipt is what the speaker was told and what the organizer sees. An
+		// edit is not a new submission.
+		expect(after.submittedAt?.getTime()).toBe(before.submittedAt?.getTime());
+	});
+
+	it('never demotes a submitted proposal back to a draft', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Stays in' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		// A draft-save posted at an already-submitted proposal must not withdraw it
+		// from the organizer's list by a side door.
+		await saveSubmission(submitterId, slug, input({ title: 'Stays in, edited' }), {
+			submit: false,
+			submissionId: saved.submissionId
+		});
+
+		const [row] = await db
+			.select({ status: submissionTable.status, submittedAt: submissionTable.submittedAt })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		expect(row.status).toBe('submitted');
+		expect(row.submittedAt).not.toBeNull();
+	});
+
+	it('refuses to rewrite a proposal once it has been decided', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Decided' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'accepted', decidedAt: new Date() })
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		const result = await saveSubmission(submitterId, slug, input({ title: 'Too late' }), {
+			submit: true,
+			submissionId: saved.submissionId
+		});
+
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.reason).toBe('forbidden');
+	});
+
+	it('still refuses a stranger', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Not yours' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		const result = await saveSubmission(strangerId, slug, input({ title: 'Mine now' }), {
+			submit: true,
+			submissionId: saved.submissionId
+		});
+
+		expect(result.ok).toBe(false);
+	});
+});
+
+describe('the public form points at what you already sent', () => {
+	// Its own account: the shared submitter already has an unfinished draft here
+	// from an earlier test, and a draft legitimately outranks a submitted proposal
+	// in this signpost — that is asserted separately below.
+	const soloId = `solo-${suffix}`;
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			id: soloId,
+			email: `${soloId}@example.test`,
+			emailVerified: true,
+			name: 'Solo'
+		});
+	});
+
+	afterAll(async () => {
+		await db.delete(user).where(eq(user.id, soloId));
+	});
+
+	it('finds a submitted proposal, not just an unfinished one', async () => {
+		const saved = await saveSubmission(soloId, slug, input({ title: 'Already sent' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+
+		// Showing a blank form to someone who already proposed is what produced the
+		// duplicate pairs in the organizer's list: re-using the form was the only
+		// way to amend anything.
+		const found = await submissionForConference(soloId, conference.id);
+		expect(found?.id).toBe(saved.submissionId);
+		expect(found?.status).toBe('submitted');
+	});
+
+	it('prefers an unfinished draft when there is both', async () => {
+		const draft = await saveSubmission(soloId, slug, input({ title: 'Still writing' }), {
+			submit: false
+		});
+		if (!draft.ok) throw new Error('expected a draft');
+
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+
+		// The unfinished one is the one still asking for something.
+		const found = await submissionForConference(soloId, conference.id);
+		expect(found?.id).toBe(draft.submissionId);
+		expect(found?.status).toBe('draft');
 	});
 });
