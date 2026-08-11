@@ -1,7 +1,6 @@
 /**
- * Review shell is outside (with-sidebar). After #62 removed the home logout,
- * this layout must still offer Home + Log out — a one-conference reviewer is
- * redirected straight here and never sees NavUser.
+ * Conference review context is local to this header. Cross-role navigation and
+ * account actions belong to the shared application sidebar.
  */
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -22,8 +21,8 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-describe('reviewer shell account affordance', () => {
-	it('renders Home and Log out outside the app sidebar', () => {
+describe('reviewer conference header', () => {
+	it('identifies the review context without duplicating sidebar account actions', () => {
 		const empty = (() => '') as unknown as import('svelte').Snippet;
 		const { body } = render(Layout, {
 			props: {
@@ -37,11 +36,8 @@ describe('reviewer shell account affordance', () => {
 			}
 		});
 
-		expect(body).toContain('data-testid="shell-account-links"');
-		expect(body).toContain('data-testid="shell-home-link"');
-		expect(body).toContain('data-testid="shell-logout"');
-		expect(body).toContain('href="/home"');
-		expect(body).toContain('Log out');
+		expect(body).not.toContain('data-testid="shell-account-links"');
+		expect(body).not.toContain('data-testid="shell-logout"');
 		expect(body).toContain('Review committee');
 	});
 });

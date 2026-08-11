@@ -2,16 +2,15 @@
 	/**
 	 * The reviewer's shell.
 	 *
-	 * Deliberately not the organizer's rail: CFP-10 asks that a reviewer sees no
-	 * organizer navigation and no organizer capability. The cheapest way to promise
-	 * that is to not build a door — this layout has one destination, their queue.
+	 * Deliberately not the organizer's conference rail: CFP-10 asks that a reviewer
+	 * sees no controls for this conference and no organizer capability. The shared
+	 * app sidebar only switches between the user's role hubs; this local shell has
+	 * one conference destination, their queue.
 	 *
-	 * Home + Log out live here because this shell is outside (with-sidebar): a
-	 * reviewer with one conference is redirected straight to /review/<slug> and
-	 * never sees NavUser.
+	 * Account and cross-role navigation stay in the shared application sidebar;
+	 * this local header only identifies the conference-specific review queue.
 	 */
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
-	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
 
 	let { data, children } = $props();
 </script>
@@ -23,10 +22,7 @@
 				{data.conference.name}
 				<span class="text-muted-foreground ml-2 text-xs font-normal">Review committee</span>
 			</a>
-			<div class="flex shrink-0 items-center gap-3">
-				<ShellAccountLinks />
-				<ModeToggle />
-			</div>
+			<ModeToggle />
 		</div>
 	</header>
 
