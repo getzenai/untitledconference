@@ -70,15 +70,13 @@
 				{receivedLine}A confirmation has gone to everyone listed on the talk, and you will be
 				emailed again when the organizers decide.
 			</p>
-			{#if s.status === 'submitted'}
-				<p class="text-muted-foreground mt-2">
-					You can still change it until the call closes — your place and the date above stay as they
-					are.
-				</p>
-				<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
-					Edit this proposal
-				</Button>
-			{/if}
+			<p class="text-muted-foreground mt-2">
+				You can still change it until the call closes — your place and the date above stay as they
+				are.
+			</p>
+			<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
+				Edit this proposal
+			</Button>
 		</div>
 	{:else if s.status === 'draft'}
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
