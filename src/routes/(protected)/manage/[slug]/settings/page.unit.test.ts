@@ -35,7 +35,8 @@ describe('conference settings config surface', () => {
 						tracks: [{ id: 2, name: 'AI Engineering', position: 0 }],
 						formats: [{ id: 3, name: 'Talk', minutes: 30, position: 0 }]
 					},
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: null
 			}
@@ -64,7 +65,8 @@ describe('conference settings config surface', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					config: { rooms: [], tracks: [], formats: [] },
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: { error: 'That start date is not a real date.', section: null }
 			}
@@ -91,7 +93,8 @@ describe('conference settings config surface', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					config: { rooms: [], tracks: [], formats: [] },
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: { message: 'Dates saved.', section: null }
 			}
@@ -121,7 +124,8 @@ describe('conference date range', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference: { ...conference, startsOn: '2028-05-12', endsOn: '2028-05-14', ...over },
 					config: { rooms: [], tracks: [], formats: [] },
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: null
 			}
@@ -165,7 +169,8 @@ describe('draft or live', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference: { ...conference, status },
 					config: { rooms: [], tracks: [], formats: [] },
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: null
 			}
@@ -208,7 +213,7 @@ describe('draft or live', () => {
  * and a template that can be edited or removed without leaving the page.
  */
 describe('task templates on settings', () => {
-	const render_ = (templates: unknown[]) =>
+	const render_ = (templates: unknown[], pending: Record<number, number> = {}) =>
 		render(Page, {
 			props: {
 				data: {
@@ -217,7 +222,8 @@ describe('task templates on settings', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					config: { rooms: [], tracks: [], formats: [] },
-					templates
+					templates,
+					pending
 				} as never,
 				form: null
 			}
@@ -229,6 +235,66 @@ describe('task templates on settings', () => {
 		expect(body).toContain('data-testid="settings-task-templates"');
 		expect(body).toContain('accepting a talk will ask its speakers for nothing');
 		expect(body).toContain('action="?/addTemplate"');
+	});
+
+	it('offers to give a task to the speakers already accepted, and says how many', () => {
+		const body = render_(
+			[
+				{
+					id: 7,
+					title: 'Upload Session Presentation',
+					instructions: null,
+					kind: 'file_request',
+					dueOffsetDays: null,
+					dueOn: null,
+					position: 0
+				}
+			],
+			{ 7: 3 }
+		);
+
+		expect(body).toContain('action="?/handOutTemplate"');
+		expect(body).toContain('Give to 3 accepted speakers');
+	});
+
+	it('says speaker, singular, when exactly one is missing it', () => {
+		const body = render_(
+			[
+				{
+					id: 7,
+					title: 'Upload Session Presentation',
+					instructions: null,
+					kind: 'file_request',
+					dueOffsetDays: null,
+					dueOn: null,
+					position: 0
+				}
+			],
+			{ 7: 1 }
+		);
+
+		expect(body).toContain('Give to 1 accepted speaker<');
+	});
+
+	it('does not offer it when every accepted speaker already has the task', () => {
+		// A button that always reads "give to 0 speakers" is one an organizer
+		// learns to ignore, and it is the state most templates are in.
+		const body = render_(
+			[
+				{
+					id: 7,
+					title: 'Upload your slides',
+					instructions: null,
+					kind: 'file_request',
+					dueOffsetDays: null,
+					dueOn: null,
+					position: 0
+				}
+			],
+			{ 7: 0 }
+		);
+
+		expect(body).not.toContain('action="?/handOutTemplate"');
 	});
 
 	it('offers each template for editing and removal', () => {
@@ -288,7 +354,8 @@ describe('adding structure a list at a time', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					config: { rooms: [], tracks: [], formats: [] },
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: form as never
 			}
@@ -354,7 +421,8 @@ describe('editing a room, track or format in place', () => {
 					tracks: [{ id: 22, name: 'AI Engineering', position: 0 }],
 					formats: [{ id: 33, name: 'Talk', minutes: 30, position: 0 }]
 				},
-				templates: []
+				templates: [],
+				pending: {}
 			} as never,
 			form: null
 		}
@@ -402,7 +470,8 @@ describe('editing a room, track or format in place', () => {
 						tracks: [],
 						formats: [{ id: 33, name: 'Panel', minutes: null, position: 0 }]
 					},
-					templates: []
+					templates: [],
+					pending: {}
 				} as never,
 				form: null
 			}

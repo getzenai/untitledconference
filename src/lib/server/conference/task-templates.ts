@@ -13,7 +13,8 @@
  * being edited.
  */
 import { db } from '$lib/server/db';
-import { taskTemplateTable } from '$lib/server/db/conference/content-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
 export type TaskTemplate = {
@@ -175,4 +176,142 @@ export async function deleteTaskTemplate(
 		.returning({ id: taskTemplateTable.id });
 
 	return removed.length > 0 ? null : 'That template is gone.';
+}
+
+/**
+ * Absolute date wins over the offset; the offset counts from the acceptance.
+ *
+ * Lives here rather than beside its first caller in `decisions.ts` because it is
+ * now asked the same question from two places — the acceptance that hands a task
+ * out, and the backfill below that hands out one the speaker missed. Two copies
+ * of this rule would eventually disagree about when a task is due.
+ */
+export function taskDueDate(
+	dueOn: Date | null,
+	offsetDays: number | null,
+	from: Date
+): Date | null {
+	if (dueOn) return dueOn;
+	if (offsetDays === null) return null;
+	const due = new Date(from);
+	due.setDate(due.getDate() + offsetDays);
+	return due;
+}
+
+/** One accepted talk and one of its speakers — the pair a task hangs on. */
+type AcceptedSlot = {
+	submissionId: number;
+	speakerProfileId: number;
+	decidedAt: Date | null;
+};
+
+async function acceptedSlots(conferenceId: number): Promise<AcceptedSlot[]> {
+	return db
+		.select({
+			submissionId: submissionTable.id,
+			speakerProfileId: submissionSpeakerTable.speakerProfileId,
+			decidedAt: submissionTable.decidedAt
+		})
+		.from(submissionTable)
+		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
+		.where(
+			and(eq(submissionTable.conferenceId, conferenceId), eq(submissionTable.status, 'accepted'))
+		);
+}
+
+/**
+ * The tasks that already exist, keyed the way `createSpeakerTasks` keys them.
+ *
+ * Same key on purpose: the acceptance path and this one must agree on what "the
+ * speaker already has this" means, or a backfill hands out a second copy of a
+ * task somebody has already uploaded against.
+ */
+async function handedOut(conferenceId: number): Promise<Set<string>> {
+	const rows = await db
+		.select({
+			submissionId: taskTable.submissionId,
+			templateId: taskTable.templateId,
+			speakerProfileId: taskTable.speakerProfileId
+		})
+		.from(taskTable)
+		.where(eq(taskTable.conferenceId, conferenceId));
+
+	return new Set(rows.map((r) => `${r.submissionId}:${r.templateId}:${r.speakerProfileId}`));
+}
+
+/**
+ * How many already-accepted speakers are missing each template, by template id.
+ *
+ * The settings page prints this so the organizer can see that a task they just
+ * wrote has reached nobody yet — the whole problem being that a template only
+ * ever applied to the *next* acceptance, silently.
+ */
+export async function pendingHandouts(conferenceId: number): Promise<Record<number, number>> {
+	const [templates, slots, existing] = await Promise.all([
+		taskTemplates(conferenceId),
+		acceptedSlots(conferenceId),
+		handedOut(conferenceId)
+	]);
+
+	const pending: Record<number, number> = {};
+	for (const template of templates) {
+		pending[template.id] = slots.filter(
+			(slot) => !existing.has(`${slot.submissionId}:${template.id}:${slot.speakerProfileId}`)
+		).length;
+	}
+
+	return pending;
+}
+
+/**
+ * Hands one template to every already-accepted speaker who does not have it.
+ *
+ * This is the other half of "changing a template changes what the next acceptance
+ * hands out": that restraint is right for editing a task somebody may have
+ * answered, but it left an organizer who adds a deliverable mid-cycle with no way
+ * to ask for it at all. Adding the template and then re-deciding every accepted
+ * talk is not a workaround — it would re-send decision mail.
+ *
+ * Idempotent by the same key the acceptance path uses, so pressing it twice is a
+ * no-op rather than a duplicate. The offset counts from each speaker's own
+ * acceptance rather than from now: "due 14 days after acceptance" means that for
+ * the person accepted in March too, not two weeks from today.
+ */
+export async function applyTemplateToAccepted(
+	conferenceId: number,
+	templateId: number
+): Promise<{ ok: true; created: number } | { ok: false; problem: string }> {
+	const [template] = await db
+		.select()
+		.from(taskTemplateTable)
+		.where(
+			and(eq(taskTemplateTable.id, templateId), eq(taskTemplateTable.conferenceId, conferenceId))
+		)
+		.limit(1);
+
+	if (!template) return { ok: false, problem: 'That template is gone.' };
+
+	const [slots, existing] = await Promise.all([
+		acceptedSlots(conferenceId),
+		handedOut(conferenceId)
+	]);
+
+	const now = new Date();
+	const rows = slots
+		.filter((slot) => !existing.has(`${slot.submissionId}:${template.id}:${slot.speakerProfileId}`))
+		.map((slot) => ({
+			conferenceId,
+			speakerProfileId: slot.speakerProfileId,
+			submissionId: slot.submissionId,
+			templateId: template.id,
+			title: template.title,
+			instructions: template.instructions,
+			kind: template.kind,
+			dueOn: taskDueDate(template.dueOn, template.dueOffsetDays, slot.decidedAt ?? now)
+		}));
+
+	if (rows.length === 0) return { ok: true, created: 0 };
+
+	await db.insert(taskTable).values(rows);
+	return { ok: true, created: rows.length };
 }

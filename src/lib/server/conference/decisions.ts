@@ -19,6 +19,7 @@ import {
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { taskDueDate } from './task-templates';
 
 export type Decision = 'accepted' | 'rejected' | 'waitlisted';
 
@@ -257,7 +258,7 @@ async function createSpeakerTasks(
 				title: template.title,
 				instructions: template.instructions,
 				kind: template.kind,
-				dueOn: dueDate(template.dueOn, template.dueOffsetDays, now)
+				dueOn: taskDueDate(template.dueOn, template.dueOffsetDays, now)
 			}))
 	);
 
@@ -271,13 +272,4 @@ function dedupeSpeakers<T extends { speakerProfileId: number }>(speakers: T[]): 
 	const seen = new Map<number, T>();
 	for (const s of speakers) if (!seen.has(s.speakerProfileId)) seen.set(s.speakerProfileId, s);
 	return [...seen.values()];
-}
-
-/** Absolute date wins over the offset; the offset counts from the acceptance. */
-function dueDate(dueOn: Date | null, offsetDays: number | null, from: Date): Date | null {
-	if (dueOn) return dueOn;
-	if (offsetDays === null) return null;
-	const due = new Date(from);
-	due.setDate(due.getDate() + offsetDays);
-	return due;
 }

@@ -24,7 +24,9 @@ import {
 } from '$lib/server/conference/config';
 import {
 	addTaskTemplate,
+	applyTemplateToAccepted,
 	deleteTaskTemplate,
+	pendingHandouts,
 	taskTemplates,
 	updateTaskTemplate,
 	type TemplateInput
@@ -37,11 +39,12 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-	const [config, templates] = await Promise.all([
+	const [config, templates, pending] = await Promise.all([
 		conferenceConfig(conference.id),
-		taskTemplates(conference.id)
+		taskTemplates(conference.id),
+		pendingHandouts(conference.id)
 	]);
-	return { config, templates };
+	return { config, templates, pending };
 };
 
 function text(form: FormData, key: string): string {
@@ -308,6 +311,29 @@ export const actions: Actions = {
 		if (problem) return fail(400, { error: problem, section: 'tasks' });
 		return {
 			message: 'Task added. Every talk accepted from now on gets it.',
+			section: 'tasks'
+		};
+	},
+
+	/**
+	 * The other half of "a template only changes the next acceptance".
+	 *
+	 * Without this an organizer who adds a deliverable mid-cycle cannot ask for it
+	 * at all: every speaker is already accepted, so nothing will ever hand it out.
+	 */
+	handOutTemplate: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = identifier(await request.formData());
+		if (id === null) return fail(400, { error: 'Unknown task.', section: 'tasks' });
+
+		const result = await applyTemplateToAccepted(conference.id, id);
+		if (!result.ok) return fail(400, { error: result.problem, section: 'tasks' });
+
+		return {
+			message:
+				result.created === 0
+					? 'Every accepted speaker already has that task.'
+					: `Task given to ${result.created} accepted ${result.created === 1 ? 'speaker' : 'speakers'}.`,
 			section: 'tasks'
 		};
 	},
