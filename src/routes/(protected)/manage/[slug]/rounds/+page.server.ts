@@ -1,0 +1,46 @@
+/**
+ * Review rounds — the entry point the submission detail has been pointing at.
+ *
+ * "Create a review round before assigning submissions" was true and unactionable:
+ * every path into assignment, scoring and anonymised reading needs a round, and
+ * nothing in the product could make one outside the demo seed.
+ */
+import { requireOrganizer } from '$lib/server/conference/access';
+import {
+	addReviewRound,
+	deleteReviewRound,
+	reviewRounds
+} from '$lib/server/conference/review-rounds';
+import { fail } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ locals, params }) => {
+	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+	return { rounds: await reviewRounds(conference.id) };
+};
+
+export const actions: Actions = {
+	add: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+
+		const result = await addReviewRound(conference.id, {
+			name: String(form.get('name') ?? ''),
+			anonymized: form.get('anonymized') === 'on'
+		});
+
+		if (!result.ok) return fail(400, { message: result.message });
+		return { message: 'Round added. Assign submissions to it from a submission’s page.' };
+	},
+
+	remove: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = Number((await request.formData()).get('id'));
+
+		if (!Number.isInteger(id)) return fail(400, { message: 'Unknown round.' });
+
+		const result = await deleteReviewRound(conference.id, id);
+		if (!result.ok) return fail(400, { message: result.message });
+		return { message: 'Round removed.' };
+	}
+};

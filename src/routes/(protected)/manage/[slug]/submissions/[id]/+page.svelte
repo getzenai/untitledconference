@@ -279,7 +279,10 @@
 				{/if}
 				{#if data.assignmentRounds.length === 0}
 					<p class="text-muted-foreground mt-2 text-sm">
-						Create a review round before assigning submissions.
+						<a class="underline" href="/manage/{data.conference.slug}/rounds">
+							Create a review round
+						</a>
+						before assigning submissions.
 					</p>
 				{:else}
 					<div class="mt-3 space-y-4">
@@ -288,7 +291,10 @@
 								<h4 class="text-xs font-medium">{round.name}</h4>
 								{#if round.reviewers.length === 0}
 									<p class="text-muted-foreground mt-1 text-sm">
-										No eligible reviewers in this round.
+										No eligible reviewers in this round —
+										<a class="underline" href="/manage/{data.conference.slug}/people">
+											add someone to the committee
+										</a>.
 									</p>
 								{:else}
 									<ul class="mt-1 divide-y">
