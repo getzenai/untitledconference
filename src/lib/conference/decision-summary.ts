@@ -8,6 +8,7 @@
  */
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import type { DecisionResult } from '$lib/server/conference/decisions';
+import type { DispatchResult } from '$lib/server/conference/email-dispatcher';
 
 const PAST_TENSE: Record<string, string> = {
 	accepted: 'accepted',
@@ -54,15 +55,30 @@ export function describeDecision(decision: string, result: DecisionResult): stri
 }
 
 /** The separate confirmation after an explicit notification action. */
+function describeDispatch(dispatch: DispatchResult | null): string[] {
+	if (!dispatch) return [];
+	if (dispatch.disabled) return ['Delivery is not configured; the emails remain queued.'];
+	const parts: string[] = [];
+	if (dispatch.sent > 0) parts.push(`${plural(dispatch.sent, 'email')} sent now.`);
+	if (dispatch.failed > 0) {
+		parts.push(`${plural(dispatch.failed, 'email')} failed to send; use Notify again to retry.`);
+	}
+	if (dispatch.remaining > 0) parts.push(`${plural(dispatch.remaining, 'email')} still queued.`);
+	return parts;
+}
+
 export function describeNotification(result: NotificationResult): string {
 	const parts: string[] = [];
 	if (result.notified > 0) {
 		parts.push(
-			`${plural(result.notified, 'submission')} notified; ${plural(result.emailsQueued, 'email')} queued.`
+			`${plural(result.emailsQueued, 'email')} queued for ${plural(result.notified, 'submission')}.`
 		);
+		parts.push(...describeDispatch(result.dispatch));
 	}
 	if (result.alreadyNotified > 0) {
-		parts.push(`${plural(result.alreadyNotified, 'submission')} already notified, left untouched.`);
+		parts.push(
+			`${plural(result.alreadyNotified, 'submission')} already had an active notification, left untouched.`
+		);
 	}
 	if (result.notDecided > 0) {
 		parts.push(
@@ -75,4 +91,20 @@ export function describeNotification(result: NotificationResult): string {
 		);
 	}
 	return parts.join(' ');
+}
+
+export type NotificationTone = 'good' | 'warn' | 'bad';
+
+/** The colour and live-region urgency must agree with the delivery result. */
+export function notificationTone(result: NotificationResult): NotificationTone {
+	if ((result.dispatch?.failed ?? 0) > 0) return 'bad';
+	const undelivered = Math.max(0, result.emailsQueued - (result.dispatch?.sent ?? 0));
+	const warnings = [
+		result.notDecided > 0,
+		result.withoutEmail > 0,
+		Boolean(result.dispatch?.disabled),
+		(result.dispatch?.remaining ?? 0) > 0,
+		undelivered > 0
+	];
+	return warnings.includes(true) ? 'warn' : 'good';
 }

@@ -1,7 +1,7 @@
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import type { DecisionResult } from '$lib/server/conference/decisions';
 import { describe, expect, it } from 'vitest';
-import { describeDecision, describeNotification } from './decision-summary';
+import { describeDecision, describeNotification, notificationTone } from './decision-summary';
 
 const result = (over: Partial<DecisionResult> = {}): DecisionResult => ({
 	decided: 0,
@@ -48,11 +48,12 @@ const notification = (over: Partial<NotificationResult> = {}): NotificationResul
 	notDecided: 0,
 	withoutEmail: 0,
 	emailsQueued: 0,
+	dispatch: null,
 	...over
 });
 
 describe('describeNotification', () => {
-	it('separates queued, duplicate, undecided and address-less rows', () => {
+	it('separates queued, duplicate, undecided and address-less rows without claiming delivery', () => {
 		expect(
 			describeNotification(
 				notification({
@@ -64,7 +65,65 @@ describe('describeNotification', () => {
 				})
 			)
 		).toBe(
-			'2 submissions notified; 3 emails queued. 1 submission already notified, left untouched. 1 submission has no decision yet, skipped. 1 submission has no speaker email, skipped.'
+			'3 emails queued for 2 submissions. 1 submission already had an active notification, left untouched. 1 submission has no decision yet, skipped. 1 submission has no speaker email, skipped.'
 		);
+	});
+
+	it('reports provider outcomes instead of presenting queueing as delivery', () => {
+		expect(
+			describeNotification(
+				notification({
+					notified: 2,
+					emailsQueued: 3,
+					dispatch: { sent: 2, failed: 1, remaining: 0, disabled: false }
+				})
+			)
+		).toBe(
+			'3 emails queued for 2 submissions. 2 emails sent now. 1 email failed to send; use Notify again to retry.'
+		);
+	});
+
+	it('says when queued mail cannot be dispatched', () => {
+		expect(
+			describeNotification(
+				notification({
+					notified: 1,
+					emailsQueued: 1,
+					dispatch: { sent: 0, failed: 0, remaining: 0, disabled: true }
+				})
+			)
+		).toBe(
+			'1 email queued for 1 submission. Delivery is not configured; the emails remain queued.'
+		);
+	});
+
+	it('uses failure, queue and delivery tones that match the dispatch result', () => {
+		expect(
+			notificationTone(
+				notification({
+					notified: 1,
+					emailsQueued: 1,
+					dispatch: { sent: 0, failed: 1, remaining: 0, disabled: false }
+				})
+			)
+		).toBe('bad');
+		expect(
+			notificationTone(
+				notification({
+					notified: 1,
+					emailsQueued: 1,
+					dispatch: { sent: 0, failed: 0, remaining: 0, disabled: true }
+				})
+			)
+		).toBe('warn');
+		expect(
+			notificationTone(
+				notification({
+					notified: 1,
+					emailsQueued: 1,
+					dispatch: { sent: 1, failed: 0, remaining: 0, disabled: false }
+				})
+			)
+		).toBe('good');
 	});
 });
