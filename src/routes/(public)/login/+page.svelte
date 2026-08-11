@@ -94,7 +94,11 @@
 </script>
 
 <AuthShell title="Sign in" description="Use the account you registered with.">
-	<form use:enhance class="space-y-4">
+	<!-- POST even though superForm cancels the submit: before hydration nothing
+	     cancels it, and a form without `method` defaults to GET - which would put
+	     the credentials in the query string, the browser history and every proxy
+	     log on the way. POST to a route without an action fails loudly instead. -->
+	<form method="POST" use:enhance class="space-y-4">
 		<Form.Field {form} name="email">
 			<Form.Control>
 				{#snippet children({ props })}

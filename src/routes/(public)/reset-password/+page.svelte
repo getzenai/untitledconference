@@ -95,7 +95,11 @@
 			</Button>
 		</div>
 	{:else}
-		<form use:enhance class="space-y-4">
+		<!-- POST even though superForm cancels the submit: before hydration nothing
+		     cancels it, and a form without `method` defaults to GET - which would put
+		     the credentials in the query string, the browser history and every proxy
+		     log on the way. POST to a route without an action fails loudly instead. -->
+		<form method="POST" use:enhance class="space-y-4">
 			<input type="hidden" name="token" value={token} />
 
 			<Form.Field {form} name="password">
