@@ -21,7 +21,7 @@ services:
     image: postgres:18-alpine
     restart: unless-stopped
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: mysecretpassword
@@ -40,7 +40,7 @@ services:
     image: postgres:18-alpine
     restart: unless-stopped
     volumes:
-      - postgres-test-data:/var/lib/postgresql/data
+      - postgres-test-data:/var/lib/postgresql
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: mysecretpassword
