@@ -8,18 +8,9 @@
 	const data = {
 		navMain: [
 			{
-				// The way into the product. Without this the organizer area exists but
-				// nobody who logs in can reach it.
 				title: 'Conferences',
 				url: '/manage',
-				icon: CalendarIcon,
-				isActive: false,
-				items: [
-					{
-						title: 'My conferences',
-						url: '/manage'
-					}
-				]
+				icon: CalendarIcon
 			},
 			{
 				// The same person is often all three. `/portal` and `/review` existed
@@ -31,14 +22,12 @@
 				// carry.
 				title: 'Speaking',
 				url: '/portal',
-				icon: MicIcon,
-				isActive: false
+				icon: MicIcon
 			},
 			{
 				title: 'Reviewing',
 				url: '/review',
-				icon: ClipboardCheckIcon,
-				isActive: false
+				icon: ClipboardCheckIcon
 			}
 		],
 		navSecondary: [
@@ -75,7 +64,15 @@
 </script>
 
 <Sidebar.Root bind:ref {variant} class={className} data-testid="app-sidebar">
-	<!-- No team-switcher header — starter demo chrome removed with #62. -->
+	<Sidebar.Header>
+		<a
+			href="/home"
+			data-testid="sidebar-home-link"
+			class="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring rounded-md px-2 py-2 text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:outline-none"
+		>
+			untitledconference
+		</a>
+	</Sidebar.Header>
 	<Sidebar.Content>
 		<NavMain items={data.navMain} />
 		{#if isAdmin}

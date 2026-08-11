@@ -1,6 +1,5 @@
 <script lang="ts">
 	import EmptyState from '$lib/components/empty-state.svelte';
-	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
 
 	let { data } = $props();
 </script>
@@ -10,9 +9,6 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-6 py-10">
-	<div class="mb-4">
-		<ShellAccountLinks />
-	</div>
 	<h1 class="text-lg font-semibold tracking-tight">Reviewing</h1>
 	<p class="text-muted-foreground mt-1 text-sm">The events whose programme you help choose.</p>
 

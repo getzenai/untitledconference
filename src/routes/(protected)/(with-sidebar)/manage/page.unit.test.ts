@@ -47,8 +47,6 @@ describe('my conferences', () => {
 		expect(html).toContain('New conference');
 		// The one they have is still listed and still reachable.
 		expect(html).toContain('/manage/devflow-2028/submissions');
-		// Leaving the organizer list for the role hub must stay one click away.
-		expect(html).toContain('href="/home"');
 	});
 
 	it('offers the create step to an owner with none yet', () => {

@@ -38,22 +38,25 @@ describe('Critical Login Workflow', () => {
 		cy.url().should('include', '/login');
 	});
 
-	/**
-	 * Regression for #80 / Sol review: product shells outside (with-sidebar)
-	 * must offer Log out. /portal is reachable without a role seed; the same
-	 * control sits on /review and /manage shells.
-	 */
-	it('logs out from a non-sidebar product shell (/portal)', () => {
+	it('keeps the shared sidebar across conferences, speaking and reviewing', () => {
 		cy.createTestUser({ organizationName: 'Shell Logout Org' }).then((user) => {
 			loginPage.visit();
 			loginPage.loginAndWaitForRedirect(user.email, user.password, '/home');
 			homePage.shouldBeLoggedIn();
 
-			// Leave the sidebar layout — speakers/reviewers land here without NavUser.
-			cy.visit('/portal');
-			cy.waitForHydration();
-			cy.get('[data-testid="app-sidebar"]').should('not.exist');
-			cy.get('[data-testid="shell-logout"]').should('be.visible').click();
+			for (const path of ['/manage', '/portal', '/review']) {
+				cy.get(`[data-testid="app-sidebar"] a[href="${path}"]`).click();
+				cy.url().should('include', path);
+				cy.get('[data-testid="app-sidebar"]').should('be.visible');
+				cy.get('[data-testid="sidebar-home-link"]')
+					.should('have.attr', 'href', '/home')
+					.and('contain.text', 'untitledconference');
+			}
+			cy.get('[data-testid="sidebar-home-link"]').click();
+			cy.url().should('include', '/home');
+
+			cy.get('[data-testid="app-sidebar"] [data-sidebar="footer"] button').first().click();
+			cy.get('[data-testid="nav-user-logout"]').click();
 			cy.url({ timeout: 20000 }).should('include', '/login');
 		});
 	});
