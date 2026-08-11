@@ -8,12 +8,29 @@
 	 * "thanks!". What it promises is only what the system actually did: the receipt
 	 * is in the send log, and the decision mail is what comes next.
 	 */
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
 
 	let { data } = $props();
 
 	const s = $derived(data.submission);
+
+	// Goose easter egg: `justSubmitted` is a one-shot signal from the submit
+	// action's redirect, not page truth — the banner below still reads off
+	// `s.status`. Strip it on mount so a reload or bookmark doesn't re-fire it.
+	let confettiTrigger = $state(0);
+	onMount(() => {
+		if (page.url.searchParams.get('justSubmitted') === '1') {
+			confettiTrigger++;
+			const url = new URL(page.url);
+			url.searchParams.delete('justSubmitted');
+			goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+		}
+	});
 
 	const statusLabel: Record<string, string> = {
 		draft: 'Draft — not submitted',
@@ -47,6 +64,8 @@
 <svelte:head>
 	<title>{s.title} — Speaker portal</title>
 </svelte:head>
+
+<FeatherConfetti trigger={confettiTrigger} />
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<a class="text-muted-foreground text-sm hover:underline" href="/portal">← Speaker portal</a>
