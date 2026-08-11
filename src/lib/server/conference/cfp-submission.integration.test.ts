@@ -495,6 +495,22 @@ describe('finishing a draft (CFP-07, the resume half)', () => {
 		expect(editable?.status).toBe('submitted');
 	});
 
+	it('keeps offering it while it is in review', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Being read' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		const editable = await editableDraft(submitterId, saved.submissionId);
+		expect(editable).not.toBeNull();
+		expect(editable?.status).toBe('in_review');
+	});
+
 	it('stops offering it once it has been decided', async () => {
 		const saved = await saveSubmission(submitterId, slug, input({ title: 'Decided one' }), {
 			submit: true
@@ -740,6 +756,41 @@ describe('editing a proposal that is already submitted (CFP-07)', () => {
 		expect(row.submittedAt).not.toBeNull();
 	});
 
+	it('keeps the right, the standing and the silence once the review has begun (CFP-09)', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Under review' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		const edited = await saveSubmission(
+			submitterId,
+			slug,
+			input({ title: 'Under review, reworded' }),
+			{ submit: true, submissionId: saved.submissionId }
+		);
+		expect(edited.ok).toBe(true);
+
+		// The review having started is not a decision: the words may still move,
+		// and the standing the organizers gave the proposal stays as it was.
+		const [row] = await db
+			.select({ title: submissionTable.title, status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+		expect(row).toMatchObject({ title: 'Under review, reworded', status: 'in_review' });
+
+		// One receipt, from the arrival — the edit is not a second submission.
+		const mails = await db
+			.select({ id: emailLogTable.id })
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, saved.submissionId));
+		expect(mails).toHaveLength(1);
+	});
+
 	it('refuses to rewrite a proposal once it has been decided', async () => {
 		const saved = await saveSubmission(submitterId, slug, input({ title: 'Decided' }), {
 			submit: true
@@ -812,6 +863,40 @@ describe('the public form points at what you already sent', () => {
 		const found = await submissionForConference(soloId, conference.id);
 		expect(found?.id).toBe(saved.submissionId);
 		expect(found?.status).toBe('submitted');
+	});
+
+	it('still points at a proposal the review has picked up', async () => {
+		const readerId = `reader-${suffix}`;
+		await db.insert(user).values({
+			id: readerId,
+			email: `${readerId}@example.test`,
+			emailVerified: true,
+			name: 'Reader'
+		});
+		try {
+			const saved = await saveSubmission(readerId, slug, input({ title: 'Being reviewed' }), {
+				submit: true
+			});
+			if (!saved.ok) throw new Error('expected a submitted proposal');
+
+			await db
+				.update(submissionTable)
+				.set({ status: 'in_review' })
+				.where(eq(submissionTable.id, saved.submissionId));
+
+			const [conference] = await db
+				.select({ id: conferenceTable.id })
+				.from(conferenceTable)
+				.where(eq(conferenceTable.slug, slug));
+
+			// A proposal under review is still this speaker's one proposal here; a
+			// blank form would invite the duplicate the signpost exists to prevent.
+			const found = await submissionForConference(readerId, conference.id);
+			expect(found?.id).toBe(saved.submissionId);
+			expect(found?.status).toBe('in_review');
+		} finally {
+			await db.delete(user).where(eq(user.id, readerId));
+		}
 	});
 
 	it('prefers an unfinished draft when there is both', async () => {

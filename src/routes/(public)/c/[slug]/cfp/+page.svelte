@@ -74,7 +74,7 @@
 	{:else}
 		{#if data.existing}
 			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
-				{#if data.existing.status === 'submitted'}
+				{#if data.existing.status !== 'draft'}
 					You already sent a proposal to this call —
 					<a class="underline" href="/portal/submissions/{data.existing.id}/edit">
 						{data.existing.title}

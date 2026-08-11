@@ -248,8 +248,11 @@ async function draftRow(userId: string, submissionId: number) {
 
 	// Editable for as long as the call is open — the route checks that separately,
 	// and `refuseSave` checks it again on the write. What is not editable here is a
-	// proposal that has been decided: the organizers judged those words.
-	return row && (row.status === 'draft' || row.status === 'submitted') ? row : null;
+	// proposal that has been decided: the organizers judged those words. Review
+	// merely having started does not end the right (CFP-09); the decision does.
+	return row && (row.status === 'draft' || row.status === 'submitted' || row.status === 'in_review')
+		? row
+		: null;
 }
 
 /** Answers keyed by field id, which is what the form's `answer:<id>` inputs need. */
@@ -388,7 +391,7 @@ export async function submissionForConference(userId: string, conferenceId: numb
 			and(
 				eq(submissionTable.conferenceId, conferenceId),
 				eq(speakerProfileTable.userId, userId),
-				inArray(submissionTable.status, ['draft', 'submitted'])
+				inArray(submissionTable.status, ['draft', 'submitted', 'in_review'])
 			)
 		)
 		// A draft first when there is both: the unfinished one is the one still
