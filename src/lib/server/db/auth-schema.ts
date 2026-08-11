@@ -2,6 +2,7 @@ import {
 	bigint,
 	boolean,
 	index,
+	integer,
 	jsonb,
 	pgTable,
 	text,
@@ -107,9 +108,12 @@ export const invitation = pgTable('invitation', {
 	role: text('role'),
 	status: text('status').notNull(),
 	expiresAt: timestamp('expires_at').notNull(),
+	createdAt: timestamp('created_at').defaultNow().notNull(),
 	inviterId: text('inviter_id')
 		.notNull()
-		.references(() => user.id, { onDelete: 'cascade' })
+		.references(() => user.id, { onDelete: 'cascade' }),
+	/** Conference reviewer invitations become reviewer seats when accepted. */
+	conferenceId: integer('conference_id')
 });
 
 export const systemInvitation = pgTable('system_invitation', {
