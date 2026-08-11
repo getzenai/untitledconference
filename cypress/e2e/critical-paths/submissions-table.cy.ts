@@ -11,6 +11,9 @@
  *  2. **Sorting by title survives the round trip through the loader.** The unit
  *     test pins the links the header emits; only a real navigation proves the
  *     server reads the parameter and the rows actually come back in that order.
+ *  3. **Export is the filtered organizer view as a real download.** The route and
+ *     query helper have separate tests; only clicking the table action proves the
+ *     browser carries its session, filters and sort all the way to the CSV response.
  *
  * The third click is asserted too, because it is the one that is easy to lose:
  * a two-state toggle leaves an organizer with no way back to the default order.
@@ -80,5 +83,35 @@ describe('Submissions table', () => {
 		// `sort=newest`, so the default order has exactly one address.
 		cy.get('[data-testid="sort-by-title"]').click();
 		cy.url().should('not.include', 'sort=');
+	});
+
+	it('downloads the filtered organizer view as CSV (ABS-13)', () => {
+		cy.viewport(WIDE.width, WIDE.height);
+		cy.intercept('GET', `**/manage/${slug}/submissions/export.csv*`).as('csvExport');
+		cy.visit(`/manage/${slug}/submissions?q=Alpha&sort=title-asc`);
+
+		// The screen and file must answer the same question. Pin the screen first so a
+		// CSV containing only Alpha cannot pass because the fixture itself was empty.
+		cy.get('tbody tr').should('have.length', 1).and('contain', 'Alpha talk');
+		cy.get('[data-testid="export-csv"]')
+			.should('have.attr', 'href')
+			.and('include', 'q=Alpha')
+			.and('include', 'sort=title-asc');
+
+		cy.get('[data-testid="export-csv"]').click();
+		cy.wait('@csvExport').then(({ response }) => {
+			expect(response?.statusCode).to.eq(200);
+			expect(response?.headers['content-type']).to.include('text/csv');
+			expect(response?.headers['content-disposition']).to.match(
+				/^attachment; filename=".+-submissions-\d{4}-\d{2}-\d{2}\.csv"$/
+			);
+			expect(response?.headers['cache-control']).to.eq('private, no-store');
+
+			const csv = String(response?.body);
+			expect(csv).to.include('id,title,status,score');
+			expect(csv).to.include('Alpha talk');
+			expect(csv).not.to.include('Middle talk');
+			expect(csv).not.to.include('Zeta talk');
+		});
 	});
 });
