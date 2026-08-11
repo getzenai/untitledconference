@@ -272,10 +272,13 @@ export type QueueEntry = {
 	title: string;
 	track: string | null;
 	sessionFormat: string | null;
+	/** Every round this reviewer holds this submission in, in board order. */
+	rounds: string[];
 	reviewsSubmitted: number;
 	reviewsAssigned: number;
 	/** Null when the mode withholds it, or when nobody has scored yet. */
 	score: number | null;
+	/** True only when this reviewer has filed in *every* round they hold it in. */
 	ownReviewSubmitted: boolean;
 };
 
@@ -292,10 +295,12 @@ export async function reviewQueue(
 	userId: string,
 	sort: QueueSort = 'coverage'
 ): Promise<QueueEntry[]> {
-	const mine = await db
+	const assignments = await db
 		.select({
 			submissionId: reviewTable.submissionId,
 			status: reviewTable.status,
+			roundName: reviewRoundTable.name,
+			roundPosition: reviewRoundTable.position,
 			title: submissionTable.title,
 			track: trackTable.name,
 			sessionFormat: sessionFormatTable.name
@@ -314,24 +319,35 @@ export async function reviewQueue(
 			)
 		);
 
-	const all = groupReviews(
-		await reviewsOn(
-			conference.id,
-			mine.map((m) => m.submissionId)
-		)
-	);
+	// One row per submission, not per assignment. A reviewer who holds the same
+	// talk in two rounds has one job — read it and say what they think — and a
+	// queue that lists it twice invites them to do that work twice. It also broke
+	// the page outright: the template keys on `submissionId`, so the second row
+	// was a duplicate key and Svelte refused to render anything at all.
+	const bySubmission = new Map<number, (typeof assignments)[number][]>();
+	for (const row of assignments) {
+		bySubmission.set(row.submissionId, [...(bySubmission.get(row.submissionId) ?? []), row]);
+	}
+
+	const all = groupReviews(await reviewsOn(conference.id, [...bySubmission.keys()]));
 	const mode = conference.reviewVisibility as ReviewVisibility;
 
-	const rows: QueueEntry[] = mine.map((row) => {
-		const on = all.filter((r) => r.submissionId === row.submissionId);
-		const ownSubmitted = row.status === 'submitted';
+	const rows: QueueEntry[] = [...bySubmission.values()].map((mine) => {
+		const [first] = mine;
+		const on = all.filter((r) => r.submissionId === first.submissionId);
+		// Outstanding in any round means outstanding: the queue is a to-do list, and
+		// finishing round 1 does not answer round 2.
+		const ownSubmitted = mine.every((row) => row.status === 'submitted');
 		const visible = canSeePeerReviews(mode, ownSubmitted);
 
 		return {
-			submissionId: row.submissionId,
-			title: row.title,
-			track: row.track,
-			sessionFormat: row.sessionFormat,
+			submissionId: first.submissionId,
+			title: first.title,
+			track: first.track,
+			sessionFormat: first.sessionFormat,
+			rounds: [...mine]
+				.sort((a, b) => a.roundPosition - b.roundPosition)
+				.map((row) => row.roundName),
 			reviewsSubmitted: on.filter((r) => r.submitted).length,
 			reviewsAssigned: on.length,
 			score: visible ? scoresFor(on) : null,

@@ -23,7 +23,7 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
 	ownReviewAccess,
@@ -200,6 +200,52 @@ describe('the queue', () => {
 
 		expect(queue.map((q) => q.submissionId).sort()).toEqual([mine, alsoMine].sort());
 		expect(queue.map((q) => q.submissionId)).not.toContain(notMine);
+	});
+
+	describe('the same submission assigned to me in two rounds', () => {
+		// Nested, not `beforeAll`: the outer hook drops and rebuilds the conference
+		// before every test, which would take this row (and its round ids) with it.
+		beforeEach(async () => {
+			await db
+				.insert(reviewTable)
+				.values({ reviewRoundId: anonRoundId, submissionId: mine, reviewerUserId: ME });
+		});
+
+		// The page keys its list on `submissionId`. A second row for the same
+		// submission is a duplicate key, and Svelte answers that by rendering
+		// nothing at all — the whole reviewer surface was a blank white page.
+		//
+		// `sort()` cannot see this: [a, a, b].sort() still contains every expected
+		// id, so the assertion above passes on a list that crashes the browser.
+		// Uniqueness has to be asserted as uniqueness.
+		it('lists it once, not once per round', async () => {
+			const ids = (await reviewQueue(await conferenceNow(), ME)).map((q) => q.submissionId);
+
+			expect(new Set(ids).size).toBe(ids.length);
+			expect(ids.filter((id) => id === mine)).toHaveLength(1);
+		});
+
+		it('names both rounds on the one row', async () => {
+			const row = (await reviewQueue(await conferenceNow(), ME)).find(
+				(q) => q.submissionId === mine
+			);
+
+			expect(row?.rounds).toEqual(['Round 1', 'Blind round']);
+		});
+
+		it('stays outstanding while either round is unfiled', async () => {
+			await db
+				.update(reviewTable)
+				.set({ status: 'submitted', submittedAt: new Date() })
+				.where(and(eq(reviewTable.reviewRoundId, roundId), eq(reviewTable.submissionId, mine)));
+
+			const row = (await reviewQueue(await conferenceNow(), ME)).find(
+				(q) => q.submissionId === mine
+			);
+			// Round 1 is filed, the blind round is not. Finishing one does not answer
+			// the other, and a queue that ticks it off hides real work.
+			expect(row?.ownReviewSubmitted).toBe(false);
+		});
 	});
 
 	it('sorts by coverage and by score', async () => {

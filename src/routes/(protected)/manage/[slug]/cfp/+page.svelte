@@ -494,7 +494,7 @@
 									onchange={(e) => (previewAnswers[field.id] = e.currentTarget.value)}
 								>
 									<option value="">—</option>
-									{#each parseOptions(field.options) as option (option)}
+									{#each parseOptions(field.options) as option, oi (oi)}
 										<option value={option}>{option}</option>
 									{/each}
 								</select>
