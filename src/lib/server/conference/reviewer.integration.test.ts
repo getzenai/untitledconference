@@ -26,6 +26,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+	ownReviewAccess,
 	requireReviewer,
 	reviewQueue,
 	reviewedConferences,
@@ -226,6 +227,33 @@ describe('blind until reviewed', () => {
 		const detail = await reviewerSubmission(open, ME, mine);
 		expect(detail?.peers).toHaveLength(1);
 		expect(detail?.peersWithheld).toBe(false);
+	});
+
+	/**
+	 * A recusal is not an opinion. `reviewsOn` filters recused rows out, and this
+	 * pins that filter: found while mutation-probing #57's door — removing the
+	 * `ne(status, 'recused')` there left the whole suite green, which means a
+	 * refactor could have shown a withdrawn review as a peer verdict and, on the
+	 * organizer's page, as part of the review record.
+	 */
+	it('never reads a recused review as a peer verdict', async () => {
+		const open = await setMode('open');
+		// A second reviewer who withdrew. It has to be a different person: one review
+		// per reviewer and round, so the fixture's peer cannot also be the recused one.
+		await db.insert(reviewTable).values({
+			reviewRoundId: roundId,
+			submissionId: mine,
+			reviewerUserId: STRANGER,
+			status: 'recused',
+			comment: 'Conflict of interest.'
+		});
+
+		const detail = await reviewerSubmission(open, ME, mine);
+
+		// The surviving peer is the one from the fixture; the recused one is gone
+		// from both the list and the outstanding count.
+		expect(detail?.peers).toHaveLength(1);
+		expect(detail?.peersPending).toBe(0);
 	});
 
 	it('withholds the score AND the comment until my own review is submitted', async () => {
@@ -525,5 +553,51 @@ describe('the two ways a reviewer could buy the peers cheaply', () => {
 		const detail = await reviewerSubmission(now, ME, mine);
 		expect(detail?.criteria[0].value).toBe(5);
 		expect(detail?.own.comment).toBe('Revised');
+	});
+});
+
+/**
+ * The door the organizer's submission page offers (#57).
+ *
+ * It has to answer exactly what the reviewer surface would answer, because the
+ * whole point of asking here is to not offer a link into a 404. The two halves are
+ * checked apart on purpose: an assignment without a seat is a real state — the
+ * assignment matrix carries such a person as not eligible — and a seat without an
+ * assignment is the ordinary state of every organizer.
+ */
+describe('the own-review door on the organizer page', () => {
+	it('opens for an assigned reviewer and names the state it is in', async () => {
+		await expect(ownReviewAccess(conference.id, ME, mine)).resolves.toMatchObject({
+			status: 'assigned'
+		});
+
+		await saveReview(await conferenceNow(), ME, mine, {
+			answers: { [criterionId]: '4' },
+			comment: 'Filed.',
+			submit: true
+		});
+
+		await expect(ownReviewAccess(conference.id, ME, mine)).resolves.toMatchObject({
+			status: 'submitted'
+		});
+	});
+
+	it('stays shut for a seat with no assignment on this submission', async () => {
+		await expect(ownReviewAccess(conference.id, ME, notMine)).resolves.toBeNull();
+	});
+
+	/** PEER is assigned to `notMine` and holds no reviewer seat: the 404 case. */
+	it('stays shut for an assignment whose seat is gone', async () => {
+		await expect(ownReviewAccess(conference.id, PEER, notMine)).resolves.toBeNull();
+	});
+
+	it('stays shut after a recusal, exactly as the reviewer surface does', async () => {
+		await db
+			.update(reviewTable)
+			.set({ status: 'recused' })
+			.where(eq(reviewTable.submissionId, mine));
+
+		await expect(ownReviewAccess(conference.id, ME, mine)).resolves.toBeNull();
+		await expect(reviewerSubmission(await conferenceNow(), ME, mine)).resolves.toBeNull();
 	});
 });
