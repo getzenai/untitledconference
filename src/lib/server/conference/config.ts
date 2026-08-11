@@ -13,12 +13,15 @@ import {
 	type FormatLine
 } from '$lib/conference/structure-lines';
 import { db } from '$lib/server/db';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
+	membershipTrackTable,
 	roomTable,
 	sessionFormatTable,
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
-import { asc, eq } from 'drizzle-orm';
+import { placementTable } from '$lib/server/db/conference/program-schema';
+import { and, asc, eq, sql } from 'drizzle-orm';
 
 /**
  * What one batch did: the names that landed, the ones already on the list, and
@@ -219,4 +222,242 @@ export async function addFormat(
 /** A single name as a one-line block, with any newlines in it taken out. */
 function oneLine(name: string): string {
 	return name.replace(/\n/g, ' ').trim().slice(0, MAX_NAME);
+}
+
+/**
+ * What a rename or a removal ran into, in the words the form prints back.
+ * `null` means it went through.
+ */
+export type ConfigProblem = string | null;
+
+/*
+ * Renaming and removing, the other two thirds of a list (#119).
+ *
+ * Adding was the only thing the settings page could do to a room, a track or a
+ * format. A typo was therefore permanent, and so was a room the venue took back.
+ *
+ * The two verbs are deliberately not symmetric. A rename is always allowed: the
+ * id every session and submission points at does not move, so "Room 3C" becoming
+ * "Hall C" is the same room under a new sign. A removal is refused while anything
+ * still points at the row, because the foreign keys are `on delete set null` or
+ * `cascade` — deleting a booked room would not fail, it would quietly clear the
+ * room off every session scheduled in it, and the organizer would find that out
+ * on the grid days later. Refusing and naming the count is the whole of the
+ * feature: "what happens to what I already have" is the question this page has
+ * to answer before anybody dares press Remove.
+ */
+
+/** A row of one of the three lists, as the name rules need to see it. */
+type NamedRow = { id: number; name: string };
+
+/**
+ * The rules a new name has to pass: not empty, the row still exists, and no
+ * sibling already carries it.
+ *
+ * Case-insensitive against the siblings, matching what `plan()` does on the way
+ * in — two rooms called "Main Stage" are unusable on the agenda grid whether the
+ * second one arrived by adding or by renaming.
+ */
+function renamed(
+	rows: NamedRow[],
+	id: number,
+	raw: string,
+	noun: string
+): { ok: true; name: string } | { ok: false; problem: string } {
+	const name = oneLine(raw);
+	if (!name) return { ok: false, problem: `Give the ${noun} a name.` };
+
+	if (!rows.some((row) => row.id === id)) return { ok: false, problem: `That ${noun} is gone.` };
+
+	const taken = rows.some(
+		(row) => row.id !== id && row.name.trim().toLowerCase() === name.toLowerCase()
+	);
+	if (taken) return { ok: false, problem: `There is already a ${noun} called "${name}".` };
+
+	return { ok: true, name };
+}
+
+/** `count(*)` as a number rather than the string the driver hands back. */
+const COUNT = { count: sql<number>`count(*)::int` };
+
+/** "1 session" / "3 sessions" — a count that reads like a sentence. */
+function plural(count: number, noun: string): string {
+	return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}
+
+export async function renameRoom(
+	conferenceId: number,
+	roomId: number,
+	raw: string
+): Promise<ConfigProblem> {
+	return db.transaction(async (tx) => {
+		const rows = await tx
+			.select({ id: roomTable.id, name: roomTable.name })
+			.from(roomTable)
+			.where(eq(roomTable.conferenceId, conferenceId));
+
+		const check = renamed(rows, roomId, raw, 'room');
+		if (!check.ok) return check.problem;
+
+		await tx
+			.update(roomTable)
+			.set({ name: check.name })
+			.where(and(eq(roomTable.id, roomId), eq(roomTable.conferenceId, conferenceId)));
+		return null;
+	});
+}
+
+export async function renameTrack(
+	conferenceId: number,
+	trackId: number,
+	raw: string
+): Promise<ConfigProblem> {
+	return db.transaction(async (tx) => {
+		const rows = await tx
+			.select({ id: trackTable.id, name: trackTable.name })
+			.from(trackTable)
+			.where(eq(trackTable.conferenceId, conferenceId));
+
+		const check = renamed(rows, trackId, raw, 'track');
+		if (!check.ok) return check.problem;
+
+		await tx
+			.update(trackTable)
+			.set({ name: check.name })
+			.where(and(eq(trackTable.id, trackId), eq(trackTable.conferenceId, conferenceId)));
+		return null;
+	});
+}
+
+/**
+ * A format carries a length as well as a name, so its edit takes both.
+ *
+ * The length is validated the same way the parser validates `Workshop, 90`, and
+ * an empty field means "no length set" rather than zero — a format with a length
+ * of nothing is a format nobody has measured yet, which is a real state.
+ */
+export async function updateFormat(
+	conferenceId: number,
+	formatId: number,
+	raw: string,
+	minutes: number | null
+): Promise<ConfigProblem> {
+	if (minutes !== null && (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_MINUTES)) {
+		return `Minutes must be a whole number between 1 and ${MAX_MINUTES}, or empty.`;
+	}
+
+	return db.transaction(async (tx) => {
+		const rows = await tx
+			.select({ id: sessionFormatTable.id, name: sessionFormatTable.name })
+			.from(sessionFormatTable)
+			.where(eq(sessionFormatTable.conferenceId, conferenceId));
+
+		const check = renamed(rows, formatId, raw, 'session format');
+		if (!check.ok) return check.problem;
+
+		await tx
+			.update(sessionFormatTable)
+			.set({ name: check.name, minutes })
+			.where(
+				and(eq(sessionFormatTable.id, formatId), eq(sessionFormatTable.conferenceId, conferenceId))
+			);
+		return null;
+	});
+}
+
+/**
+ * A room goes only when nothing is scheduled in it.
+ *
+ * `placement.room_id` is `on delete set null`, so the database would take the
+ * delete happily and hand back an agenda full of sessions in no room at all.
+ */
+export async function removeRoom(conferenceId: number, roomId: number): Promise<ConfigProblem> {
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.select({ id: roomTable.id })
+			.from(roomTable)
+			.where(and(eq(roomTable.id, roomId), eq(roomTable.conferenceId, conferenceId)));
+		if (!row) return 'That room is gone.';
+
+		const [{ count: scheduled }] = await tx
+			.select(COUNT)
+			.from(placementTable)
+			.where(eq(placementTable.roomId, roomId));
+		if (scheduled > 0) {
+			return `${plural(scheduled, 'session')} on the agenda ${scheduled === 1 ? 'is' : 'are'} in this room. Move ${scheduled === 1 ? 'it' : 'them'} on the agenda first — removing the room here would leave ${scheduled === 1 ? 'it' : 'them'} scheduled nowhere.`;
+		}
+
+		await tx
+			.delete(roomTable)
+			.where(and(eq(roomTable.id, roomId), eq(roomTable.conferenceId, conferenceId)));
+		return null;
+	});
+}
+
+/**
+ * A track goes only when no submission carries it and no reviewer is narrowed to
+ * it.
+ *
+ * The second check is the less obvious one and matters more: `membership_track`
+ * cascades, so deleting a track a reviewer was limited to would delete their
+ * narrowing too — and a reviewer with no narrowing left sees every track. A
+ * removal in settings must not quietly widen somebody's access.
+ */
+export async function removeTrack(conferenceId: number, trackId: number): Promise<ConfigProblem> {
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.select({ id: trackTable.id })
+			.from(trackTable)
+			.where(and(eq(trackTable.id, trackId), eq(trackTable.conferenceId, conferenceId)));
+		if (!row) return 'That track is gone.';
+
+		const [{ count: submissions }] = await tx
+			.select(COUNT)
+			.from(submissionTable)
+			.where(eq(submissionTable.trackId, trackId));
+		if (submissions > 0) {
+			return `${plural(submissions, 'submission')} ${submissions === 1 ? 'is' : 'are'} in this track. Move ${submissions === 1 ? 'it' : 'them'} to another track first — removing it here would leave ${submissions === 1 ? 'it' : 'them'} with no track at all.`;
+		}
+
+		const [{ count: reviewers }] = await tx
+			.select(COUNT)
+			.from(membershipTrackTable)
+			.where(eq(membershipTrackTable.trackId, trackId));
+		if (reviewers > 0) {
+			return `${plural(reviewers, 'reviewer')} ${reviewers === 1 ? 'is' : 'are'} limited to this track. Change that under Team & reviewers first — removing the track here would widen them to every track instead.`;
+		}
+
+		await tx
+			.delete(trackTable)
+			.where(and(eq(trackTable.id, trackId), eq(trackTable.conferenceId, conferenceId)));
+		return null;
+	});
+}
+
+/** A format goes only when no submission was proposed as one. */
+export async function removeFormat(conferenceId: number, formatId: number): Promise<ConfigProblem> {
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.select({ id: sessionFormatTable.id })
+			.from(sessionFormatTable)
+			.where(
+				and(eq(sessionFormatTable.id, formatId), eq(sessionFormatTable.conferenceId, conferenceId))
+			);
+		if (!row) return 'That session format is gone.';
+
+		const [{ count: submissions }] = await tx
+			.select(COUNT)
+			.from(submissionTable)
+			.where(eq(submissionTable.sessionFormatId, formatId));
+		if (submissions > 0) {
+			return `${plural(submissions, 'submission')} ${submissions === 1 ? 'was' : 'were'} proposed as this format. Change ${submissions === 1 ? 'it' : 'them'} first — removing it here would leave ${submissions === 1 ? 'it' : 'them'} with no format at all.`;
+		}
+
+		await tx
+			.delete(sessionFormatTable)
+			.where(
+				and(eq(sessionFormatTable.id, formatId), eq(sessionFormatTable.conferenceId, conferenceId))
+			);
+		return null;
+	});
 }

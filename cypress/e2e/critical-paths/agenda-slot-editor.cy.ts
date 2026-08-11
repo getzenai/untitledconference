@@ -72,8 +72,12 @@ describe('Agenda slot editor', () => {
 
 		// Every room listed before we leave, or the agenda below is checking a page
 		// that is still being written.
+		//
+		// By `data-name` rather than by text: since #119 a room's name lives in the
+		// editable field of its row, and a field's value is not text a browser can
+		// be asked to find.
 		for (const name of names) {
-			cy.contains('[data-testid="settings-rooms"] li', name).should('exist');
+			cy.get(`[data-testid="settings-room-row"][data-name="${name}"]`).should('exist');
 		}
 
 		cy.visit(`/manage/${slug}/agenda`);
