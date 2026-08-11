@@ -21,10 +21,11 @@ import {
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
+import { taskTable } from '$lib/server/db/conference/content-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { saveSubmission, type SubmissionInput } from './cfp-submission';
-import { mySubmission, mySubmissions } from './speaker-portal';
+import { mySubmission, mySubmissions, myTasks } from './speaker-portal';
 import { addSpeakerToConference } from './speakers';
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -217,5 +218,88 @@ describe('mySubmissions visibility for an invited speaker', () => {
 
 	it('opens the invited talk by direct id', async () => {
 		expect(await mySubmission(speaker.id, invitedTalkId)).not.toBeNull();
+	});
+});
+
+describe('mySubmissions and myTasks for a co-speaker', () => {
+	let organizationId = '';
+	let conference: Conference;
+	/** The person who fills in the form. */
+	let submitter: { id: string; email: string };
+	/** Named on that form by someone else, and never submits anything themselves. */
+	let coSpeaker: { id: string; email: string };
+	let talkId = 0;
+	let taskId = 0;
+
+	beforeAll(async () => {
+		({ organizationId, conference } = await makeOrg('cospeaker'));
+		submitter = await makeUser('cospeaker-primary');
+		coSpeaker = await makeUser('cospeaker-second');
+
+		const input: SubmissionInput = {
+			title: 'The two-person talk',
+			abstract: 'Both of us are on it.',
+			keyTakeaway: 'Pairing works.',
+			audienceLevel: 'intermediate',
+			sessionFormatId: null,
+			trackId: null,
+			answers: {},
+			speaker: {
+				name: 'Marcus Okafor',
+				sortName: 'Okafor, Marcus',
+				email: submitter.email,
+				jobTitle: '',
+				company: '',
+				bio: ''
+			},
+			coSpeakers: [{ name: 'Priya Raman', email: coSpeaker.email, roleLabel: 'Co-presenter' }]
+		};
+		const saved = await saveSubmission(submitter.id, conference.slug, input, { submit: true });
+		if (!saved.ok) throw new Error(`fixture: saveSubmission failed (${saved.reason})`);
+		talkId = saved.submissionId;
+
+		// The co-speaker's profile is created by `upsertCoSpeaker` with no account
+		// attached. A task written against it is what an acceptance produces.
+		const [profile] = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.email, coSpeaker.email));
+		if (!profile) throw new Error('fixture: no co-speaker profile');
+
+		const [task] = await db
+			.insert(taskTable)
+			.values({
+				conferenceId: conference.id,
+				speakerProfileId: profile.id,
+				submissionId: talkId,
+				title: 'Send us your slides'
+			})
+			.returning({ id: taskTable.id });
+		taskId = task.id;
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, organizationId));
+		await db.delete(user).where(eq(user.id, submitter.id));
+		await db.delete(user).where(eq(user.id, coSpeaker.id));
+	});
+
+	it('shows the co-presented talk to the co-speaker', async () => {
+		const titles = (await mySubmissions(coSpeaker.id)).map((s) => s.title);
+		expect(titles).toContain('The two-person talk');
+	});
+
+	it('opens the co-presented talk by direct id', async () => {
+		expect(await mySubmission(coSpeaker.id, talkId)).not.toBeNull();
+	});
+
+	it('shows the co-speaker the task written for them', async () => {
+		const ids = (await myTasks(coSpeaker.id)).map((t) => t.id);
+		expect(ids).toContain(taskId);
+	});
+
+	it('still shows the submitter their own talk', async () => {
+		const titles = (await mySubmissions(submitter.id)).map((s) => s.title);
+		expect(titles).toContain('The two-person talk');
 	});
 });
