@@ -7,6 +7,7 @@
  * into a roster nobody notices is wrong.
  */
 import { describe, expect, it } from 'vitest';
+import { csvFile } from './csv';
 import { importedMessage, MAX_ROWS, parseCsv, readSpeakerCsv } from './speaker-csv';
 
 describe('parseCsv', () => {
@@ -73,6 +74,41 @@ describe('parseCsv', () => {
 });
 
 describe('readSpeakerCsv', () => {
+	it('reads the exact column order and CSV dialect written by our exporter', () => {
+		const result = readSpeakerCsv(
+			csvFile(
+				['name', 'email', 'job title', 'company', 'bio', 'notes', 'status'],
+				[
+					[
+						'Vance, Bob',
+						'bob@example.com',
+						'Staff Engineer',
+						'Acme "Labs"',
+						'Line one\nLine two',
+						'Met at KubeCon',
+						'confirmed'
+					]
+				]
+			)
+		);
+
+		expect(result).toEqual({
+			ok: true,
+			rows: [
+				{
+					line: 2,
+					name: 'Vance, Bob',
+					email: 'bob@example.com',
+					jobTitle: 'Staff Engineer',
+					company: 'Acme "Labs"',
+					bio: 'Line one\nLine two',
+					notes: 'Met at KubeCon',
+					status: 'confirmed'
+				}
+			]
+		});
+	});
+
 	it('maps the obvious header row', () => {
 		const result = readSpeakerCsv(
 			'name,email,job title,company,bio,notes,status\nPriya Raman,priya@example.com,Staff Engineer,Acme,Builds things.,Met at KubeCon,confirmed\n'
