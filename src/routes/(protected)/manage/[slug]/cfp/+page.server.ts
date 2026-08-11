@@ -83,7 +83,8 @@ export const actions: Actions = {
 		);
 		return {
 			success: true,
-			message: 'Call for papers created. Add the fields submitters should fill in.'
+			message:
+				'Call for papers created. It already asks for a title, an abstract and who the speaker is — add any extra questions you need.'
 		};
 	},
 

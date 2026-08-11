@@ -20,6 +20,8 @@
 		type AnswerContext,
 		type FieldDefinition
 	} from '$lib/conference/form-definition';
+	import FixedQuestionsList from '$lib/components/app/conference/fixed-questions-list.svelte';
+	import FixedQuestionsPreview from '$lib/components/app/conference/fixed-questions-preview.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -272,7 +274,7 @@
 	{#if !data.form}
 		<EmptyState
 			title="No call for papers yet"
-			description="Create it, then add the fields you want submitters to answer. Nothing is public until you publish it."
+			description="Create it and it already asks for a title, an abstract and who the speaker is — you add the questions you want on top of those. Nothing is public until you publish it."
 		>
 			<form method="POST" action="?/createForm" use:enhance={submitting} class="mt-3 flex gap-2">
 				<Input
@@ -347,16 +349,21 @@
 					</form>
 				</section>
 
+				<FixedQuestionsList />
+
 				<section class="border-border bg-card rounded-lg border p-4">
 					<h2 class="text-sm font-semibold">
 						Fields <span class="text-muted-foreground font-normal tabular-nums"
 							>({fields.length})</span
 						>
 					</h2>
+					<p class="text-muted-foreground mt-0.5 text-xs">
+						Extra questions, asked after the ones above.
+					</p>
 
 					{#if fields.length === 0}
 						<p class="text-muted-foreground mt-2 text-sm">
-							No fields yet. A form with no fields collects nothing but a title.
+							No extra questions yet. The form still asks everything under “Always asked”.
 						</p>
 					{/if}
 
@@ -450,31 +457,19 @@
 				</p>
 
 				<div class="mt-3 space-y-3">
-					<label class="block text-sm">
-						<span class="text-muted-foreground text-xs">Session format</span>
-						<select
-							class="{selectClass} mt-1 w-full"
-							onchange={(e) => (previewFormat = Number(e.currentTarget.value) || null)}
-						>
-							<option value="">—</option>
-							{#each data.formats as format (format.id)}
-								<option value={format.id}>{format.name}</option>
-							{/each}
-						</select>
-					</label>
+					<FixedQuestionsPreview
+						formats={data.formats}
+						tracks={data.tracks}
+						{selectClass}
+						onFormat={(id) => (previewFormat = id)}
+						onTrack={(id) => (previewTrack = id)}
+					/>
 
-					<label class="block text-sm">
-						<span class="text-muted-foreground text-xs">Track</span>
-						<select
-							class="{selectClass} mt-1 w-full"
-							onchange={(e) => (previewTrack = Number(e.currentTarget.value) || null)}
-						>
-							<option value="">—</option>
-							{#each data.tracks as track (track.id)}
-								<option value={track.id}>{track.name}</option>
-							{/each}
-						</select>
-					</label>
+					{#if shown.length > 0}
+						<h3 class="text-muted-foreground pt-1 text-xs font-semibold tracking-wide uppercase">
+							Questions from the organizers
+						</h3>
+					{/if}
 
 					{#each shown as field (field.id)}
 						<label class="block text-sm">
@@ -519,7 +514,9 @@
 					{/each}
 
 					{#if shown.length === 0}
-						<p class="text-muted-foreground text-sm">Nothing to fill in yet.</p>
+						<p class="text-muted-foreground text-sm">
+							No extra questions right now — the submitter still fills in everything above.
+						</p>
 					{/if}
 				</div>
 			</section>
