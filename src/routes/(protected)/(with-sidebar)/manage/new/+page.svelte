@@ -11,7 +11,6 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
 	import { slugify } from '$lib/conference/slug';
 
 	let { data, form } = $props();
@@ -48,16 +47,7 @@
 </svelte:head>
 
 <div class="mx-auto w-full max-w-2xl px-6 py-10">
-	<!--
-		This route renders outside AppSidebar, so Home and Log out have to come from
-		the page itself. The back link only reaches My conferences: an organizer who
-		lands here first — and a brand new one lands here with no organization and
-		nothing to go back to — otherwise has no way out of the product at all.
-	-->
-	<div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-		<a class="text-muted-foreground text-sm hover:underline" href="/manage">← My conferences</a>
-		<ShellAccountLinks />
-	</div>
+	<a class="text-muted-foreground text-sm hover:underline" href="/manage">← My conferences</a>
 
 	{#if !data.canCreate}
 		<EmptyState
