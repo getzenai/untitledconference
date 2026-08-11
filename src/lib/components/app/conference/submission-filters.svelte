@@ -9,6 +9,7 @@
 	 */
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Input } from '$lib/components/ui/input';
+	import { tick } from 'svelte';
 
 	let {
 		facets,
@@ -71,9 +72,29 @@
 	const applyFilters = (event: Event) => {
 		(event.currentTarget as HTMLFormElement).requestSubmit();
 	};
+
+	let formEl: HTMLFormElement;
+
+	/**
+	 * The app-drawn dropdowns apply themselves, because nothing else will.
+	 *
+	 * The row applies on the form's own `change` event, which reaches it because a
+	 * native control dispatches one that bubbles. A shadcn select does not: it
+	 * sets its hidden input programmatically and dispatches nothing, so both of
+	 * these would have looked like working filters that quietly did nothing.
+	 *
+	 * `tick()` first. bits-ui calls this back synchronously from its value setter,
+	 * while the hidden input carrying that value is written on Svelte's next
+	 * flush — submitting before it lands would post the previous choice.
+	 */
+	const applyAfterFlush = async () => {
+		await tick();
+		formEl?.requestSubmit();
+	};
 </script>
 
 <form
+	bind:this={formEl}
 	method="GET"
 	class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-2"
 	data-testid="submission-filters"
@@ -99,6 +120,7 @@
 		class="w-40"
 		value={filters.trackId ? String(filters.trackId) : ''}
 		options={facetOptions('All tracks', facets.tracks)}
+		onValueChange={applyAfterFlush}
 	/>
 
 	<AppSelect
@@ -107,6 +129,7 @@
 		class="w-40"
 		value={filters.sessionFormatId ? String(filters.sessionFormatId) : ''}
 		options={facetOptions('All formats', facets.formats)}
+		onValueChange={applyAfterFlush}
 	/>
 
 	<!--

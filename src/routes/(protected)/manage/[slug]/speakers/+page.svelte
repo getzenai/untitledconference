@@ -9,6 +9,7 @@
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import { tick } from 'svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -43,7 +44,14 @@
 	 * carries an id and the control names it — one indirection, and the same
 	 * "picking a status IS the save" behaviour the organizer already has.
 	 */
-	const submitOwnForm = (id: string) => {
+	const submitOwnForm = async (id: string) => {
+		// bits-ui calls back synchronously from its value setter; the hidden input
+		// carrying that value is written on Svelte's next flush, and `use:enhance`
+		// reads the FormData synchronously. Submitting first posts the status the
+		// row had before the click — a save that changes nothing while the trigger
+		// shows the new value, and a second click on the same value never fires the
+		// setter again.
+		await tick();
 		const form = document.getElementById(id);
 		if (form instanceof HTMLFormElement) form.requestSubmit();
 	};

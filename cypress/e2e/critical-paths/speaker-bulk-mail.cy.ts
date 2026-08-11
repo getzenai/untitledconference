@@ -90,4 +90,36 @@ describe('Speaker bulk mail', () => {
 				cy.contains('2 queued · 0 sent · 0 failed').should('exist');
 			});
 	});
+
+	/**
+	 * The row's status control saves on pick, and now has to reach its form the
+	 * long way round (#124).
+	 *
+	 * The native `<select>` submitted through `event.currentTarget.form`. The
+	 * shadcn one hands back a value, synchronously, from inside its own setter —
+	 * before Svelte has written the hidden input that carries it. Submitting on
+	 * that callback posts the status the row had a moment ago, so the save is a
+	 * no-op while the trigger shows the new value: exactly the kind of failure
+	 * that leaves every test green and every screenshot right.
+	 */
+	it('saves the status picked on a speaker row', () => {
+		cy.visit(`/manage/${slug}/speakers`);
+		cy.waitForHydration();
+
+		// The speaker's own name carries the word "Invited", so the status is read
+		// from the badge rather than from the row's text.
+		cy.contains('[data-testid="speaker-row"]', 'Ivan Invited')
+			.should('contain.text', 'Invited')
+			.find('[data-testid="speaker-status-select"]')
+			.click();
+
+		// The listbox is portalled to the body, so it is picked outside the row.
+		cy.get('[role="option"]').contains('confirmed').click();
+
+		// A reload, not the badge on the spot: the trigger and the optimistic badge
+		// both show what was picked either way. Only re-reading the row from the
+		// database can tell a real save from a POST that carried the old value.
+		cy.reload();
+		cy.contains('[data-testid="speaker-row"]', 'Ivan Invited').should('contain.text', 'Confirmed');
+	});
 });
