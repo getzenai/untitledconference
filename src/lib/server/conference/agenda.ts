@@ -423,6 +423,140 @@ export async function unplaceSession(conferenceId: number, placementId: number):
 }
 
 /**
+ * Trades the slots of two scheduled sessions, both or neither.
+ *
+ * The organizer's actual move is "these two are in the wrong order". Built from the
+ * pieces that already exist that is unplace-unplace-place-place, and the honest
+ * description of that sequence is *lossy*: between the steps a session sits in the
+ * tray with nothing to say it is on its way somewhere. Any interruption — a lost
+ * connection, a second tab, a deploy — leaves a talk unscheduled and nobody told.
+ * So this is one write, and the two rows move together or not at all.
+ *
+ * Both rows are locked `FOR UPDATE` **lowest id first**. Two organizers swapping the
+ * same pair from opposite ends would otherwise each hold one row and wait for the
+ * other's; Postgres breaks that by aborting one with a deadlock error, which reaches
+ * the loser as a 500. A fixed order turns the race into a queue.
+ *
+ * The days are read `FOR KEY SHARE` for the same reason `placeSession` does it (#93):
+ * the write and the existence check have to share a transaction, or a concurrent day
+ * range shrink turns a plain answer into a foreign key error. Both days are locked in
+ * id order too, for the same reason the placements are.
+ *
+ * The permissive clash rule (AIA-05) is untouched. A swap can still land a longer talk
+ * on top of its new neighbour, and that is reported like any other clash rather than
+ * refused — nobody asks for a swap as an intermediate step, so the only refusals here
+ * are nonsense inputs: a session with itself, a stranger's session, a partner that has
+ * no slot to trade.
+ *
+ * Each session keeps its **own** length. Swapping a 30-minute talk with a 45-minute
+ * one exchanges their start times; inheriting the other's end would silently restate
+ * how long somebody is speaking.
+ */
+export async function swapPlacements(
+	conferenceId: number,
+	placementId: number,
+	withPlacementId: number
+): Promise<PlaceResult> {
+	if (placementId === withPlacementId) {
+		return { ok: false, reason: 'A session cannot swap with itself' };
+	}
+
+	const [first, second] = await Promise.all([
+		ownPlacement(conferenceId, placementId),
+		ownPlacement(conferenceId, withPlacementId)
+	]);
+	if (!first || !second) return { ok: false, reason: 'No such session' };
+
+	// Ascending id, so every swap in this conference queues on the same order.
+	const lockOrder = [placementId, withPlacementId].sort((a, b) => a - b);
+
+	return db.transaction(async (tx) => {
+		const locked = new Map<number, LockedSlot>();
+		for (const id of lockOrder) {
+			const [row] = await tx
+				.select({
+					id: placementTable.id,
+					conferenceDayId: placementTable.conferenceDayId,
+					roomId: placementTable.roomId,
+					startsAt: placementTable.startsAt
+				})
+				.from(placementTable)
+				.where(eq(placementTable.id, id))
+				.limit(1)
+				.for('update');
+			if (!row) return { ok: false, reason: 'No such session' };
+			locked.set(id, row);
+		}
+
+		const a = locked.get(placementId);
+		const b = locked.get(withPlacementId);
+
+		// Read under the lock rather than from the snapshot taken before it: the other
+		// session may have been pulled off the grid while this call waited its turn.
+		if (!a || !b || !onGrid(a) || !onGrid(b)) {
+			return { ok: false, reason: 'Both sessions have to be on the grid to swap' };
+		}
+
+		for (const dayId of [...new Set([a.conferenceDayId, b.conferenceDayId])].sort(
+			(x, y) => x - y
+		)) {
+			const [day] = await tx
+				.select({ id: conferenceDayTable.id })
+				.from(conferenceDayTable)
+				.where(
+					and(eq(conferenceDayTable.id, dayId), eq(conferenceDayTable.conferenceId, conferenceId))
+				)
+				.limit(1)
+				.for('key share');
+			if (!day) return { ok: false, reason: 'No such day' };
+		}
+
+		await moveTo(tx, a.id, b, first.formatMinutes ?? DEFAULT_MINUTES);
+		await moveTo(tx, b.id, a, second.formatMinutes ?? DEFAULT_MINUTES);
+
+		return {
+			ok: true,
+			endMinutes: slotMinutes(b.startsAt) + (first.formatMinutes ?? DEFAULT_MINUTES)
+		};
+	});
+}
+
+type LockedSlot = {
+	id: number;
+	conferenceDayId: number | null;
+	roomId: number | null;
+	startsAt: Date | null;
+};
+
+/** A placement with an actual slot — the tray has no position to trade. */
+function onGrid(
+	slot: LockedSlot
+): slot is LockedSlot & { conferenceDayId: number; startsAt: Date } {
+	return slot.conferenceDayId !== null && slot.startsAt !== null;
+}
+
+/** Writes one half of a swap: this placement, at that slot, with its own length. */
+function moveTo(
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+	placementId: number,
+	slot: LockedSlot & { conferenceDayId: number; startsAt: Date },
+	minutes: number
+) {
+	const startsAt = slot.startsAt;
+	const endsAt = new Date(startsAt.getTime() + minutes * 60_000);
+
+	return tx
+		.update(placementTable)
+		.set({
+			conferenceDayId: slot.conferenceDayId,
+			roomId: slot.roomId,
+			startsAt,
+			endsAt
+		})
+		.where(eq(placementTable.id, placementId));
+}
+
+/**
  * Publishes every scheduled session, or pulls them all back to tentative.
  *
  * Only placements with a slot are published. A tray item promoted to confirmed would

@@ -40,15 +40,24 @@ const timeLabel = (minutes: number | null) =>
 		? ''
 		: `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 
+const candidate = (placementId: number, startMinutes: number, roomName: string) => ({
+	placementId,
+	title: `Talk ${placementId}`,
+	startMinutes,
+	roomName
+});
+
 function body(props: {
 	rooms: { id: number; name: string }[];
 	occupant?: ReturnType<typeof placed> | null;
+	swapWith?: ReturnType<typeof candidate>[];
 	tray?: ReturnType<typeof waiting>[];
 }) {
 	return render(SlotEditor, {
 		props: {
 			target: { roomId: 1, roomName: 'Room 1', startMinutes: 540 },
 			occupant: props.occupant ?? null,
+			swapWith: props.swapWith ?? [],
 			tray: props.tray ?? [waiting(1)],
 			days: [{ id: 1, date: '2027-05-10' }],
 			rooms: props.rooms,
@@ -98,6 +107,36 @@ describe('the slot editor', () => {
 		expect(html).toContain('data-testid="agenda-slot-remove"');
 		expect(html).not.toContain('data-testid="agenda-slot-place"');
 		expect(html).not.toContain('name="roomId"');
+	});
+
+	it('offers every swap partner it is given, and posts to ?/swap with both ids', () => {
+		const html = body({
+			rooms,
+			occupant: placed(7),
+			swapWith: [candidate(8, 600, 'Room 2'), candidate(9, 660, 'Room 3')]
+		});
+
+		const select = /<select[^>]*name="withPlacementId"[^>]*>([\s\S]*?)<\/select>/.exec(html);
+		if (!select) throw new Error('the editor rendered no withPlacementId select');
+		const options = [...select[1].matchAll(/<option[^>]*value="(\d+)"[^>]*>([\s\S]*?)<\/option>/g)];
+
+		expect(options.map((o) => o[1])).toEqual(['8', '9']);
+		// The label has to say where the partner is, or the two 30-minute talks in
+		// the list are indistinguishable.
+		expect(options[0][2].replace(/\s+/g, ' ').trim()).toBe('Talk 8 (10:00, Room 2)');
+
+		expect(html).toContain('action="?/swap"');
+		// The occupant travels as `placementId`; the action needs both halves.
+		expect(html).toMatch(/name="placementId"[^>]*value="7"/);
+	});
+
+	it('hides the swap form when the day holds nothing else', () => {
+		// An empty dropdown that posts a swap with nobody is worse than no dropdown.
+		const html = body({ rooms, occupant: placed(7), swapWith: [] });
+
+		expect(html).not.toContain('data-testid="agenda-slot-swap"');
+		expect(html).not.toContain('action="?/swap"');
+		expect(html).toContain('data-testid="agenda-slot-remove"');
 	});
 
 	it('says so when nothing is waiting, rather than showing an empty dropdown', () => {

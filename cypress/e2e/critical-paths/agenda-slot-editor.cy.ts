@@ -122,6 +122,42 @@ describe('Agenda slot editor', () => {
 		cy.contains('[data-testid="agenda-conflict"]', 'Two sessions in Hall 1 at').should('exist');
 	});
 
+	it('swaps two placed talks in one action, and offers only the rest of the day', () => {
+		addRooms(['Hall 1', 'Hall 2', 'Staging']);
+
+		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
+		placeFromTray('Fixture Talk B', 'Hall 2', '10:00');
+
+		// Precondition: a swap test that passes because nothing was on the grid
+		// would be asserting an empty dropdown against an empty expectation.
+		cy.get('[data-testid="agenda-placed-session"]').should('have.length', 2);
+
+		cy.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.find('[data-testid^="agenda-edit-slot-"]')
+			.click();
+		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
+
+		// The list the *page* builds, which the component test cannot see: the other
+		// session on this day, and not the one already in the slot.
+		cy.get('[data-testid="agenda-slot-swap-with"] option').should('have.length', 1);
+		cy.get('[data-testid="agenda-slot-swap-with"] option')
+			.should('contain', 'Fixture Talk B')
+			.and('contain', 'Hall 2');
+
+		cy.get('[data-testid="agenda-slot-swap"]').click();
+		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
+
+		// Both moved, in one post. Two sessions on the grid still, neither in the
+		// tray — the failure this whole issue is about is one of them going missing.
+		cy.get('[data-testid="agenda-placed-session"]').should('have.length', 2);
+		cy.contains('[data-testid="agenda-room-card"]', 'Hall 2')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '10:00');
+		cy.contains('[data-testid="agenda-room-card"]', 'Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk B')
+			.should('contain', '09:00');
+	});
+
 	/** Open the empty staging room's slot and send a tray talk somewhere else. */
 	function placeFromTray(title: string, room: string, start: string) {
 		cy.contains('[data-testid="agenda-room-card"]', 'Staging')
