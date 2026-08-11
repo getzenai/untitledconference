@@ -1,16 +1,18 @@
 /**
  * The review committee an organizer can actually assemble.
  *
- * The assertion that carries the feature is the last one: a membership written
- * here has to be the same thing `setReviewAssignment` accepts as eligible. Two
- * modules agreeing on a role string is exactly the kind of contract that
- * typechecks either way and only fails in the product.
+ * The assertions that carry the feature check the contract in both directions:
+ * a membership written here has to be accepted by `setReviewAssignment`, and a
+ * round membership accepted there has to appear here. Two modules agreeing on a
+ * role string is exactly the kind of contract that typechecks while the product
+ * still disagrees with itself.
  */
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
+	membershipTable,
 	membershipTrackTable,
 	trackTable,
 	type Conference
@@ -35,6 +37,8 @@ const otherId = `rev2-${suffix}`;
 const otherEmail = `${otherId}@example.test`;
 const inviteeId = `invitee-${suffix}`;
 const inviteeEmail = `${inviteeId}@example.test`;
+const roundReviewerId = `round-${suffix}`;
+const roundReviewerEmail = `${roundReviewerId}@example.test`;
 
 let conference: Conference;
 let otherConference: Conference;
@@ -51,7 +55,8 @@ beforeAll(async () => {
 	await db.insert(user).values([
 		{ id: reviewerId, email: reviewerEmail, emailVerified: true, name: 'Rex Reviewer' },
 		{ id: otherId, email: otherEmail, emailVerified: true, name: 'Ines Reviewer' },
-		{ id: inviteeId, email: inviteeEmail, emailVerified: true, name: 'New Reviewer' }
+		{ id: inviteeId, email: inviteeEmail, emailVerified: true, name: 'New Reviewer' },
+		{ id: roundReviewerId, email: roundReviewerEmail, emailVerified: true, name: 'Round Reviewer' }
 	]);
 
 	[conference] = await db
@@ -81,6 +86,7 @@ afterAll(async () => {
 	await db.delete(user).where(eq(user.id, reviewerId));
 	await db.delete(user).where(eq(user.id, otherId));
 	await db.delete(user).where(eq(user.id, inviteeId));
+	await db.delete(user).where(eq(user.id, roundReviewerId));
 });
 
 describe('addReviewer', () => {
@@ -173,7 +179,7 @@ describe('removeReviewer', () => {
 	});
 });
 
-describe('the membership this writes is the one assignment accepts', () => {
+describe('committee and assignment membership contract', () => {
 	it('lets a freshly added reviewer be assigned to a submission', async () => {
 		const round = await addReviewRound(conference.id, { name: 'Screening', anonymized: false });
 		expect(round.ok).toBe(true);
@@ -184,7 +190,9 @@ describe('the membership this writes is the one assignment accepts', () => {
 			.values({ conferenceId: conference.id, title: 'Assignable talk', status: 'submitted' })
 			.returning({ id: submissionTable.id });
 
-		const [member] = await committee(conference.id);
+		const member = (await committee(conference.id)).find((row) => row.userId === reviewerId);
+		expect(member).toBeDefined();
+		if (!member) return;
 
 		// `setReviewAssignment` answers 'invalid' when the reviewer has no eligible
 		// membership — which is precisely what every conference outside the demo seed
@@ -198,5 +206,51 @@ describe('the membership this writes is the one assignment accepts', () => {
 		);
 
 		expect(result).toBe('assigned');
+	});
+
+	it('shows every round-scoped reviewer that assignment accepts, once per person', async () => {
+		const screening = await addReviewRound(conference.id, {
+			name: 'Round-scoped screening',
+			anonymized: false
+		});
+		const final = await addReviewRound(conference.id, {
+			name: 'Round-scoped final',
+			anonymized: false
+		});
+		expect(screening.ok).toBe(true);
+		expect(final.ok).toBe(true);
+		if (!screening.ok || !final.ok) return;
+		const foreign = await addReviewRound(otherConference.id, {
+			name: 'Other conference round',
+			anonymized: false
+		});
+		expect(foreign.ok).toBe(true);
+		if (!foreign.ok) return;
+
+		await db.insert(membershipTable).values([
+			{ userId: roundReviewerId, role: 'reviewer', scopeType: 'round', scopeId: screening.id },
+			{ userId: roundReviewerId, role: 'reviewer', scopeType: 'round', scopeId: final.id },
+			{ userId: otherId, role: 'reviewer', scopeType: 'round', scopeId: foreign.id }
+		]);
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Round assignment', status: 'submitted' })
+			.returning({ id: submissionTable.id });
+
+		expect(
+			await setReviewAssignment(conference.id, submission.id, screening.id, roundReviewerId, true)
+		).toBe('assigned');
+
+		const shown = (await committee(conference.id)).filter(
+			(member) => member.userId === roundReviewerId
+		);
+		expect(shown).toHaveLength(1);
+		expect((await committee(conference.id)).map((member) => member.userId)).not.toContain(otherId);
+		expect(shown[0]).toMatchObject({
+			conferenceManaged: false,
+			rounds: ['Round-scoped screening', 'Round-scoped final'],
+			assigned: 1,
+			outstanding: 1
+		});
 	});
 });
