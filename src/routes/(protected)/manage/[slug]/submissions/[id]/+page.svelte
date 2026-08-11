@@ -10,7 +10,11 @@
 	 * and what the button is about to set off (R3).
 	 */
 	import { enhance } from '$app/forms';
-	import { describeDecision, describeNotification } from '$lib/conference/decision-summary';
+	import {
+		describeDecision,
+		describeNotification,
+		notificationTone
+	} from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -136,7 +140,15 @@
 	</div>
 
 	{#if form?.notificationResult}
-		<p class="text-status-good mt-3 text-sm" role="status">
+		{@const tone = notificationTone(form.notificationResult)}
+		<p
+			class={tone === 'bad'
+				? 'text-status-bad mt-3 text-sm'
+				: tone === 'warn'
+					? 'text-status-warn mt-3 text-sm'
+					: 'text-status-good mt-3 text-sm'}
+			role={tone === 'bad' ? 'alert' : 'status'}
+		>
 			{describeNotification(form.notificationResult)}
 		</p>
 	{:else if form?.result}
@@ -440,7 +452,7 @@
 					}}
 				>
 					<Button type="submit" variant="secondary" size="sm" disabled={!decided || busy}>
-						Notify speakers of decision
+						{data.notificationStatus === 'failed' ? 'Notify again' : 'Notify speakers of decision'}
 					</Button>
 				</form>
 			</div>

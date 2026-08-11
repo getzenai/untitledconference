@@ -1,4 +1,5 @@
 /** A single decision is saved before, and independently from, its notification. */
+import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import type { PageData } from './$types';
@@ -21,10 +22,11 @@ const conference = {
 
 function renderPage(
 	status: 'accepted' | 'submitted',
-	notificationStatus: null | 'sent' = null,
+	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
-	rounds: 'one' | 'none' = 'one'
+	rounds: 'one' | 'none' = 'one',
+	notificationResult: NotificationResult | null = null
 ) {
 	return render(Page, {
 		props: {
@@ -75,7 +77,7 @@ function renderPage(
 							],
 				ownReview
 			} as PageData,
-			form: null
+			form: notificationResult ? { notificationResult } : null
 		}
 	}).body;
 }
@@ -94,12 +96,31 @@ describe('organizer submission detail decision workflow', () => {
 
 	it('shows the current notification state and blocks notifying an undecided submission', () => {
 		expect(renderPage('accepted', 'sent')).toContain('Decision notification sent.');
+		const failed = renderPage('accepted', 'failed');
+		expect(failed).toContain('Decision notification failed. Notify again to retry.');
+		expect(failed).toContain('>Notify again<');
+		expect(failed).not.toContain('>Notify speakers of decision<');
 
 		const undecided = renderPage('submitted');
 		expect(undecided).toContain('Choose a decision before notifying speakers.');
 		const notifyForm = undecided.slice(undecided.indexOf('action="?/notify"'));
 		expect(notifyForm).toContain('disabled=""');
 		expect(notifyForm).toContain('Notify speakers of decision');
+	});
+
+	it('renders a failed dispatch as an alert instead of a green success', () => {
+		const body = renderPage('accepted', 'failed', null, null, 'one', {
+			notified: 1,
+			alreadyNotified: 0,
+			notDecided: 0,
+			withoutEmail: 0,
+			emailsQueued: 1,
+			dispatch: { sent: 0, failed: 1, remaining: 0, disabled: false }
+		});
+
+		expect(body).toContain('1 email failed to send; use Notify again to retry.');
+		expect(body).toContain('text-status-bad');
+		expect(body).toContain('role="alert"');
 	});
 
 	it('offers an explicit organizer assignment action', () => {
