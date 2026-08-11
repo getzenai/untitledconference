@@ -12,9 +12,13 @@ import { RegisterPage } from '../../support/pages/register.page';
  * do run - this spec sorts last, and it wipes the user table first so the
  * "first user" branch in src/lib/auth.ts is actually exercised.
  *
- * Registration leaves `emailVerified` false, so the app sends new sign-ups to
- * /verify-email. The `markEmailVerified` task stands in for clicking the link
- * in the verification mail.
+ * Registration leaves `emailVerified` false, and this suite runs with
+ * REQUIRE_EMAIL_VERIFICATION=false — as production does. A new account is
+ * therefore signed in immediately and lands on /home. It used to land on
+ * /verify-email, and this spec asserted that: the app read "unverified" as "not
+ * allowed in" even where nothing was gating on it, which put a dead end on the
+ * first screen after registering. The `markEmailVerified` task is kept for the
+ * checks that care about the flag itself, not about being let in.
  */
 describe('First User Admin Assignment', () => {
 	const registerPage = new RegisterPage();
@@ -34,12 +38,17 @@ describe('First User Admin Assignment', () => {
 
 		registerPage.visit();
 		registerPage.register(email, password);
-		cy.url({ timeout: 20000 }).should('include', '/verify-email');
+		// Straight in: no verification gate is configured, so none may be shown.
+		cy.url({ timeout: 20000 }).should('include', '/home');
+		cy.url().should('not.include', '/verify-email');
 
 		cy.task('getUserByEmail', email).should('deep.include', { email, role: 'admin' });
 
-		cy.task('markEmailVerified', email);
+		// Signing out and back in must not produce the interstitial either — an
+		// unverified address is the normal state here, on every visit.
+		cy.logout();
 		cy.loginViaUi(email, password);
+		cy.url().should('not.include', '/verify-email');
 
 		// Admin nav and the dashboard are both available to the first user
 		homePage.shouldShowAdminNav();
@@ -64,11 +73,11 @@ describe('First User Admin Assignment', () => {
 		);
 
 		registerPage.register(email, password);
-		cy.url({ timeout: 20000 }).should('include', '/verify-email');
+		cy.url({ timeout: 20000 }).should('include', '/home');
 
 		cy.task('getUserByEmail', email).should('deep.include', { email, role: 'user' });
 
-		cy.task('markEmailVerified', email);
+		cy.logout();
 		cy.loginViaUi(email, password);
 
 		// No admin nav group in the sidebar

@@ -18,9 +18,11 @@ import { RegisterPage } from '../../support/pages/register.page';
  *    /settings/organization/new, which 500s (see the note in
  *    organization-lifecycle.cy.ts). Organization coverage lives there.
  *
- * Sign-up leaves `emailVerified` false, so the app routes new users to
- * /verify-email. `markEmailVerified` stands in for clicking the link in the
- * verification email.
+ * Sign-up leaves `emailVerified` false, and this suite runs with
+ * REQUIRE_EMAIL_VERIFICATION=false, as production does — so a new account is
+ * signed in straight away and the journey starts on /home. Until this spec was
+ * corrected it asserted the /verify-email interstitial, which is the state the
+ * app produced by reading "unverified" as "not allowed in".
  */
 describe('Critical User Journey', () => {
 	const registerPage = new RegisterPage();
@@ -36,10 +38,11 @@ describe('Critical User Journey', () => {
 		// STEP 1: Register through the real form
 		registerPage.visit();
 		registerPage.register(userEmail, password);
-		cy.url({ timeout: 20000 }).should('include', '/verify-email');
-		cy.task('markEmailVerified', userEmail);
+		// No gate is configured, so registering ends where the work is.
+		cy.url({ timeout: 20000 }).should('include', '/home');
 
-		// STEP 2: Log in and land on the dashboard
+		// STEP 2: Sign out and back in — the second visit must not gate either
+		cy.logout();
 		cy.loginViaUi(userEmail, password);
 		homePage.shouldBeLoggedIn();
 
@@ -69,9 +72,9 @@ describe('Critical User Journey', () => {
 
 		registerPage.visit();
 		registerPage.register(ownerEmail, password);
-		cy.url({ timeout: 20000 }).should('include', '/verify-email');
-		cy.task('markEmailVerified', ownerEmail);
+		cy.url({ timeout: 20000 }).should('include', '/home');
 
+		cy.logout();
 		cy.loginViaUi(ownerEmail, password);
 		homePage.shouldBeLoggedIn();
 

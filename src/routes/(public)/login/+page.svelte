@@ -61,14 +61,19 @@
 						identifyUser(sessionData.user.id, { email: sessionData.user.email });
 						trackEvent(EventNames.USER_SIGNED_IN);
 
-						// Check email verification
-						if (!sessionData.user.emailVerified) {
-							const params = new SvelteURLSearchParams({ email });
-							const returnTo = page.url.searchParams.get('returnTo');
-							if (returnTo) params.set('returnTo', returnTo);
-							await goto(`/verify-email?${params}`);
-							return;
-						}
+						// No second opinion on whether this person may be here.
+						//
+						// This used to send anybody whose address was unverified to
+						// /verify-email — after a sign-in that had already succeeded. Where
+						// REQUIRE_EMAIL_VERIFICATION is off, which is how production runs,
+						// that put a "you are not finished" screen in front of a session
+						// that was complete: the user was signed in and told they were not.
+						//
+						// Better Auth decides this, and it answers above: with verification
+						// required and the address unverified, sign-in throws 403 EMAIL_NOT_
+						// VERIFIED (api/routes/sign-in) and never returns a session. So a
+						// session in hand means the server let them in, and the only thing
+						// left to do is take them where they were going.
 
 						// Redirect to home or returnTo URL
 						const rawReturnTo = page.url.searchParams.get('returnTo') || '/home';
