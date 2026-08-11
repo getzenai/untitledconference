@@ -347,6 +347,11 @@ describe('two organizers swapping at once', () => {
 		// through this lock and pass. Only the explicit row lock makes it queue.
 		let release!: () => void;
 		const held = new Promise<void>((resolve) => (release = resolve));
+		let acquired!: () => void;
+		// Starting the holder is not the same as the holder *having* the lock. Without
+		// waiting for this, the swap sometimes reaches the row first and the test
+		// reports "it did not block" about a lock nobody was holding.
+		const locked = new Promise<void>((resolve) => (acquired = resolve));
 
 		const holder = onOwnConnection(async () => {
 			await db.transaction(async (tx) => {
@@ -355,15 +360,22 @@ describe('two organizers swapping at once', () => {
 					.from(placementTable)
 					.where(eq(placementTable.id, b))
 					.for('key share');
+				acquired();
 				await held;
 			});
 		});
+		await locked;
 
 		const swap = onOwnConnection(() => swapPlacements(conferenceId, a, b));
-		expect(await settledWithin(swap)).toBe(false);
+		try {
+			expect(await settledWithin(swap)).toBe(false);
+		} finally {
+			// A failed assertion here must still end the transaction: the lock would
+			// otherwise outlive the test and hang the next `beforeEach` on its DELETE.
+			release();
+			await holder;
+		}
 
-		release();
-		await holder;
 		expect(await swap).toMatchObject({ ok: true });
 	});
 });
