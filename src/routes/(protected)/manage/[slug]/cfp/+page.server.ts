@@ -1,3 +1,4 @@
+import { FIXED_QUESTIONS } from '$lib/conference/fixed-questions';
 import type { ConditionSource, FieldKind } from '$lib/conference/form-definition';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
@@ -6,6 +7,7 @@ import {
 	createCfpForm,
 	deleteField,
 	moveField,
+	setFixedQuestionShown,
 	updateCfpForm,
 	updateField,
 	type FieldInput
@@ -63,6 +65,36 @@ function fieldInput(form: FormData): FieldInput {
 		conditionSource: source,
 		conditionFieldId: id(form, 'conditionFieldId'),
 		conditionValue: conditionValue(form, source)
+	};
+}
+
+const fixedQuestionLabel = (key: string) =>
+	FIXED_QUESTIONS.find((question) => question.key === key)?.label ?? 'That question';
+
+/**
+ * The body of both fixed-question actions.
+ *
+ * `setFixedQuestionShown` is the authority on which keys may move — it is the
+ * one that has to be right when a request arrives that no button produced — so
+ * this reads its answer rather than checking the key a second time here.
+ */
+async function setFixedQuestion(
+	{ locals, params, request }: import('./$types').RequestEvent,
+	shown: boolean
+) {
+	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+	const key = text(await request.formData(), 'key');
+
+	if (!(await setFixedQuestionShown(conference.id, key, shown))) {
+		return fail(400, { success: false, message: 'That question cannot be changed.' });
+	}
+
+	const label = fixedQuestionLabel(key);
+	return {
+		success: true,
+		message: shown
+			? `“${label}” is back on the form.`
+			: `“${label}” removed. Answers already given to it stay on their submissions.`
 	};
 }
 
@@ -138,6 +170,17 @@ export const actions: Actions = {
 			message: 'Field removed. Answers already given to it stay on their submissions.'
 		};
 	},
+
+	/**
+	 * Takes one of the form's built-in questions off this call, or puts it back
+	 * (#159).
+	 *
+	 * Two actions rather than one with a boolean, because the row posts no state
+	 * of its own: what the organizer clicked IS the intention, and a `shown=false`
+	 * field would be one more thing a stale page could get wrong.
+	 */
+	hideFixedQuestion: async (event) => setFixedQuestion(event, false),
+	showFixedQuestion: async (event) => setFixedQuestion(event, true),
 
 	moveField: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);

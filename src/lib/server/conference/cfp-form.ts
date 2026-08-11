@@ -13,6 +13,11 @@
  *   conference B.
  */
 import {
+	isRemovable,
+	parseHiddenFixedKeys,
+	serializeHiddenFixedKeys
+} from '$lib/conference/fixed-questions';
+import {
 	optionsFromText,
 	validateDefinition,
 	type ConditionSource,
@@ -118,6 +123,41 @@ export async function updateCfpForm(conferenceId: number, meta: FormMeta): Promi
 		.returning();
 
 	return updated;
+}
+
+/**
+ * Switches one of the form's built-in questions off or back on (#159).
+ *
+ * The whole set is read and rewritten rather than the one key being appended,
+ * because the column is a set and `serializeHiddenFixedKeys` is the only thing
+ * that decides what a valid set looks like — de-duplicated, sorted, and free of
+ * keys this build cannot honour. A caller that appended would eventually store
+ * `["abstract","abstract"]` and the screen would count two removals.
+ *
+ * Returns false for a question nobody may remove, so the route says so rather
+ * than reporting a save that changed nothing. The check is here and not only in
+ * the page for the usual reason: the field key arrives in a request.
+ */
+export async function setFixedQuestionShown(
+	conferenceId: number,
+	key: string,
+	shown: boolean
+): Promise<boolean> {
+	if (!isRemovable(key)) return false;
+
+	const form = await formOf(conferenceId);
+	if (!form) return false;
+
+	const hidden = new Set(parseHiddenFixedKeys(form.hiddenFixedFields));
+	if (shown) hidden.delete(key);
+	else hidden.add(key);
+
+	await db
+		.update(cfpFormTable)
+		.set({ hiddenFixedFields: serializeHiddenFixedKeys([...hidden]) })
+		.where(eq(cfpFormTable.id, form.id));
+
+	return true;
 }
 
 export type FieldInput = {

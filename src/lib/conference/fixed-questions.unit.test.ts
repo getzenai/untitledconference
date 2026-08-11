@@ -15,7 +15,17 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FIXED_QUESTION_GROUPS, FIXED_QUESTION_NAMES } from './fixed-questions';
+import {
+	asks,
+	FIXED_QUESTION_GROUPS,
+	FIXED_QUESTION_NAMES,
+	FIXED_QUESTIONS,
+	fixedQuestionVisibility,
+	isRemovable,
+	parseHiddenFixedKeys,
+	REMOVABLE_FIXED_KEYS,
+	serializeHiddenFixedKeys
+} from './fixed-questions';
 
 const source = readFileSync(
 	fileURLToPath(new URL('../components/app/conference/proposal-form.svelte', import.meta.url)),
@@ -59,5 +69,81 @@ describe('the fixed questions', () => {
 		// empty title, abstract, speaker name or email); the list has to agree with
 		// it or the builder promises less than the form demands.
 		expect(required).toEqual(['Title', 'Abstract', 'Name', 'Email']);
+	});
+});
+
+/**
+ * The stored side of #159.
+ *
+ * What is written down is which questions a call does NOT ask, so the default —
+ * every conference that existed before the feature, and every one created since
+ * without touching it — is the whole form. These pin that direction, because
+ * getting it backwards would empty every existing call's form on deploy and
+ * nothing else in the suite would notice until a submitter did.
+ */
+describe('which fixed questions a call asks', () => {
+	it('asks all of them when nothing is stored', () => {
+		for (const stored of [null, undefined, '', '[]']) {
+			const visibility = fixedQuestionVisibility(stored);
+			for (const question of FIXED_QUESTIONS) expect(asks(visibility, question.key)).toBe(true);
+		}
+	});
+
+	it('stops asking exactly the stored keys', () => {
+		const visibility = fixedQuestionVisibility('["abstract","trackId"]');
+
+		expect(asks(visibility, 'abstract')).toBe(false);
+		expect(asks(visibility, 'trackId')).toBe(false);
+		expect(asks(visibility, 'keyTakeaway')).toBe(true);
+		expect(asks(visibility, 'title')).toBe(true);
+	});
+
+	// Every rejection here is a control that stays on the form. Hiding on a key
+	// this build does not understand would remove a control while the server went
+	// on requiring what it collected.
+	it('ignores anything it cannot honour rather than hiding on it', () => {
+		expect(parseHiddenFixedKeys('not json')).toEqual([]);
+		expect(parseHiddenFixedKeys('{"abstract":true}')).toEqual([]);
+		expect(parseHiddenFixedKeys('["abstract",7,null]')).toEqual(['abstract']);
+		// Removing the title is refused at every layer, this one included.
+		expect(parseHiddenFixedKeys('["title","speakerName","speakerEmail"]')).toEqual([]);
+		expect(parseHiddenFixedKeys('["fromAFutureRelease"]')).toEqual([]);
+	});
+
+	// An unknown key answers "asked", so a question that leaves the list cannot
+	// take a control that is still rendered off the form with it.
+	it('treats a question it has never heard of as asked', () => {
+		expect(asks(fixedQuestionVisibility(null), 'inventedLater')).toBe(true);
+	});
+
+	it('writes a set, not a log: sorted, unique, and filtered', () => {
+		expect(serializeHiddenFixedKeys(['trackId', 'abstract', 'abstract', 'title'])).toBe(
+			'["abstract","trackId"]'
+		);
+	});
+
+	it('lets go of everything except what names the talk and the speaker', () => {
+		const permanent = FIXED_QUESTIONS.filter((q) => !isRemovable(q.key)).map((q) => q.key);
+
+		expect(permanent).toEqual(['title', 'speakerName', 'speakerEmail']);
+		// And each of them says why on the row, since the screen offers no button.
+		for (const key of permanent) {
+			expect(FIXED_QUESTIONS.find((q) => q.key === key)?.permanentBecause).toBeTruthy();
+		}
+		expect(REMOVABLE_FIXED_KEYS.length).toBe(FIXED_QUESTIONS.length - permanent.length);
+	});
+
+	// The keys are stored in a database column: a rename is a silent un-hide on
+	// every conference that had removed that question.
+	it('names its keys after the controls they switch off', () => {
+		const single = FIXED_QUESTIONS.filter((q) => q.names.length === 1);
+		expect(single.length).toBeGreaterThan(6);
+		for (const question of single) expect(question.key).toBe(question.names[0]);
+	});
+
+	it('gives every question a key, and no two the same', () => {
+		const keys = FIXED_QUESTIONS.map((q) => q.key);
+		expect(keys.every(Boolean)).toBe(true);
+		expect(new Set(keys).size).toBe(keys.length);
 	});
 });

@@ -47,3 +47,67 @@ describe('The always-asked questions in the CFP builder', () => {
 		cy.contains('h3', 'About the speaker').should('exist');
 	});
 });
+
+/**
+ * Removing one of them, and meeting the result as a submitter (#159).
+ *
+ * Fabian's complaint was that the form is not fully configurable. The unit
+ * tests prove the markup and the integration tests prove the server, but the
+ * question he actually asked — "can I take this off my form?" — is only
+ * answered by clicking it off in one screen and finding it gone in another.
+ */
+describe('Removing a standard question', () => {
+	it('takes it off the builder, the preview and the public form', () => {
+		const slug = uniqueSlug();
+
+		cy.createAndLogin().then((user) => {
+			cy.request({
+				method: 'POST',
+				url: `${Cypress.config('baseUrl')}/api/v1/test/agenda-fixture`,
+				body: { userId: user.id, slug, days: ['2028-05-10'], sessions: [] }
+			})
+				.its('status')
+				.should('eq', 200);
+		});
+
+		cy.visit(`/manage/${slug}/cfp`);
+		cy.waitForHydration();
+		cy.contains('button', 'Create the call for papers').click();
+
+		cy.get('[data-testid="fixed-question-keyTakeaway"]')
+			.should('have.attr', 'data-shown', 'true')
+			.contains('button', 'Remove')
+			.click();
+
+		// The row turns into its own undo, rather than the question vanishing from
+		// a screen whose whole job is to say what the form asks.
+		cy.get('[data-testid="fixed-question-keyTakeaway"]')
+			.should('have.attr', 'data-shown', 'false')
+			.and('contain.text', 'Add back');
+
+		// The preview is the half an organizer believes.
+		cy.contains('h2', 'What the submitter sees')
+			.parent()
+			.should('not.contain.text', 'Key takeaway');
+
+		// The title cannot go, and says why instead of offering a dead button.
+		cy.get('[data-testid="fixed-question-title"]')
+			.should('not.contain.text', 'Remove')
+			.and('contain.text', 'title');
+
+		// It is a stored decision, not a toggle that lives in this tab.
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="fixed-question-keyTakeaway"]').should('have.attr', 'data-shown', 'false');
+
+		cy.get('[data-testid="fixed-question-keyTakeaway"]').contains('button', 'Add back').click();
+		cy.get('[data-testid="fixed-question-keyTakeaway"]').should('have.attr', 'data-shown', 'true');
+	});
+});
+
+/**
+ * The public form is covered by `proposal-form.unit.test.ts` (the control is not
+ * rendered) and by `fixed-questions.integration.test.ts` (the server neither
+ * requires nor stores it). What is left for a browser is the builder's own round
+ * trip, which is what this file already runs.
+ */
