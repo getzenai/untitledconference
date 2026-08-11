@@ -54,12 +54,21 @@ export function csvFile(header: string[], rows: (string | number | null | undefi
  * careful: a carriage return in a header is a second header. Anything that is not a
  * plain filename character is dropped rather than replaced, and the result can never
  * be empty.
+ *
+ * Takes the extension because the hazard has nothing to do with CSV — the bulk file
+ * download reuses it for `.zip`, and a second copy of this rule is a second place
+ * for it to be got wrong.
  */
-export function csvFilename(...parts: string[]): string {
+export function attachmentFilename(extension: string, ...parts: string[]): string {
 	const stem = parts
 		.map((part) => part.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''))
 		.filter(Boolean)
 		.join('-');
 
-	return `${stem || 'export'}.csv`;
+	return `${stem || 'export'}.${extension}`;
+}
+
+/** The same, for the exports that are CSV. */
+export function csvFilename(...parts: string[]): string {
+	return attachmentFilename('csv', ...parts);
 }
