@@ -22,6 +22,7 @@
 		{ href: `${base}/agenda`, label: 'Agenda', ready: true },
 		{ href: `${base}/speakers`, label: 'Speakers', ready: true },
 		{ href: `${base}/content`, label: 'Speaker content', ready: true },
+		{ href: `${base}/rounds`, label: 'Review rounds', ready: true },
 		{ href: `${base}/people`, label: 'Team & reviewers', ready: true },
 		{ href: `${base}/embed`, label: 'Embed & share', ready: true },
 		{ href: `${base}/settings`, label: 'Settings', ready: true }
