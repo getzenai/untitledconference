@@ -369,15 +369,15 @@
 						<li
 							data-testid="agenda-tray-item"
 							data-placement-id={item.placementId}
-							class="border-border cursor-grab touch-none rounded-md border p-3 select-none {drag
+							class="border-border min-w-0 cursor-grab touch-none overflow-hidden rounded-md border p-3 select-none {drag
 								.dragging?.placementId === item.placementId
 								? 'opacity-40'
 								: ''}"
 							onpointerdown={(e) =>
 								drag.begin(e, { placementId: item.placementId, title: item.title, roomId: null })}
 						>
-							<p class="text-sm font-medium">{item.title}</p>
-							<p class="text-muted-foreground mt-0.5 text-xs">
+							<p class="min-w-0 text-sm font-medium break-words" title={item.title}>{item.title}</p>
+							<p class="text-muted-foreground mt-0.5 min-w-0 truncate text-xs">
 								{item.speakers.join(', ') || 'No speaker'}
 								{#if item.formatName}<span class="px-1">·</span>{item.formatName}{/if}
 								<span class="px-1">·</span>{item.minutes} min
@@ -473,16 +473,17 @@
 
 						{#each visibleRooms as room (room.id)}
 							<div
-								class="border-border min-w-36 flex-1 border-l"
+								class="border-border min-w-36 flex-1 overflow-hidden border-l"
 								data-testid="agenda-room-card"
 								data-room-id={room.id}
 							>
-								<div class="flex h-9 items-center justify-between gap-1 px-1.5">
-									<h3 class="truncate text-sm font-medium">{room.name}</h3>
+								<div class="flex h-9 min-w-0 items-center justify-between gap-1 px-1.5">
+									<h3 class="min-w-0 truncate text-sm font-medium">{room.name}</h3>
 									<Button
 										type="button"
 										size="sm"
 										variant="ghost"
+										class="shrink-0"
 										data-testid="agenda-open-slot-{room.id}"
 										onclick={() => openSlot(room, data.slots[0].minutes)}
 									>
@@ -490,7 +491,7 @@
 									</Button>
 								</div>
 
-								<div class="relative" data-column-body style="height: {gridHeight}">
+								<div class="relative min-w-0" data-column-body style="height: {gridHeight}">
 									<!--
 										One button per slot, all of them out of the tab order. The
 										keyboard route into a slot is the room's "Open a slot"
@@ -519,11 +520,19 @@
 									{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
 										{@const rows = blockRows(frame, session)}
 										{@const clashes = clashesFor(session.placementId)}
+										{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
 										{#if rows}
+											<!--
+												min-w-0 + overflow-hidden keep long titles, speaker lists and
+												conflict badges inside the slot, even when a clash splits the
+												column into narrow lanes. title= keeps the full conflict text
+												reachable when the badge has to wrap or clip.
+											-->
 											<div
 												data-testid="agenda-placed-session"
 												data-placement-id={session.placementId}
-												class="absolute z-10 overflow-hidden rounded-md border {clashes.length > 0
+												class="absolute z-10 min-w-0 overflow-hidden rounded-md border {clashes.length >
+												0
 													? 'border-status-bad bg-status-bad/10'
 													: 'border-border bg-card'} {drag.dragging?.placementId ===
 												session.placementId
@@ -531,7 +540,8 @@
 													: ''}"
 												style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
 													ROW_REM}rem; left: calc({(lane / lanes) *
-													100}% + 0.125rem); width: calc({100 / lanes}% - 0.25rem)"
+													100}% + 0.125rem); width: calc({100 /
+													lanes}% - 0.25rem); max-width: calc({100 / lanes}% - 0.25rem)"
 											>
 												<button
 													type="button"
@@ -543,15 +553,16 @@
 															title: session.title,
 															roomId: room.id
 														})}
-													class="h-full w-full cursor-grab touch-none px-1.5 py-1 text-left select-none"
+													class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-1 text-left select-none"
 												>
 													<span
-														class="flex items-baseline justify-between gap-1 text-xs tabular-nums"
+														class="flex min-w-0 items-baseline justify-between gap-1 text-xs tabular-nums"
 													>
-														<span class="font-medium">
+														<span class="min-w-0 truncate font-medium">
 															{timeLabel(session.startMinutes)}–{timeLabel(session.endMinutes)}
 														</span>
 														<Badge
+															class="shrink-0"
 															variant={session.status === 'confirmed' ? 'secondary' : 'outline'}
 														>
 															{session.status === 'confirmed' ? 'Published' : 'Draft'}
@@ -561,15 +572,24 @@
 													{#each clashes as clash, ci (ci)}
 														<span
 															data-testid="agenda-conflict"
-															class="text-status-bad block text-xs font-medium"
+															class="text-status-bad block min-w-0 text-xs font-medium break-words"
+															title={clash}
 														>
 															{clash}
 														</span>
 													{/each}
 
-													<span class="mt-0.5 block text-sm leading-tight">{session.title}</span>
-													<span class="text-muted-foreground block text-xs">
-														{session.speakers.join(', ') || 'No speaker'}
+													<span
+														class="mt-0.5 block min-w-0 text-sm leading-tight break-words"
+														title={session.title}>{session.title}</span
+													>
+													<span
+														class="text-muted-foreground block min-w-0 truncate text-xs"
+														title={session.trackName
+															? `${speakerLine} · ${session.trackName}`
+															: speakerLine}
+													>
+														{speakerLine}
 														{#if session.trackName}<span class="px-1">·</span
 															>{session.trackName}{/if}
 													</span>
