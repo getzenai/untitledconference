@@ -98,11 +98,12 @@ describe('the front page a visitor sees', () => {
 	it('leads with what the tool does and how to start', () => {
 		const body = renderFrontPage([{ slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027' }]);
 
-		expect(body).toContain('From first submission to published schedule.');
-		expect(body).toContain('Speakers');
-		expect(body).toContain('Reviewers');
-		expect(body).toContain('Organizers');
-		expect(body).toContain('Set up a conference');
+		expect(body).toContain('Run the whole event.');
+		expect(body).toContain('For speakers');
+		expect(body).toContain('For reviewers');
+		expect(body).toContain('For organizers');
+		expect(body).toContain('Create your event');
+		expect(body).toContain('/mascot/goose.svg');
 		// Two ways in, and neither may quietly disappear: the CTA for someone new,
 		// the sign-in for someone who has been here.
 		expect(body).toContain('href="/register"');
@@ -115,8 +116,8 @@ describe('the front page a visitor sees', () => {
 		expect(body).toContain('href="/c/devflow-conf-2027"');
 		expect(body).toContain('DevFlow Conf 2027');
 		// Below, not above: this is the EMB start point, not the point of the page.
-		expect(body).toContain('From first submission');
-		expect(body.indexOf('From first submission')).toBeLessThan(
+		expect(body).toContain('Run the whole event.');
+		expect(body.indexOf('Run the whole event.')).toBeLessThan(
 			body.indexOf('href="/c/devflow-conf-2027"')
 		);
 	});
@@ -124,7 +125,7 @@ describe('the front page a visitor sees', () => {
 	it('keeps the pitch when nothing is published yet', () => {
 		const body = renderFrontPage([]);
 
-		expect(body).toContain('From first submission to published schedule.');
+		expect(body).toContain('Run the whole event.');
 		expect(body).toContain('Nothing published yet.');
 	});
 });
