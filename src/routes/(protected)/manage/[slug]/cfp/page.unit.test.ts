@@ -114,3 +114,91 @@ describe('the call-for-papers builder', () => {
 		for (const label of labels) expect(preview).toContain(label);
 	});
 });
+
+/**
+ * The form data the builder posts (#124).
+ *
+ * Every native `<select>` and `<input type="datetime-local">` on this screen
+ * became a shadcn control, and the actions on the far side read their form data
+ * by hand — `text(form, 'conditionValueFormat')`, `when(form, 'closesAt')`. A
+ * change of appearance that dropped or renamed one of those keys would not fail
+ * a single test above; it would just quietly stop saving that setting. So this
+ * block pins the names, and only the names.
+ */
+const conditionalField = {
+	...field,
+	id: 4,
+	label: 'Workshop capacity',
+	conditionSource: 'session_format' as const,
+	conditionValue: '1'
+};
+
+const dated = {
+	...cfpForm,
+	opensAt: new Date('2027-01-05T09:00:00Z'),
+	closesAt: new Date('2027-02-15T22:59:00Z')
+};
+
+const bodyWith = (
+	form: typeof cfpForm | typeof dated,
+	fields: (typeof field | typeof conditionalField)[]
+) =>
+	render(Page, {
+		props: {
+			data: {
+				user: { id: 'organizer-1', name: 'Jordan' },
+				impersonating: null,
+				analytics: { apiKey: undefined, host: undefined },
+				conference,
+				form,
+				fields,
+				tracks: [{ id: 1, name: 'Platform' }],
+				formats: [{ id: 1, name: 'Talk' }]
+			},
+			form: null
+		}
+	}).body;
+
+describe('what the builder posts', () => {
+	it('names every control the update actions read', () => {
+		const html = bodyWith(dated, [field]);
+
+		// Settings — read by `updateForm`.
+		for (const name of ['title', 'status', 'opensAt', 'closesAt', 'description']) {
+			expect(html).toContain(`name="${name}"`);
+		}
+
+		// A field — read by `fieldInput()`, for both the edit and the add form.
+		for (const name of ['label', 'kind', 'required', 'conditionSource']) {
+			expect(html).toContain(`name="${name}"`);
+		}
+	});
+
+	it('names the condition control that belongs to the stored source, and only that one', () => {
+		// `conditionValue()` on the server reads whichever input the source names.
+		// The other two are not merely hidden now — they are not rendered — so a
+		// rule saved as "only for format Talk" must still find its own control.
+		const html = bodyWith(cfpForm, [conditionalField]);
+
+		expect(html).toContain('name="conditionValueFormat"');
+		expect(html).not.toContain('name="conditionValueTrack"');
+	});
+
+	it('carries the stored deadlines as local wall time, the way the submit handler expects', () => {
+		// `saveSettings` runs `new Date(raw).toISOString()` over these two values.
+		// A zone suffix here would be converted twice and walk the deadline.
+		const html = bodyWith(dated, []);
+
+		expect(html).toMatch(/name="opensAt" value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"/);
+		expect(html).toMatch(/name="closesAt" value="\d{4}-\d{2}-\d{2}T\d{2}:\d{2}"/);
+	});
+
+	it('has no browser-drawn control left on it', () => {
+		// Fabian's reading of the screen, as an assertion: the date field was the
+		// last thing on it the browser styled for itself.
+		const html = bodyWith(dated, [conditionalField]);
+
+		expect(html).not.toContain('<select');
+		expect(html).not.toContain('datetime-local');
+	});
+});

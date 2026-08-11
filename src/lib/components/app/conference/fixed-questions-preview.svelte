@@ -7,25 +7,30 @@
 	 * makes a conditional field appear, which is the whole reason the preview
 	 * beside the builder is interactive at all.
 	 */
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { FIXED_QUESTION_GROUPS } from '$lib/conference/fixed-questions';
 	import { Input } from '$lib/components/ui/input';
 
 	let {
 		formats,
 		tracks,
-		selectClass,
 		onFormat,
 		onTrack
 	}: {
 		formats: { id: number; name: string }[];
 		tracks: { id: number; name: string }[];
-		/** The builder's own select styling, so the preview matches the page. */
-		selectClass: string;
 		onFormat: (id: number | null) => void;
 		onTrack: (id: number | null) => void;
 	} = $props();
 
 	const chosen = (value: string) => Number(value) || null;
+
+	// No `name` on either: the preview is a picture of the form, and a picture
+	// that posts would add `sessionFormatId` to the organizer's own save.
+	const options = (entries: { id: number; name: string }[]) => [
+		{ value: '', label: '—' },
+		...entries.map((entry) => ({ value: String(entry.id), label: entry.name }))
+	];
 </script>
 
 {#each FIXED_QUESTION_GROUPS as group (group.title)}
@@ -34,34 +39,35 @@
 	</h3>
 
 	{#each group.questions as question (question.label)}
-		<label class="block text-sm">
+		<div class="block text-sm">
 			<span class="text-muted-foreground text-xs">
 				{question.label}{#if question.required}<span class="text-status-bad"> *</span>{/if}
 			</span>
 
 			{#if question.names[0] === 'sessionFormatId'}
-				<select
-					class="{selectClass} mt-1 w-full"
-					onchange={(event) => onFormat(chosen(event.currentTarget.value))}
-				>
-					<option value="">—</option>
-					{#each formats as format (format.id)}
-						<option value={format.id}>{format.name}</option>
-					{/each}
-				</select>
+				<AppSelect
+					options={options(formats)}
+					placeholder="—"
+					class="mt-1"
+					aria-label={question.label}
+					onValueChange={(value) => onFormat(chosen(value))}
+				/>
 			{:else if question.names[0] === 'trackId'}
-				<select
-					class="{selectClass} mt-1 w-full"
-					onchange={(event) => onTrack(chosen(event.currentTarget.value))}
-				>
-					<option value="">—</option>
-					{#each tracks as track (track.id)}
-						<option value={track.id}>{track.name}</option>
-					{/each}
-				</select>
+				<AppSelect
+					options={options(tracks)}
+					placeholder="—"
+					class="mt-1"
+					aria-label={question.label}
+					onValueChange={(value) => onTrack(chosen(value))}
+				/>
 			{:else}
-				<Input class="mt-1" disabled placeholder={question.hint ?? ''} />
+				<Input
+					class="mt-1"
+					disabled
+					placeholder={question.hint ?? ''}
+					aria-label={question.label}
+				/>
 			{/if}
-		</label>
+		</div>
 	{/each}
 {/each}
