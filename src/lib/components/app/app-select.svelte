@@ -32,6 +32,7 @@
 		disabled = false,
 		required = false,
 		'aria-label': ariaLabel,
+		testId,
 		onValueChange
 	}: {
 		/** The form field name. Omitted for a control that is only shown, never posted. */
@@ -46,6 +47,15 @@
 		disabled?: boolean;
 		required?: boolean;
 		'aria-label'?: string;
+		/**
+		 * Overrides the derived `app-select-<name>` hook.
+		 *
+		 * A screen that already had a testid on its native `<select>` keeps it
+		 * through the swap: the test names the control, and a control that changes
+		 * its name while keeping its job makes the test look like the thing that
+		 * broke.
+		 */
+		testId?: string;
 		onValueChange?: (value: string) => void;
 	} = $props();
 
@@ -69,7 +79,7 @@
 		{id}
 		{size}
 		aria-label={ariaLabel}
-		data-testid={name ? `app-select-${name}` : undefined}
+		data-testid={testId ?? (name ? `app-select-${name}` : undefined)}
 		class={cn('w-full justify-between font-normal', !label && 'text-muted-foreground', className)}
 	>
 		{label || placeholder}

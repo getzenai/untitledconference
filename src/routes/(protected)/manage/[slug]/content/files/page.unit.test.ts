@@ -59,12 +59,16 @@ describe('files library page', () => {
 		expect(body).toContain('action="/manage/devflow-conf-2027/content/files/download"');
 	});
 
+	// The second option lives in the popover the shadcn select opens, so it is not
+	// in the server's HTML at all. What a server render can still prove is the
+	// part the download action depends on: the hidden input that carries `group`,
+	// and the choice it starts on.
 	it('offers the grouping choice the archive is built from', () => {
 		const { body } = render(Page, { props: props([file()]) });
 
 		expect(body).toContain('name="group"');
 		expect(body).toContain('One folder per speaker');
-		expect(body).toContain('No folders');
+		expect(body).toContain('data-testid="app-select-group"');
 	});
 
 	it('hides superseded versions until asked, rather than dropping them', () => {

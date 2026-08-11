@@ -7,12 +7,19 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { MAX_MINUTES } from '$lib/conference/structure-lines';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import DatePicker from '$lib/components/app/date-picker.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 
 	let { data, form } = $props();
+
+	/** The two task kinds, in the wording the organizer reads on the row. */
+	const TASK_KINDS = [
+		{ value: 'file_request', label: 'Upload a file' },
+		{ value: 'action', label: 'Do something' }
+	];
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const config = $derived(data.config);
@@ -508,17 +515,14 @@
 								</label>
 								<label class="w-36 text-xs">
 									<span class="text-muted-foreground">Speaker has to</span>
-									<select
+									<AppSelect
 										name="kind"
-										class="border-input bg-background mt-1 h-8 w-full rounded-md border px-2 text-sm"
-									>
-										<option value="action" selected={template.kind === 'action'}
-											>Do something</option
-										>
-										<option value="file_request" selected={template.kind === 'file_request'}>
-											Upload a file
-										</option>
-									</select>
+										size="sm"
+										class="mt-1"
+										aria-label="Speaker has to"
+										value={template.kind}
+										options={TASK_KINDS}
+									/>
 								</label>
 							</div>
 							<div class="flex flex-wrap items-end gap-2">
@@ -604,13 +608,14 @@
 				</label>
 				<label class="w-36 text-xs">
 					<span class="text-muted-foreground">Speaker has to</span>
-					<select
+					<AppSelect
 						name="kind"
-						class="border-input bg-background mt-1 h-8 w-full rounded-md border px-2 text-sm"
-					>
-						<option value="file_request">Upload a file</option>
-						<option value="action">Do something</option>
-					</select>
+						size="sm"
+						class="mt-1"
+						aria-label="Speaker has to"
+						value="file_request"
+						options={TASK_KINDS}
+					/>
 				</label>
 			</div>
 			<div class="flex flex-wrap items-end gap-2">

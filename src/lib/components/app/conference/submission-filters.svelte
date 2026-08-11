@@ -7,6 +7,7 @@
 	 * share exactly one contract with the rest of the screen: every one of them is a
 	 * query parameter the loader reads, and nothing here holds state of its own.
 	 */
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Input } from '$lib/components/ui/input';
 
 	let {
@@ -27,6 +28,17 @@
 		/** Where "Clear" goes — the page owns the URL, this component only links to it. */
 		clearHref: string;
 	} = $props();
+
+	/**
+	 * "All tracks" is an option, not a placeholder.
+	 *
+	 * The empty value is what clears the filter, so it has to be pickable — a
+	 * placeholder is only shown while nothing is chosen and gives no way back.
+	 */
+	const facetOptions = (all: string, entries: { id: number; name: string }[]) => [
+		{ value: '', label: all },
+		...entries.map((entry) => ({ value: String(entry.id), label: entry.name }))
+	];
 
 	const filtered = $derived(
 		Boolean(
@@ -81,29 +93,21 @@
 		aria-label="Search submissions"
 	/>
 
-	<select
+	<AppSelect
 		name="track"
 		aria-label="Track"
-		class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-	>
-		<option value="">All tracks</option>
-		{#each facets.tracks as track (track.id)}
-			<option value={track.id} selected={filters.trackId === track.id}>{track.name}</option>
-		{/each}
-	</select>
+		class="w-40"
+		value={filters.trackId ? String(filters.trackId) : ''}
+		options={facetOptions('All tracks', facets.tracks)}
+	/>
 
-	<select
+	<AppSelect
 		name="format"
 		aria-label="Format"
-		class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-	>
-		<option value="">All formats</option>
-		{#each facets.formats as format (format.id)}
-			<option value={format.id} selected={filters.sessionFormatId === format.id}>
-				{format.name}
-			</option>
-		{/each}
-	</select>
+		class="w-40"
+		value={filters.sessionFormatId ? String(filters.sessionFormatId) : ''}
+		options={facetOptions('All formats', facets.formats)}
+	/>
 
 	<!--
 		The one filter the interview asked for by name (#122): what is left to review.
