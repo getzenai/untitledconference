@@ -32,7 +32,11 @@
 	/>
 </svelte:head>
 
-<div class="bg-background text-foreground min-h-screen overflow-hidden">
+<!-- overflow-x-clip, not overflow-hidden: hidden would make this div the scroll
+     container for the sticky header, which then never sticks (the page scrolls on
+     the viewport, not on this div). clip clips the decorative bleed without
+     creating a scroll container. -->
+<div class="bg-background text-foreground min-h-screen overflow-x-clip">
 	<header class="border-border/70 bg-background/90 sticky top-0 z-50 border-b backdrop-blur-xl">
 		<div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8">
 			<a
