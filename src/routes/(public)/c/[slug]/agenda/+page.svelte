@@ -195,18 +195,28 @@
 
 					{#each daySessions as session (session.id)}
 						{@const col = columnOf(session)}
+						{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
+						<!--
+							min-w-0 + overflow-hidden keep long titles inside narrow room
+							columns; title= exposes the full string when the card clips.
+						-->
 						<button
 							type="button"
 							onclick={() => (selected = session)}
-							class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex flex-col items-start overflow-hidden rounded-md border p-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+							class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border p-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
 							style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(
 								session.start
 							)} / {rowOf(session.end)};"
+							title={session.title}
 						>
-							<span class="block text-sm leading-tight font-medium">{session.title}</span>
-							<span class="text-muted-foreground mt-0.5 block text-xs">
-								{[session.track, session.format].filter(Boolean).join(' · ')}
-							</span>
+							<span class="block w-full min-w-0 text-sm leading-tight font-medium break-words"
+								>{session.title}</span
+							>
+							{#if meta}
+								<span class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs">
+									{meta}
+								</span>
+							{/if}
 						</button>
 					{/each}
 				</div>
