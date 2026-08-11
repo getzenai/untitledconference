@@ -10,6 +10,7 @@
  */
 import type { ProposalDraft } from '$lib/conference/proposal-draft';
 import { db } from '$lib/server/db';
+import { user } from '$lib/server/db/auth-schema';
 import {
 	formFieldTable,
 	submissionAnswerTable,
@@ -23,10 +24,48 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { taskTable } from '$lib/server/db/conference/content-schema';
-import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+
+/**
+ * Attach this account to every profile that already stands for it.
+ *
+ * A speaker profile is created with no `userId` whenever someone other than its
+ * owner names them: the organizer's roster (`speakers.ts`) and the co-speaker path
+ * (`cfp-submission.ts`) both identify a speaker by `(organization, email)` and
+ * neither can know whether that person has signed up. Submitting a proposal claims
+ * such a profile, but a co-speaker never submits — by definition someone else did
+ * — so on a two-person talk that leaves half the speakers holding tasks and
+ * proposals they cannot see.
+ *
+ * Reconciling here rather than at sign-in is deliberate. The moment a profile
+ * becomes claimable is the moment someone else names you, which the auth layer
+ * cannot observe: a co-speaker added while you are already signed in would stay
+ * invisible until you next logged out. This runs on the read that would otherwise
+ * miss them.
+ *
+ * The address compared is the account's, so the claim is only as strong as the
+ * deployment's signup check — see `upsertOwnProfile`, which makes the same trade
+ * on the write side.
+ */
+async function claimProfilesForAccount(userId: string): Promise<void> {
+	const [account] = await db
+		.select({ email: user.email })
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+
+	if (!account?.email) return;
+
+	await db
+		.update(speakerProfileTable)
+		.set({ userId })
+		.where(and(eq(speakerProfileTable.email, account.email), isNull(speakerProfileTable.userId)));
+}
 
 /** The profile ids this user speaks under, across every organization. */
 async function ownProfileIds(userId: string): Promise<number[]> {
+	await claimProfilesForAccount(userId);
+
 	const rows = await db
 		.select({ id: speakerProfileTable.id })
 		.from(speakerProfileTable)
@@ -150,6 +189,11 @@ async function ownedSubmissionRow(userId: string, submissionId: number) {
 }
 
 export async function mySubmission(userId: string, submissionId: number) {
+	// The list reconciles through `ownProfileIds`; a deep link arrives without ever
+	// having gone through it, and answering 404 for a talk that is genuinely this
+	// person's is the exact symptom this module is meant to have stopped producing.
+	await claimProfilesForAccount(userId);
+
 	const row = await ownedSubmissionRow(userId, submissionId);
 	if (!row) return null;
 
