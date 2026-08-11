@@ -38,6 +38,20 @@
 	let kind = $state(field?.kind ?? FIELD_KINDS[0].value);
 	let source = $state(field?.conditionSource ?? '');
 
+	/**
+	 * The typed options, kept while the kind is something else.
+	 *
+	 * Since #156 the textarea is unmounted rather than hidden when the kind is not
+	 * `select`, and an unmounted control takes its value with it: switching to
+	 * short text and back cost the organizer the list they had just typed. Two
+	 * lines of buffer are cheaper than that surprise.
+	 */
+	// Reading `field` once is what makes it a buffer: the editor is keyed by field
+	// id, so a re-render is the same field, and re-seeding from it would overwrite
+	// whatever the organizer has typed since.
+	// svelte-ignore state_referenced_locally
+	let optionsText = $state(field ? parseOptions(field.options).join('\n') : '');
+
 	const kindOptions = FIELD_KINDS.map((entry) => ({ value: entry.value, label: entry.label }));
 
 	const SOURCE_OPTIONS = [
@@ -106,7 +120,7 @@
 		<Textarea
 			name="options"
 			rows={2}
-			value={field ? parseOptions(field.options).join('\n') : ''}
+			bind:value={optionsText}
 			placeholder="Dropdown options — one per line"
 			aria-label="Dropdown options"
 		/>

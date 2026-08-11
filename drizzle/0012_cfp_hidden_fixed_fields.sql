@@ -1,0 +1,1 @@
+ALTER TABLE "cfp_form" ADD COLUMN "hidden_fixed_fields" text;

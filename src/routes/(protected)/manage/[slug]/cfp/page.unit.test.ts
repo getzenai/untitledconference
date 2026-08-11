@@ -40,6 +40,7 @@ const cfpForm = {
 	status: 'draft' as const,
 	opensAt: null,
 	closesAt: null,
+	hiddenFixedFields: null,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
@@ -59,7 +60,7 @@ const field = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-const body = (fields: (typeof field)[]) =>
+const body = (fields: (typeof field)[], hiddenFixedFields: string | null = null) =>
 	render(Page, {
 		props: {
 			data: {
@@ -67,7 +68,7 @@ const body = (fields: (typeof field)[]) =>
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
-				form: cfpForm,
+				form: { ...cfpForm, hiddenFixedFields },
 				fields,
 				tracks: [{ id: 1, name: 'Platform' }],
 				formats: [{ id: 1, name: 'Talk' }]
@@ -112,6 +113,68 @@ describe('the call-for-papers builder', () => {
 		const preview = html.slice(html.indexOf('What the submitter sees'));
 
 		for (const label of labels) expect(preview).toContain(label);
+	});
+});
+
+/**
+ * The standard questions as rows the organizer can remove (#159).
+ *
+ * The rows are the whole feature: a screen that lists them and offers no way to
+ * act is exactly the state this issue was filed against. So these pin the
+ * control, the action it posts to, and the one thing the preview must not do —
+ * keep showing a question the call has stopped asking.
+ */
+describe('removing a standard question', () => {
+	const rowFor = (html: string, key: string) => {
+		const start = html.indexOf(`data-testid="fixed-question-${key}"`);
+		expect(start).toBeGreaterThan(-1);
+		return html.slice(start, html.indexOf('</li>', start));
+	};
+
+	it('offers a remove button on every question that may go', () => {
+		const row = rowFor(body([]), 'abstract');
+
+		expect(row).toContain('?/hideFixedQuestion');
+		expect(row).toContain('value="abstract"');
+		expect(row).toContain('Remove');
+	});
+
+	it('offers no button on the three that identify the talk and the speaker', () => {
+		const html = body([]);
+
+		for (const key of ['title', 'speakerName', 'speakerEmail']) {
+			const row = rowFor(html, key);
+			expect(row).not.toContain('?/hideFixedQuestion');
+			// The reason is on the row, not in a disabled tooltip nobody reads.
+			expect(row).toMatch(/title|person|speaker|reach/i);
+		}
+	});
+
+	it('turns a removed question into an add-back button', () => {
+		const row = rowFor(body([], '["abstract"]'), 'abstract');
+
+		expect(row).toContain('?/showFixedQuestion');
+		expect(row).toContain('Add back');
+		expect(row).toContain('data-shown="false"');
+	});
+
+	// The half an organizer believes. A preview still showing the abstract is the
+	// same untrue screen #126 set out to fix, one configuration change later.
+	it('drops the removed question from the preview', () => {
+		const preview = (html: string) => html.slice(html.indexOf('What the submitter sees'));
+
+		expect(preview(body([]))).toContain('Key takeaway');
+		expect(preview(body([], '["keyTakeaway"]'))).not.toContain('Key takeaway');
+	});
+
+	// A stored key this build cannot honour must not hide anything: the control
+	// would still be on the form, and the preview would deny it.
+	it('ignores a stored key that is unknown or not removable', () => {
+		const preview = body([], '["title","nonsense"]').slice(
+			body([], '["title","nonsense"]').indexOf('What the submitter sees')
+		);
+
+		expect(preview).toContain('Title');
 	});
 });
 

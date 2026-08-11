@@ -1,3 +1,4 @@
+import { ALL_FIXED_QUESTIONS_SHOWN } from '$lib/conference/fixed-questions';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
@@ -29,7 +30,8 @@ const call = (state: 'open' | 'closed' | 'not_yet_open', description: string | n
 	state,
 	fields: [],
 	formats: [],
-	tracks: []
+	tracks: [],
+	fixed: ALL_FIXED_QUESTIONS_SHOWN
 });
 
 const publicConference = {
