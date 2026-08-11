@@ -135,7 +135,8 @@ describe('explicit decision notifications', () => {
 			alreadyNotified: 0,
 			notDecided: 0,
 			withoutEmail: 0,
-			emailsQueued: 1
+			emailsQueued: 1,
+			dispatch: { sent: 0, failed: 0, remaining: 0, disabled: true }
 		});
 
 		const [email] = await db
@@ -182,7 +183,8 @@ describe('explicit decision notifications', () => {
 			alreadyNotified: 0,
 			notDecided: 1,
 			withoutEmail: 1,
-			emailsQueued: 4
+			emailsQueued: 4,
+			dispatch: { sent: 0, failed: 0, remaining: 0, disabled: true }
 		});
 
 		const emails = await db
@@ -223,16 +225,33 @@ describe('explicit decision notifications', () => {
 			.update(emailLogTable)
 			.set({ status: 'failed', error: 'Provider unavailable' })
 			.where(eq(emailLogTable.relatedId, submission.id));
+		const [failed] = await db
+			.select({ id: emailLogTable.id })
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, submission.id));
 
 		expect(await decisionNotificationStatuses(conference.id, [submission])).toEqual({
 			[submission.id]: 'failed'
 		});
 
 		const retried = await notifySubmissionDecisions(conference, [submission.id]);
-		expect(retried).toMatchObject({ notified: 1, emailsQueued: 1 });
+		expect(retried).toMatchObject({
+			notified: 1,
+			emailsQueued: 1,
+			dispatch: { disabled: true }
+		});
 		expect(await decisionNotificationStatuses(conference.id, [submission])).toEqual({
 			[submission.id]: 'queued'
 		});
+		const acceptanceRows = await db
+			.select({
+				id: emailLogTable.id,
+				status: emailLogTable.status,
+				error: emailLogTable.error
+			})
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, submission.id));
+		expect(acceptanceRows).toEqual([{ id: failed.id, status: 'queued', error: null }]);
 
 		await db
 			.update(submissionTable)
@@ -250,7 +269,6 @@ describe('explicit decision notifications', () => {
 			.from(emailLogTable)
 			.where(eq(emailLogTable.relatedId, submission.id));
 		expect(emails.map((email) => email.template)).toEqual([
-			'decision_accepted',
 			'decision_accepted',
 			'decision_rejected'
 		]);

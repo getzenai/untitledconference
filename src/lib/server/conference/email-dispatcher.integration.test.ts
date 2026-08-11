@@ -98,4 +98,30 @@ describe('dispatchQueuedEmails', () => {
 		expect(stored.sentAt).toBeNull();
 		expect(stored.error).toHaveLength(1000);
 	});
+
+	it('dispatches only the rows attributed to the current request', async () => {
+		const unrelated = await queuedMail();
+		const selected = await queuedMail();
+		const transport = vi.fn(async () => undefined);
+
+		const result = await dispatchQueuedEmails({
+			conferenceId,
+			emailIds: [selected.id],
+			transport
+		});
+
+		expect(result).toEqual({ sent: 1, failed: 0, remaining: 0, disabled: false });
+		expect(transport).toHaveBeenCalledOnce();
+		expect(transport).toHaveBeenCalledWith(expect.objectContaining({ id: selected.id }));
+		const stored = await db
+			.select({ id: emailLogTable.id, status: emailLogTable.status })
+			.from(emailLogTable)
+			.where(eq(emailLogTable.conferenceId, conferenceId));
+		expect(stored).toEqual(
+			expect.arrayContaining([
+				{ id: unrelated.id, status: 'queued' },
+				{ id: selected.id, status: 'sent' }
+			])
+		);
+	});
 });

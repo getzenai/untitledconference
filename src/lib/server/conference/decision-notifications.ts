@@ -11,7 +11,7 @@ import { speakerProfileTable, type Conference } from '$lib/server/db/conference/
 import { emailLogTable, type EmailLog } from '$lib/server/db/conference/email-schema';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Decision } from './decisions';
-import { dispatchConferenceEmails } from './email-dispatcher';
+import { dispatchConferenceEmails, type DispatchResult } from './email-dispatcher';
 
 const EMAIL_TEMPLATE: Record<Decision, string> = {
 	accepted: 'decision_accepted',
@@ -29,6 +29,7 @@ export type NotificationResult = {
 	notDecided: number;
 	withoutEmail: number;
 	emailsQueued: number;
+	dispatch: DispatchResult | null;
 };
 
 const NOTHING_NOTIFIED: NotificationResult = {
@@ -36,7 +37,8 @@ const NOTHING_NOTIFIED: NotificationResult = {
 	alreadyNotified: 0,
 	notDecided: 0,
 	withoutEmail: 0,
-	emailsQueued: 0
+	emailsQueued: 0,
+	dispatch: null
 };
 
 function decision(value: string): Decision | null {
@@ -130,7 +132,8 @@ function applyStatuses(
  * The notification state for the CURRENT decision on each submission.
  *
  * A previous acceptance email does not make a later decline look notified. Rows are
- * read in id order so a retry after a failed send becomes the visible current state.
+ * read in id order so the newest legacy duplicate becomes the visible current state.
+ * Retries now reuse that same row and change its status in place.
  */
 export async function decisionNotificationStatuses(
 	conferenceId: number,
@@ -207,11 +210,15 @@ async function recipientEmails(tx: Tx, targetIds: number[]) {
 	return bySubmission;
 }
 
-async function activeNotifications(tx: Tx, conferenceId: number, targets: NotificationTarget[]) {
+type CurrentNotification = Pick<EmailLog, 'id' | 'status'>;
+type PendingMail = typeof emailLogTable.$inferInsert;
+
+async function currentNotifications(tx: Tx, conferenceId: number, targets: NotificationTarget[]) {
 	const targetIds = targets.map((target) => target.id);
 	const decidedAt = new Map(targets.map((target) => [target.id, target.decidedAt]));
 	const existing = await tx
 		.select({
+			id: emailLogTable.id,
 			relatedId: emailLogTable.relatedId,
 			template: emailLogTable.template,
 			toEmail: emailLogTable.toEmail,
@@ -226,27 +233,61 @@ async function activeNotifications(tx: Tx, conferenceId: number, targets: Notifi
 				inArray(emailLogTable.relatedId, targetIds),
 				inArray(emailLogTable.template, Object.values(EMAIL_TEMPLATE))
 			)
-		);
-	return new Set(
-		existing
-			.filter(
-				(mail) =>
-					mail.relatedId !== null &&
-					mail.status !== 'failed' &&
-					isCurrentDecisionEmail(mail.createdAt, decidedAt.get(mail.relatedId) ?? null)
-			)
-			.map((mail) => `${mail.relatedId}:${mail.template}:${mail.toEmail}`)
-	);
+		)
+		.orderBy(emailLogTable.id);
+	const current = new Map<string, CurrentNotification>();
+	for (const mail of existing) {
+		if (
+			mail.relatedId === null ||
+			!isCurrentDecisionEmail(mail.createdAt, decidedAt.get(mail.relatedId) ?? null)
+		) {
+			continue;
+		}
+		current.set(`${mail.relatedId}:${mail.template}:${mail.toEmail}`, mail);
+	}
+	return current;
+}
+
+function planTargetMails(
+	conference: Conference,
+	target: NotificationTarget,
+	recipients: string[],
+	current: Map<string, CurrentNotification>
+) {
+	const mails: PendingMail[] = [];
+	const retryIds: number[] = [];
+	const template = EMAIL_TEMPLATE[target.decision];
+	for (const toEmail of recipients) {
+		const key = `${target.id}:${template}:${toEmail}`;
+		const prior = current.get(key);
+		if (prior?.status === 'queued' || prior?.status === 'sent') continue;
+		if (prior?.status === 'failed') {
+			retryIds.push(prior.id);
+			continue;
+		}
+		mails.push({
+			conferenceId: conference.id,
+			toEmail,
+			template,
+			subject: subjectFor(target.decision, conference),
+			bodyPreview: bodyFor(target.decision, conference, target.title),
+			status: 'queued',
+			relatedType: 'submission',
+			relatedId: target.id
+		});
+	}
+	return { mails, retryIds };
 }
 
 function buildMails(
 	conference: Conference,
 	targets: NotificationTarget[],
 	recipientsBySubmission: Map<number, Set<string>>,
-	active: Set<string>,
+	current: Map<string, CurrentNotification>,
 	result: NotificationResult
 ) {
-	const mails: (typeof emailLogTable.$inferInsert)[] = [];
+	const mails: PendingMail[] = [];
+	const retryIds: number[] = [];
 	const notified = new Set<number>();
 	for (const target of targets) {
 		const recipients = [...(recipientsBySubmission.get(target.id) ?? [])];
@@ -254,28 +295,15 @@ function buildMails(
 			result.withoutEmail += 1;
 			continue;
 		}
-		const template = EMAIL_TEMPLATE[target.decision];
-		for (const toEmail of recipients) {
-			const key = `${target.id}:${template}:${toEmail}`;
-			if (active.has(key)) continue;
-			active.add(key);
-			notified.add(target.id);
-			mails.push({
-				conferenceId: conference.id,
-				toEmail,
-				template,
-				subject: subjectFor(target.decision, conference),
-				bodyPreview: bodyFor(target.decision, conference, target.title),
-				status: 'queued',
-				relatedType: 'submission',
-				relatedId: target.id
-			});
-		}
+		const plan = planTargetMails(conference, target, recipients, current);
+		mails.push(...plan.mails);
+		retryIds.push(...plan.retryIds);
+		if (plan.mails.length > 0 || plan.retryIds.length > 0) notified.add(target.id);
 		if (!notified.has(target.id)) result.alreadyNotified += 1;
 	}
 	result.notified = notified.size;
-	result.emailsQueued = mails.length;
-	return mails;
+	result.emailsQueued = mails.length + retryIds.length;
+	return { mails, retryIds };
 }
 
 async function queueNotifications(
@@ -286,12 +314,24 @@ async function queueNotifications(
 ) {
 	const selected = await targetsFor(tx, conference.id, submissionIds);
 	result.notDecided = selected.notDecided;
-	if (selected.targets.length === 0) return;
+	if (selected.targets.length === 0) return [];
 	const targetIds = selected.targets.map((target) => target.id);
 	const recipients = await recipientEmails(tx, targetIds);
-	const active = await activeNotifications(tx, conference.id, selected.targets);
-	const mails = buildMails(conference, selected.targets, recipients, active, result);
-	if (mails.length > 0) await tx.insert(emailLogTable).values(mails);
+	const current = await currentNotifications(tx, conference.id, selected.targets);
+	const { mails, retryIds } = buildMails(conference, selected.targets, recipients, current, result);
+	if (retryIds.length > 0) {
+		// Reuse the outbox row so the provider idempotency key stays stable if its
+		// earlier response was lost after accepting the message.
+		await tx
+			.update(emailLogTable)
+			.set({ status: 'queued', error: null, sentAt: null })
+			.where(inArray(emailLogTable.id, retryIds));
+	}
+	const inserted =
+		mails.length > 0
+			? await tx.insert(emailLogTable).values(mails).returning({ id: emailLogTable.id })
+			: [];
+	return [...retryIds, ...inserted.map((row) => row.id)];
 }
 
 /**
@@ -308,8 +348,12 @@ export async function notifySubmissionDecisions(
 	const result = { ...NOTHING_NOTIFIED };
 	if (submissionIds.length === 0) return result;
 
-	await db.transaction((tx) => queueNotifications(tx, conference, submissionIds, result));
-	if (result.emailsQueued > 0) await dispatchConferenceEmails(conference.id);
+	const emailIds = await db.transaction((tx) =>
+		queueNotifications(tx, conference, submissionIds, result)
+	);
+	if (emailIds.length > 0) {
+		result.dispatch = await dispatchConferenceEmails(conference.id, emailIds);
+	}
 
 	return result;
 }

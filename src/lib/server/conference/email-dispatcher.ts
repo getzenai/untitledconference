@@ -9,7 +9,7 @@
 import { db } from '$lib/server/db';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { serverEnv } from '$lib/server/env';
-import { and, asc, count, eq, type SQL } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, type SQL } from 'drizzle-orm';
 
 export type DeliverableEmail = {
 	id: number;
@@ -135,6 +135,7 @@ async function dispatchNext(scope: SQL[], transport: EmailTransport) {
 async function dispatchConfigured(
 	options: {
 		conferenceId?: number;
+		emailIds?: number[];
 		limit?: number;
 	},
 	transport: EmailTransport
@@ -143,6 +144,9 @@ async function dispatchConfigured(
 	const scope: SQL[] = [eq(emailLogTable.status, 'queued')];
 	if (options.conferenceId !== undefined) {
 		scope.push(eq(emailLogTable.conferenceId, options.conferenceId));
+	}
+	if (options.emailIds !== undefined) {
+		scope.push(inArray(emailLogTable.id, options.emailIds));
 	}
 
 	let sent = 0;
@@ -165,16 +169,23 @@ async function dispatchConfigured(
 export function dispatchQueuedEmails(
 	options: {
 		conferenceId?: number;
+		emailIds?: number[];
 		limit?: number;
 		transport?: EmailTransport;
 	} = {}
 ): Promise<DispatchResult> {
+	if (options.emailIds?.length === 0) {
+		return Promise.resolve({ sent: 0, failed: 0, remaining: 0, disabled: false });
+	}
 	const transport = options.transport ?? configuredTransport();
 	if (!transport) return Promise.resolve({ sent: 0, failed: 0, remaining: 0, disabled: true });
 	return dispatchConfigured(options, transport);
 }
 
 /** Best-effort request-path flush: missing Resend configuration intentionally leaves the outbox queued. */
-export async function dispatchConferenceEmails(conferenceId: number): Promise<DispatchResult> {
-	return dispatchQueuedEmails({ conferenceId });
+export async function dispatchConferenceEmails(
+	conferenceId: number,
+	emailIds?: number[]
+): Promise<DispatchResult> {
+	return dispatchQueuedEmails({ conferenceId, emailIds });
 }

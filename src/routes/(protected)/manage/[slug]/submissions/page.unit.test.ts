@@ -1,4 +1,5 @@
 /** The table must expose two distinct actions: decide now, notify later. */
+import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { PageData } from './$types';
@@ -59,10 +60,11 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 });
 
 function renderPage(
-	notificationStatus: null | 'queued' = null,
+	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	sort: PageData['sort'] = 'newest',
 	query = '',
-	filters: PageData['filters'] = {}
+	filters: PageData['filters'] = {},
+	notificationResult: NotificationResult | null = null
 ) {
 	currentUrl.value = new URL(`https://example.test/manage/test-conf/submissions${query}`);
 	return render(Page, {
@@ -80,7 +82,7 @@ function renderPage(
 				counts: { total: 2, undecided: 1, unreviewed: 2 },
 				notificationStatuses: { 1: notificationStatus, 2: null }
 			} as PageData,
-			form: null
+			form: notificationResult ? { notificationResult } : null
 		}
 	}).body;
 }
@@ -104,6 +106,27 @@ describe('organizer submission decisions', () => {
 		expect(unsent).toContain('Not ready');
 
 		expect(renderPage('queued')).toContain('Queued');
+	});
+
+	it('does not style a failed bulk dispatch as success', () => {
+		const body = renderPage(
+			null,
+			'newest',
+			'',
+			{},
+			{
+				notified: 1,
+				alreadyNotified: 0,
+				notDecided: 0,
+				withoutEmail: 0,
+				emailsQueued: 1,
+				dispatch: { sent: 0, failed: 1, remaining: 0, disabled: false }
+			}
+		);
+
+		expect(body).toContain('border-status-bad');
+		expect(body).toContain('role="alert"');
+		expect(body).not.toContain('1 submission notified');
 	});
 });
 

@@ -10,7 +10,11 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
-	import { describeDecision, describeNotification } from '$lib/conference/decision-summary';
+	import {
+		describeDecision,
+		describeNotification,
+		notificationTone
+	} from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
@@ -253,9 +257,14 @@
 	/>
 
 	{#if form?.notificationResult}
+		{@const tone = notificationTone(form.notificationResult)}
 		<p
-			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
-			role="status"
+			class={tone === 'bad'
+				? 'border-status-bad text-status-bad mb-3 rounded-md border px-3 py-2 text-sm'
+				: tone === 'warn'
+					? 'border-status-warn text-status-warn mb-3 rounded-md border px-3 py-2 text-sm'
+					: 'border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm'}
+			role={tone === 'bad' ? 'alert' : 'status'}
 		>
 			{describeNotification(form.notificationResult)}
 		</p>
