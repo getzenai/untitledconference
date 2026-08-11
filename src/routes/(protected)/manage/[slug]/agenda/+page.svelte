@@ -2,23 +2,36 @@
 	/**
 	 * The agenda builder — journey 2, step 8.
 	 *
-	 * Scheduling happens through the slot editor: open a slot, and either put a
-	 * waiting talk in it or take out the one that is there. It replaced three
-	 * dropdowns hanging off every card, which worked and read as a spreadsheet.
+	 * The grid is a calendar: rooms are columns, quarter hours are rows, and a
+	 * block's height is its length. That is the shape the public agenda page has
+	 * always had, and the shape an organizer already knows from every other
+	 * calendar. The room-card list it replaced was readable but flat — every talk
+	 * looked the same size, so the one question this screen exists to answer, does
+	 * this fit next to that, could not be answered by looking.
 	 *
-	 * This is the deterministic path, not the only planned one — drag-and-drop is
-	 * meant to land on top of it for humans (#69). It is built first and kept
-	 * visible on purpose: Cypress and the eval harness drive it, and it is what
-	 * makes the grid usable from a keyboard.
+	 * Sessions are dragged between slots and out of the tray. Drag is the human
+	 * path and it is the only thing here that needs JavaScript, so it is built
+	 * strictly on top of the click path rather than replacing it:
 	 *
-	 * The tray on the left is every accepted talk with nowhere to be. The grid on the
-	 * right is the conference. Conflicts are shown on the sessions that cause them,
-	 * not collected in a panel somebody has to go and read.
+	 *  - Every slot opens the slot editor on click, and every room keeps its
+	 *    "Open a slot" button — that is the keyboard route, the no-JS route, and
+	 *    the route the eval harness drives.
+	 *  - A drop posts `?/place`, the same action the editor's form posts. There is
+	 *    no write path that only exists for the mouse.
+	 *
+	 * Two things deliberately cannot be dragged. Breaks span every room, so
+	 * dropping one into a column would file lunch under Hall 1. And a drop onto a
+	 * taken slot is not a swap: `placeSession` is permissive about conflicts, so it
+	 * would double-book rather than trade. Both stay with the editor, which asks
+	 * which of the two you meant.
 	 */
 	import { enhance } from '$app/forms';
+	import { tick } from 'svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import { blockRows, gridSlots, laneLayout, type GridFrame } from '$lib/conference/agenda-grid';
 	import { formatDayLong } from '$lib/conference/public-view';
+	import { DragController } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
 
 	let { data, form } = $props();
@@ -44,9 +57,9 @@
 	const day = $derived(board.days[activeDay] ?? board.days[0]);
 
 	/**
-	 * The clashes a given session is part of, so a card can show its own.
+	 * The clashes a given session is part of, so a block can show its own.
 	 *
-	 * Filtered per card rather than indexed once: a conference has a handful of
+	 * Filtered per block rather than indexed once: a conference has a handful of
 	 * conflicts at most, and an index would be a mutable Map inside a derived — more
 	 * machinery than the problem has.
 	 */
@@ -74,10 +87,10 @@
 	const dayBreaks = $derived(daySessions.filter((s) => s.roomId === null).sort(byStart));
 
 	/**
-	 * Twenty rooms is twenty cards, and the one you are looking at is somewhere past
-	 * the fold. Narrowing to a single room is the cheap way out; it is a view filter
-	 * only — the slot editor's room select keeps offering every room, so nothing
-	 * becomes unreachable by hiding it.
+	 * Twenty rooms is twenty columns, and the one you are looking at is somewhere
+	 * off the right edge. Narrowing to a single room is the cheap way out; it is a
+	 * view filter only — the slot editor's room select keeps offering every room,
+	 * so nothing becomes unreachable by hiding it.
 	 */
 	const ROOM_FILTER_FROM = 6;
 	let roomFilter = $state('all');
@@ -88,6 +101,39 @@
 	const unscheduled = $derived(board.tray.length);
 	const everythingPublished = $derived(
 		board.placed.length > 0 && board.placed.every((p) => p.status === 'confirmed')
+	);
+
+	/**
+	 * The frame: which rooms are columns, which minutes are rows.
+	 *
+	 * `gridSlots` widens past the working day for anything already placed outside
+	 * it, so a seeded 08:00 keynote has a row rather than quietly not being drawn.
+	 * Both halves of the screen read this one object — the rows the grid paints and
+	 * the slot a drop lands in — so they cannot drift apart.
+	 */
+	const SLOT_MINUTES = 15;
+	const ROW_REM = 1.5;
+	/** A time label every second row, i.e. every half hour, as on the public page. */
+	const LABEL_EVERY = 2;
+
+	const frame = $derived<GridFrame>({
+		rooms: visibleRooms.map((r) => r.id),
+		slots: gridSlots({
+			dayStartsAt: data.slots[0]?.minutes ?? 9 * 60,
+			dayEndsAt: (data.slots.at(-1)?.minutes ?? 17 * 60 + 45) + SLOT_MINUTES,
+			slotMinutes: SLOT_MINUTES,
+			sessions: daySessions.filter((s) => s.roomId !== null)
+		}),
+		slotMinutes: SLOT_MINUTES
+	});
+
+	const gridHeight = $derived(`${frame.slots.length * ROW_REM}rem`);
+
+	const gutter = $derived(
+		frame.slots
+			.map((minutes, i) => ({ minutes, i }))
+			.filter(({ i }) => i % LABEL_EVERY === 0)
+			.map(({ minutes, i }) => ({ minutes, top: `${i * ROW_REM}rem` }))
 	);
 
 	/**
@@ -157,9 +203,63 @@
 			}
 		};
 	};
+
+	/* ---------------------------------------------------------------- dragging */
+
+	/**
+	 * The gesture itself lives in `drag-controller.svelte.ts`. What stays here is
+	 * everything that needs the DOM or the board: where the columns are on screen,
+	 * what already sits in a slot, and the form a drop posts.
+	 */
+	let gridEl = $state<HTMLElement | null>(null);
+	let placeForm = $state<HTMLFormElement | null>(null);
+	let pending = $state<{ placementId: number; roomId: number; startMinutes: number } | null>(null);
+
+	const drag = new DragController({
+		frame: () => frame,
+		columnsBox: () => {
+			const bodies = gridEl?.querySelectorAll('[data-column-body]');
+			if (!bodies || bodies.length === 0) return null;
+
+			const first = bodies[0].getBoundingClientRect();
+			const last = bodies[bodies.length - 1].getBoundingClientRect();
+			return {
+				left: first.left,
+				top: first.top,
+				width: last.right - first.left,
+				height: first.height
+			};
+		},
+		occupantAt: (slot) => startingAt(slot.roomId, slot.startMinutes),
+		openSlot: (slot) => {
+			const room = board.rooms.find((r) => r.id === slot.roomId);
+			if (room) openSlot(room, slot.startMinutes);
+		},
+		place: async (placementId, slot) => {
+			if (!day) return;
+			pending = { placementId, roomId: slot.roomId, startMinutes: slot.startMinutes };
+			await tick();
+			placeForm?.requestSubmit();
+		}
+	});
+
+	/** A drag that ended on the grid still fires a click; that click is not a slot click. */
+	function slotClicked(room: { id: number; name: string }, startMinutes: number) {
+		if (drag.moved) return;
+		openSlot(room, startMinutes);
+	}
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && closeSlot()} />
+<svelte:window
+	onpointermove={drag.move}
+	onpointerup={drag.end}
+	onpointercancel={drag.cancel}
+	onkeydown={(e) => {
+		if (e.key !== 'Escape') return;
+		if (drag.dragging) drag.cancel();
+		else closeSlot();
+	}}
+/>
 
 <svelte:head>
 	<title>Agenda — {data.conference.name}</title>
@@ -206,6 +306,25 @@
 	</div>
 </div>
 
+<!--
+	The one form every drop posts. It is the page's, not a block's: the block that
+	started the drag is re-rendered by the update that follows, and a form living
+	inside it would be submitting itself out of existence.
+-->
+<form
+	method="POST"
+	action="?/place"
+	class="hidden"
+	bind:this={placeForm}
+	use:enhance={submitting}
+	data-testid="agenda-drop-form"
+>
+	<input type="hidden" name="placementId" value={pending?.placementId ?? ''} />
+	<input type="hidden" name="dayId" value={day?.id ?? ''} />
+	<input type="hidden" name="roomId" value={pending?.roomId ?? ''} />
+	<input type="hidden" name="startMinutes" value={pending?.startMinutes ?? ''} />
+</form>
+
 <!-- Wide on purpose — this is the grid — but never flush against the rail. -->
 <div class="space-y-6 px-6 py-5">
 	{#if form?.error}
@@ -233,7 +352,7 @@
 		</p>
 	{/if}
 
-	<div class="grid gap-6 lg:grid-cols-[20rem_1fr]">
+	<div class="grid gap-6 lg:grid-cols-[16rem_1fr]">
 		<!-- The tray -->
 		<section class="border-border bg-card h-fit rounded-lg border p-4">
 			<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
@@ -247,7 +366,16 @@
 			{:else}
 				<ul class="mt-3 space-y-3">
 					{#each board.tray as item (item.placementId)}
-						<li class="border-border rounded-md border p-3">
+						<li
+							data-testid="agenda-tray-item"
+							data-placement-id={item.placementId}
+							class="border-border cursor-grab touch-none rounded-md border p-3 select-none {drag
+								.dragging?.placementId === item.placementId
+								? 'opacity-40'
+								: ''}"
+							onpointerdown={(e) =>
+								drag.begin(e, { placementId: item.placementId, title: item.title, roomId: null })}
+						>
 							<p class="text-sm font-medium">{item.title}</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
 								{item.speakers.join(', ') || 'No speaker'}
@@ -256,7 +384,7 @@
 							</p>
 
 							<p class="text-muted-foreground mt-2 text-xs">
-								Open a slot on the grid to put this somewhere.
+								Drag it onto the grid, or open a slot to put it there.
 							</p>
 						</li>
 					{/each}
@@ -325,98 +453,156 @@
 					</label>
 				{/if}
 
-				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-					{#each visibleRooms as room (room.id)}
-						<div class="border-border bg-card rounded-lg border p-3" data-testid="agenda-room-card">
-							<div class="flex items-baseline justify-between gap-2">
-								<h3 class="text-sm font-medium">{room.name}</h3>
-								<Button
-									type="button"
-									size="sm"
-									variant="outline"
-									data-testid="agenda-open-slot-{room.id}"
-									onclick={() => openSlot(room, data.slots[0].minutes)}
-								>
-									Open a slot
-								</Button>
+				<div class="overflow-x-auto">
+					<div class="flex w-full" bind:this={gridEl}>
+						<!-- The time axis. Its header spacer is fixed-height so the labels
+						     line up with the columns without measuring anything. -->
+						<div class="w-14 shrink-0">
+							<div class="h-9"></div>
+							<div class="relative" style="height: {gridHeight}">
+								{#each gutter as label (label.minutes)}
+									<span
+										class="text-muted-foreground border-border absolute inset-x-0 border-t pt-0.5 pr-2 text-right text-xs tabular-nums"
+										style="top: {label.top}"
+									>
+										{timeLabel(label.minutes)}
+									</span>
+								{/each}
 							</div>
-
-							{#if sessionsIn(room.id).length === 0}
-								<p class="text-muted-foreground mt-2 text-xs">Empty on this day.</p>
-							{:else}
-								<ul class="mt-2 space-y-2">
-									{#each sessionsIn(room.id) as session (session.placementId)}
-										{@const clashes = clashesFor(session.placementId)}
-										<li
-											data-testid="agenda-placed-session"
-											class="rounded-md border p-2 {clashes.length > 0
-												? 'border-status-bad'
-												: 'border-border'}"
-										>
-											<div class="flex items-baseline justify-between gap-2">
-												<span class="text-xs font-medium tabular-nums">
-													{timeLabel(session.startMinutes)}–{timeLabel(session.endMinutes)}
-												</span>
-												<Badge variant={session.status === 'confirmed' ? 'secondary' : 'outline'}>
-													{session.status === 'confirmed' ? 'Published' : 'Draft'}
-												</Badge>
-											</div>
-											<p class="mt-1 text-sm">{session.title}</p>
-											<p class="text-muted-foreground text-xs">
-												{session.speakers.join(', ') || 'No speaker'}
-												{#if session.trackName}<span class="px-1">·</span>{session.trackName}{/if}
-											</p>
-
-											{#each clashes as clash (clash)}
-												<p
-													data-testid="agenda-conflict"
-													class="text-status-bad mt-1 text-xs font-medium"
-												>
-													{clash}
-												</p>
-											{/each}
-
-											<div class="mt-2 flex flex-wrap items-end gap-1.5">
-												<Button
-													type="button"
-													size="sm"
-													variant="outline"
-													data-testid="agenda-edit-slot-{session.placementId}"
-													onclick={() => openSlot(room, session.startMinutes ?? 0)}
-												>
-													Edit slot
-												</Button>
-
-												<form method="POST" action="?/toggleOne" use:enhance={submitting}>
-													<input type="hidden" name="placementId" value={session.placementId} />
-													<input
-														type="hidden"
-														name="status"
-														value={session.status === 'confirmed' ? 'tentative' : 'confirmed'}
-													/>
-													<Button type="submit" size="sm" variant="ghost" disabled={busy}>
-														{session.status === 'confirmed' ? 'Hold back' : 'Publish'}
-													</Button>
-												</form>
-
-												<form method="POST" action="?/unplace" use:enhance={submitting}>
-													<input type="hidden" name="placementId" value={session.placementId} />
-													<Button type="submit" size="sm" variant="ghost" disabled={busy}>
-														Remove
-													</Button>
-												</form>
-											</div>
-										</li>
-									{/each}
-								</ul>
-							{/if}
 						</div>
-					{/each}
+
+						{#each visibleRooms as room (room.id)}
+							<div
+								class="border-border min-w-36 flex-1 border-l"
+								data-testid="agenda-room-card"
+								data-room-id={room.id}
+							>
+								<div class="flex h-9 items-center justify-between gap-1 px-1.5">
+									<h3 class="truncate text-sm font-medium">{room.name}</h3>
+									<Button
+										type="button"
+										size="sm"
+										variant="ghost"
+										data-testid="agenda-open-slot-{room.id}"
+										onclick={() => openSlot(room, data.slots[0].minutes)}
+									>
+										Open a slot
+									</Button>
+								</div>
+
+								<div class="relative" data-column-body style="height: {gridHeight}">
+									<!--
+										One button per slot, all of them out of the tab order. The
+										keyboard route into a slot is the room's "Open a slot"
+										button and the editor's day/time/room selects; putting 36
+										empty cells per room into the tab sequence would bury it.
+									-->
+									{#each frame.slots as minutes, i (minutes)}
+										<button
+											type="button"
+											tabindex="-1"
+											aria-label="{room.name} at {timeLabel(minutes)}"
+											data-testid="agenda-slot-cell"
+											data-room-id={room.id}
+											data-start-minutes={minutes}
+											onclick={() => slotClicked(room, minutes)}
+											class="absolute inset-x-0 {i % LABEL_EVERY === 0
+												? 'border-border border-t'
+												: ''} {drag.hover?.roomId === room.id &&
+											drag.hover?.startMinutes === minutes
+												? 'bg-primary/20'
+												: 'hover:bg-muted/60'}"
+											style="top: {i * ROW_REM}rem; height: {ROW_REM}rem"
+										></button>
+									{/each}
+
+									{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
+										{@const rows = blockRows(frame, session)}
+										{@const clashes = clashesFor(session.placementId)}
+										{#if rows}
+											<div
+												data-testid="agenda-placed-session"
+												data-placement-id={session.placementId}
+												class="absolute z-10 overflow-hidden rounded-md border {clashes.length > 0
+													? 'border-status-bad bg-status-bad/10'
+													: 'border-border bg-card'} {drag.dragging?.placementId ===
+												session.placementId
+													? 'opacity-40'
+													: ''}"
+												style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
+													ROW_REM}rem; left: calc({(lane / lanes) *
+													100}% + 0.125rem); width: calc({100 / lanes}% - 0.25rem)"
+											>
+												<button
+													type="button"
+													data-testid="agenda-edit-slot-{session.placementId}"
+													onclick={() => slotClicked(room, session.startMinutes ?? 0)}
+													onpointerdown={(e) =>
+														drag.begin(e, {
+															placementId: session.placementId,
+															title: session.title,
+															roomId: room.id
+														})}
+													class="h-full w-full cursor-grab touch-none px-1.5 py-1 text-left select-none"
+												>
+													<span
+														class="flex items-baseline justify-between gap-1 text-xs tabular-nums"
+													>
+														<span class="font-medium">
+															{timeLabel(session.startMinutes)}–{timeLabel(session.endMinutes)}
+														</span>
+														<Badge
+															variant={session.status === 'confirmed' ? 'secondary' : 'outline'}
+														>
+															{session.status === 'confirmed' ? 'Published' : 'Draft'}
+														</Badge>
+													</span>
+
+													{#each clashes as clash (clash)}
+														<span
+															data-testid="agenda-conflict"
+															class="text-status-bad block text-xs font-medium"
+														>
+															{clash}
+														</span>
+													{/each}
+
+													<span class="mt-0.5 block text-sm leading-tight">{session.title}</span>
+													<span class="text-muted-foreground block text-xs">
+														{session.speakers.join(', ') || 'No speaker'}
+														{#if session.trackName}<span class="px-1">·</span
+															>{session.trackName}{/if}
+													</span>
+												</button>
+											</div>
+										{/if}
+									{/each}
+								</div>
+							</div>
+						{/each}
+					</div>
 				</div>
+
+				<p class="text-muted-foreground mt-3 text-xs">
+					Drag a session to move it. Click a slot to open it — that is also how a session swaps
+					places with another, or comes off the grid.
+				</p>
 			{/if}
 		</section>
 	</div>
 </div>
+
+{#if drag.dragging && drag.pointer}
+	<!-- The thing under the cursor. `pointer-events-none` on purpose: it sits
+	     exactly where the drop is measured, so anything else would make it its
+	     own drop target. -->
+	<div
+		class="border-border bg-card pointer-events-none fixed z-50 max-w-48 truncate rounded-md border px-2 py-1 text-xs shadow-md"
+		style="left: {drag.pointer.x + 12}px; top: {drag.pointer.y + 12}px"
+	>
+		{drag.dragging.title}
+	</div>
+{/if}
 
 {#if editing}
 	<SlotEditor

@@ -35,6 +35,8 @@
 		startMinutes: number | null;
 		endMinutes: number | null;
 		speakers: string[];
+		/** `confirmed` once it is on the public agenda; `tentative` while it is a draft. */
+		status: string;
 	};
 
 	/** A session already on the grid, offered as the other half of a swap. */
@@ -144,14 +146,36 @@
 				</form>
 			{/if}
 
-			<form method="POST" action="?/unplace" use:enhance={submit} class="mt-4">
-				<input type="hidden" name="placementId" value={occupant.placementId} />
-				<Button type="submit" variant="outline" disabled={busy} data-testid="agenda-slot-remove">
-					Take it out of this slot
-				</Button>
-			</form>
+			<div class="mt-4 flex flex-wrap gap-2">
+				<form method="POST" action="?/unplace" use:enhance={submit}>
+					<input type="hidden" name="placementId" value={occupant.placementId} />
+					<Button type="submit" variant="outline" disabled={busy} data-testid="agenda-slot-remove">
+						Take it out of this slot
+					</Button>
+				</form>
+
+				<!--
+					Publishing one session lives here rather than on the block. A calendar
+					block is as tall as the talk is long, so a 15-minute one has room for
+					a time and a title and nothing else — hanging buttons off it would
+					either overflow the block or make every block the same height, which
+					is the thing the calendar exists to stop doing.
+				-->
+				<form method="POST" action="?/toggleOne" use:enhance={submit}>
+					<input type="hidden" name="placementId" value={occupant.placementId} />
+					<input
+						type="hidden"
+						name="status"
+						value={occupant.status === 'confirmed' ? 'tentative' : 'confirmed'}
+					/>
+					<Button type="submit" variant="ghost" disabled={busy} data-testid="agenda-slot-status">
+						{occupant.status === 'confirmed' ? 'Hold it back' : 'Publish it'}
+					</Button>
+				</form>
+			</div>
 			<p class="text-muted-foreground mt-2 text-xs">
-				To move it to an empty slot, take it out and open the one you want.
+				To move it, drag it to an empty slot on the grid — or take it out here and open the one you
+				want.
 			</p>
 		{:else if tray.length === 0}
 			<p class="text-muted-foreground mt-4 text-sm">
