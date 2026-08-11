@@ -11,6 +11,7 @@ import { speakerProfileTable, type Conference } from '$lib/server/db/conference/
 import { emailLogTable, type EmailLog } from '$lib/server/db/conference/email-schema';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Decision } from './decisions';
+import { dispatchConferenceEmails } from './email-dispatcher';
 
 const EMAIL_TEMPLATE: Record<Decision, string> = {
 	accepted: 'decision_accepted',
@@ -308,6 +309,7 @@ export async function notifySubmissionDecisions(
 	if (submissionIds.length === 0) return result;
 
 	await db.transaction((tx) => queueNotifications(tx, conference, submissionIds, result));
+	if (result.emailsQueued > 0) await dispatchConferenceEmails(conference.id);
 
 	return result;
 }

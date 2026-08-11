@@ -61,7 +61,7 @@ jobs:
       - name: Verify required variables are present
         run: |
           missing=0
-          for var in NEON_CONNECTION_STRING CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BETTER_AUTH_SECRET; do
+          for var in NEON_CONNECTION_STRING CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BETTER_AUTH_SECRET RESEND_API_KEY; do
             if [ -z "${!var}" ]; then
               echo "::error::$var is missing from Infisical (project untitled-conference, env prod)"
               missing=1
@@ -106,6 +106,7 @@ jobs:
         run: |
           printf '%s' "$BETTER_AUTH_SECRET" | npx wrangler secret put BETTER_AUTH_SECRET
           printf '%s' "$NEON_CONNECTION_STRING" | npx wrangler secret put DATABASE_URL
+          printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY
 
       - name: Deploy
         run: npx wrangler deploy

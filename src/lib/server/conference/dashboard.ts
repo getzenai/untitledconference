@@ -78,6 +78,7 @@ export type MailItem = {
 	toEmail: string;
 	subject: string;
 	status: string;
+	error: string | null;
 	createdAt: Date;
 };
 
@@ -383,6 +384,7 @@ async function mailQueue(conferenceId: number): Promise<DashboardSnapshot['mail'
 				toEmail: emailLogTable.toEmail,
 				subject: emailLogTable.subject,
 				status: emailLogTable.status,
+				error: emailLogTable.error,
 				createdAt: emailLogTable.createdAt
 			})
 			.from(emailLogTable)

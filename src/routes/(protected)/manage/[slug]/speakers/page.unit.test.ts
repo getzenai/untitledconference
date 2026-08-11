@@ -80,6 +80,9 @@ describe('speaker roster page', () => {
 		expect(body).toContain('data-testid="speaker-status-select"');
 		expect(body).toContain('data-testid="speakers-search"');
 		expect(body).toContain('data-testid="speakers-status-filter"');
+		expect(body).toContain('data-testid="speaker-mail-compose"');
+		expect(body).toContain('action="?/compose"');
+		expect(body).toContain('Send to 1 speaker');
 	});
 
 	it('shows empty state when the roster has no rows', () => {

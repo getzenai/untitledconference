@@ -13,8 +13,10 @@ import {
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
+import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { queueSpeakerMail } from './speaker-mail';
 import {
 	addSpeakerToConference,
 	listConferenceSpeakers,
@@ -48,6 +50,8 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+	await db.delete(emailLogTable).where(eq(emailLogTable.conferenceId, conference.id));
+	await db.delete(emailLogTable).where(eq(emailLogTable.conferenceId, otherConference.id));
 	await db
 		.delete(conferenceSpeakerTable)
 		.where(eq(conferenceSpeakerTable.conferenceId, conference.id));
@@ -359,5 +363,51 @@ describe('updateSpeakerStatus (SPK-04)', () => {
 				)
 			);
 		expect(row.status).toBe('invited');
+	});
+});
+
+describe('queueSpeakerMail (SPK-13)', () => {
+	it('queues only the conference-and-status filtered roster, and skips missing addresses', async () => {
+		await addSpeakerToConference(conference, {
+			name: 'Confirmed Here',
+			email: `confirmed-${suffix}@example.com`,
+			status: 'confirmed'
+		});
+		await addSpeakerToConference(conference, {
+			name: 'Invited Here',
+			email: `invited-${suffix}@example.com`,
+			status: 'invited'
+		});
+		await addSpeakerToConference(conference, {
+			name: 'Confirmed Without Email',
+			status: 'confirmed'
+		});
+		await addSpeakerToConference(otherConference, {
+			name: 'Confirmed Sister',
+			email: `sister-${suffix}@example.com`,
+			status: 'confirmed'
+		});
+
+		const result = await queueSpeakerMail(
+			conference.id,
+			{ status: 'confirmed' },
+			'Arrival details',
+			'Please reply with your travel time.'
+		);
+
+		expect(result).toEqual({ queued: 1, withoutEmail: 1 });
+		const rows = await db
+			.select()
+			.from(emailLogTable)
+			.where(eq(emailLogTable.conferenceId, conference.id));
+		expect(rows).toHaveLength(1);
+		expect(rows[0]).toMatchObject({
+			toEmail: `confirmed-${suffix}@example.com`,
+			template: 'speaker_bulk',
+			subject: 'Arrival details',
+			bodyPreview: 'Please reply with your travel time.',
+			status: 'queued',
+			relatedType: 'speaker'
+		});
 	});
 });
