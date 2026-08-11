@@ -29,6 +29,8 @@ const draw = (
 		name: string;
 		email: string;
 		role: 'reviewer';
+		conferenceManaged: boolean;
+		rounds: string[];
 		trackIds: number[];
 		tracks: string[];
 		assigned: number;
@@ -85,6 +87,8 @@ describe('team & reviewers page', () => {
 				name: 'Rex Reviewer',
 				email: 'rex@example.com',
 				role: 'reviewer',
+				conferenceManaged: true,
+				rounds: [],
 				trackIds: [3],
 				tracks: ['Platform'],
 				assigned: 4,
@@ -101,6 +105,30 @@ describe('team & reviewers page', () => {
 		expect(body).toContain('action="?/updateTracks"');
 		expect(body).toContain('Only selected tracks');
 		expect(body).not.toContain('submissions cannot be assigned');
+	});
+
+	it('shows round-scoped reviewers once without conference-only controls', () => {
+		const body = draw([
+			{
+				membershipId: 8,
+				userId: 'user-ines',
+				name: 'Ines Reviewer',
+				email: 'ines@example.com',
+				role: 'reviewer',
+				conferenceManaged: false,
+				rounds: ['Screening', 'Final'],
+				trackIds: [],
+				tracks: [],
+				assigned: 1,
+				submitted: 0,
+				outstanding: 1
+			}
+		]);
+
+		expect(body).toContain('Round reviewer · Screening, Final');
+		expect(body).toContain('access is managed by their review rounds');
+		expect(body).not.toContain('action="?/removeReviewer"');
+		expect(body).not.toContain('action="?/updateTracks"');
 	});
 
 	it('shows pending reviewer invitations with the reusable acceptance link', () => {
