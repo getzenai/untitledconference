@@ -20,6 +20,11 @@ export function parseSubmissionFilters(url: URL): SubmissionFilters {
 		q: url.searchParams.get('q') ?? undefined,
 		status: url.searchParams.getAll('status').filter(Boolean),
 		trackId: number('track'),
-		sessionFormatId: number('format')
+		sessionFormatId: number('format'),
+		// Present at all means on, whatever the value: this rides in on a checkbox,
+		// which sends `needsReview=on` and sends nothing when it is off. Comparing
+		// against '1' or 'true' would make the box that ships the filter the one
+		// shape that fails to apply it.
+		needsReview: url.searchParams.has('needsReview')
 	};
 }

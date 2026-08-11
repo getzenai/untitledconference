@@ -40,7 +40,11 @@ describe('Submissions table', () => {
 					userId: user.id,
 					slug,
 					days: ['2028-05-10'],
-					sessions: ['Zeta talk', 'Middle talk', 'Alpha talk']
+					sessions: ['Zeta talk', 'Middle talk', 'Alpha talk'],
+					// One of the three carries a handed-in review, so the still-to-review
+					// filter (#122) has something to leave out. A pile where every row is
+					// alike would let a filter that does nothing pass.
+					reviewed: ['Alpha talk']
 				}
 			})
 				.its('status')
@@ -64,6 +68,58 @@ describe('Submissions table', () => {
 		// And the columns it points at are genuinely reachable rather than clipped:
 		// the last header can be scrolled to.
 		cy.contains('th', 'Notification').scrollIntoView().should('be.visible');
+	});
+
+	/**
+	 * What is left to review (#122).
+	 *
+	 * Both halves need a pile where some talks are reviewed and some are not, which
+	 * is why the fixture files one review. Only a real navigation can prove that the
+	 * checkbox becomes a query parameter, the loader reads it, and the rows that
+	 * come back are the right ones — the unit test can only prove the control is on
+	 * the page.
+	 */
+	describe('still to review', () => {
+		beforeEach(() => {
+			cy.viewport(WIDE.width, WIDE.height);
+			cy.visit(`/manage/${slug}/submissions`);
+		});
+
+		it('filters the pile down to what nobody has reviewed', () => {
+			// Precondition: all three are on screen first, or "two rows" below would
+			// pass on a page that simply failed to load the third.
+			cy.get('tbody tr').should('have.length', 3);
+
+			cy.get('[data-testid="filter-needs-review"]').check();
+			cy.url().should('include', 'needsReview=on');
+			cy.get('tbody tr').should('have.length', 2);
+			cy.contains('tbody tr', 'Alpha talk').should('not.exist');
+
+			// The count in the header is the same question asked a second way, and the
+			// two have to agree — they are separate queries over one expression.
+			cy.get('[data-testid="unreviewed-count"]').should('contain.text', '2 unreviewed');
+		});
+
+		it('takes the same filter from the count in the header', () => {
+			cy.get('[data-testid="unreviewed-count"]').click();
+			cy.url().should('include', 'needsReview=on');
+			cy.get('tbody tr').should('have.length', 2);
+			cy.get('[data-testid="filter-needs-review"]').should('be.checked');
+		});
+
+		it('sorts by how many reviews are in, fewest first', () => {
+			cy.get('[data-testid="sort-by-reviews"]').click();
+			cy.url().should('include', 'sort=reviews-asc');
+			// The reviewed one sinks to the bottom; the two untouched ones float up.
+			cy.get('tbody tr').last().should('contain', 'Alpha talk');
+
+			cy.get('[data-testid="sort-by-reviews"]').click();
+			cy.url().should('include', 'sort=reviews-desc');
+			cy.get('tbody tr').first().should('contain', 'Alpha talk');
+
+			cy.get('[data-testid="sort-by-reviews"]').click();
+			cy.url().should('not.include', 'sort=');
+		});
 	});
 
 	it('sorts by title through the server and cycles back to the default', () => {

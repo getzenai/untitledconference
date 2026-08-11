@@ -56,7 +56,8 @@
 			data.filters.q ||
 			data.filters.trackId ||
 			data.filters.sessionFormatId ||
-			data.filters.status?.length
+			data.filters.status?.length ||
+			data.filters.needsReview
 		)
 	);
 
@@ -130,6 +131,10 @@
 
 	const score = $derived(column('score-desc', 'score-asc'));
 	const title = $derived(column('title-asc', 'title-desc'));
+	// Fewest first is the direction this column opens in, and it is the only one of
+	// the three where the ascending end is the interesting one: nobody sorts to find
+	// the most-reviewed talk, they sort to find the ones nobody has touched.
+	const reviews = $derived(column('reviews-asc', 'reviews-desc'));
 
 	// The control says what it will do AND what it has already done, because the arrow
 	// alone cannot: "↓" is unreadable to anyone who is not looking at the other two.
@@ -139,6 +144,14 @@
 			: score.ascending
 				? 'Sorted by score, lowest first. Back to newest first'
 				: 'Sorted by score, highest first. Sort lowest first'
+	);
+
+	const reviewsHint = $derived(
+		!reviews.active
+			? 'Sort by reviews, fewest first'
+			: reviews.ascending
+				? 'Sorted by reviews, fewest first. Sort most first'
+				: 'Sorted by reviews, most first. Back to newest first'
 	);
 
 	const titleHint = $derived(
@@ -191,8 +204,17 @@
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Submissions</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
-				{data.counts.total} total · {data.counts.undecided} awaiting a decision · {data.counts
-					.unreviewed} unreviewed
+				{data.counts.total} total · {data.counts.undecided} awaiting a decision ·
+				<!-- The number and the way to act on it are the same thing (#122). Reading
+				     "37 unreviewed" and then having to build the filter by hand is the gap
+				     this issue is about; the count is the shortest route to the pile. -->
+				<a
+					href="{base}/submissions?needsReview=on"
+					class="hover:text-foreground underline underline-offset-4"
+					data-testid="unreviewed-count"
+				>
+					{data.counts.unreviewed} unreviewed
+				</a>
 				{#if filtered}
 					<!-- The filter's own count, not the page's: "12 shown" under a filter that
 					     matches 300 is a wrong answer to the question the organizer is asking. -->
@@ -382,7 +404,7 @@
 				</th>
 			{/snippet}
 
-			<ScrollTable label="Scroll sideways for score, status and notification">
+			<ScrollTable label="Scroll sideways for score, reviews, status and notification">
 				<table class="w-full min-w-3xl text-left text-sm">
 					<!--
 						No `sticky top-0`. It was here and it never worked: sticky positions
@@ -408,6 +430,7 @@
 							<th class="py-2 pr-4 font-medium">Format</th>
 							<th class="py-2 pr-4 font-medium">Sponsor</th>
 							{@render sortable('Score', score, scoreHint, 'sort-by-score')}
+							{@render sortable('Reviews', reviews, reviewsHint, 'sort-by-reviews')}
 							<th class="py-2 pr-4 font-medium">Status</th>
 							<th class="py-2 pr-4 font-medium">Notification</th>
 						</tr>
@@ -448,13 +471,15 @@
 										/>
 									{/if}
 								</td>
-								<td class="py-2 pr-4 tabular-nums">
-									{formatScore(submission.score)}
-									{#if submission.reviewsAssigned > 0}
-										<span class="text-muted-foreground text-xs">
-											({submission.reviewsSubmitted}/{submission.reviewsAssigned})
-										</span>
-									{/if}
+								<td class="py-2 pr-4 tabular-nums">{formatScore(submission.score)}</td>
+								<!--
+									Handed in over assigned, in its own column now that it is sortable.
+									Both halves matter and they are different facts: 0/3 is three
+									reviewers sitting on a talk, 0/0 is a talk nobody has been asked
+									about. The first needs a nudge, the second needs an assignment.
+								-->
+								<td class="py-2 pr-4 tabular-nums" data-testid="reviews-cell">
+									{submission.reviewsSubmitted}/{submission.reviewsAssigned}
 								</td>
 								<td class="py-2 pr-4"><StatusBadge status={submission.status} /></td>
 								<td class="text-muted-foreground py-2 pr-4">

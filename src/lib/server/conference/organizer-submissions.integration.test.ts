@@ -23,7 +23,12 @@ import {
 } from '$lib/server/db/conference/review-schema';
 import { and, eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { exportSubmissions, listSubmissions, PAGE_SIZE } from './organizer-submissions';
+import {
+	exportSubmissions,
+	listSubmissions,
+	PAGE_SIZE,
+	submissionTotals
+} from './organizer-submissions';
 import { parseSort, scoreExpression } from './submission-sort';
 
 const suffix = `paging-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -460,5 +465,194 @@ describe('the exported file itself', () => {
 			'\uFEFFtitle,score',
 			'"Testing, ""briefly""",4.0'
 		]);
+	});
+});
+
+/**
+ * "What is left to review" (#122) — the filter the user interview asked for by
+ * name, and the order that goes with it.
+ *
+ * Two things here can only be asked of a database. The first is what counts as
+ * reviewed: an assignment nobody has answered is not a review, and a review filed
+ * under another conference's plan is not this conference's business. Both are
+ * decided by a join, and a join is not something a unit test can be wrong about.
+ *
+ * The second is the one that would embarrass us in front of an organizer: the
+ * number in the page header and the number of rows the filter returns are two
+ * different queries, and they have to agree. They are built from one expression
+ * now, and this is where that stays true.
+ */
+describe('the still-to-review filter (#122)', () => {
+	/** One reviewed talk, one assigned-but-unanswered, one untouched, one draft. */
+	async function pile() {
+		await addSubmission(conference, 'Reviewed talk', 1);
+		await addSubmission(conference, 'Assigned talk', 2);
+		await addSubmission(conference, 'Untouched talk', 3);
+		await db.insert(submissionTable).values({
+			conferenceId: conference.id,
+			title: 'Draft talk',
+			status: 'draft'
+		});
+
+		await addReview(await idFor('Reviewed talk'), REVIEWERS[0], { relevance: 4, depth: 8 });
+		await addReview(await idFor('Assigned talk'), REVIEWERS[1], {
+			relevance: null,
+			depth: null,
+			submitted: false
+		});
+	}
+
+	const titlesOf = async (filters = { needsReview: true }) =>
+		(await listSubmissions(conference.id, filters, 1, 'title-asc')).rows.map((r) => r.title);
+
+	it('keeps what nobody has handed a review in on, and drops what somebody has', async () => {
+		await pile();
+
+		// The assigned-but-unanswered talk is the interesting one: it has a review
+		// row, and it still needs reviewing. Counting rows instead of submissions
+		// would drop it and hide exactly the talk somebody is sitting on.
+		expect(await titlesOf()).toEqual(['Assigned talk', 'Untouched talk']);
+	});
+
+	/**
+	 * A draft is the speaker's work in progress. It has not been handed in, so it
+	 * is not review work — and it would be on this list forever, since nobody can
+	 * review it.
+	 */
+	it('leaves drafts out', async () => {
+		await pile();
+
+		expect(await titlesOf()).not.toContain('Draft talk');
+		// And the status filter still reaches it, so this is a rule of the review
+		// filter rather than a row the table has stopped being able to show.
+		const drafts = await listSubmissions(conference.id, { status: ['draft'] });
+		expect(drafts.rows.map((r) => r.title)).toEqual(['Draft talk']);
+	});
+
+	/**
+	 * The header prints this count and links to this filter. They are separate
+	 * queries; one expression feeds both, and this is the assertion that keeps it
+	 * that way. Drift here reads as data loss to the person looking at the screen.
+	 */
+	it('matches the unreviewed count the page header shows', async () => {
+		await pile();
+
+		const totals = await submissionTotals(conference.id);
+		const filtered = await listSubmissions(conference.id, { needsReview: true });
+
+		expect(filtered.matching).toBe(totals.unreviewed);
+		expect(totals.unreviewed).toBe(2);
+	});
+
+	/**
+	 * A review row can name a submission of this conference under a plan belonging
+	 * to another one — nothing in the schema forbids it. The join is what says such
+	 * a review does not count, so it is worth one row of proof rather than trust.
+	 */
+	it('ignores a review filed under another conference plan', async () => {
+		await addSubmission(conference, 'Untouched talk', 1);
+
+		const [foreignPlan] = await db
+			.insert(evaluationPlanTable)
+			.values({ conferenceId: other.id, name: 'Their plan' })
+			.returning();
+		const [foreignRound] = await db
+			.insert(reviewRoundTable)
+			.values({ evaluationPlanId: foreignPlan.id, name: 'Their round', position: 0 })
+			.returning();
+		await db.insert(reviewTable).values({
+			reviewRoundId: foreignRound.id,
+			submissionId: await idFor('Untouched talk'),
+			reviewerUserId: REVIEWERS[0],
+			status: 'submitted',
+			submittedAt: new Date()
+		});
+
+		expect(await titlesOf()).toEqual(['Untouched talk']);
+
+		await db.delete(evaluationPlanTable).where(eq(evaluationPlanTable.id, foreignPlan.id));
+	});
+
+	it('composes with the other filters rather than replacing them', async () => {
+		await pile();
+		await addSubmission(conference, 'Untouched talk in review', 4);
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(
+				and(
+					eq(submissionTable.conferenceId, conference.id),
+					eq(submissionTable.title, 'Untouched talk in review')
+				)
+			);
+
+		expect(await titlesOf({ needsReview: true, status: ['in_review'] } as never)).toEqual([
+			'Untouched talk in review'
+		]);
+	});
+
+	/** The file is the view (ABS-13), and the new filter is part of the view. */
+	it('carries into the export', async () => {
+		await pile();
+
+		const exported = await exportSubmissions(conference.id, { needsReview: true }, 'title-asc');
+		expect(exported.rows.map((r) => r.title)).toEqual(['Assigned talk', 'Untouched talk']);
+	});
+});
+
+describe('ordering by how many reviews are in (#122)', () => {
+	it('sorts by handed-in reviews across pages, fewest first and most first', async () => {
+		// One more row than fits on a page, and the reviewed one sits at the very
+		// bottom of the default order — so a sort applied to the page instead of the
+		// query would leave it on page two and this test would see it nowhere.
+		for (let i = 0; i < PAGE_SIZE + 1; i++) await addSubmission(conference, `Talk ${i}`, i);
+
+		const busiest = await idFor(`Talk ${PAGE_SIZE}`);
+		const middling = await idFor('Talk 0');
+		await addReview(busiest, REVIEWERS[0], { relevance: 4, depth: 8 });
+		await addReview(busiest, REVIEWERS[1], { relevance: 3, depth: 7 });
+		await addReview(middling, REVIEWERS[2], { relevance: 2, depth: 6 });
+
+		const most = await listSubmissions(conference.id, {}, 1, 'reviews-desc');
+		expect(most.rows.slice(0, 2).map((r) => r.id)).toEqual([busiest, middling]);
+		expect(most.rows[0].reviewsSubmitted).toBe(2);
+
+		// Ascending: the 49 untouched talks fill the top, the one-review talk closes
+		// page one, and the busiest is over on page two — where a sort applied to the
+		// page instead of the query could never have put it.
+		const fewest = await listSubmissions(conference.id, {}, 1, 'reviews-asc');
+		expect(fewest.rows.map((r) => r.id)).not.toContain(busiest);
+		expect(fewest.rows.slice(0, -1).every((r) => r.reviewsSubmitted === 0)).toBe(true);
+		expect(fewest.rows.at(-1)?.id).toBe(middling);
+
+		const lastPage = await listSubmissions(conference.id, {}, fewest.pageCount, 'reviews-asc');
+		expect(lastPage.rows.at(-1)?.id).toBe(busiest);
+	});
+
+	/**
+	 * An assignment is not a review. A talk three reviewers are sitting on has to
+	 * stay at the fewest-first end, because it is precisely the one that still
+	 * needs chasing.
+	 */
+	it('counts only what was handed in, not what was assigned', async () => {
+		await addSubmission(conference, 'Waiting talk', 1);
+		await addSubmission(conference, 'Done talk', 2);
+
+		const waiting = await idFor('Waiting talk');
+		for (const reviewer of REVIEWERS) {
+			await addReview(waiting, reviewer, { relevance: null, depth: null, submitted: false });
+		}
+		await addReview(await idFor('Done talk'), REVIEWERS[0], { relevance: 4, depth: 8 });
+
+		const fewest = await listSubmissions(conference.id, {}, 1, 'reviews-asc');
+		expect(fewest.rows.map((r) => r.title)).toEqual(['Waiting talk', 'Done talk']);
+		expect(fewest.rows[0].reviewsAssigned).toBe(3);
+		expect(fewest.rows[0].reviewsSubmitted).toBe(0);
+	});
+
+	it('reads the two new orders and still refuses an unknown one', () => {
+		expect(parseSort('reviews-asc')).toBe('reviews-asc');
+		expect(parseSort('reviews-desc')).toBe('reviews-desc');
+		expect(parseSort('reviews')).toBe('newest');
 	});
 });
