@@ -8,6 +8,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
+	import DatePicker from '$lib/components/app/date-picker.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -97,11 +98,11 @@
 			<div class="grid gap-5 sm:grid-cols-2">
 				<div class="space-y-2">
 					<Label for="startsOn">Starts</Label>
-					<Input id="startsOn" name="startsOn" type="date" value={form?.values?.startsOn ?? ''} />
+					<DatePicker name="startsOn" value={form?.values?.startsOn ?? ''} />
 				</div>
 				<div class="space-y-2">
 					<Label for="endsOn">Ends</Label>
-					<Input id="endsOn" name="endsOn" type="date" value={form?.values?.endsOn ?? ''} />
+					<DatePicker name="endsOn" value={form?.values?.endsOn ?? ''} />
 				</div>
 			</div>
 

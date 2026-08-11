@@ -8,6 +8,7 @@
 	import { enhance } from '$app/forms';
 	import { MAX_MINUTES } from '$lib/conference/structure-lines';
 	import { Button } from '$lib/components/ui/button';
+	import DatePicker from '$lib/components/app/date-picker.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 
@@ -19,7 +20,7 @@
 
 	let busy = $state(false);
 
-	/** A stored timestamp back into the `YYYY-MM-DD` an `<input type="date">` takes. */
+	/** A stored timestamp back into the `YYYY-MM-DD` the date picker takes. */
 	const isoDay = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
 
 	const submitting = () => {
@@ -266,24 +267,30 @@
 
 		<form method="POST" action="?/dates" use:enhance={submitting} class="mt-3 space-y-3">
 			<div class="flex flex-wrap items-end gap-2">
-				<label class="w-44 text-xs">
+				<!-- A picker is a button, and a button takes its accessible name from
+				     what is inside it — which here is a date, not a field name. The
+				     caption above it is therefore repeated as `aria-label`, otherwise a
+				     screen reader announces two buttons both called "May 12, 2027". -->
+				<div class="w-44 text-xs">
 					<span class="text-muted-foreground">Starts on</span>
-					<Input
+					<DatePicker
 						name="startsOn"
-						type="date"
 						value={data.conference.startsOn ?? ''}
-						class="mt-1 h-8 text-sm"
+						size="sm"
+						aria-label="Starts on"
+						class="mt-1 text-sm"
 					/>
-				</label>
-				<label class="w-44 text-xs">
+				</div>
+				<div class="w-44 text-xs">
 					<span class="text-muted-foreground">Ends on</span>
-					<Input
+					<DatePicker
 						name="endsOn"
-						type="date"
 						value={data.conference.endsOn ?? ''}
-						class="mt-1 h-8 text-sm"
+						size="sm"
+						aria-label="Ends on"
+						class="mt-1 text-sm"
 					/>
-				</label>
+				</div>
 				<Button type="submit" size="sm" disabled={busy}>Save dates</Button>
 			</div>
 			<p class="text-muted-foreground text-xs">
@@ -525,15 +532,16 @@
 										class="mt-1 h-8 text-sm"
 									/>
 								</label>
-								<label class="w-40 text-xs">
+								<div class="w-40 text-xs">
 									<span class="text-muted-foreground">or a fixed date</span>
-									<Input
+									<DatePicker
 										name="dueOn"
-										type="date"
 										value={template.dueOn ? isoDay(template.dueOn) : ''}
-										class="mt-1 h-8 text-sm"
+										size="sm"
+										aria-label="Due on a fixed date"
+										class="mt-1 text-sm"
 									/>
-								</label>
+								</div>
 								<Button type="submit" size="sm" variant="outline" disabled={busy}>Save</Button>
 							</div>
 							<label class="block text-xs">
@@ -595,10 +603,15 @@
 						placeholder="14"
 					/>
 				</label>
-				<label class="w-40 text-xs">
+				<div class="w-40 text-xs">
 					<span class="text-muted-foreground">or a fixed date</span>
-					<Input name="dueOn" type="date" class="mt-1 h-8 text-sm" />
-				</label>
+					<DatePicker
+						name="dueOn"
+						size="sm"
+						aria-label="Due on a fixed date"
+						class="mt-1 text-sm"
+					/>
+				</div>
 				<Button type="submit" size="sm" disabled={busy}>Add task</Button>
 			</div>
 		</form>
