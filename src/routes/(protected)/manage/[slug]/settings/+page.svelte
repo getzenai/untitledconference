@@ -17,6 +17,9 @@
 
 	let busy = $state(false);
 
+	/** A stored timestamp back into the `YYYY-MM-DD` an `<input type="date">` takes. */
+	const isoDay = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
+
 	const submitting = () => {
 		busy = true;
 		return async ({ update }: { update: () => Promise<void> }) => {
@@ -281,6 +284,155 @@
 				/>
 			</label>
 			<Button type="submit" size="sm" disabled={busy}>Add format</Button>
+		</form>
+	</section>
+
+	<!--
+		The deliverables screen has been promising this section for as long as it has
+		existed: "tasks are created from the templates in settings". There were no
+		templates in settings. The generator on the accept path was fine — nothing
+		could feed it, so every speaker portal stayed empty and the journey ended at
+		the first step.
+
+		Deliberately not a template designer. A title, what it is, and when it is due
+		is the whole of what `createSpeakerTasks` reads; anything more would be a
+		screen about the screen.
+	-->
+	<section
+		class="border-border bg-card max-w-2xl rounded-lg border p-4"
+		data-testid="settings-task-templates"
+	>
+		<h2 class="text-sm font-semibold">Speaker tasks</h2>
+		<p class="text-muted-foreground mt-0.5 text-xs">
+			What every speaker is asked for once their talk is accepted — a slide deck, a headshot, a bio.
+			Accepting a talk creates these for its speakers; changing them here changes what the
+			<em>next</em>
+			acceptance hands out, never a task somebody already has.
+		</p>
+
+		{#if data.templates.length === 0}
+			<p class="text-muted-foreground mt-3 text-sm">
+				No tasks yet — accepting a talk will ask its speakers for nothing.
+			</p>
+		{:else}
+			<ul class="divide-border mt-3 divide-y">
+				{#each data.templates as template (template.id)}
+					<li class="py-3">
+						<form
+							method="POST"
+							action="?/updateTemplate"
+							use:enhance={submitting}
+							class="space-y-2"
+						>
+							<input type="hidden" name="id" value={template.id} />
+							<div class="flex flex-wrap items-end gap-2">
+								<label class="min-w-[12rem] flex-1 text-xs">
+									<span class="text-muted-foreground">Title</span>
+									<Input name="title" value={template.title} class="mt-1 h-8 text-sm" required />
+								</label>
+								<label class="w-36 text-xs">
+									<span class="text-muted-foreground">Speaker has to</span>
+									<select
+										name="kind"
+										class="border-input bg-background mt-1 h-8 w-full rounded-md border px-2 text-sm"
+									>
+										<option value="action" selected={template.kind === 'action'}
+											>Do something</option
+										>
+										<option value="file_request" selected={template.kind === 'file_request'}>
+											Upload a file
+										</option>
+									</select>
+								</label>
+							</div>
+							<div class="flex flex-wrap items-end gap-2">
+								<label class="w-40 text-xs">
+									<span class="text-muted-foreground">Days after accept</span>
+									<Input
+										name="dueOffsetDays"
+										type="number"
+										min="0"
+										max="365"
+										value={template.dueOffsetDays ?? ''}
+										class="mt-1 h-8 text-sm"
+									/>
+								</label>
+								<label class="w-40 text-xs">
+									<span class="text-muted-foreground">or a fixed date</span>
+									<Input
+										name="dueOn"
+										type="date"
+										value={template.dueOn ? isoDay(template.dueOn) : ''}
+										class="mt-1 h-8 text-sm"
+									/>
+								</label>
+								<Button type="submit" size="sm" variant="outline" disabled={busy}>Save</Button>
+							</div>
+							<label class="block text-xs">
+								<span class="text-muted-foreground">Instructions (optional)</span>
+								<Input
+									name="instructions"
+									value={template.instructions ?? ''}
+									class="mt-1 h-8 text-sm"
+									placeholder="16:9, PDF, no larger than 20 MB"
+								/>
+							</label>
+						</form>
+
+						<!-- Its own form: nesting it in the edit form would post the edited
+						     fields with the delete, and a browser will not nest them anyway. -->
+						<form method="POST" action="?/deleteTemplate" use:enhance={submitting} class="mt-2">
+							<input type="hidden" name="id" value={template.id} />
+							<Button
+								type="submit"
+								size="sm"
+								variant="ghost"
+								class="text-muted-foreground h-7 px-2 text-xs"
+								disabled={busy}
+							>
+								Remove
+							</Button>
+						</form>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+
+		<form method="POST" action="?/addTemplate" use:enhance={submitting} class="mt-4 space-y-2">
+			<div class="flex flex-wrap items-end gap-2">
+				<label class="min-w-[12rem] flex-1 text-xs">
+					<span class="text-muted-foreground">New task</span>
+					<Input name="title" class="mt-1 h-8 text-sm" placeholder="Upload your slides" required />
+				</label>
+				<label class="w-36 text-xs">
+					<span class="text-muted-foreground">Speaker has to</span>
+					<select
+						name="kind"
+						class="border-input bg-background mt-1 h-8 w-full rounded-md border px-2 text-sm"
+					>
+						<option value="file_request">Upload a file</option>
+						<option value="action">Do something</option>
+					</select>
+				</label>
+			</div>
+			<div class="flex flex-wrap items-end gap-2">
+				<label class="w-40 text-xs">
+					<span class="text-muted-foreground">Days after accept</span>
+					<Input
+						name="dueOffsetDays"
+						type="number"
+						min="0"
+						max="365"
+						class="mt-1 h-8 text-sm"
+						placeholder="14"
+					/>
+				</label>
+				<label class="w-40 text-xs">
+					<span class="text-muted-foreground">or a fixed date</span>
+					<Input name="dueOn" type="date" class="mt-1 h-8 text-sm" />
+				</label>
+				<Button type="submit" size="sm" disabled={busy}>Add task</Button>
+			</div>
 		</form>
 	</section>
 </div>
