@@ -10,7 +10,18 @@ import { invalidRangeField, MAX_CONFERENCE_DAYS } from '$lib/conference/conferen
 import { addedMessage } from '$lib/conference/structure-lines';
 import { requireOrganizer } from '$lib/server/conference/access';
 import { syncConferenceDays } from '$lib/server/conference/conference-days';
-import { addFormats, addRooms, addTracks, conferenceConfig } from '$lib/server/conference/config';
+import {
+	addFormats,
+	addRooms,
+	addTracks,
+	conferenceConfig,
+	removeFormat,
+	removeRoom,
+	removeTrack,
+	renameRoom,
+	renameTrack,
+	updateFormat
+} from '$lib/server/conference/config';
 import {
 	addTaskTemplate,
 	deleteTaskTemplate,
@@ -194,6 +205,101 @@ export const actions: Actions = {
 			message: addedMessage('session format', result.added, result.skipped),
 			section: 'formats'
 		};
+	},
+
+	/**
+	 * Editing and removing what the three lists hold (#119).
+	 *
+	 * Every one of these takes the row id from the form and hands it straight to a
+	 * writer that matches on the conference as well: an id from a browser is never
+	 * a claim about which conference it belongs to.
+	 *
+	 * The success sentences say what did *not* happen as well as what did. A rename
+	 * keeps the id, so every scheduled session and every submission follows along —
+	 * an organizer who is not told that will go and check.
+	 */
+	renameRoom: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const id = identifier(form);
+		if (id === null) return fail(400, { error: 'Unknown room.', section: 'rooms' });
+
+		const problem = await renameRoom(conference.id, id, text(form, 'name'));
+		if (problem) return fail(400, { error: problem, section: 'rooms' });
+		return {
+			message: 'Room renamed. Everything scheduled in it stays where it is.',
+			section: 'rooms'
+		};
+	},
+
+	deleteRoom: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = identifier(await request.formData());
+		if (id === null) return fail(400, { error: 'Unknown room.', section: 'rooms' });
+
+		const problem = await removeRoom(conference.id, id);
+		if (problem) return fail(400, { error: problem, section: 'rooms' });
+		return { message: 'Room removed.', section: 'rooms' };
+	},
+
+	renameTrack: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const id = identifier(form);
+		if (id === null) return fail(400, { error: 'Unknown track.', section: 'tracks' });
+
+		const problem = await renameTrack(conference.id, id, text(form, 'name'));
+		if (problem) return fail(400, { error: problem, section: 'tracks' });
+		return {
+			message: 'Track renamed. Submissions in it keep it, under the new name.',
+			section: 'tracks'
+		};
+	},
+
+	deleteTrack: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = identifier(await request.formData());
+		if (id === null) return fail(400, { error: 'Unknown track.', section: 'tracks' });
+
+		const problem = await removeTrack(conference.id, id);
+		if (problem) return fail(400, { error: problem, section: 'tracks' });
+		return { message: 'Track removed.', section: 'tracks' };
+	},
+
+	/**
+	 * Name and length in one submit, because they are one row and an organizer
+	 * fixing "Wokrshop" should not have to decide whether the 90 minutes came too.
+	 */
+	updateFormat: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const id = identifier(form);
+		if (id === null) return fail(400, { error: 'Unknown session format.', section: 'formats' });
+
+		// An empty minutes field is "no length set", not zero — `Number('')` is 0,
+		// and a zero-minute format would flatten every agenda end time it touches.
+		const minutes = optional(form, 'minutes');
+		const problem = await updateFormat(
+			conference.id,
+			id,
+			text(form, 'name'),
+			minutes === null ? null : Number(minutes)
+		);
+		if (problem) return fail(400, { error: problem, section: 'formats' });
+		return {
+			message: 'Session format saved. Submissions already proposed as it keep it.',
+			section: 'formats'
+		};
+	},
+
+	deleteFormat: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = identifier(await request.formData());
+		if (id === null) return fail(400, { error: 'Unknown session format.', section: 'formats' });
+
+		const problem = await removeFormat(conference.id, id);
+		if (problem) return fail(400, { error: problem, section: 'formats' });
+		return { message: 'Session format removed.', section: 'formats' };
 	},
 
 	addTemplate: async ({ locals, params, request }) => {

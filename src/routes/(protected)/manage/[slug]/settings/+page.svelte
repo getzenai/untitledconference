@@ -6,6 +6,7 @@
 	 * are not a list here — they follow from the date range at the top (#86).
 	 */
 	import { enhance } from '$app/forms';
+	import { MAX_MINUTES } from '$lib/conference/structure-lines';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -109,6 +110,68 @@
 			</p>
 		{/if}
 	{/if}
+{/snippet}
+
+<!--
+	Remove, as its own form beside the rename form rather than inside it.
+
+	A browser will not nest forms at all, and even if it would, a Remove that
+	posted the half-typed name next to it would be two intentions on one button.
+-->
+{#snippet removeRow(action: string, id: number, label: string)}
+	<form method="POST" {action} use:enhance={submitting}>
+		<input type="hidden" name="id" value={id} />
+		<Button
+			type="submit"
+			size="sm"
+			variant="ghost"
+			class="text-muted-foreground h-8 px-2 text-xs"
+			disabled={busy}
+			aria-label={label}
+		>
+			Remove
+		</Button>
+	</form>
+{/snippet}
+
+<!--
+	One row of a list whose whole content is a name: a field that starts at what is
+	stored, Save beside it, Remove beside that.
+
+	Rooms and tracks share it because they are the same thing to an organizer. A
+	session format does not — it carries a length as well, and folding a field that
+	only one of the three has into here would cost more in conditionals than the
+	repetition it saves.
+-->
+{#snippet nameRow(
+	noun: string,
+	row: { id: number; name: string },
+	renameAction: string,
+	deleteAction: string
+)}
+	<li
+		class="flex flex-wrap items-center gap-2 py-2"
+		data-testid="settings-{noun}-row"
+		data-name={row.name}
+	>
+		<form
+			method="POST"
+			action={renameAction}
+			use:enhance={submitting}
+			class="flex flex-1 flex-wrap items-center gap-2"
+		>
+			<input type="hidden" name="id" value={row.id} />
+			<Input
+				name="name"
+				value={row.name}
+				aria-label="{noun} name"
+				class="h-8 min-w-[10rem] flex-1 text-sm"
+				required
+			/>
+			<Button type="submit" size="sm" variant="outline" disabled={busy}>Save</Button>
+		</form>
+		{@render removeRow(deleteAction, row.id, `Remove ${noun}`)}
+	</li>
 {/snippet}
 
 <svelte:head>
@@ -235,7 +298,8 @@
 	>
 		<h2 class="text-sm font-semibold">Rooms</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			Columns on the agenda grid. Add them here, not while scheduling.
+			Columns on the agenda grid. Add them here, not while scheduling. Renaming one keeps everything
+			scheduled in it; a room can only go once nothing is.
 		</p>
 
 		{#if config.rooms.length === 0}
@@ -243,7 +307,7 @@
 		{:else}
 			<ul class="divide-border mt-3 divide-y text-sm">
 				{#each config.rooms as room (room.id)}
-					<li class="py-2">{room.name}</li>
+					{@render nameRow('room', room, '?/renameRoom', '?/deleteRoom')}
 				{/each}
 			</ul>
 		{/if}
@@ -276,7 +340,8 @@
 	>
 		<h2 class="text-sm font-semibold">Tracks</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			Thematic streams on the call for papers and the public site.
+			Thematic streams on the call for papers and the public site. A track can only go once no
+			submission is in it and no reviewer is limited to it.
 		</p>
 
 		{#if config.tracks.length === 0}
@@ -284,7 +349,7 @@
 		{:else}
 			<ul class="divide-border mt-3 divide-y text-sm">
 				{#each config.tracks as track (track.id)}
-					<li class="py-2">{track.name}</li>
+					{@render nameRow('track', track, '?/renameTrack', '?/deleteTrack')}
 				{/each}
 			</ul>
 		{/if}
@@ -317,7 +382,8 @@
 	>
 		<h2 class="text-sm font-semibold">Session formats</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			What a speaker proposes (Keynote, Talk, Workshop…). Length drives agenda end times.
+			What a speaker proposes (Keynote, Talk, Workshop…). Length drives agenda end times. A format
+			can only go once nothing was proposed as it.
 		</p>
 
 		{#if config.formats.length === 0}
@@ -327,15 +393,41 @@
 		{:else}
 			<ul class="divide-border mt-3 divide-y text-sm">
 				{#each config.formats as format (format.id)}
-					<li class="flex items-center justify-between gap-3 py-2">
-						<span>{format.name}</span>
-						<span class="text-muted-foreground text-xs">
-							{#if format.minutes}
-								{format.minutes} min
-							{:else}
-								no length set
-							{/if}
-						</span>
+					<li
+						class="flex flex-wrap items-center gap-2 py-2"
+						data-testid="settings-format-row"
+						data-name={format.name}
+					>
+						<form
+							method="POST"
+							action="?/updateFormat"
+							use:enhance={submitting}
+							class="flex flex-1 flex-wrap items-center gap-2"
+						>
+							<input type="hidden" name="id" value={format.id} />
+							<Input
+								name="name"
+								value={format.name}
+								aria-label="Session format name"
+								class="h-8 min-w-[10rem] flex-1 text-sm"
+								required
+							/>
+							<!-- Blank is "no length set", which is why there is no default here:
+							     a format nobody has measured yet is a real state, and typing a
+							     number in is how it stops being one. -->
+							<Input
+								name="minutes"
+								type="number"
+								min="1"
+								max={MAX_MINUTES}
+								value={format.minutes ?? ''}
+								aria-label="Length in minutes"
+								placeholder="min"
+								class="h-8 w-20 text-sm"
+							/>
+							<Button type="submit" size="sm" variant="outline" disabled={busy}>Save</Button>
+						</form>
+						{@render removeRow('?/deleteFormat', format.id, 'Remove session format')}
 					</li>
 				{/each}
 			</ul>

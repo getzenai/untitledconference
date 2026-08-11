@@ -333,3 +333,82 @@ describe('adding structure a list at a time', () => {
 		expect(body.match(/Added 3 rooms\./g)).toHaveLength(1);
 	});
 });
+
+/**
+ * A list you can only add to (#119).
+ *
+ * Every row now carries its own name field and its own Remove, and the two are
+ * separate forms on purpose: a browser will not nest forms, and a Remove that
+ * posted the half-typed name next to it would be two intentions on one button.
+ */
+describe('editing a room, track or format in place', () => {
+	const body = render(Page, {
+		props: {
+			data: {
+				user: { id: 'organizer-1', name: 'Jordan' },
+				impersonating: null,
+				analytics: { apiKey: undefined, host: undefined },
+				conference,
+				config: {
+					rooms: [{ id: 11, name: 'Main Stage', position: 0 }],
+					tracks: [{ id: 22, name: 'AI Engineering', position: 0 }],
+					formats: [{ id: 33, name: 'Talk', minutes: 30, position: 0 }]
+				},
+				templates: []
+			} as never,
+			form: null
+		}
+	}).body;
+
+	it('gives every row an edit form and a remove form of its own', () => {
+		for (const action of [
+			'?/renameRoom',
+			'?/deleteRoom',
+			'?/renameTrack',
+			'?/deleteTrack',
+			'?/updateFormat',
+			'?/deleteFormat'
+		]) {
+			expect(body).toContain(`action="${action}"`);
+		}
+
+		for (const id of ['11', '22', '33']) {
+			expect(body).toContain(`name="id" value="${id}"`);
+		}
+	});
+
+	it('starts the fields at what is stored, so a save is an edit and not a retype', () => {
+		expect(body).toContain('value="Main Stage"');
+		expect(body).toContain('value="AI Engineering"');
+		expect(body).toContain('value="Talk"');
+		expect(body).toContain('value="30"');
+	});
+
+	/**
+	 * A format with no length set must come back with an empty minutes field, not
+	 * a zero: zero minutes is a real number the form would happily post, and it
+	 * would flatten every agenda end time that format touches.
+	 */
+	it('leaves the length blank for a format nobody has measured', () => {
+		const unmeasured = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: {
+						rooms: [],
+						tracks: [],
+						formats: [{ id: 33, name: 'Panel', minutes: null, position: 0 }]
+					},
+					templates: []
+				} as never,
+				form: null
+			}
+		}).body;
+
+		expect(unmeasured).toContain('name="minutes"');
+		expect(unmeasured).not.toContain('value="0"');
+	});
+});

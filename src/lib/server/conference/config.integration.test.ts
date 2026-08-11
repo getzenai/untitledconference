@@ -7,20 +7,38 @@
  * worth having — order, positions, and a repeat that does not fork the list.
  */
 import { db } from '$lib/server/db';
-import { organization } from '$lib/server/db/auth-schema';
+import { organization, user } from '$lib/server/db/auth-schema';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
+	membershipTable,
+	membershipTrackTable,
 	roomTable,
 	sessionFormatTable,
 	trackTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { addFormat, addFormats, addRoom, addRooms, addTracks, conferenceConfig } from './config';
+import {
+	addFormat,
+	addFormats,
+	addRoom,
+	addRooms,
+	addTracks,
+	conferenceConfig,
+	removeFormat,
+	removeRoom,
+	removeTrack,
+	renameRoom,
+	renameTrack,
+	updateFormat
+} from './config';
 
 const suffix = `cfg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
+const userId = `user-${suffix}`;
 
 let conference: Conference;
 let otherConference: Conference;
@@ -31,6 +49,14 @@ beforeAll(async () => {
 		name: 'Config Org',
 		slug: organizationId,
 		createdAt: new Date()
+	});
+	await db.insert(user).values({
+		id: userId,
+		name: 'Reviewer',
+		email: `${userId}@example.test`,
+		emailVerified: true,
+		createdAt: new Date(),
+		updatedAt: new Date()
 	});
 
 	[conference] = await db
@@ -53,6 +79,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
 	await db.delete(organization).where(eq(organization.id, organizationId));
+	await db.delete(user).where(eq(user.id, userId));
 });
 
 describe('adding several rooms in one submit', () => {
@@ -203,5 +230,180 @@ describe('the single-name helpers the agenda uses', () => {
 		expect(id).not.toBeNull();
 		const { rooms } = await conferenceConfig(conference.id);
 		expect(rooms.map((room) => room.name)).toEqual(['Main Stage']);
+	});
+});
+
+/**
+ * Renaming and removing (#119).
+ *
+ * The rename tests are mostly about the id staying put: what makes a rename safe
+ * is that every session and submission points at a row, not at a string.
+ *
+ * The removal tests are the ones worth having. All three foreign keys are
+ * `on delete set null` or `cascade`, so the database will take every one of these
+ * deletes happily — and hand back an agenda with sessions in no room, submissions
+ * with no track, or a reviewer who was narrowed to one track and can now read all
+ * of them. Nothing here would fail loudly on its own.
+ */
+describe('editing and removing what the lists hold', () => {
+	beforeEach(async () => {
+		await db.delete(placementTable).where(eq(placementTable.conferenceId, conference.id));
+		await db.delete(submissionTable).where(eq(submissionTable.conferenceId, conference.id));
+	});
+
+	it('renames a room without moving the id anything is scheduled against', async () => {
+		const roomId = (await addRoom(conference.id, 'Room 3C'))!;
+		const [placement] = await db
+			.insert(placementTable)
+			.values({ conferenceId: conference.id, kind: 'block', title: 'Lunch', roomId })
+			.returning();
+
+		expect(await renameRoom(conference.id, roomId, '  Hall C  ')).toBeNull();
+
+		const { rooms } = await conferenceConfig(conference.id);
+		expect(rooms).toEqual([expect.objectContaining({ id: roomId, name: 'Hall C' })]);
+
+		const [still] = await db
+			.select({ roomId: placementTable.roomId })
+			.from(placementTable)
+			.where(eq(placementTable.id, placement.id));
+		expect(still.roomId).toBe(roomId);
+	});
+
+	it('refuses a rename onto a name the list already carries, whatever the case', async () => {
+		const roomId = (await addRoom(conference.id, 'Room 3C'))!;
+		await addRoom(conference.id, 'Main Stage');
+
+		expect(await renameRoom(conference.id, roomId, 'main stage')).toContain('already');
+		expect((await conferenceConfig(conference.id)).rooms[0].name).toBe('Room 3C');
+	});
+
+	it('refuses to rename a room to nothing', async () => {
+		const roomId = (await addRoom(conference.id, 'Room 3C'))!;
+
+		expect(await renameRoom(conference.id, roomId, '   ')).toContain('name');
+		expect((await conferenceConfig(conference.id)).rooms[0].name).toBe('Room 3C');
+	});
+
+	// The id comes from a form, so it is never a claim about which conference it
+	// belongs to. A neighbouring conference's room must be untouchable through it.
+	it('will not rename or remove a room belonging to another conference', async () => {
+		const foreign = (await addRoom(otherConference.id, 'Their Stage'))!;
+
+		expect(await renameRoom(conference.id, foreign, 'Ours Now')).toContain('gone');
+		expect(await removeRoom(conference.id, foreign)).toContain('gone');
+		expect((await conferenceConfig(otherConference.id)).rooms[0].name).toBe('Their Stage');
+	});
+
+	it('removes a room nothing is scheduled in', async () => {
+		const roomId = (await addRoom(conference.id, 'Room 3C'))!;
+
+		expect(await removeRoom(conference.id, roomId)).toBeNull();
+		expect((await conferenceConfig(conference.id)).rooms).toEqual([]);
+	});
+
+	it('keeps a room that still holds sessions, and says how many', async () => {
+		const roomId = (await addRoom(conference.id, 'Main Stage'))!;
+		await db.insert(placementTable).values([
+			{ conferenceId: conference.id, kind: 'block', title: 'Keynote', roomId },
+			{ conferenceId: conference.id, kind: 'block', title: 'Lunch', roomId }
+		]);
+
+		expect(await removeRoom(conference.id, roomId)).toContain('2 sessions');
+		expect((await conferenceConfig(conference.id)).rooms).toHaveLength(1);
+	});
+
+	it('keeps a track a submission is in', async () => {
+		const trackId = (await addTracks(conference.id, 'Security')).ids[0];
+		await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'A talk', trackId });
+
+		expect(await removeTrack(conference.id, trackId)).toContain('1 submission');
+		expect((await conferenceConfig(conference.id)).tracks).toHaveLength(1);
+	});
+
+	/**
+	 * The check that is easy to leave out and expensive to leave out.
+	 *
+	 * `membership_track` cascades. Deleting the track would delete the narrowing
+	 * with it, and a reviewer with no narrowing left reads every track — a
+	 * widening of access nobody asked for, arriving through a Remove button in
+	 * settings.
+	 */
+	it('keeps a track a reviewer is limited to, rather than widening them to all of them', async () => {
+		const trackId = (await addTracks(conference.id, 'Platform')).ids[0];
+		const [membership] = await db
+			.insert(membershipTable)
+			.values({ userId, role: 'reviewer', scopeType: 'conference', scopeId: conference.id })
+			.returning();
+		await db.insert(membershipTrackTable).values({ membershipId: membership.id, trackId });
+
+		expect(await removeTrack(conference.id, trackId)).toContain('1 reviewer');
+		expect((await conferenceConfig(conference.id)).tracks).toHaveLength(1);
+
+		await db.delete(membershipTable).where(eq(membershipTable.id, membership.id));
+	});
+
+	it('renames a track the submissions in it keep pointing at', async () => {
+		const trackId = (await addTracks(conference.id, 'Sec')).ids[0];
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'A talk', trackId })
+			.returning();
+
+		expect(await renameTrack(conference.id, trackId, 'Security')).toBeNull();
+		expect((await conferenceConfig(conference.id)).tracks[0].name).toBe('Security');
+
+		const [still] = await db
+			.select({ trackId: submissionTable.trackId })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submission.id));
+		expect(still.trackId).toBe(trackId);
+	});
+
+	it('removes a track nothing points at', async () => {
+		const trackId = (await addTracks(conference.id, 'Platform')).ids[0];
+
+		expect(await removeTrack(conference.id, trackId)).toBeNull();
+		expect((await conferenceConfig(conference.id)).tracks).toEqual([]);
+	});
+
+	it('saves a format name and length together, and takes an empty length back', async () => {
+		const formatId = (await addFormat(conference.id, 'Wokrshop', 90))!;
+
+		expect(await updateFormat(conference.id, formatId, 'Workshop', 120)).toBeNull();
+		expect((await conferenceConfig(conference.id)).formats).toEqual([
+			expect.objectContaining({ id: formatId, name: 'Workshop', minutes: 120 })
+		]);
+
+		expect(await updateFormat(conference.id, formatId, 'Workshop', null)).toBeNull();
+		expect((await conferenceConfig(conference.id)).formats[0].minutes).toBeNull();
+	});
+
+	it('refuses a length that is not a whole number of minutes in range', async () => {
+		const formatId = (await addFormat(conference.id, 'Talk', 30))!;
+
+		expect(await updateFormat(conference.id, formatId, 'Talk', 0)).toContain('Minutes');
+		expect(await updateFormat(conference.id, formatId, 'Talk', 12.5)).toContain('Minutes');
+		expect(await updateFormat(conference.id, formatId, 'Talk', 24 * 60 + 1)).toContain('Minutes');
+		expect((await conferenceConfig(conference.id)).formats[0].minutes).toBe(30);
+	});
+
+	it('keeps a format a submission was proposed as', async () => {
+		const formatId = (await addFormat(conference.id, 'Talk', 30))!;
+		await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'A talk', sessionFormatId: formatId });
+
+		expect(await removeFormat(conference.id, formatId)).toContain('1 submission');
+		expect((await conferenceConfig(conference.id)).formats).toHaveLength(1);
+	});
+
+	it('removes a format nothing was proposed as', async () => {
+		const formatId = (await addFormat(conference.id, 'Panel', null))!;
+
+		expect(await removeFormat(conference.id, formatId)).toBeNull();
+		expect((await conferenceConfig(conference.id)).formats).toEqual([]);
 	});
 });
