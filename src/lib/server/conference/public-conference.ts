@@ -17,6 +17,7 @@
  * strings so the interface never does arithmetic on a primary key.
  */
 import type { PublicConference, PublicSession, PublicSpeaker } from '$lib/conference/public-types';
+import { isPublishableUrl, parseSpeakerLinks } from '$lib/conference/speaker-links';
 import { db } from '$lib/server/db';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
@@ -158,7 +159,8 @@ function selectSpeakersFor(submissionIds: number[]) {
 				jobTitle: speakerProfileTable.jobTitle,
 				company: speakerProfileTable.company,
 				headshotUrl: speakerProfileTable.headshotUrl,
-				bio: speakerProfileTable.bio
+				bio: speakerProfileTable.bio,
+				links: speakerProfileTable.links
 			})
 			.from(submissionSpeakerTable)
 			.innerJoin(
@@ -214,7 +216,11 @@ function assembleProgramme(placements: PlacementRow[], speakerRows: SpeakerRow[]
 			jobTitle: s.jobTitle,
 			company: s.company,
 			headshotUrl: s.headshotUrl,
-			bio: s.bio
+			bio: s.bio,
+			// Parsed here rather than in the component: a link that cannot be
+			// published must not reach a page as an href, and this is the boundary
+			// where public data is decided.
+			links: parseSpeakerLinks(s.links).filter((link) => isPublishableUrl(link.url))
 		});
 	}
 
