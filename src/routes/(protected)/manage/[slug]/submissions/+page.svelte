@@ -13,9 +13,10 @@
 	import { describeDecision, describeNotification } from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
+	import SubmissionFilters from '$lib/components/app/conference/submission-filters.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
 	import { untrack } from 'svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 
@@ -73,28 +74,6 @@
 		data.submissions.filter((s) => selected.has(s.id) && DECIDED.includes(s.status)).length
 	);
 
-	const STATUSES = [
-		'draft',
-		'submitted',
-		'in_review',
-		'accepted',
-		'waitlisted',
-		'rejected',
-		'withdrawn'
-	];
-
-	/**
-	 * Apply the filters the moment one of them changes.
-	 *
-	 * `change` rather than `input`: this is a GET form and submitting it navigates,
-	 * so firing per keystroke would reload the page under the organizer's caret. On a
-	 * text field `change` means blur or Enter; on a select or a checkbox it means the
-	 * click they just made.
-	 */
-	const applyFilters = (event: Event) => {
-		(event.currentTarget as HTMLFormElement).requestSubmit();
-	};
-
 	/**
 	 * A link to another page of the same view.
 	 *
@@ -113,6 +92,8 @@
 		return `${base}/submissions${query ? `?${query}` : ''}`;
 	};
 
+	type Sort = typeof data.sort;
+
 	/**
 	 * The same view, ordered differently (ABS-10).
 	 *
@@ -120,7 +101,7 @@
 	 * number deliberately does NOT: row 51 of the old order has nothing to do with row
 	 * 51 of the new one, so re-sorting starts at the top of the pile.
 	 */
-	const sortHref = (next: 'newest' | 'score-desc' | 'score-asc') => {
+	const sortHref = (next: Sort) => {
 		const params = new SvelteURLSearchParams(currentPage.url.searchParams);
 		params.delete('page');
 		if (next === 'newest') params.delete('sort');
@@ -129,19 +110,43 @@
 		return `${base}/submissions${query ? `?${query}` : ''}`;
 	};
 
-	// One click cycles: highest first, lowest first, and back to the newest-first
-	// order the screen opens in. Three states, one control — the third click is the
-	// way out, which a two-state toggle never has.
-	const nextScoreSort = $derived(
-		data.sort === 'score-desc' ? 'score-asc' : data.sort === 'score-asc' ? 'newest' : 'score-desc'
+	/**
+	 * One sortable column, as three states on one control.
+	 *
+	 * A click cycles first direction, other direction, and back to the newest-first
+	 * order the screen opens in. The third click is the way out — a two-state toggle
+	 * never has one, and "undo the sort" is a thing organizers ask for constantly
+	 * because the default order is the one that answers "what just came in".
+	 *
+	 * `first` is the direction the column opens in, and it differs per column on
+	 * purpose: nobody sorts a score ascending to begin with, and nobody sorts titles
+	 * Z–A to begin with either.
+	 */
+	const column = (first: Sort, second: Sort) => ({
+		next: data.sort === first ? second : data.sort === second ? ('newest' as Sort) : first,
+		active: data.sort === first || data.sort === second,
+		ascending: data.sort.endsWith('-asc')
+	});
+
+	const score = $derived(column('score-desc', 'score-asc'));
+	const title = $derived(column('title-asc', 'title-desc'));
+
+	// The control says what it will do AND what it has already done, because the arrow
+	// alone cannot: "↓" is unreadable to anyone who is not looking at the other two.
+	const scoreHint = $derived(
+		!score.active
+			? 'Sort by score, highest first'
+			: score.ascending
+				? 'Sorted by score, lowest first. Back to newest first'
+				: 'Sorted by score, highest first. Sort lowest first'
 	);
 
-	const scoreSortLabel = $derived(
-		data.sort === 'score-desc'
-			? 'Sorted by score, highest first. Sort lowest first'
-			: data.sort === 'score-asc'
-				? 'Sorted by score, lowest first. Back to newest first'
-				: 'Sort by score, highest first'
+	const titleHint = $derived(
+		!title.active
+			? 'Sort by title, A to Z'
+			: title.ascending
+				? 'Sorted by title, A to Z. Sort Z to A'
+				: 'Sorted by title, Z to A. Back to newest first'
 	);
 
 	/**
@@ -210,114 +215,20 @@
 </div>
 
 <div class="px-6 py-5">
-	<form
-		method="GET"
-		class="mb-3 flex flex-wrap items-end gap-x-3 gap-y-2"
-		data-testid="submission-filters"
-		onchange={applyFilters}
-	>
-		<!-- A GET form submits only its own fields, so without this the first filter
-		     change would quietly throw the chosen order away. -->
-		{#if data.sort !== 'newest'}
-			<input type="hidden" name="sort" value={data.sort} />
-		{/if}
-
-		<Input
-			name="q"
-			value={data.filters.q ?? ''}
-			placeholder="Search title or speaker…"
-			class="w-60"
-			aria-label="Search submissions"
-		/>
-
-		<select
-			name="track"
-			aria-label="Track"
-			class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-		>
-			<option value="">All tracks</option>
-			{#each data.facets.tracks as track (track.id)}
-				<option value={track.id} selected={data.filters.trackId === track.id}>{track.name}</option>
-			{/each}
-		</select>
-
-		<select
-			name="format"
-			aria-label="Format"
-			class="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-[3px] focus-visible:outline-none"
-		>
-			<option value="">All formats</option>
-			{#each data.facets.formats as format (format.id)}
-				<option value={format.id} selected={data.filters.sessionFormatId === format.id}>
-					{format.name}
-				</option>
-			{/each}
-		</select>
-
-		<!--
-			Checkboxes, not a `multiple` listbox. Several statuses at once is the point —
-			"undecided" is `submitted` OR `in_review`, the most useful view on this screen
-			— but the old control asked for that with ⌘-click, which is invisible, easy to
-			get wrong (a plain click silently drops the other picks) and impossible on a
-			touch screen. Checkboxes send the same repeated `status` parameter the server
-			has read as a list since day one; only the control changed.
-		-->
-		<!--
-			Its own row from the start. Seven checkboxes plus a search box and two
-			selects do not fit on one line at any width an organizer actually uses, and
-			as a flex item the group does not wrap on its own — it just runs off the
-			right edge and takes "rejected" and "withdrawn" with it.
-		-->
-		<fieldset class="order-last basis-full border-0 p-0">
-			<legend class="text-muted-foreground mb-1 text-xs">Status</legend>
-			<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-				{#each STATUSES as status (status)}
-					<label class="flex cursor-pointer items-center gap-1.5 text-sm">
-						<input
-							type="checkbox"
-							name="status"
-							value={status}
-							checked={data.filters.status?.includes(status)}
-							class="border-input accent-primary size-4 rounded"
-						/>
-						<span>{status.replace(/_/g, ' ')}</span>
-					</label>
-				{/each}
-			</div>
-		</fieldset>
-
-		<!--
-			No "Filter" button: every control applies itself on change, so the button was
-			a second step that only ever meant "yes, I meant it". `onchange` on the form
-			catches all of them at once — and for the search box that is blur or Enter,
-			not every keystroke, because a GET form navigates and a navigation per letter
-			would take the caret with it.
-
-			Without JavaScript nothing would apply at all, so the fallback is a real
-			submit button that only exists in that case.
-		-->
-		<noscript>
-			<button
-				type="submit"
-				class="border-input bg-background hover:bg-muted h-9 rounded-md border px-3 text-sm"
-			>
-				Filter
-			</button>
-		</noscript>
-
-		{#if filtered}
-			<!-- Clears the filters and keeps the order: the link says "Clear", and the
-			     organizer means the boxes beside it, not the column they just sorted by. -->
-			<a
-				href={data.sort === 'newest'
-					? `${base}/submissions`
-					: `${base}/submissions?sort=${data.sort}`}
-				class="text-muted-foreground hover:text-foreground pb-1.5 text-sm underline underline-offset-4"
-			>
-				Clear
-			</a>
-		{/if}
-	</form>
+	<!--
+		The filter row lives in its own component: this file is the table, the
+		selection and the bulk bar, and those three already earn every line they take.
+		The split is along the seam that was already there — the filters talk to the
+		loader through the URL and to nothing on this page.
+	-->
+	<SubmissionFilters
+		facets={data.facets}
+		filters={data.filters}
+		sort={data.sort}
+		clearHref={data.sort === 'newest'
+			? `${base}/submissions`
+			: `${base}/submissions?sort=${data.sort}`}
+	/>
 
 	{#if form?.notificationResult}
 		<p
@@ -436,9 +347,51 @@
 				</div>
 			</div>
 
-			<div class="border-border overflow-hidden rounded-lg border">
-				<table class="w-full text-left text-sm">
-					<thead class="bg-muted text-muted-foreground sticky top-0 text-xs">
+			<!--
+				One sortable column, rendered from its three-state cycle. A link and not a
+				button, because the order lives in the URL: middle-click, back and "send
+				this to a colleague" all work, and inside this form a <button> would
+				submit the decisions instead.
+			-->
+			{#snippet sortable(
+				label: string,
+				state: { next: Sort; active: boolean; ascending: boolean },
+				hint: string,
+				testid: string
+			)}
+				<th
+					class="py-2 pr-4 font-medium"
+					aria-sort={state.active ? (state.ascending ? 'ascending' : 'descending') : 'none'}
+				>
+					<a
+						href={sortHref(state.next)}
+						data-testid={testid}
+						aria-label={hint}
+						title={hint}
+						class="hover:text-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-sm focus-visible:ring-[3px] focus-visible:outline-none {state.active
+							? 'text-foreground'
+							: ''}"
+					>
+						{label}
+						<!-- `aria-sort` above already told a screen reader the state; the arrow is
+						     the same fact for everyone else, so it is hidden rather than read twice. -->
+						<span aria-hidden="true" class="text-[0.9em] leading-none">
+							{state.active ? (state.ascending ? '↑' : '↓') : '↕'}
+						</span>
+					</a>
+				</th>
+			{/snippet}
+
+			<ScrollTable label="Scroll sideways for score, status and notification">
+				<table class="w-full min-w-3xl text-left text-sm">
+					<!--
+						No `sticky top-0`. It was here and it never worked: sticky positions
+						against the nearest scrolling ancestor, and the box around this table
+						is the one that scrolls sideways — so the header stuck to a container
+						that never scrolls vertically. Keeping a dead rule that looks alive is
+						worse than not having the feature.
+					-->
+					<thead class="bg-muted text-muted-foreground text-xs">
 						<tr>
 							<th class="w-10 py-2 pr-3 pl-4">
 								<input
@@ -449,39 +402,12 @@
 									onchange={toggleAll}
 								/>
 							</th>
-							<th class="py-2 pr-4 font-medium">Title</th>
+							{@render sortable('Title', title, titleHint, 'sort-by-title')}
 							<th class="py-2 pr-4 font-medium">Speaker</th>
 							<th class="py-2 pr-4 font-medium">Track</th>
 							<th class="py-2 pr-4 font-medium">Format</th>
 							<th class="py-2 pr-4 font-medium">Sponsor</th>
-							<!-- The only sortable column, and it says so with the arrow rather than
-							     with a legend: `aria-sort` tells a screen reader the same thing the
-							     arrow tells everyone else. It is a link, not a button, because the
-							     order lives in the URL — middle-click and back both work. -->
-							<th
-								class="py-2 pr-4 font-medium"
-								aria-sort={data.sort === 'score-desc'
-									? 'descending'
-									: data.sort === 'score-asc'
-										? 'ascending'
-										: 'none'}
-							>
-								<a
-									href={sortHref(nextScoreSort)}
-									data-testid="sort-by-score"
-									aria-label={scoreSortLabel}
-									title={scoreSortLabel}
-									class="hover:text-foreground focus-visible:ring-ring inline-flex items-center gap-1 rounded-sm focus-visible:ring-[3px] focus-visible:outline-none {data.sort ===
-									'newest'
-										? ''
-										: 'text-foreground'}"
-								>
-									Score
-									<span aria-hidden="true" class="text-[0.9em] leading-none">
-										{data.sort === 'score-desc' ? '↓' : data.sort === 'score-asc' ? '↑' : '↕'}
-									</span>
-								</a>
-							</th>
+							{@render sortable('Score', score, scoreHint, 'sort-by-score')}
 							<th class="py-2 pr-4 font-medium">Status</th>
 							<th class="py-2 pr-4 font-medium">Notification</th>
 						</tr>
@@ -538,7 +464,7 @@
 						{/each}
 					</tbody>
 				</table>
-			</div>
+			</ScrollTable>
 
 			{#if data.pagination.pageCount > 1}
 				<nav

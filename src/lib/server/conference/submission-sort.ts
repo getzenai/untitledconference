@@ -22,9 +22,15 @@ import { asc, desc, sql } from 'drizzle-orm';
  * this type exists: an organizer building a programme reads the pile from the top
  * score down, and reads it from the bottom up when they are looking for what to cut.
  */
-export type SubmissionSort = 'newest' | 'score-desc' | 'score-asc';
+export type SubmissionSort = 'newest' | 'score-desc' | 'score-asc' | 'title-asc' | 'title-desc';
 
-export const SUBMISSION_SORTS: readonly SubmissionSort[] = ['newest', 'score-desc', 'score-asc'];
+export const SUBMISSION_SORTS: readonly SubmissionSort[] = [
+	'newest',
+	'score-desc',
+	'score-asc',
+	'title-asc',
+	'title-desc'
+];
 
 export function parseSort(raw: string | null | undefined): SubmissionSort {
 	return SUBMISSION_SORTS.includes(raw as SubmissionSort) ? (raw as SubmissionSort) : 'newest';
@@ -89,6 +95,20 @@ export function scoreExpression(conferenceId: number) {
 export function orderFor(sort: SubmissionSort, conferenceId: number) {
 	if (sort === 'newest') {
 		return [desc(submissionTable.submittedAt), asc(submissionTable.id)];
+	}
+
+	// `lower(...)`, not the raw column, so the alphabet does not depend on the
+	// database's collation: our databases run `en_US.utf8`, which already ignores
+	// case, but a C-collated one sorts "Zebra" ahead of "apple" and would put every
+	// capitalised title in a block of its own. That makes this line defensive rather
+	// than load-bearing today — worth knowing, because the ordering test passes with
+	// it removed on the collation CI actually runs.
+	//
+	// In SQL rather than after `LIMIT`, for the same reason the score sort is: an
+	// ordering applied to the current page only is not an ordering.
+	if (sort === 'title-asc' || sort === 'title-desc') {
+		const title = sql`lower(${submissionTable.title})`;
+		return [sort === 'title-asc' ? sql`${title} asc` : sql`${title} desc`, asc(submissionTable.id)];
 	}
 
 	const score = scoreExpression(conferenceId);

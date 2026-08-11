@@ -40,10 +40,15 @@
 	const ceiling = $derived.by(() => {
 		if (peak <= 4) return 4;
 		// 1 / 2 / 5 / 10 times the magnitude — the ladder people actually read on an
-		// axis. 2.5 is not on it because the half tick has to stay a whole number.
+		// axis.
 		const magnitude = Math.pow(10, Math.floor(Math.log10(peak)));
-		return ([1, 2, 5, 10].map((f) => f * magnitude).find((top) => top >= peak) ??
+		const top = ([1, 2, 5, 10].map((f) => f * magnitude).find((rung) => rung >= peak) ??
 			10 * magnitude) as number;
+		// The half tick has to stay a whole number, and the ladder does not guarantee
+		// it: a peak of exactly 5 lands on the rung 5 and puts "2.5" on an axis that
+		// counts submissions. One rung of slack (5 → 6) is the whole fix, and it never
+		// fires above magnitude 1 — 20, 50, 100 are all even already.
+		return top % 2 === 0 ? top : top + magnitude;
 	});
 
 	const x = (i: number) =>
