@@ -9,9 +9,13 @@
 	 * Speakers with something outstanding sort first. A page that opens on the people
 	 * who are already finished buries the work.
 	 */
+	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import StatusBadge from '$lib/components/status-badge.svelte';
+	import { cn } from '$lib/utils.js';
 
 	let { data } = $props();
 
@@ -23,6 +27,19 @@
 	 */
 	const FILTER_FROM = 8;
 	let query = $state('');
+
+	/**
+	 * Collapsed by default. A hundred speakers means a hundred cards each showing
+	 * every task, which turns the page into a scroll before it answers anything —
+	 * the header line (name, open/total) already says who needs chasing; the task
+	 * list is only worth opening for the ones that do. Not persisted across
+	 * reloads: there is nothing here worth remembering between visits.
+	 */
+	const expanded = new SvelteSet<number>();
+	const toggle = (speakerProfileId: number) => {
+		if (expanded.has(speakerProfileId)) expanded.delete(speakerProfileId);
+		else expanded.add(speakerProfileId);
+	};
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const t = $derived(data.totals);
@@ -112,74 +129,94 @@
 	{:else}
 		<div class="space-y-4">
 			{#each shown as speaker (speaker.speakerProfileId)}
-				<section class="border-border bg-card rounded-lg border p-4">
-					<div class="flex flex-wrap items-baseline justify-between gap-2">
-						<div>
-							<h2 class="text-sm font-medium">{speaker.name}</h2>
-							<p class="text-muted-foreground text-xs">
-								{speaker.email ?? 'No email'}
-								{#if !speaker.hasAccount}
-									<span class="px-1">·</span>
-									<!--
-										Worth stating rather than hiding: this person cannot sign in,
-										so nothing here will be done by them. Chasing them means email.
-									-->
-									<span title="Created by an organizer — no login">no account</span>
-								{/if}
-							</p>
-						</div>
-						<p class="text-muted-foreground text-xs">
-							{speaker.waiting > 0 ? `${speaker.waiting} waiting · ` : ''}{speaker.open} open ·
-							{speaker.done} done
-						</p>
-					</div>
-
-					<ul class="divide-border mt-3 divide-y">
-						{#each speaker.tasks as task (task.id)}
-							<li class="flex flex-wrap items-center justify-between gap-2 py-2">
-								<div class="min-w-0">
-									<a class="text-sm hover:underline" href="{base}/content/tasks/{task.id}">
-										{task.title}
-									</a>
-									<span class="text-muted-foreground ml-2 text-xs">
-										{#if task.fileCount > 0}
-											{task.latestFilename}{#if task.fileCount > 1}
-												<span class="px-1">·</span>v{task.fileCount}{/if}
-										{:else if task.kind === 'file_request'}
-											nothing handed in
-										{:else}
-											no file needed
-										{/if}
-										{#if task.dueOn}
-											<span class="px-1">·</span>
-											<span class={overdue(task.dueOn, task.status) ? 'text-status-bad' : ''}>
-												due {due(task.dueOn)}
-											</span>
-										{/if}
-									</span>
-								</div>
-
-								<div class="flex items-center gap-2">
-									{#if task.latestApproval && task.fileCount > 0}
-										<Badge variant={task.latestApproval === 'approved' ? 'secondary' : 'outline'}>
-											{task.latestApproval === 'approved'
-												? 'Approved'
-												: task.latestApproval === 'rejected'
-													? 'Rejected'
-													: 'Needs a look'}
-										</Badge>
+				{@const isOpen = expanded.has(speaker.speakerProfileId)}
+				{@const outstanding = speaker.open + speaker.waiting}
+				<section class="border-border bg-card rounded-lg border">
+					<button
+						type="button"
+						class="flex w-full flex-wrap items-baseline justify-between gap-2 p-4 text-left"
+						aria-expanded={isOpen}
+						onclick={() => toggle(speaker.speakerProfileId)}
+					>
+						<div class="flex items-baseline gap-2">
+							<ChevronRightIcon
+								class={cn(
+									'text-muted-foreground size-4 shrink-0 self-center transition-transform',
+									isOpen && 'rotate-90'
+								)}
+							/>
+							<div>
+								<h2 class="text-sm font-medium">{speaker.name}</h2>
+								<p class="text-muted-foreground text-xs">
+									{speaker.email ?? 'No email'}
+									{#if !speaker.hasAccount}
+										<span class="px-1">·</span>
+										<!--
+											Worth stating rather than hiding: this person cannot sign in,
+											so nothing here will be done by them. Chasing them means email.
+										-->
+										<span title="Created by an organizer — no login">no account</span>
 									{/if}
-									<Badge variant={task.status === 'open' ? 'outline' : 'secondary'}>
-										{task.status === 'open'
-											? 'Open'
-											: task.status === 'submitted'
-												? 'Handed in'
-												: 'Done'}
-									</Badge>
-								</div>
-							</li>
-						{/each}
-					</ul>
+								</p>
+							</div>
+						</div>
+						<StatusBadge
+							status="open"
+							tone={outstanding > 0 ? 'warn' : 'good'}
+							label="{outstanding} open · {speaker.tasks.length} {speaker.tasks.length === 1
+								? 'task'
+								: 'tasks'}"
+						/>
+					</button>
+
+					{#if isOpen}
+						<ul class="divide-border border-border mt-0 divide-y border-t px-4 pb-4">
+							{#each speaker.tasks as task (task.id)}
+								<li class="flex flex-wrap items-center justify-between gap-2 py-2">
+									<div class="min-w-0">
+										<a class="text-sm hover:underline" href="{base}/content/tasks/{task.id}">
+											{task.title}
+										</a>
+										<span class="text-muted-foreground ml-2 text-xs">
+											{#if task.fileCount > 0}
+												{task.latestFilename}{#if task.fileCount > 1}
+													<span class="px-1">·</span>v{task.fileCount}{/if}
+											{:else if task.kind === 'file_request'}
+												nothing handed in
+											{:else}
+												no file needed
+											{/if}
+											{#if task.dueOn}
+												<span class="px-1">·</span>
+												<span class={overdue(task.dueOn, task.status) ? 'text-status-bad' : ''}>
+													due {due(task.dueOn)}
+												</span>
+											{/if}
+										</span>
+									</div>
+
+									<div class="flex items-center gap-2">
+										{#if task.latestApproval && task.fileCount > 0}
+											<Badge variant={task.latestApproval === 'approved' ? 'secondary' : 'outline'}>
+												{task.latestApproval === 'approved'
+													? 'Approved'
+													: task.latestApproval === 'rejected'
+														? 'Rejected'
+														: 'Needs a look'}
+											</Badge>
+										{/if}
+										<Badge variant={task.status === 'open' ? 'outline' : 'secondary'}>
+											{task.status === 'open'
+												? 'Open'
+												: task.status === 'submitted'
+													? 'Handed in'
+													: 'Done'}
+										</Badge>
+									</div>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</section>
 			{/each}
 		</div>

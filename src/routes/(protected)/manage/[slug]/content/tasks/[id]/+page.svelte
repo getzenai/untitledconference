@@ -89,16 +89,31 @@
 		<ul class="divide-border divide-y">
 			{#each files as file, i (file.id)}
 				<li class="py-4">
-					<div class="flex flex-wrap items-baseline justify-between gap-2">
-						<div>
-							<a class="text-sm font-medium hover:underline" href="{base}/content/files/{file.id}">
-								{file.filename}
-							</a>
-							<span class="text-muted-foreground ml-2 text-sm">
-								v{file.version}{#if file.sizeBytes}<span class="px-1.5">·</span>{sizeLabel(
-										file.sizeBytes
-									)}{/if}
-							</span>
+					<div class="flex flex-wrap items-start justify-between gap-2">
+						<div class="flex items-start gap-3">
+							{#if file.contentType?.startsWith('image/')}
+								<a href="{base}/content/files/{file.id}">
+									<img
+										src="{base}/content/files/{file.id}"
+										alt="Preview of {file.filename}"
+										loading="lazy"
+										class="border-border size-24 shrink-0 rounded-md border object-cover"
+									/>
+								</a>
+							{/if}
+							<div>
+								<a
+									class="text-sm font-medium hover:underline"
+									href="{base}/content/files/{file.id}"
+								>
+									{file.filename}
+								</a>
+								<span class="text-muted-foreground ml-2 text-sm">
+									v{file.version}{#if file.sizeBytes}<span class="px-1.5">·</span>{sizeLabel(
+											file.sizeBytes
+										)}{/if}
+								</span>
+							</div>
 						</div>
 						<div class="flex items-center gap-2">
 							{#if i === 0}<Badge variant="secondary">Latest</Badge>{/if}
