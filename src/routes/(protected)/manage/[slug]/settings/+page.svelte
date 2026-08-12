@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Event configuration (#63, #86, #153): dates, rooms, tracks, session formats.
+	 * Conference configuration (#63, #86, #153): dates, rooms, tracks, session formats.
 	 *
 	 * Reviewer-visibility lives under Team & reviewers. The days of the agenda grid
 	 * are not a list here — they follow from the date range (#86). The long page is
@@ -307,7 +307,7 @@
 <div class="border-border bg-card border-b px-6 py-5">
 	<h1 class="text-lg font-semibold tracking-tight">Settings</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
-		Whether this event is public, plus its dates, rooms, tracks and session formats. Reviewer
+		Whether this conference is public, plus its dates, rooms, tracks and session formats. Reviewer
 		visibility is under
 		<a class="underline underline-offset-4" href="{base}/people">Team &amp; reviewers</a>.
 	</p>
@@ -368,7 +368,7 @@
 
 		<!--
 			First on the page, because until this is on, half the product does not exist:
-			the public site, the event directory on the front door and the public
+			the public site, the conference directory on the front door and the public
 			submission form all filter on `status = 'published'`. The Embed & share page
 			has been telling organizers to "publish it in Settings" while there was
 			nothing here to press.
@@ -380,8 +380,8 @@
 		>
 			<h2 class="text-sm font-semibold">General</h2>
 			<p class="text-muted-foreground mt-0.5 text-xs">
-				A draft event is yours alone. Publishing puts the public site online and lets speakers reach
-				the call for papers — it does not decide what is on the programme, only whether anyone
+				A draft conference is yours alone. Publishing puts the public site online and lets speakers
+				reach the call for papers — it does not decide what is on the programme, only whether anyone
 				outside can see it.
 			</p>
 
