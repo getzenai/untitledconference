@@ -54,7 +54,7 @@ describe('speaker portal task list', () => {
 		expect(body).toContain('Complete bio and profile');
 	});
 
-	it('gives completed task links a stable accessible name', () => {
+	it('keeps a finished task under its talk instead of in a separate list', () => {
 		const body = draw([
 			task(5, { status: 'done', title: 'Sign release' }),
 			task(6, {
@@ -65,9 +65,32 @@ describe('speaker portal task list', () => {
 			})
 		]);
 
-		expect(body).toContain(
-			'aria-label="Sign release — Build systems without the wait, DevFlow Conf 2027"'
-		);
-		expect(body).toContain('aria-label="Complete bio and profile — DevFlow Conf 2027"');
+		// The talk title is on the screen, not only in an `aria-label` — that split
+		// was the bug: a screen reader heard which talk, a sighted reader did not.
+		expect(body).toContain('Build systems without the wait');
+		expect(body).toContain('Event-wide tasks');
+		expect(body).toContain('Sign release');
+		expect(body).not.toContain('already done');
+	});
+
+	it('marks a finished task as done and drops its deadline', () => {
+		const body = draw([
+			task(7, { status: 'done', title: 'Sign release', dueOn: '2027-01-04' }),
+			task(8, { title: 'Upload slides', dueOn: '2027-02-11' })
+		]);
+
+		expect(body).toContain('Done —');
+		expect(body).toContain('1 of 2 done');
+		// A finished task has no deadline left to meet; the open one keeps its own.
+		expect(body).not.toContain('Mon, 4 Jan');
+		expect(body).toContain('Thu, 11 Feb');
+	});
+
+	it('says nothing is waiting when every task is finished', () => {
+		const body = draw([task(9, { status: 'done' })]);
+
+		expect(body).toContain('Nothing is waiting on you — everything here is done.');
+		// Still the talk's own list, so the tick is visible under the talk.
+		expect(body).toContain('Build systems without the wait');
 	});
 });

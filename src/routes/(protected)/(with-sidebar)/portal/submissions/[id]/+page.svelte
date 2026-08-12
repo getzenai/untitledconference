@@ -117,7 +117,7 @@
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">Accepted.</p>
 			<p class="text-muted-foreground mt-1">
-				Anything else the organizers need from you appears under What is due in the speaker portal.
+				Anything else the organizers need from you appears under Your tasks in the speaker portal.
 			</p>
 		</div>
 	{/if}
