@@ -600,18 +600,23 @@
 															{session.status === 'confirmed' ? 'Published' : 'Draft'}
 														</Badge>
 													</span>
-													{#if session.submissionStatus === 'rejected' || session.submissionStatus === 'waitlisted'}
+													{#if session.submissionStatus === 'rejected'}
 														<span
 															class="text-status-bad block min-w-0 text-xs font-medium"
 															data-testid="rejected-placement-badge"
-															title={session.submissionStatus === 'rejected'
-																? 'This talk was declined but its slot remains — remove or reassign it.'
-																: 'This talk is waitlisted but its slot remains — remove or reassign it.'}
+															title="This talk was declined but its slot remains — remove or reassign it."
 														>
-															{session.submissionStatus === 'rejected' ? 'Declined' : 'Waitlisted'}
+															Declined
+														</span>
+													{:else if session.submissionStatus === 'waitlisted'}
+														<span
+															class="text-status-warn block min-w-0 text-xs font-medium"
+															data-testid="rejected-placement-badge"
+															title="This talk is waitlisted but its slot remains — remove or reassign it."
+														>
+															Waitlisted
 														</span>
 													{/if}
-
 
 													{#each clashes as clash, ci (ci)}
 														<span

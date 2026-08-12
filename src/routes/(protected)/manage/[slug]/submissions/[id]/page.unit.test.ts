@@ -289,5 +289,4 @@ describe('the organizer talk editor', () => {
 		expect(body).toContain('Declined but still on the programme');
 		expect(body).toContain('/manage/test-conf/agenda');
 	});
-
 });
