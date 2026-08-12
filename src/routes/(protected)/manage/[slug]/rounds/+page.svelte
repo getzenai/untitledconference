@@ -262,15 +262,15 @@
 							{:else}
 								<ul class="mt-3 space-y-3" data-testid="criteria-list">
 									{#each criteria as criterion, index (criterion.id)}
+										{@const locked = criterion.scoreCount > 0}
+										{@const shownKind = locked
+											? criterion.kind
+											: editKind(criterion.id, criterion.kind)}
 										<li
 											class="border-border bg-muted/30 rounded-md border p-3"
 											data-testid="criterion-row"
 											data-criterion-id={criterion.id}
 										>
-											{@const locked = criterion.scoreCount > 0}
-											{@const shownKind = locked
-												? criterion.kind
-												: editKind(criterion.id, criterion.kind)}
 											<form
 												method="POST"
 												action="?/updateCriterion"

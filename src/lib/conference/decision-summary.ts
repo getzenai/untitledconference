@@ -110,7 +110,10 @@ export function describeBulkAssign(result: {
 		parts.push(`${result.already} already assigned, left untouched.`);
 	}
 	if ((result.recused ?? 0) > 0) {
-		parts.push(`${result.recused} recused — left alone.`);
+		// Tell the organizer what they can still do — single-cell reassign overrides.
+		parts.push(
+			`${result.recused} recused seats left alone — flip each on the submission if you mean to override.`
+		);
 	}
 	if (result.skipped > 0) {
 		parts.push(`${plural(result.skipped, 'submission')} could not be assigned to that reviewer.`);
