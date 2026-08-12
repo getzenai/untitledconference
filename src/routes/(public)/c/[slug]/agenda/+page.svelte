@@ -61,6 +61,18 @@
 		return { start: i + 2, end: i + 3 };
 	};
 
+	// One floor per room column, shared by the heading row and the grid below it.
+	//
+	// `1fr` alone distributes the space there is, it never asks for more: at 31
+	// rooms that left ~1.4rem a column, and a grid that never grows wider than its
+	// scroll container never offers a scrollbar either. The floor is the same
+	// 9rem the organizer agenda gives a room column (`min-w-36`), so both views
+	// read the same at the same room count.
+	const ROOM_MIN = '9rem';
+	const COLUMNS = $derived(
+		`4.5rem repeat(${view.conference.rooms.length}, minmax(${ROOM_MIN}, 1fr))`
+	);
+
 	const goToDay = (i: number) => {
 		dayIndex = i;
 		selected = null;
@@ -161,65 +173,64 @@
 		/>
 	{:else}
 		<div class="overflow-x-auto">
-			<div class="min-w-3xl">
-				<!-- Room headings sit in their own row so the scrollable grid below can
-				     keep one clean row-per-half-hour arithmetic. -->
-				<div
-					class="text-muted-foreground grid gap-px pb-2 text-xs font-medium"
-					style="grid-template-columns: 4.5rem repeat({view.conference.rooms
-						.length}, minmax(0, 1fr));"
-				>
-					<span></span>
-					{#each view.conference.rooms as room (room.id)}
-						<span class="px-2">{room.name}</span>
-					{/each}
-				</div>
+			<!-- Room headings sit in their own row so the scrollable grid below can
+			     keep one clean row-per-half-hour arithmetic.
 
-				<div
-					class="grid gap-px"
-					style="grid-template-columns: 4.5rem repeat({view.conference.rooms
-						.length}, minmax(0, 1fr)); grid-template-rows: repeat({bounds.rows}, 1.5rem);"
-				>
-					{#each gutter as slot (slot.row)}
+			     Both grids must keep character-identical column definitions, or the
+			     names stop standing over their columns. -->
+			<div
+				class="text-muted-foreground grid gap-px pb-2 text-xs font-medium"
+				style="grid-template-columns: {COLUMNS};"
+			>
+				<span></span>
+				{#each view.conference.rooms as room (room.id)}
+					<span class="px-2">{room.name}</span>
+				{/each}
+			</div>
+
+			<div
+				class="grid gap-px"
+				style="grid-template-columns: {COLUMNS}; grid-template-rows: repeat({bounds.rows}, 1.5rem);"
+			>
+				{#each gutter as slot (slot.row)}
+					<span
+						class="text-muted-foreground border-border border-t pt-1 text-xs tabular-nums"
+						style="grid-column: 1; grid-row: {slot.row} / span {LABEL_EVERY};">{slot.label}</span
+					>
+					{#each view.conference.rooms as room, i (room.id)}
 						<span
-							class="text-muted-foreground border-border border-t pt-1 text-xs tabular-nums"
-							style="grid-column: 1; grid-row: {slot.row} / span {LABEL_EVERY};">{slot.label}</span
-						>
-						{#each view.conference.rooms as room, i (room.id)}
-							<span
-								class="border-border border-t"
-								style="grid-column: {i + 2}; grid-row: {slot.row} / span {LABEL_EVERY};"
-							></span>
-						{/each}
+							class="border-border border-t"
+							style="grid-column: {i + 2}; grid-row: {slot.row} / span {LABEL_EVERY};"
+						></span>
 					{/each}
+				{/each}
 
-					{#each daySessions as session (session.id)}
-						{@const col = columnOf(session)}
-						{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
-						<!--
-							min-w-0 + overflow-hidden keep long titles inside narrow room
-							columns; title= exposes the full string when the card clips.
-						-->
-						<button
-							type="button"
-							onclick={() => (selected = session)}
-							class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border p-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
-							style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(
-								session.start
-							)} / {rowOf(session.end)};"
-							title={session.title}
+				{#each daySessions as session (session.id)}
+					{@const col = columnOf(session)}
+					{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
+					<!--
+						min-w-0 + overflow-hidden keep long titles inside narrow room
+						columns; title= exposes the full string when the card clips.
+					-->
+					<button
+						type="button"
+						onclick={() => (selected = session)}
+						class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border p-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+						style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(session.start)} / {rowOf(
+							session.end
+						)};"
+						title={session.title}
+					>
+						<span class="block w-full min-w-0 text-sm leading-tight font-medium break-words"
+							>{session.title}</span
 						>
-							<span class="block w-full min-w-0 text-sm leading-tight font-medium break-words"
-								>{session.title}</span
-							>
-							{#if meta}
-								<span class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs">
-									{meta}
-								</span>
-							{/if}
-						</button>
-					{/each}
-				</div>
+						{#if meta}
+							<span class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs">
+								{meta}
+							</span>
+						{/if}
+					</button>
+				{/each}
 			</div>
 		</div>
 	{/if}
