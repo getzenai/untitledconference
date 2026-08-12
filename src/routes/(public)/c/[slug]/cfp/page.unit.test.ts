@@ -119,6 +119,7 @@ describe('the public call for papers', () => {
 
 		expect(body).toContain('Sign in to submit');
 		expect(body).toContain("We'll send this proposal as soon as you sign in.");
+		expect(body).toContain('formaction="?/submit"');
 	});
 });
 

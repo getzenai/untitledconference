@@ -49,7 +49,6 @@
 			closed?: boolean;
 		} | null;
 		signedIn: boolean;
-		signInHref: string;
 		submitLabel?: string;
 		/**
 		 * A proposal that is already in has no draft state to fall back to: saving it
@@ -74,7 +73,6 @@
 		initial,
 		form = null,
 		signedIn,
-		signInHref: _signInHref,
 		submitLabel = 'Submit proposal',
 		allowDraft = true,
 		onSignIn,
@@ -453,7 +451,9 @@
 		</div>
 	{:else}
 		<div class="flex flex-wrap items-center gap-3 border-t pt-6">
-			<Button type="submit" data-testid="cfp-sign-in-to-submit">Sign in to submit</Button>
+			<Button type="submit" formaction="?/submit" data-testid="cfp-sign-in-to-submit">
+				Sign in to submit
+			</Button>
 			<span class="text-muted-foreground text-sm">
 				We'll send this proposal as soon as you sign in.
 			</span>

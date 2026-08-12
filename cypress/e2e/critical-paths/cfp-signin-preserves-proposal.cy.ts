@@ -69,4 +69,30 @@ describe('Signing in from the public call', () => {
 			cy.contains('You have not proposed anything yet.').should('not.exist');
 		});
 	});
+
+	/**
+	 * The JS path cancels the POST and parks the draft. Without JS the same
+	 * click is a native submit, and a button without `formaction` posts to
+	 * the default action — which this route does not have, so SvelteKit 404s.
+	 * `formaction="?/submit"` sends it through `save()`, which already
+	 * redirects an anonymous visitor to /login. Draft is still lost (no
+	 * sessionStorage without JS); the path itself must not be an error page.
+	 */
+	it('sends a JS-less submit to /login, not a 404', () => {
+		cy.clearCookies();
+		cy.request({
+			method: 'POST',
+			url: `${Cypress.config('baseUrl')}/c/any-conference/cfp?/submit`,
+			form: true,
+			headers: { origin: Cypress.config('baseUrl') as string, accept: 'text/html' },
+			body: { title: 'A talk that never lands' },
+			followRedirect: false,
+			failOnStatusCode: false
+		}).then((res) => {
+			expect(res.status, 'named submit action, not default').to.eq(303);
+			const location = decodeURIComponent(String(res.headers.location));
+			expect(location).to.include('/login?returnTo=');
+			expect(location).to.include('/c/any-conference/cfp');
+		});
+	});
 });

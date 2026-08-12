@@ -140,7 +140,6 @@
 				initial={restored ?? emptyProposal()}
 				{form}
 				{signedIn}
-				{signInHref}
 				onSignIn={stashAndSignIn}
 				autoSubmit={resume}
 			/>
