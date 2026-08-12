@@ -98,8 +98,8 @@
 	<h1 class="text-lg font-semibold tracking-tight">Rounds &amp; scorecards</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
 		Each review round has its own open/close window and scorecard. Add criteria (rating, select, or
-		text), set their weights — the submission average is the weighted mean of numeric scores — then
-		assign reviewers from the
+		text), set their weights. A submission's average weights the criteria, then counts every
+		reviewer equally. Assign reviewers from the
 		<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/people"
 			>reviewer pool</a
 		>.

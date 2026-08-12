@@ -262,14 +262,13 @@
 				class="text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs"
 				data-testid="submissions-abs-links"
 			>
+				<!--
+					Export lives once, as the outline button in this header — a second
+					"Export scores (CSV)" link here read as a bug to humans and gave the
+					eval agent nothing the button does not already say.
+				-->
 				<a class="underline underline-offset-4" href="{base}/rounds">Scorecards &amp; weights</a>
 				<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>
-				<a
-					class="underline underline-offset-4"
-					href={exportHref}
-					download
-					data-testid="export-csv-inline">Export scores (CSV)</a
-				>
 			</p>
 		</div>
 		<div class="flex gap-2">
