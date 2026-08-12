@@ -11,11 +11,20 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
+	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
 
 	let { data, form } = $props();
 
 	const task = $derived(data.task);
 	const files = $derived(data.files);
+	const participationTask = $derived(
+		task.kind === 'action' && isParticipationTaskTitle(task.title)
+	);
+	const profileTask = $derived(task.kind === 'action' && isProfileTaskTitle(task.title));
+	// Acceptance initially puts a speaker on the roster as confirmed. That is the
+	// organizer's assumption, not this speaker's answer; only present it as their
+	// decision once this participation task has actually been completed.
+	const participationDecision = $derived(task.status === 'done' ? task.participationStatus : null);
 	let busy = $state(false);
 
 	const submitting = () => {
@@ -52,6 +61,37 @@
 		return date.toLocaleDateString('en-GB', options);
 	});
 	const overdue = $derived(Boolean(task.dueOn && new Date(task.dueOn) < new Date()));
+	const sessionWhen = $derived.by(() => {
+		if (!task.sessionStartsAt) return null;
+		const starts = new Date(task.sessionStartsAt);
+		const date = starts.toLocaleDateString('en-GB', {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long',
+			year: 'numeric',
+			timeZone: 'UTC'
+		});
+		const start = starts.toLocaleTimeString('en-GB', {
+			hour: '2-digit',
+			minute: '2-digit',
+			timeZone: 'UTC'
+		});
+		const end = task.sessionEndsAt
+			? new Date(task.sessionEndsAt).toLocaleTimeString('en-GB', {
+					hour: '2-digit',
+					minute: '2-digit',
+					timeZone: 'UTC'
+				})
+			: null;
+		return `${date} · ${start}${end ? `–${end}` : ''}`;
+	});
+	const visibleInstructions = $derived.by(() => {
+		if (!task.instructions) return null;
+		const genericUploadInstruction =
+			task.instructions.trim().toLocaleLowerCase('en') === 'upload the file here once it is ready.';
+		if (task.kind === 'file_request' && files.length > 0 && genericUploadInstruction) return null;
+		return task.instructions;
+	});
 
 	const sizeLabel = (bytes: number | null) =>
 		bytes === null ? '' : `${(bytes / 1024).toFixed(0)} KB`;
@@ -87,11 +127,74 @@
 		</p>
 	{/if}
 
-	{#if task.instructions}
-		<p class="mt-4 text-sm whitespace-pre-line">{task.instructions}</p>
+	{#if visibleInstructions}
+		<p class="mt-4 text-sm whitespace-pre-line">{visibleInstructions}</p>
 	{/if}
 
-	{#if task.kind === 'action'}
+	{#if participationTask}
+		<section class="border-border bg-muted/30 mt-6 rounded-lg border p-5">
+			<h2 class="font-medium">Confirm your participation</h2>
+			<p class="text-muted-foreground mt-1 text-sm">
+				Tell the organizers whether you can take part in {task.conferenceName}. Your answer applies
+				to all of your sessions at this event.
+			</p>
+
+			<div class="mt-4">
+				<p class="text-sm font-medium">{task.submissionTitle ?? 'Your accepted session'}</p>
+				{#if sessionWhen}
+					<p class="text-muted-foreground mt-1 text-sm">
+						{sessionWhen}{#if task.sessionRoom}<span class="px-1.5">·</span>{task.sessionRoom}{/if}
+					</p>
+				{:else}
+					<p class="text-muted-foreground mt-1 text-sm">The schedule is not published yet.</p>
+				{/if}
+				{#if task.conferenceVenue}
+					<p class="text-muted-foreground mt-1 text-sm">{task.conferenceVenue}</p>
+				{/if}
+			</div>
+
+			{#if participationDecision === 'confirmed'}
+				<p class="text-status-good mt-4 text-sm font-medium">You are confirmed for this event.</p>
+			{:else if participationDecision === 'declined'}
+				<p class="text-status-bad mt-4 text-sm font-medium">
+					You told the organizers you cannot take part.
+				</p>
+			{/if}
+
+			<div class="mt-4 flex flex-wrap gap-3">
+				<form method="POST" action="?/participation" use:enhance={submitting}>
+					<input type="hidden" name="decision" value="confirmed" />
+					<Button type="submit" disabled={busy}>
+						{participationDecision === 'confirmed'
+							? 'Participation confirmed'
+							: 'Yes, I’ll be there'}
+					</Button>
+				</form>
+				<form method="POST" action="?/participation" use:enhance={submitting}>
+					<input type="hidden" name="decision" value="declined" />
+					<Button type="submit" variant="outline" disabled={busy}>
+						{participationDecision === 'declined' ? 'Participation declined' : 'I can’t take part'}
+					</Button>
+				</form>
+			</div>
+
+			{#if form?.participationError}
+				<p class="text-status-bad mt-3 text-sm">{form.participationError}</p>
+			{/if}
+		</section>
+	{:else if task.kind === 'action'}
+		{#if profileTask}
+			<section class="border-border bg-muted/30 mt-6 rounded-lg border p-5">
+				<h2 class="font-medium">Complete your speaker profile</h2>
+				<p class="text-muted-foreground mt-1 text-sm">
+					Add the bio, headshot, role and links organizers need for the programme and speaker pages.
+				</p>
+				<Button href="/portal/profile" class="mt-4">Open my speaker profile</Button>
+				<p class="text-muted-foreground mt-3 text-xs">
+					When your profile is ready, return here and mark the task as done.
+				</p>
+			</section>
+		{/if}
 		<form method="POST" action="?/toggle" use:enhance={submitting} class="mt-6">
 			<input type="hidden" name="done" value={task.status === 'done' ? 'false' : 'true'} />
 			<Button
@@ -104,9 +207,14 @@
 		</form>
 	{:else}
 		<section class="mt-8">
-			<h2 class="text-sm font-medium">Hand in a file</h2>
+			<h2 class="text-sm font-medium">
+				{files.length === 0 ? 'Hand in a file' : 'Add a new version'}
+			</h2>
 			<p class="text-muted-foreground mt-1 text-sm">
-				Uploading again adds a new version. Nothing you sent before is lost.
+				{files.length === 0
+					? 'Upload the requested file when it is ready.'
+					: 'Your file is already handed in. Upload here only to add a newer version.'}
+				Nothing you sent before is lost.
 			</p>
 
 			<form
