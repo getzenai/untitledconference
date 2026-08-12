@@ -34,7 +34,13 @@ export const actions: Actions = {
 			return fail(400, { message: 'Unknown review.' });
 		}
 		const recused = await recuseReview(conference.id, locals.user!.id, id, reviewId);
-		if (!recused) {
+		if (!recused.ok) {
+			// Same distinction as `save`: withdrawn is not a permission problem.
+			if (recused.reason === 'withdrawn') {
+				return fail(409, {
+					message: 'The speaker withdrew this talk, so it no longer needs a review.'
+				});
+			}
 			return fail(400, { message: 'Only an outstanding review can be recused.' });
 		}
 		redirect(303, `/review/${conference.slug}`);

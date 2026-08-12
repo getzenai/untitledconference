@@ -343,8 +343,8 @@ describe('reviewer recusal', () => {
 			})
 			.returning();
 
-		expect(await recuseReview(conference.id, CONFERENCE_REVIEWER, submissionId, review.id)).toBe(
-			true
+		expect(await recuseReview(conference.id, CONFERENCE_REVIEWER, submissionId, review.id)).toEqual(
+			{ ok: true }
 		);
 		expect(await reviewQueue(conference, CONFERENCE_REVIEWER)).toEqual([]);
 		expect(await reviewerSubmission(conference, CONFERENCE_REVIEWER, submissionId)).toBeNull();
@@ -361,8 +361,8 @@ describe('reviewer recusal', () => {
 			})
 			.returning();
 
-		expect(await recuseReview(conference.id, CONFERENCE_REVIEWER, submissionId, review.id)).toBe(
-			false
+		expect(await recuseReview(conference.id, CONFERENCE_REVIEWER, submissionId, review.id)).toEqual(
+			{ ok: false, reason: 'not_found' }
 		);
 	});
 });
