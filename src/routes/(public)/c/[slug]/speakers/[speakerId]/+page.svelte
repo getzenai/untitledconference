@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { buildView, formatFullStamp } from '$lib/conference/public-view';
 
@@ -11,7 +12,24 @@
 	const view = $derived(buildView(data.conference));
 	const speaker = $derived(view.speakersById.get(page.params.speakerId ?? ''));
 	const sessions = $derived(speaker ? (view.sessionsBySpeaker.get(speaker.id) ?? []) : []);
+	// The loader already excludes this conference and drops speakers it cannot
+	// resolve, so an empty array here means "spoke nowhere else" — not "unknown".
+	const elsewhere = $derived(data.appearances);
 </script>
+
+<!-- The reason this page exists after the conference is over. Rendered as a link
+     rather than a plain URL because the visitor came here from a speaker's name,
+     not from a URL bar; absent entirely before the talk is recorded, so a speaker
+     with no recordings reads as quiet rather than broken. -->
+{#snippet recording(url: string | null)}
+	{#if url}
+		<p class="mt-3">
+			<Button href={url} rel="noopener" target="_blank" size="sm" variant="secondary">
+				Watch recording
+			</Button>
+		</p>
+	{/if}
+{/snippet}
 
 <svelte:head>
 	<title>{speaker?.name ?? 'Speaker'} — {view.conference.name}</title>
@@ -81,8 +99,40 @@
 						{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span
 							>{session.room}{/if}
 					</p>
+					{@render recording(session.recordingUrl)}
 				</li>
 			{/each}
 		</ul>
+
+		{#if elsewhere.length > 0}
+			<!-- One `speaker_profile` row is carried from event to event by
+			     `conference_speaker`, so the same person genuinely has a history here.
+			     It is the half of this page the agenda can never show: the agenda knows
+			     about one conference by construction. -->
+			<h3 class="mt-10 text-sm font-medium">Also spoke at</h3>
+			{#each elsewhere as event (event.conferenceSlug)}
+				<section class="mt-4">
+					<a
+						href={withEmbed(`/c/${event.conferenceSlug}`, data.embed)}
+						class="text-sm font-medium hover:underline">{event.conferenceName}</a
+					>
+					<ul class="divide-border mt-1 divide-y">
+						{#each event.sessions as session (session.id)}
+							<li class="py-4">
+								<a
+									href={withEmbed(`/c/${event.conferenceSlug}/agenda`, data.embed)}
+									class="font-medium hover:underline">{session.title}</a
+								>
+								<p class="text-muted-foreground mt-1 text-sm">
+									{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span
+										>{session.room}{/if}
+								</p>
+								{@render recording(session.recordingUrl)}
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/each}
+		{/if}
 	</article>
 {/if}
