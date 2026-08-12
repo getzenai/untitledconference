@@ -1,53 +1,189 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<title>Settings — after</title>
-<style>
-  body { margin:0; font:14px/1.4 system-ui,sans-serif; background:#f4f4f5; color:#18181b; }
-  .shell { max-width:900px; margin:0 auto; background:#fff; min-height:100vh; border-left:1px solid #e4e4e7; border-right:1px solid #e4e4e7; display:grid; grid-template-columns:160px 1fr; }
-  header { grid-column:1/-1; padding:20px 24px; border-bottom:1px solid #e4e4e7; }
-  h1 { margin:0; font-size:18px; }
-  .sub { color:#71717a; font-size:13px; margin-top:4px; }
-  nav { padding:20px 12px; border-right:1px solid #f4f4f5; position:sticky; top:0; align-self:start; }
-  nav a { display:block; padding:6px 10px; border-radius:6px; color:#71717a; text-decoration:none; font-size:13px; margin-bottom:2px; }
-  nav a.current { background:#f4f4f5; color:#18181b; font-weight:600; }
-  main { padding:20px 24px; display:flex; flex-direction:column; gap:16px; }
-  .card { border:1px solid #e4e4e7; border-radius:8px; padding:16px; background:#fff; }
-  .card h2 { margin:0 0 6px; font-size:14px; }
-  .card p { margin:0; color:#71717a; font-size:12px; }
-  .row { margin-top:10px; height:32px; background:#f4f4f5; border-radius:6px; }
-  .row.sm { height:24px; width:60%; }
-  .badge { display:inline-block; border:1px solid #16a34a; color:#16a34a; font-size:11px; padding:2px 8px; border-radius:6px; margin-top:10px; }
-  .feedback { margin-top:12px; border:1px solid #16a34a; color:#16a34a; font-size:12px; padding:8px 10px; border-radius:6px; }
-  .more { margin-top:8px; font-size:12px; color:#71717a; text-decoration:underline; }
-  .label { font-size:11px; color:#a1a1aa; text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
-  .pill { display:inline-block; background:#eef2ff; color:#3730a3; font-size:11px; padding:2px 8px; border-radius:999px; margin-left:8px; }
-</style>
-</head>
-<body>
-  <div class="shell">
-    <header>
-      <div class="label">AFTER · #153</div>
-      <h1>Settings <span class="pill">sticky jump nav · scoped feedback · list preview</span></h1>
-      <div class="sub">Overview on entry — jump to General / Dates / Rooms / Tracks / Formats / Tasks without losing place.</div>
-    </header>
-    <nav aria-label="Settings sections">
-      <a class="current" href="#g">General</a>
-      <a href="#d">Dates</a>
-      <a href="#r">Rooms</a>
-      <a href="#t">Tracks</a>
-      <a href="#f">Session formats</a>
-      <a href="#s">Speaker tasks</a>
-    </nav>
-    <main>
-      <div class="card" id="g"><h2>General</h2><p>Publish switch stays in its own section.</p><span class="badge">Live</span><div class="feedback">Published. /c/demo is live…</div></div>
-      <div class="card" id="d"><h2>Dates</h2><p>Save feedback sits next to the form it confirms.</p><div class="row"></div><div class="feedback">Dates saved — added 2 days.</div></div>
-      <div class="card" id="r"><h2>Rooms</h2><p>Long lists open on demand.</p><div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div><div class="more">Show all 12 rooms</div></div>
-      <div class="card" id="t"><h2>Tracks</h2><div class="row"></div><div class="row"></div></div>
-      <div class="card" id="f"><h2>Session formats</h2><div class="row"></div></div>
-      <div class="card" id="s"><h2>Speaker tasks</h2><div class="row"></div></div>
-    </main>
-  </div>
-</body>
+	<head>
+		<meta charset="utf-8" />
+		<title>Settings — after</title>
+		<style>
+			body {
+				margin: 0;
+				font:
+					14px/1.4 system-ui,
+					sans-serif;
+				background: #f4f4f5;
+				color: #18181b;
+			}
+			.shell {
+				max-width: 900px;
+				margin: 0 auto;
+				background: #fff;
+				min-height: 100vh;
+				border-left: 1px solid #e4e4e7;
+				border-right: 1px solid #e4e4e7;
+				display: grid;
+				grid-template-columns: 160px 1fr;
+			}
+			header {
+				grid-column: 1/-1;
+				padding: 20px 24px;
+				border-bottom: 1px solid #e4e4e7;
+			}
+			h1 {
+				margin: 0;
+				font-size: 18px;
+			}
+			.sub {
+				color: #71717a;
+				font-size: 13px;
+				margin-top: 4px;
+			}
+			nav {
+				padding: 20px 12px;
+				border-right: 1px solid #f4f4f5;
+				position: sticky;
+				top: 0;
+				align-self: start;
+			}
+			nav a {
+				display: block;
+				padding: 6px 10px;
+				border-radius: 6px;
+				color: #71717a;
+				text-decoration: none;
+				font-size: 13px;
+				margin-bottom: 2px;
+			}
+			nav a.current {
+				background: #f4f4f5;
+				color: #18181b;
+				font-weight: 600;
+			}
+			main {
+				padding: 20px 24px;
+				display: flex;
+				flex-direction: column;
+				gap: 16px;
+			}
+			.card {
+				border: 1px solid #e4e4e7;
+				border-radius: 8px;
+				padding: 16px;
+				background: #fff;
+			}
+			.card h2 {
+				margin: 0 0 6px;
+				font-size: 14px;
+			}
+			.card p {
+				margin: 0;
+				color: #71717a;
+				font-size: 12px;
+			}
+			.row {
+				margin-top: 10px;
+				height: 32px;
+				background: #f4f4f5;
+				border-radius: 6px;
+			}
+			.row.sm {
+				height: 24px;
+				width: 60%;
+			}
+			.badge {
+				display: inline-block;
+				border: 1px solid #16a34a;
+				color: #16a34a;
+				font-size: 11px;
+				padding: 2px 8px;
+				border-radius: 6px;
+				margin-top: 10px;
+			}
+			.feedback {
+				margin-top: 12px;
+				border: 1px solid #16a34a;
+				color: #16a34a;
+				font-size: 12px;
+				padding: 8px 10px;
+				border-radius: 6px;
+			}
+			.more {
+				margin-top: 8px;
+				font-size: 12px;
+				color: #71717a;
+				text-decoration: underline;
+			}
+			.label {
+				font-size: 11px;
+				color: #a1a1aa;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin-bottom: 8px;
+			}
+			.pill {
+				display: inline-block;
+				background: #eef2ff;
+				color: #3730a3;
+				font-size: 11px;
+				padding: 2px 8px;
+				border-radius: 999px;
+				margin-left: 8px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="shell">
+			<header>
+				<div class="label">AFTER · #153</div>
+				<h1>Settings <span class="pill">sticky jump nav · scoped feedback · list preview</span></h1>
+				<div class="sub">
+					Overview on entry — jump to General / Dates / Rooms / Tracks / Formats / Tasks without
+					losing place.
+				</div>
+			</header>
+			<nav aria-label="Settings sections">
+				<a class="current" href="#g">General</a>
+				<a href="#d">Dates</a>
+				<a href="#r">Rooms</a>
+				<a href="#t">Tracks</a>
+				<a href="#f">Session formats</a>
+				<a href="#s">Speaker tasks</a>
+			</nav>
+			<main>
+				<div class="card" id="g">
+					<h2>General</h2>
+					<p>Publish switch stays in its own section.</p>
+					<span class="badge">Live</span>
+					<div class="feedback">Published. /c/demo is live…</div>
+				</div>
+				<div class="card" id="d">
+					<h2>Dates</h2>
+					<p>Save feedback sits next to the form it confirms.</p>
+					<div class="row"></div>
+					<div class="feedback">Dates saved — added 2 days.</div>
+				</div>
+				<div class="card" id="r">
+					<h2>Rooms</h2>
+					<p>Long lists open on demand.</p>
+					<div class="row"></div>
+					<div class="row"></div>
+					<div class="row"></div>
+					<div class="row"></div>
+					<div class="row"></div>
+					<div class="more">Show all 12 rooms</div>
+				</div>
+				<div class="card" id="t">
+					<h2>Tracks</h2>
+					<div class="row"></div>
+					<div class="row"></div>
+				</div>
+				<div class="card" id="f">
+					<h2>Session formats</h2>
+					<div class="row"></div>
+				</div>
+				<div class="card" id="s">
+					<h2>Speaker tasks</h2>
+					<div class="row"></div>
+				</div>
+			</main>
+		</div>
+	</body>
 </html>
