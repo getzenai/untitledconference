@@ -81,7 +81,10 @@
 		     fewest reviews first (ascending) and `score` means highest first
 		     (descending), and `aria-sort` has to say which — an arrow that always points
 		     down would be lying on one of the two columns. -->
-		<th class="py-2 pr-4 font-medium" aria-sort={active ? direction : 'none'}>
+		<th
+			class="py-2 pr-4 font-medium {value === 'title' ? 'pl-4' : ''}"
+			aria-sort={active ? direction : 'none'}
+		>
 			<a
 				href={sortHref(value)}
 				data-testid="sort-by-{value}"
@@ -113,8 +116,8 @@
 		<table class="w-full min-w-lg text-left text-sm">
 			<thead class="bg-muted text-muted-foreground text-xs">
 				<tr>
-					<th class="py-2 pr-4 pl-4 font-medium">Title</th>
-					<th class="py-2 pr-4 font-medium">Track</th>
+					{@render sortable('Title', 'title', 'alphabetical by title', 'ascending')}
+					{@render sortable('Track', 'track', 'alphabetical by track', 'ascending')}
 					{@render sortable('Reviews', 'coverage', 'fewest reviews first', 'ascending')}
 					{@render sortable('Score', 'score', 'highest score first', 'descending')}
 					<th class="py-2 pr-4 font-medium">Mine</th>

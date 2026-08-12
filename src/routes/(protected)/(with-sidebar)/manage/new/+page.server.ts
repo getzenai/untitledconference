@@ -70,6 +70,6 @@ export const actions: Actions = {
 			});
 		}
 
-		redirect(303, `/manage/${result.conference.slug}/submissions`);
+		redirect(303, `/manage/${result.conference.slug}/settings?setup=1`);
 	}
 };

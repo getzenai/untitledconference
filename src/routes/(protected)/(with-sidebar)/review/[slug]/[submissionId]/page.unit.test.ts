@@ -62,6 +62,21 @@ describe('reviewer recusal', () => {
 	it('does not offer recusal after submission', () => {
 		expect(page('submitted')).not.toContain('Recuse myself');
 	});
+
+	it('labels a filed review as an update, not a first submit', () => {
+		const filed = page('submitted');
+		expect(filed).toContain('Update review');
+		expect(filed).not.toContain('Submit review');
+		// intent values stay the same so the action path is unchanged
+		expect(filed).toContain('name="intent"');
+		expect(filed).toContain('value="submit"');
+	});
+
+	it('keeps the first-submit wording while the review is still a draft', () => {
+		const draft = page('assigned');
+		expect(draft).toContain('Submit review');
+		expect(draft).not.toContain('Update review');
+	});
 });
 
 /**

@@ -60,8 +60,8 @@
 	{:else}
 		<h1 class="mt-6 text-lg font-semibold tracking-tight">New conference</h1>
 		<p class="text-muted-foreground mt-1 text-sm">
-			Name it and pick the dates. Everything else — the call for papers, the programme, your team —
-			you set up inside.
+			Name it and pick the dates. You land in Settings next — rooms, tracks and formats first — then
+			open the call for papers when the structure is ready.
 		</p>
 
 		<form method="POST" use:enhance={submitting} class="mt-8 space-y-5">

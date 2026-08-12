@@ -9,6 +9,7 @@ import {
 	nextVersion,
 	ownTask,
 	recordDeliverable,
+	respondToParticipationTask,
 	setActionTaskDone,
 	taskFiles
 } from '$lib/server/conference/deliverables';
@@ -143,5 +144,20 @@ export const actions: Actions = {
 		if (!changed) error(404, 'No such task');
 
 		return { toggled: true };
+	},
+
+	participation: async ({ request, params, locals }) => {
+		if (!locals.user) error(401, 'Sign in to respond');
+
+		const data = await request.formData();
+		const decision = data.get('decision');
+		if (decision !== 'confirmed' && decision !== 'declined') {
+			return fail(400, { participationError: 'Choose whether you can take part.' });
+		}
+
+		const changed = await respondToParticipationTask(locals.user.id, taskId(params.id), decision);
+		if (!changed) error(404, 'No such task');
+
+		return { participation: decision };
 	}
 };

@@ -538,7 +538,18 @@
 				withdraws the tasks nobody has started. A slot you already confirmed stays — that one is
 				yours to move.
 			</p>
-			{#if inTray}
+			{#if inTray && (s.status === 'rejected' || s.status === 'waitlisted')}
+				<p
+					class="border-status-warn/40 bg-status-warn-bg text-status-warn mt-3 rounded-md border px-3 py-2 text-sm font-medium"
+					data-testid="rejected-placement-badge"
+					role="status"
+				>
+					{s.status === 'rejected' ? 'Declined' : 'Waitlisted'} but still on the programme ({s.placements
+						.map((p) => p.status)
+						.join(', ')}). Remove or reassign the slot on
+					<a class="underline underline-offset-4" href="{base}/agenda">Agenda</a>.
+				</p>
+			{:else if inTray}
 				<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
 					Already in the programme as
 					{s.placements.map((p) => p.status).join(', ')}.

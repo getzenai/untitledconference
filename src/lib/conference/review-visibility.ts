@@ -54,7 +54,7 @@ export function canOrganizerSeeAllReviews(): boolean {
 	return true;
 }
 
-export type QueueSort = 'coverage' | 'score';
+export type QueueSort = 'coverage' | 'score' | 'title' | 'track';
 
 export const QUEUE_SORTS: { value: QueueSort; label: string; hint: string }[] = [
 	{
@@ -66,12 +66,24 @@ export const QUEUE_SORTS: { value: QueueSort; label: string; hint: string }[] = 
 		value: 'score',
 		label: 'Highest score first',
 		hint: 'The decision agenda — what the committee should talk about.'
+	},
+	{
+		value: 'title',
+		label: 'Title A–Z',
+		hint: 'Alphabetical by submission title.'
+	},
+	{
+		value: 'track',
+		label: 'Track A–Z',
+		hint: 'Grouped by track, then title.'
 	}
 ];
 
 export type QueueRow = {
 	submissionId: number;
 	title: string;
+	/** Present when the row knows its track (queue always does). */
+	track?: string | null;
 	reviewsSubmitted: number;
 	/** Null when the viewer may not see the aggregate yet, or nobody has scored. */
 	score: number | null;
@@ -81,12 +93,22 @@ export type QueueRow = {
 /**
  * Orders the queue.
  *
- * Two sorts, because a reviewer and a chair are looking for opposite things: the
- * reviewer wants what nobody has done, the chair wants what scored highest. Rows the
- * viewer may not see a score for sort last rather than as zero — hidden is not bad.
+ * Four sorts on the column headers. Coverage and score are the working lists
+ * (fewest first / highest first); title and track are alphabetical. Rows the
+ * viewer may not see a score for sort last under score rather than as zero —
+ * hidden is not bad.
  */
 export function sortQueue<T extends QueueRow>(rows: T[], sort: QueueSort): T[] {
 	const byTitle = (a: T, b: T) => a.title.localeCompare(b.title);
+	const byTrack = (a: T, b: T) => {
+		const at = a.track ?? '';
+		const bt = b.track ?? '';
+		// Empty track last: "no track" is not a name, and should not sort as "".
+		if (!at && !bt) return byTitle(a, b);
+		if (!at) return 1;
+		if (!bt) return -1;
+		return at.localeCompare(bt) || byTitle(a, b);
+	};
 
 	if (sort === 'score') {
 		return [...rows].sort((a, b) => {
@@ -97,5 +119,14 @@ export function sortQueue<T extends QueueRow>(rows: T[], sort: QueueSort): T[] {
 		});
 	}
 
+	if (sort === 'title') {
+		return [...rows].sort(byTitle);
+	}
+
+	if (sort === 'track') {
+		return [...rows].sort(byTrack);
+	}
+
+	// coverage — fewest reviews first
 	return [...rows].sort((a, b) => a.reviewsSubmitted - b.reviewsSubmitted || byTitle(a, b));
 }

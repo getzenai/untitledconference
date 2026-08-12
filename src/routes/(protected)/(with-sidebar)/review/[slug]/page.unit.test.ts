@@ -33,7 +33,10 @@ const row = (
 	withdrawn: false
 });
 
-function renderQueue(queue: ReturnType<typeof row>[], sort: 'coverage' | 'score' = 'coverage') {
+function renderQueue(
+	queue: ReturnType<typeof row>[],
+	sort: 'coverage' | 'score' | 'title' | 'track' = 'coverage'
+) {
 	return render(Page, {
 		props: {
 			data: {
@@ -53,7 +56,7 @@ function renderQueue(queue: ReturnType<typeof row>[], sort: 'coverage' | 'score'
 	}).body;
 }
 
-function renderPage(sort: 'coverage' | 'score' = 'coverage') {
+function renderPage(sort: 'coverage' | 'score' | 'title' | 'track' = 'coverage') {
 	return renderQueue([row(1, 'A talk', 0), row(2, 'Another talk', 2)], sort);
 }
 
@@ -77,9 +80,23 @@ describe('the review queue sorts from its column headers', () => {
 
 		expect(body).toContain('href="/review/test-conf?sort=coverage"');
 		expect(body).toContain('href="/review/test-conf?sort=score"');
+		expect(body).toContain('href="/review/test-conf?sort=title"');
+		expect(body).toContain('href="/review/test-conf?sort=track"');
 		// Exactly one header is marked current: two would mean the page cannot say
 		// what it is showing.
 		expect(body.match(/aria-current="true"/g) ?? []).toHaveLength(1);
+	});
+
+	it('exposes title and track as sort links with a single current header', () => {
+		const title = renderPage('title');
+		expect(title).toContain('data-testid="sort-by-title"');
+		expect(title).toContain('aria-sort="ascending"');
+		expect(title.match(/aria-current="true"/g) ?? []).toHaveLength(1);
+
+		const track = renderPage('track');
+		expect(track).toContain('data-testid="sort-by-track"');
+		expect(track).toContain('aria-sort="ascending"');
+		expect(track.match(/aria-current="true"/g) ?? []).toHaveLength(1);
 	});
 
 	it('has stopped saying the same thing in two places', () => {
