@@ -91,7 +91,7 @@ export async function listPipelineCards(userId: string): Promise<PipelineCard[]>
 			eq(speakerProfileTable.id, crmPipelineCardTable.speakerProfileId)
 		)
 		.where(inArray(crmPipelineCardTable.organizationId, orgIds))
-		.orderBy(asc(crmPipelineCardTable.updatedAt), asc(crmPipelineCardTable.id));
+		.orderBy(desc(crmPipelineCardTable.updatedAt), desc(crmPipelineCardTable.id));
 
 	return rows
 		.filter((r) => isPipelineStage(r.stage))
