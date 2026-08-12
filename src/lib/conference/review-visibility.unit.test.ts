@@ -49,6 +49,30 @@ describe('sortQueue', () => {
 		]);
 	});
 
+	it('sorts alphabetically by title', () => {
+		expect(sortQueue(rows, 'title').map((r) => r.title)).toEqual([
+			'Alpha',
+			'Beta',
+			'Delta',
+			'Gamma'
+		]);
+	});
+
+	it('sorts by track then title, with missing track last', () => {
+		const withTracks = [
+			row({ title: 'Zulu', track: 'Platform', reviewsSubmitted: 1, score: 1 }),
+			row({ title: 'Alpha', track: 'AI', reviewsSubmitted: 1, score: 1 }),
+			row({ title: 'Beta', track: 'AI', reviewsSubmitted: 1, score: 1 }),
+			row({ title: 'No track yet', track: null, reviewsSubmitted: 1, score: 1 })
+		];
+		expect(sortQueue(withTracks, 'track').map((r) => r.title)).toEqual([
+			'Alpha',
+			'Beta',
+			'Zulu',
+			'No track yet'
+		]);
+	});
+
 	it('does not mutate the list it was given', () => {
 		const original = [...rows];
 		sortQueue(rows, 'score');
