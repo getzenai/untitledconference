@@ -260,6 +260,22 @@ export const crmPipelineStageHistoryTable = pgTable('crm_pipeline_stage_history'
 });
 
 /**
+ * CRM-09: named, reusable filter snapshots on the org directory.
+ * Filters are JSON `{ q?, company?, jobTitle?, tag? }` — dynamic: reopening
+ * re-runs the criteria against current contacts.
+ */
+export const crmSegmentTable = pgTable('crm_segment', {
+	id: serial('id').primaryKey(),
+	organizationId: text('organization_id')
+		.notNull()
+		.references(() => organization.id, { onDelete: 'cascade' }),
+	name: text('name').notNull(),
+	/** Serialized ContactFilters JSON. */
+	filters: text('filters').notNull().default('{}'),
+	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
+});
+
+/**
  * Scoped role assignment. `membership` says who MAY READ; `review` (review-schema.ts)
  * says who SHOULD DO WHAT. Two different questions, two different tables.
  *
@@ -325,6 +341,8 @@ export type CrmPipelineCard = typeof crmPipelineCardTable.$inferSelect;
 export type NewCrmPipelineCard = typeof crmPipelineCardTable.$inferInsert;
 export type CrmPipelineStageHistory = typeof crmPipelineStageHistoryTable.$inferSelect;
 export type NewCrmPipelineStageHistory = typeof crmPipelineStageHistoryTable.$inferInsert;
+export type CrmSegment = typeof crmSegmentTable.$inferSelect;
+export type NewCrmSegment = typeof crmSegmentTable.$inferInsert;
 export type Membership = typeof membershipTable.$inferSelect;
 export type NewMembership = typeof membershipTable.$inferInsert;
 export type MembershipTrack = typeof membershipTrackTable.$inferSelect;
