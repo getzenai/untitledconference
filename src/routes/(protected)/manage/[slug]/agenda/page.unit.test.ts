@@ -111,13 +111,12 @@ describe('empty board guidance', () => {
 });
 
 /**
- * #154 — long titles and conflict badges must stay inside a narrow slot.
+ * #154 / card polish — long titles stay inside a narrow slot, and the title is
+ * the first line (not the clock — the grid axis already shows that).
  *
- * SSR cannot measure pixels, so this pins the layout contract that makes the
- * clip possible: min-width: 0 on the card, wrapping on title and conflict, and
- * a title= attribute so the full conflict detail stays reachable when the
- * badge has to wrap or clip. Two overlapping placements force a lane split
- * (narrower than a full column), which is the case that was overflowing.
+ * SSR cannot measure pixels, so this pins the layout contract: min-width: 0 and
+ * truncate on the title, a title= attribute for the full string, min-h-8 so a
+ * short slot still has room for that one line, and lane-split still clips width.
  */
 describe('agenda card text overflow (#154)', () => {
 	const longTitle =
@@ -162,12 +161,38 @@ describe('agenda card text overflow (#154)', () => {
 		expect(body).toContain('data-testid="agenda-conflict"');
 		expect(body).toContain(conflictDetail);
 
-		// Card and button constrain width; title/conflict wrap rather than spill.
+		// Card constrains width; title truncates rather than spills.
 		expect(body).toMatch(/data-testid="agenda-placed-session"[^>]*min-w-0/);
-		expect(body).toMatch(/data-testid="agenda-conflict"[^>]*break-words/);
-		// Full conflict text stays on the element for hover / AT even if clipped.
+		expect(body).toMatch(/data-testid="agenda-session-title"[^>]*truncate/);
+		// Full strings stay on the elements for hover / AT even if clipped.
 		expect(body).toContain(`title="${conflictDetail}"`);
 		expect(body).toContain(`title="${longTitle}"`);
+	});
+
+	it('puts the title first and floors short cards so it stays readable', () => {
+		const title = 'Keynote: shipping on a fifteen-minute slot';
+		// 15 minutes → one grid row (ROW_REM); without a floor the card collapses
+		// past a readable title line.
+		const short: BoardSession = {
+			...placedSession(3, title),
+			minutes: 15,
+			startMinutes: 540,
+			endMinutes: 555
+		};
+		const body = renderWith(1, 1, { placed: [short], tray: [] });
+
+		expect(body).toMatch(/data-testid="agenda-placed-session"[^>]*min-h-8/);
+		expect(body).toContain('data-testid="agenda-session-title"');
+		expect(body).toContain(title);
+
+		// Title is the primary line — ahead of the secondary clock range.
+		const cardStart = body.indexOf('data-testid="agenda-placed-session"');
+		const cardEnd = body.indexOf('</button>', cardStart);
+		const card = body.slice(cardStart, cardEnd);
+		const titleMark = card.indexOf('data-testid="agenda-session-title"');
+		const clockMark = card.indexOf('09:00–09:15');
+		expect(titleMark).toBeGreaterThan(-1);
+		expect(clockMark).toBeGreaterThan(titleMark);
 	});
 
 	it('marks a declined talk that still has a slot (#9)', () => {
