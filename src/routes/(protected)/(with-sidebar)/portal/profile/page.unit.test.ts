@@ -66,6 +66,16 @@ describe('the speaker profile page', () => {
 		expect(body).toContain('name="linkUrl2"');
 	});
 
+	it('gives each link row its own example, so three empty rows are not one field thrice', () => {
+		const body = draw([profile()]);
+
+		expect(body).toContain('placeholder="LinkedIn"');
+		expect(body).toContain('placeholder="Mastodon"');
+		expect(body).toContain('placeholder="Your site"');
+		// The failure this replaces: the same hint on every row.
+		expect(body.match(/placeholder="LinkedIn"/g) ?? []).toHaveLength(1);
+	});
+
 	it('draws one form per organization and names them, because the profile is org-wide', () => {
 		const body = draw([
 			profile(),

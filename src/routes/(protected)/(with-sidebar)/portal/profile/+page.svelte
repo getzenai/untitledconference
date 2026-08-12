@@ -29,6 +29,20 @@
 		};
 	};
 
+	/**
+	 * A different example per row.
+	 *
+	 * All three rows carried "LinkedIn", which makes a set of empty fields read as
+	 * the same field repeated three times rather than as three slots for three
+	 * different links. Varying the example is what says "these are yours to fill
+	 * with whatever you use" without a sentence explaining it.
+	 */
+	const LINK_EXAMPLES = [
+		{ label: 'LinkedIn', url: 'https://linkedin.com/in/…' },
+		{ label: 'Mastodon', url: 'https://mastodon.social/@…' },
+		{ label: 'Your site', url: 'https://…' }
+	];
+
 	/** The link rows for one profile: what is stored, padded out to the fixed count. */
 	const linkRows = (stored: string | null) => {
 		const links = parseSpeakerLinks(stored);
@@ -177,14 +191,14 @@
 							<Input
 								name="linkLabel{i}"
 								value={row.label}
-								placeholder="LinkedIn"
+								placeholder={LINK_EXAMPLES[i]?.label ?? 'Link'}
 								aria-label="Link {i + 1} label"
 							/>
 							<Input
 								name="linkUrl{i}"
 								type="url"
 								value={row.url}
-								placeholder="https://…"
+								placeholder={LINK_EXAMPLES[i]?.url ?? 'https://…'}
 								aria-label="Link {i + 1} address"
 							/>
 						</div>
