@@ -241,34 +241,57 @@ describe('task templates on settings', () => {
 		// A greyed placeholder reads as stored text, and this one described a file
 		// the task does not accept: "Confirm participation … 16:9, PDF, no larger
 		// than 20 MB" was the reported sighting.
-		const action = render_([
-			{
-				id: 7,
-				title: 'Confirm participation',
-				instructions: null,
-				kind: 'action',
-				dueOffsetDays: null,
-				dueOn: null,
-				position: 0
-			}
-		]);
+		//
+		// Scoped to the existing-template rows, not the whole body: the persistent
+		// "add a task" form below always shows an Instructions field of its own
+		// (defaulting to the file-request hint), so the file hint legitimately
+		// appears once regardless of which templates already exist.
+		const templateRows = (body: string) => body.split('action="?/addTemplate"')[0];
+
+		const action = templateRows(
+			render_([
+				{
+					id: 7,
+					title: 'Confirm participation',
+					instructions: null,
+					kind: 'action',
+					dueOffsetDays: null,
+					dueOn: null,
+					position: 0
+				}
+			])
+		);
 
 		expect(action).not.toContain('16:9, PDF, no larger than 20 MB');
 		expect(action).toContain('Anything the speaker needs to know');
 
-		const upload = render_([
-			{
-				id: 8,
-				title: 'Upload your slides',
-				instructions: null,
-				kind: 'file_request',
-				dueOffsetDays: null,
-				dueOn: null,
-				position: 0
-			}
-		]);
+		const upload = templateRows(
+			render_([
+				{
+					id: 8,
+					title: 'Upload your slides',
+					instructions: null,
+					kind: 'file_request',
+					dueOffsetDays: null,
+					dueOn: null,
+					position: 0
+				}
+			])
+		);
 
 		expect(upload).toContain('16:9, PDF, no larger than 20 MB');
+	});
+
+	it('shows the add-task Instructions field immediately, before any save', () => {
+		// Fabian's review: picking "Upload a file" in the add-task form should show
+		// the Instructions field right away, not only after the new task round-trips
+		// through a save and becomes an editable template row.
+		const body = render_([]);
+
+		expect(body).toContain('action="?/addTemplate"');
+		const addForm = body.split('action="?/addTemplate"')[1];
+		expect(addForm).toContain('Instructions (optional)');
+		expect(addForm).toContain('16:9, PDF, no larger than 20 MB');
 	});
 
 	it('offers to give a task to the speakers already accepted, and says how many', () => {

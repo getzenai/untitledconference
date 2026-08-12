@@ -27,6 +27,15 @@
 
 	let busy = $state(false);
 
+	/**
+	 * The add-task form's own Instructions field needs the kind that is about to be
+	 * submitted, not the one on a stored template — there is no template yet. Kept
+	 * in its own piece of state (rather than reading the select at submit time) so
+	 * the Instructions placeholder updates the moment "Upload a file" is picked,
+	 * instead of only after the row round-trips through a save.
+	 */
+	let newTaskKind = $state('file_request');
+
 	/** A stored timestamp back into the `YYYY-MM-DD` the date picker takes. */
 	const isoDay = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
 
@@ -646,11 +655,20 @@
 						size="sm"
 						class="mt-1"
 						aria-label="Speaker has to"
-						value="file_request"
+						value={newTaskKind}
+						onValueChange={(value) => (newTaskKind = value)}
 						options={TASK_KINDS}
 					/>
 				</label>
 			</div>
+			<label class="block text-xs">
+				<span class="text-muted-foreground">Instructions (optional)</span>
+				<Input
+					name="instructions"
+					class="mt-1 h-8 text-sm"
+					placeholder={instructionsHint(newTaskKind)}
+				/>
+			</label>
 			<div class="flex flex-wrap items-end gap-2">
 				<label class="w-40 text-xs">
 					<span class="text-muted-foreground">Days after accept</span>
