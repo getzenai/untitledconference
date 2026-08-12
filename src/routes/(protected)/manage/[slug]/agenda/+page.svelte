@@ -477,17 +477,34 @@
 								data-testid="agenda-room-card"
 								data-room-id={room.id}
 							>
+								<!--
+									The room name wins the width, because it is what tells an
+									organizer which column they are looking at. #166 stopped the row
+									from overflowing, but the button beside the name still refuses to
+									shrink, so in a 9rem column the name kept about forty pixels and
+									every heading on the grid read "M…", "R…", "W…". The public
+									agenda, which has no button in this row, shows the same rooms in
+									full — so it was never the width itself.
+
+									The button keeps its job, its testid and its place in the tab
+									order; only its label is now short, with the whole sentence in the
+									accessible name.
+								-->
 								<div class="flex h-9 min-w-0 items-center justify-between gap-1 px-1.5">
-									<h3 class="min-w-0 truncate text-sm font-medium">{room.name}</h3>
+									<h3 class="min-w-0 flex-1 truncate text-sm font-medium" title={room.name}>
+										{room.name}
+									</h3>
 									<Button
 										type="button"
 										size="sm"
 										variant="ghost"
-										class="shrink-0"
+										class="h-6 shrink-0 px-1.5 text-xs"
+										aria-label="Open a slot in {room.name}"
+										title="Open a slot in {room.name}"
 										data-testid="agenda-open-slot-{room.id}"
 										onclick={() => openSlot(room, data.slots[0].minutes)}
 									>
-										Open a slot
+										+ slot
 									</Button>
 								</div>
 
