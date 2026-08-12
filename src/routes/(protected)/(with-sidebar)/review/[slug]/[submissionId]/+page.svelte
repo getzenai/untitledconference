@@ -138,7 +138,7 @@
 							{/if}
 							{#if peer.comment}
 								<div class="mt-2">
-									<p class="text-muted-foreground text-xs">Comment</p>
+									<p class="text-muted-foreground text-xs">Overall comment</p>
 									<p class="mt-0.5 text-sm whitespace-pre-line">{peer.comment}</p>
 								</div>
 							{/if}
@@ -205,7 +205,7 @@
 
 		{#if s.criteria.length === 0}
 			<p class="text-muted-foreground text-sm">
-				This round has no scorecard yet — leave your verdict as a comment.
+				This round has no scorecard yet — leave your verdict as an overall comment.
 			</p>
 		{/if}
 
@@ -245,15 +245,22 @@
 					<textarea name="criterion-{criterion.id}" rows="2" class="{inputClass} mt-1 w-full"
 						>{criterion.valueText ?? ''}</textarea
 					>
+					<span class="text-muted-foreground mt-1 block text-xs">
+						Part of this round's scorecard — not the overall comment below.
+					</span>
 				{/if}
 			</label>
 		{/each}
 
 		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Comment</span>
+			<span class="text-muted-foreground text-xs">Overall comment</span>
 			<textarea name="comment" rows="4" class="{inputClass} mt-1 w-full"
 				>{s.own.comment ?? ''}</textarea
 			>
+			<span class="text-muted-foreground mt-1 block text-xs">
+				Your verdict on this talk. Visible to organizers and — unless the round is anonymised — to
+				other reviewers.
+			</span>
 		</label>
 
 		<div class="flex flex-wrap gap-2">
