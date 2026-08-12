@@ -119,6 +119,53 @@ describe('home hub', () => {
 		expect(html).toContain('href="/portal/submissions/7"');
 	});
 
+	it('names the talk on a task row so two confirms at one event are not twins (#243)', () => {
+		const html = body(null, {
+			...emptyHub,
+			canCreateEvent: false,
+			openTasks: [
+				{
+					id: 11,
+					submissionId: 7,
+					title: 'Confirm participation',
+					instructions: null,
+					status: 'open',
+					dueOn: null,
+					conference: { slug: 'devflow', name: 'DevFlow Summit' },
+					submissionTitle: 'Serving 70B models on a budget'
+				} as never,
+				{
+					id: 12,
+					submissionId: 8,
+					title: 'Confirm participation',
+					instructions: null,
+					status: 'open',
+					dueOn: null,
+					conference: { slug: 'devflow', name: 'DevFlow Summit' },
+					submissionTitle: 'The hallway track is the product'
+				} as never,
+				{
+					id: 13,
+					submissionId: null,
+					title: 'Upload your headshot',
+					instructions: null,
+					status: 'open',
+					dueOn: null,
+					conference: { slug: 'devflow', name: 'DevFlow Summit' },
+					submissionTitle: null
+				} as never
+			]
+		});
+
+		expect(html).toContain('DevFlow Summit · Serving 70B models on a budget');
+		expect(html).toContain('DevFlow Summit · The hallway track is the product');
+		expect(html).toContain('Upload your headshot');
+		// Event-wide: conference only, no dangling middle-dot.
+		expect(html).not.toContain('DevFlow Summit · Upload');
+		expect(html).toContain('href="/portal/tasks/11"');
+		expect(html).toContain('href="/portal/tasks/12"');
+	});
+
 	it('surfaces unfinished onboarding without burying the hub', () => {
 		const html = body(
 			{

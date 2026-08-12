@@ -29,6 +29,12 @@
 		return `${start.toLocaleDateString('en-GB', month)} – ${end.toLocaleDateString('en-GB', full)}`;
 	};
 
+	/** Conference, plus the talk when the task belongs to one. Event-wide stays conference alone. */
+	const taskWhere = (task: { conference: { name: string }; submissionTitle: string | null }) =>
+		task.submissionTitle
+			? `${task.conference.name} · ${task.submissionTitle}`
+			: task.conference.name;
+
 	const hasAnyWork = $derived(
 		Boolean(
 			hub &&
@@ -220,7 +226,7 @@
 								>
 									<div class="font-medium">{task.title}</div>
 									<div class="text-muted-foreground text-xs">
-										{task.conference.name}{#if task.dueOn}
+										{taskWhere(task)}{#if task.dueOn}
 											· due {new Date(task.dueOn).toLocaleDateString('en-GB', {
 												day: 'numeric',
 												month: 'short'
