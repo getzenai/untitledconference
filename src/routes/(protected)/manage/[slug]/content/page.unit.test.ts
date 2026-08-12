@@ -77,3 +77,24 @@ describe('organizer speaker content layout', () => {
 		expect(renderWith(8)).toContain('data-testid="content-filter"');
 	});
 });
+
+describe('organizer speaker content cards', () => {
+	it('starts every card collapsed, with an open/total count on the header', () => {
+		const body = renderWith(2);
+
+		// Collapsed on first render — the task list markup is not in the SSR
+		// output at all, not merely hidden by CSS.
+		expect(body).not.toContain('Slides 1');
+		expect(body).not.toContain('nothing handed in');
+		expect(body).toMatch(/aria-expanded="false"/);
+		expect(body.match(/aria-expanded="false"/g)).toHaveLength(2);
+		// speaker() gives each speaker one open task, zero waiting, zero done.
+		expect(body).toContain('1 open · 1 task');
+	});
+
+	it('is a real, keyboard-reachable toggle button, not a div with an onclick', () => {
+		const body = renderWith(1);
+
+		expect(body).toMatch(/<button[^>]*aria-expanded="false"[^>]*>/);
+	});
+});
