@@ -204,7 +204,7 @@ async function importConference(conf) {
 				? at(s.ends_at_local)
 				: new Date(startsAt.getTime() + minutesFor(s.format) * 60 * 1000);
 		} else {
-			startsAt = fictionalSlot(dates[0], 0, fictionalMinutesUsed);
+			startsAt = fictionalSlot(dates[0], fictionalMinutesUsed);
 			const minutes = minutesFor(s.format);
 			endsAt = new Date(startsAt.getTime() + minutes * 60 * 1000);
 			fictionalMinutesUsed += minutes + 5; // A five-minute gap between back-to-back slots.
