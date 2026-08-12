@@ -18,6 +18,15 @@
 
 	let { data } = $props();
 
+	/**
+	 * Where this page's own logo points.
+	 *
+	 * `/` sends a signed-in visitor straight back to `/home`, so for them the plain
+	 * link would undo the escape hatch they just used: click the logo, land in the
+	 * app, and the product page is out of reach again.
+	 */
+	const selfHref = $derived(data.user ? '/?home=0' : '/');
+
 	const dateRange = (startsOn: string, endsOn: string) => {
 		if (!startsOn) return null;
 		if (!endsOn || endsOn === startsOn) return formatDayLong(startsOn);
@@ -41,7 +50,7 @@
 	<header class="border-border/70 bg-background/90 sticky top-0 z-50 border-b backdrop-blur-xl">
 		<div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8">
 			<a
-				href="/"
+				href={selfHref}
 				class="focus-visible:ring-ring flex items-center gap-2 rounded-md font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:outline-none"
 			>
 				<Goose silent class="h-9 w-8" />
@@ -70,10 +79,20 @@
 
 			<div class="flex items-center gap-1.5 sm:gap-2">
 				<ModeToggle class="hidden sm:inline-flex" />
-				<Button href="/login" variant="ghost" size="sm" class="hidden sm:inline-flex"
-					>Sign in</Button
-				>
-				<Button href="/register" variant="act" size="sm">Get started</Button>
+				<!-- A signed-in reader arrives here through `?home=0` (see +page.server.ts), so
+				     the two buttons that ask them to sign in or sign up would be nonsense. The
+				     page stays exactly the same otherwise: it is the product page, and reading
+				     it is the point of having come. -->
+				{#if data.user}
+					<Button href="/home" variant="act" size="sm" data-testid="landing-back-to-work">
+						Back to your work
+					</Button>
+				{:else}
+					<Button href="/login" variant="ghost" size="sm" class="hidden sm:inline-flex"
+						>Sign in</Button
+					>
+					<Button href="/register" variant="act" size="sm">Get started</Button>
+				{/if}
 			</div>
 		</div>
 	</header>
@@ -501,7 +520,7 @@
 			<div class="flex items-center gap-2 text-sm font-semibold">
 				<Goose class="h-8 w-7" />
 				<a
-					href="/"
+					href={selfHref}
 					class="focus-visible:ring-ring rounded-md focus-visible:ring-[3px] focus-visible:outline-none"
 					>untitledconference</a
 				>
@@ -511,7 +530,10 @@
 					class="hover:text-foreground inline-flex items-center gap-1.5"
 					href={REPO_URL}
 					rel="noreferrer"><GithubIcon class="size-4" /> GitHub</a
-				><a class="hover:text-foreground" href="/login">Sign in</a>
+				>{#if data.user}<a class="hover:text-foreground" href="/home">Your work</a>{:else}<a
+						class="hover:text-foreground"
+						href="/login">Sign in</a
+					>{/if}
 			</div>
 		</div>
 	</footer>

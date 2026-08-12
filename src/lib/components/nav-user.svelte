@@ -4,6 +4,7 @@
 	import { authClient } from '$lib/auth-client';
 	import BuildingIcon from '@lucide/svelte/icons/building';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
+	import HouseIcon from '@lucide/svelte/icons/house';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
 	import UserIcon from '@lucide/svelte/icons/user';
 
@@ -94,6 +95,15 @@
 					<DropdownMenu.Item onclick={() => goto('/settings/organization')}>
 						<BuildingIcon />
 						Organization
+					</DropdownMenu.Item>
+					<!--
+						The signed-in way to the product page (#237). `/` alone would bounce
+						straight back to /home; `?home=0` is the one bypass the front door
+						honours, and this menu is where someone looks for it.
+					-->
+					<DropdownMenu.Item data-testid="nav-user-product-page" onclick={() => goto('/?home=0')}>
+						<HouseIcon />
+						Product page
 					</DropdownMenu.Item>
 				</DropdownMenu.Group>
 				<DropdownMenu.Separator />
