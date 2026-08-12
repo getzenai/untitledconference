@@ -285,7 +285,7 @@
 					formaction="?/recuse"
 					variant="ghost"
 					size="sm"
-					disabled={busy}
+					disabled={busy || withdrawn}
 				>
 					Recuse myself
 				</Button>

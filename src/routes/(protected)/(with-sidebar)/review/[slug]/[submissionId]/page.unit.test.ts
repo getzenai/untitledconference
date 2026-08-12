@@ -106,8 +106,11 @@ describe('the form on a withdrawn talk', () => {
 
 		expect(body).toContain('The speaker withdrew this talk, so it no longer needs a review.');
 		expect(body).toContain('Withdrawn');
-		// Both write paths, not just the prominent one.
-		expect(body.match(/disabled/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+		// All write paths, including recuse (#183): recusing would erase the
+		// withdrawn queue row that #180 deliberately keeps visible.
+		expect(body.match(/disabled/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+		// disabled= lands before formaction in the rendered button markup.
+		expect(body).toMatch(/disabled=""[^>]*formaction="\?\/recuse"/);
 	});
 
 	it('leaves the form open on a talk that is still live', () => {

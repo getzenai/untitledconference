@@ -712,15 +712,34 @@ export async function saveReview(
 	return { ok: true };
 }
 
-/** Recuses one exact assigned review without letting a forged id cross its boundary. */
+export type RecuseReviewResult =
+	| { ok: true }
+	/** No matching outstanding assignment — wrong id, already submitted, or not theirs. */
+	| { ok: false; reason: 'not_found' }
+	/**
+	 * The speaker took the talk back. Recusing would delete the queue row and hide
+	 * the withdrawn talk entirely (#183) — the same silent vanishing #180 avoids
+	 * for "to do" rows. Blocked the same way `saveReview` is.
+	 */
+	| { ok: false; reason: 'withdrawn' };
+
+/**
+ * Recuses one exact assigned review without letting a forged id cross its boundary.
+ *
+ * Withdrawn talks refuse recusal: the queue keeps the row visible as withdrawn
+ * (#180), and clearing the assignment would erase that signal.
+ */
 export async function recuseReview(
 	conferenceId: number,
 	userId: string,
 	submissionId: number,
 	reviewId: number
-): Promise<boolean> {
+): Promise<RecuseReviewResult> {
+	const submission = await submissionFor(conferenceId, submissionId);
+	if (submission?.status === 'withdrawn') return { ok: false, reason: 'withdrawn' };
+
 	const roundIds = await roundsOf(conferenceId);
-	if (roundIds.length === 0) return false;
+	if (roundIds.length === 0) return { ok: false, reason: 'not_found' };
 	const recused = await db
 		.update(reviewTable)
 		.set({ status: 'recused', submittedAt: null })
@@ -735,7 +754,7 @@ export async function recuseReview(
 		)
 		.returning({ id: reviewTable.id });
 
-	return recused.length > 0;
+	return recused.length > 0 ? { ok: true } : { ok: false, reason: 'not_found' };
 }
 
 type Criterion = { id: number; kind: string; scaleMax: number | null };
