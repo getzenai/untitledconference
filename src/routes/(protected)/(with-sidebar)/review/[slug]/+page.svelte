@@ -10,6 +10,7 @@
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import { QUEUE_SORTS } from '$lib/conference/review-visibility';
+	import { ROUND_WINDOW_TONES } from '$lib/conference/round-window';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
@@ -156,14 +157,30 @@
 							{/if}
 						</td>
 						<td class="py-2 pr-4">
-							<StatusBadge
-								status={row.withdrawn
-									? 'withdrawn'
-									: row.ownReviewSubmitted
-										? 'submitted'
-										: 'assigned'}
-								label={row.withdrawn ? 'Withdrawn' : row.ownReviewSubmitted ? 'Reviewed' : 'To do'}
-							/>
+							<!-- "To do" on a round that is shut is an instruction the reviewer cannot
+							     follow (ABS-01), so the window replaces it — but only while the review
+							     is outstanding: one already filed stays "Reviewed" whether or not the
+							     round has since closed. -->
+							{#if !row.withdrawn && !row.ownReviewSubmitted && row.window.state !== 'open'}
+								<StatusBadge
+									status={row.window.state}
+									tone={ROUND_WINDOW_TONES[row.window.state]}
+									label={row.window.label}
+								/>
+							{:else}
+								<StatusBadge
+									status={row.withdrawn
+										? 'withdrawn'
+										: row.ownReviewSubmitted
+											? 'submitted'
+											: 'assigned'}
+									label={row.withdrawn
+										? 'Withdrawn'
+										: row.ownReviewSubmitted
+											? 'Reviewed'
+											: 'To do'}
+								/>
+							{/if}
 						</td>
 					</tr>
 				{/each}

@@ -79,6 +79,20 @@ export const actions: Actions = {
 					message: 'The speaker withdrew this talk, so it no longer needs a review.'
 				});
 			}
+			// The round is shut (ABS-01). 409 for the same reason withdrawn is: nothing
+			// about this POST was malformed, the world moved while the form was open.
+			// Two messages, because "come back later" and "you are too late" ask
+			// opposite things of the reader.
+			if (saved.reason === 'round_not_open') {
+				return fail(409, {
+					message: 'This review round has not opened yet, so nothing can be filed in it.'
+				});
+			}
+			if (saved.reason === 'round_closed') {
+				return fail(409, {
+					message: 'This review round is closed. Reviews can no longer be filed or changed.'
+				});
+			}
 			return fail(400, {
 				message:
 					'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
