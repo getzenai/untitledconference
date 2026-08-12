@@ -1,0 +1,90 @@
+name: Run DB script
+
+# One-off runner for idempotent data scripts under scripts/db/ against prod
+# (e.g. scripts/db/fix-ai-engineer-recording-urls.mjs). Mirrors deploy.yaml's
+# Infisical OIDC step — same identity, same binding to refs/heads/main, so
+# this raises no one's personal access and only ever runs what's on main.
+#
+# `script` must be a bare filename inside scripts/db/ (no path separators),
+# so a workflow_dispatch input can't be used to run an arbitrary path outside
+# that directory.
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: 'Script filename inside scripts/db/ (e.g. fix-ai-engineer-recording-urls.mjs)'
+        required: true
+      dry_run:
+        description: 'Pass --dry-run to the script'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC; without it the Infisical step fails
+
+concurrency:
+  group: run-db-script
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Run script against prod
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate script input
+        env:
+          SCRIPT: ${{ inputs.script }}
+        run: |
+          if [[ "$SCRIPT" == */* || "$SCRIPT" == "" ]]; then
+            echo "::error::script must be a bare filename inside scripts/db/, got: $SCRIPT"
+            exit 1
+          fi
+          if [ ! -f "scripts/db/$SCRIPT" ]; then
+            echo "::error::scripts/db/$SCRIPT does not exist"
+            exit 1
+          fi
+
+      # Fetches NEON_CONNECTION_STRING (plus the app secrets deploy.yaml also
+      # needs) as environment variables for the rest of this job only.
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: oidc
+          identity-id: e8e7dc26-6908-4548-bf57-32edd043e944
+          project-slug: untitled-conference
+          env-slug: prod
+          domain: https://eu.infisical.com
+
+      - name: Verify NEON_CONNECTION_STRING is present
+        run: |
+          if [ -z "$NEON_CONNECTION_STRING" ]; then
+            echo "::error::NEON_CONNECTION_STRING is missing from Infisical (project untitled-conference, env prod)"
+            exit 1
+          fi
+
+      - name: Run script
+        env:
+          SCRIPT: ${{ inputs.script }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=()
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          DATABASE_URL="$NEON_CONNECTION_STRING" node "scripts/db/$SCRIPT" "${args[@]}"
