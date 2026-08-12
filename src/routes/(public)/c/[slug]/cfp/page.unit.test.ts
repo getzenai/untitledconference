@@ -11,7 +11,11 @@ import Page from './+page.svelte';
  * above the form, and gone once the call is closed. That is the whole point of
  * the feature, so it is what these render.
  */
-const call = (state: 'open' | 'closed' | 'not_yet_open', description: string | null) => ({
+const call = (
+	state: 'open' | 'closed' | 'not_yet_open',
+	description: string | null,
+	closesAt: Date | null = null
+) => ({
 	conference: {
 		id: 1,
 		slug: 'devflow-conf-2027',
@@ -25,7 +29,7 @@ const call = (state: 'open' | 'closed' | 'not_yet_open', description: string | n
 		title: 'Call for papers',
 		description,
 		opensAt: null,
-		closesAt: null
+		closesAt
 	},
 	state,
 	fields: [],
@@ -52,12 +56,13 @@ const publicConference = {
 const renderCfp = (
 	state: 'open' | 'closed' | 'not_yet_open',
 	description: string | null,
-	existing: { id: number; title: string; status: 'draft' | 'submitted' } | null = null
+	existing: { id: number; title: string; status: 'draft' | 'submitted' } | null = null,
+	closesAt: Date | null = null
 ) =>
 	render(Page, {
 		props: {
 			data: {
-				call: call(state, description),
+				call: call(state, description, closesAt),
 				existing,
 				// The public layout's data reaches this page's type but not its body.
 				user: undefined,
@@ -96,10 +101,10 @@ describe('the public call for papers', () => {
 	});
 
 	it('drops the box once the call has closed', () => {
-		const body = renderCfp('closed', 'Travel is covered');
+		const body = renderCfp('closed', 'Travel is covered', null, new Date('2027-04-14T12:00:00Z'));
 
 		expect(body).not.toContain('Travel is covered');
-		expect(body).toContain('This call has closed');
+		expect(body).toContain('This call has closed — proposals were accepted until');
 	});
 
 	it('renders the call unchanged when the organizer wrote nothing', () => {

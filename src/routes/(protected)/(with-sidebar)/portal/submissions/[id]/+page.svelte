@@ -59,6 +59,12 @@
 	 * render "…at 04:57.A confirmation has gone…".
 	 */
 	const receivedLine = $derived(stamp(s.submittedAt) ? `Received ${stamp(s.submittedAt)}. ` : '');
+
+	const answerValue = (answer: { kind: string; value: string | null }) => {
+		if (answer.value === null || answer.value === '') return '—';
+		if (answer.kind !== 'boolean') return answer.value;
+		return answer.value === 'true' ? 'Yes' : 'No';
+	};
 </script>
 
 <svelte:head>
@@ -111,9 +117,7 @@
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">Accepted.</p>
 			<p class="text-muted-foreground mt-1">
-				Anything the organizers need from you is on your <a class="underline" href="/portal"
-					>portal</a
-				>.
+				Anything else the organizers need from you appears under What is due in the speaker portal.
 			</p>
 		</div>
 	{/if}
@@ -159,12 +163,12 @@
 		</h2>
 		<ul class="mt-2 space-y-1 text-sm">
 			{#each s.speakers as speaker, i (i)}
-				<li>
-					{speaker.name}{#if speaker.isPrimary}<span class="text-muted-foreground">
-							— presenting</span
-						>{:else if speaker.roleLabel}<span class="text-muted-foreground">
-							— {speaker.roleLabel}</span
-						>{/if}
+				<li class="text-muted-foreground">
+					<span class="text-foreground">{speaker.name}</span>{speaker.isPrimary
+						? ' — presenting'
+						: speaker.roleLabel
+							? ` — ${speaker.roleLabel}`
+							: ''}
 				</li>
 			{/each}
 		</ul>
@@ -177,7 +181,7 @@
 				{#each s.answers as answer, i (i)}
 					<div>
 						<dt class="text-muted-foreground text-xs">{answer.label}</dt>
-						<dd class="mt-0.5 whitespace-pre-line">{answer.value}</dd>
+						<dd class="mt-0.5 whitespace-pre-line">{answerValue(answer)}</dd>
 					</div>
 				{/each}
 			</dl>

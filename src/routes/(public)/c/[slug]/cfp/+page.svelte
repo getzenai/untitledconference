@@ -63,9 +63,9 @@
 
 	{#if call.state === 'closed'}
 		<p class="border-border bg-muted/40 text-muted-foreground mt-4 rounded-lg border p-4 text-sm">
-			This call has closed{#if closesLabel}
-				— proposals were accepted until {closesLabel}{/if}. Anything you already submitted is still
-			in your <a class="underline" href="/portal">speaker portal</a>.
+			This call has closed{closesLabel ? ` — proposals were accepted until ${closesLabel}` : ''}.
+			Anything you already submitted is still in your
+			<a class="underline" href="/portal">speaker portal</a>.
 		</p>
 	{:else if call.state === 'not_yet_open'}
 		<p class="border-border bg-muted/40 text-muted-foreground mt-4 rounded-lg border p-4 text-sm">
