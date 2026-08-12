@@ -283,3 +283,99 @@ describe('reviewer progress as a comparison', () => {
 		expect(body).toMatch(/aria-hidden="true"[^>]*>\s*<div class="bg-status-good/);
 	});
 });
+
+/**
+ * The four queue cards at the foot of the page. They list talk titles, and the
+ * title is the only thing on a row worth reading — but at four columns a card
+ * was ~250 px wide, of which the status on the right takes a third, so on a
+ * 1280 px screen every line stopped after about twenty characters ("Five
+ * minutes on f…"). Two columns and a two-line clamp is the layout decision;
+ * these assertions pin it, so a later "let's make it denser" has to argue with
+ * a test rather than quietly bring the ellipsis back.
+ */
+describe('queue cards', () => {
+	const longTitle = 'Five minutes on flaky tests and the twenty years of CI that earned them';
+
+	const withQueues = () =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					dashboard: {
+						...emptyDashboard,
+						reviews: { assigned: 0, submitted: 0, outstanding: 0, items: [] },
+						decisions: {
+							undecided: 1,
+							unreviewed: 1,
+							items: [{ id: 11, title: longTitle, reviewsSubmitted: 0, reviewsAssigned: 2 }]
+						},
+						scheduling: {
+							accepted: 1,
+							unplaced: 1,
+							tentative: 0,
+							items: [{ id: 12, title: longTitle, state: 'unplaced' }]
+						},
+						tasks: {
+							open: 1,
+							overdue: 0,
+							dueSoon: 1,
+							items: [
+								{
+									id: 13,
+									title: longTitle,
+									speaker: 'Priya Raman',
+									dueOn: '2027-03-01',
+									overdue: false
+								}
+							]
+						},
+						mail: {
+							queued: 0,
+							sent: 1,
+							failed: 0,
+							items: [
+								{
+									id: 14,
+									subject: longTitle,
+									toEmail: 'priya@example.com',
+									status: 'sent',
+									error: null
+								}
+							]
+						}
+					}
+				} as unknown as PageData,
+				form: null
+			}
+		}).body;
+
+	// The queue grid is the last grid on the page; the metric strip above it is
+	// allowed its four columns because it holds numbers, not prose.
+	const queueGrid = (body: string) => body.slice(body.lastIndexOf('<div class="grid'));
+
+	it('never puts the four title lists in more than two columns', () => {
+		const grid = queueGrid(withQueues());
+
+		expect(grid).toContain('md:grid-cols-2');
+		expect(grid).not.toContain('grid-cols-4');
+	});
+
+	it('gives a long title two lines instead of one ellipsis', () => {
+		const grid = queueGrid(withQueues());
+
+		// One clamped title per card, and nothing left cutting a title off after a
+		// single line.
+		expect(grid.match(/line-clamp-2/g)).toHaveLength(4);
+		expect(grid).not.toMatch(/class="[^"]*\btruncate\b[^"]*"[^>]*>\s*Five minutes/);
+	});
+
+	it('keeps the whole title reachable on hover even when it is clamped', () => {
+		const grid = queueGrid(withQueues());
+
+		expect(grid).toContain(`title="${longTitle}"`);
+		expect(grid).toContain(`title="${longTitle} · Priya Raman"`);
+	});
+});
