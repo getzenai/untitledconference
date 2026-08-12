@@ -44,5 +44,8 @@ cypress/downloads
 # Agent scratch worktrees
 .claude/worktrees/
 
+# Agent scratch dir (3 GB of throwaway checkouts, not source)
+.scratch/
+
 # Written by scripts/db/seed-devflow.mjs, consumed by seed-uploads.mjs.
 scripts/db/.seed-uploads.json
