@@ -115,8 +115,9 @@ describe('empty board guidance', () => {
  * the first line (not the clock — the grid axis already shows that).
  *
  * SSR cannot measure pixels, so this pins the layout contract: min-width: 0 and
- * truncate on the title, a title= attribute for the full string, min-h-8 so a
- * short slot still has room for that one line, and lane-split still clips width.
+ * truncate on the title, min-h-8 so a short slot still has room for that one line,
+ * and lane-split still clips width. Full strings that CSS clips are carried by the
+ * shadcn Tooltip (#219), not by a title= attribute.
  */
 describe('agenda card text overflow (#154)', () => {
 	const longTitle =
@@ -164,9 +165,10 @@ describe('agenda card text overflow (#154)', () => {
 		// Card constrains width; title truncates rather than spills.
 		expect(body).toMatch(/data-testid="agenda-placed-session"[^>]*min-w-0/);
 		expect(body).toMatch(/data-testid="agenda-session-title"[^>]*truncate/);
-		// Full strings stay on the elements for hover / AT even if clipped.
+		// Conflict detail still uses title= (not a primary label on a dense card).
 		expect(body).toContain(`title="${conflictDetail}"`);
-		expect(body).toContain(`title="${longTitle}"`);
+		// Session title is in the DOM (CSS may clip it); no title= crutch.
+		expect(body).not.toMatch(/data-testid="agenda-session-title"[^>]*title=/);
 	});
 
 	it('puts the title first and floors short cards so it stays readable', () => {
@@ -205,5 +207,120 @@ describe('agenda card text overflow (#154)', () => {
 
 		expect(body).toContain('data-testid="rejected-placement-badge"');
 		expect(body).toContain('Declined');
+	});
+});
+
+/**
+ * #219 — Agenda-Builder for humans (World's Fair density).
+ *
+ * Room heads stack name over "+ slot" so similar prefixes stay distinguishable.
+ * Publish state is a colour, not a "Published" badge that steals title width.
+ * Full names that CSS truncates are reached via the shadcn Tooltip trigger (not title=).
+ */
+describe('agenda builder readability (#219)', () => {
+	const placedSession = (
+		placementId: number,
+		title: string,
+		status: BoardSession['status'] = 'tentative'
+	): BoardSession => ({
+		placementId,
+		submissionId: placementId,
+		title,
+		kind: 'talk',
+		status,
+		submissionStatus: 'accepted',
+		trackName: 'Systems',
+		formatName: 'Talk',
+		minutes: 30,
+		dayId: 1,
+		roomId: 1,
+		startMinutes: 540,
+		endMinutes: 570,
+		speakers: ['Ada']
+	});
+
+	it('stacks + slot under the room name and keeps the full name in the head', () => {
+		// Twenty rooms with the same prefix — the World's Fair case that used to
+		// collapse every header to "M…", "R…", "W…" once the button ate the row.
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					board: {
+						days: [{ id: 1, date: '2027-05-10', position: 0 }],
+						rooms: Array.from({ length: 20 }, (_, i) => ({
+							id: i + 1,
+							name: `Main Hall Track ${String.fromCharCode(65 + (i % 26))} ${i + 1}`,
+							position: i
+						})),
+						tracks: [],
+						formats: [],
+						placed: [],
+						tray: [],
+						conflicts: []
+					},
+					slots: [{ minutes: 540, label: '09:00' }]
+				},
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('data-testid="agenda-room-head"');
+		// Class list comes before data-testid in the SSR attribute order.
+		expect(body).toMatch(/flex-col[^>]*data-testid="agenda-room-head"/);
+		expect(body).toContain('data-testid="agenda-room-name"');
+		expect(body).toContain('Main Hall Track A 1');
+		expect(body).toContain('Main Hall Track T 20');
+		// Open-slot control stays findable for Cypress and the keyboard path.
+		expect(body).toContain('data-testid="agenda-open-slot-1"');
+		// Room name is no longer forced to share a single row with the button.
+		const headStart = body.indexOf('data-testid="agenda-room-head"');
+		const headEnd = body.indexOf('data-column-body', headStart);
+		const head = body.slice(headStart, headEnd);
+		const nameMark = head.indexOf('data-testid="agenda-room-name"');
+		const slotMark = head.indexOf('data-testid="agenda-open-slot-1"');
+		expect(nameMark).toBeGreaterThan(-1);
+		expect(slotMark).toBeGreaterThan(nameMark);
+	});
+
+	it('codes publish state with colour instead of a width-eating badge', () => {
+		const body = renderWith(1, 1, {
+			placed: [
+				placedSession(1, 'A published keynote that needs every pixel of its title', 'confirmed'),
+				{
+					...placedSession(2, 'A draft still waiting for the publish pass', 'tentative'),
+					roomId: 1,
+					startMinutes: 570,
+					endMinutes: 600
+				}
+			]
+		});
+
+		// No visible Published/Draft badge text on the card chrome.
+		expect(body).not.toMatch(/data-slot="badge"[^>]*>\s*Published/);
+		expect(body).not.toMatch(/data-slot="badge"[^>]*>\s*Draft/);
+		expect(body).toContain('data-publish-state="published"');
+		expect(body).toContain('data-publish-state="draft"');
+		expect(body).toMatch(/data-publish-state="published"[^>]*border-status-good/);
+		expect(body).toMatch(/data-publish-state="draft"[^>]*border-border/);
+		// Title still present in full in the DOM (tooltip + truncate, no badge beside it).
+		expect(body).toContain('A published keynote that needs every pixel of its title');
+	});
+
+	it('wires shadcn tooltip triggers on room names and session titles', () => {
+		const body = renderWith(2, 1, {
+			placed: [placedSession(1, 'Tooltip-worthy title that is longer than the column')]
+		});
+
+		// bits-ui marks the trigger; the full string is the tooltip content payload.
+		expect(body).toContain('data-slot="tooltip-trigger"');
+		expect(body).toContain('data-testid="agenda-room-name"');
+		expect(body).toContain('data-testid="agenda-session-title"');
+		// Full title is rendered (in trigger text and/or tooltip content) — not lost.
+		expect(body).toContain('Tooltip-worthy title that is longer than the column');
+		expect(body).toContain('Room 1');
 	});
 });
