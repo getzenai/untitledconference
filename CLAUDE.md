@@ -126,7 +126,7 @@ npm run format            # Format code
 ```
 
 `npm run test:e2e` runs `scripts/run-e2e.sh`: push schema to `TEST_DATABASE_URL`,
-build, start `vite preview` on port 5174, run Cypress. Set `SKIP_BUILD=true` to
+build, start `vite preview` on a free port, run Cypress. Set `SKIP_BUILD=true` to
 reuse an existing build. No Infisical secrets are needed for E2E.
 
 ### E2E Test Debugging

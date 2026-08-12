@@ -178,7 +178,7 @@ jobs:
         run: npm ci
 
       - name: Apply every migration to a fresh database
-        run: node scripts/db/migrate.mjs
+        run: node scripts/db/migrate.mjs --allow-any-tree
         env:
           DATABASE_URL: postgres://root:mysecretpassword@localhost:5434/migrate_check
 

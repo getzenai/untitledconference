@@ -13,17 +13,71 @@
  * Exits 0 on success including "nothing to migrate", 1 on failure — where
  * "success" now means every committed migration is recorded as applied, not just
  * that Drizzle returned without throwing. See `assertNothingSkipped`.
+ *
+ * By default, the script also requires HEAD to match origin/main and tracked files
+ * to be clean. CI may opt out for its throwaway database with `--allow-any-tree`.
  */
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import postgres from 'postgres';
+
+const allowAnyTree = process.argv.slice(2).includes('--allow-any-tree');
+
+function git(...args) {
+	return execFileSync('git', args, {
+		encoding: 'utf8',
+		stdio: ['ignore', 'pipe', 'pipe']
+	}).trim();
+}
+
+/**
+ * Production migrations must come from the exact commit that main points at.
+ * A stale branch can carry migration journal history that is absent from its own
+ * diff, so reviewing the branch changes is not enough to make the run safe.
+ */
+function assertDeploymentTree() {
+	if (allowAnyTree) {
+		console.log('[migrate] Tree guard bypassed (--allow-any-tree)');
+		return;
+	}
+
+	try {
+		const head = git('rev-parse', 'HEAD');
+		const main = git('rev-parse', 'origin/main');
+		if (head !== main) {
+			console.error(
+				`[migrate] Refusing to migrate: HEAD ${head.slice(0, 12)} != origin/main ${main.slice(0, 12)}`
+			);
+			console.error(
+				'[migrate] Use --allow-any-tree only for a throwaway database (for example, the CI migration check).'
+			);
+			process.exit(1);
+		}
+
+		const trackedChanges = git('status', '--porcelain', '--untracked-files=no');
+		if (trackedChanges) {
+			console.error('[migrate] Refusing to migrate: tracked files contain uncommitted changes');
+			console.error(trackedChanges);
+			process.exit(1);
+		}
+	} catch (error) {
+		console.error(
+			'[migrate] Could not verify HEAD against origin/main:',
+			error instanceof Error ? error.message : error
+		);
+		process.exit(1);
+	}
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
 	console.error('[migrate] DATABASE_URL is not set');
 	process.exit(1);
 }
+
+assertDeploymentTree();
 
 const journal = JSON.parse(readFileSync('./drizzle/meta/_journal.json', 'utf8'));
 
