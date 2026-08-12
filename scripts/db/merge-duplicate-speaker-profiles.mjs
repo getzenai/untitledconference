@@ -31,6 +31,9 @@ const ORG_ID = 'org-ai-engineer-import';
 const FILLABLE = ['email', 'headshot_url', 'job_title', 'company', 'bio', 'links', 'notes', 'tags'];
 
 const dryRun = process.argv.includes('--dry-run');
+
+/** Named in the closing line so a run that touched CRM data never looks like a no-op. */
+const totals = { cardsMoved: 0, cardsDropped: 0 };
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
 	console.error(`${TAG} DATABASE_URL is required`);
@@ -42,10 +45,16 @@ const sql = postgres(databaseUrl, { max: 1 });
 /**
  * Repoints one child table from `duplicateId` to `survivorId`.
  *
- * `submission_speaker` and `conference_speaker` both carry a unique index that the
- * survivor may already satisfy — the same person credited on one submission under
- * both profiles. Moving such a row would violate the index, so it is dropped
- * instead: the survivor already holds the link the row was expressing.
+ * `submission_speaker`, `conference_speaker` and `crm_pipeline_card` each carry a
+ * unique index that the survivor may already satisfy — the same person credited on
+ * one submission under both profiles, or enrolled in the org pipeline twice. Moving
+ * such a row would violate the index, so it is dropped instead: the survivor already
+ * holds the link the row was expressing.
+ *
+ * For a dropped `crm_pipeline_card` the attached `crm_pipeline_stage_history` goes
+ * with it (cascade). That is correct — the history describes a card that no longer
+ * exists — but it is real organizer-entered data, so the count is logged rather than
+ * absorbed into a total.
  */
 async function repoint(table, scopeColumn, survivorId, duplicateId) {
 	const moved = await sql`
@@ -67,6 +76,30 @@ async function repoint(table, scopeColumn, survivorId, duplicateId) {
 	return { moved: moved.length, dropped: dropped.length };
 }
 
+/**
+ * Read-only preview of the one child table whose loss would be irreversible, so a
+ * dry run says what the real run would do to the pipeline instead of staying quiet.
+ */
+async function previewCards(survivor, duplicate) {
+	const cards = await sql`
+		SELECT card.id, EXISTS (
+			SELECT 1 FROM crm_pipeline_card AS kept
+			WHERE kept.speaker_profile_id = ${survivor.id}
+			  AND kept.organization_id = card.organization_id
+		) AS conflicts
+		FROM crm_pipeline_card AS card
+		WHERE card.speaker_profile_id = ${duplicate.id}
+	`;
+	for (const card of cards) {
+		console.log(
+			`${TAG}   pipeline card #${card.id} would be ` +
+				(card.conflicts ? 'dropped (survivor already enrolled)' : 'repointed')
+		);
+		if (card.conflicts) totals.cardsDropped += 1;
+		else totals.cardsMoved += 1;
+	}
+}
+
 async function mergeInto(survivor, duplicate) {
 	const fills = {};
 	for (const column of FILLABLE) {
@@ -78,7 +111,7 @@ async function mergeInto(survivor, duplicate) {
 			(Object.keys(fills).length ? ` (fills ${Object.keys(fills).join(', ')})` : '')
 	);
 
-	if (dryRun) return;
+	if (dryRun) return previewCards(survivor, duplicate);
 
 	if (Object.keys(fills).length) {
 		await sql`UPDATE speaker_profile SET ${sql(fills)}, updated_at = now() WHERE id = ${survivor.id}`;
@@ -92,6 +125,10 @@ async function mergeInto(survivor, duplicate) {
 		duplicate.id
 	);
 	const rosters = await repoint('conference_speaker', 'conference_id', survivor.id, duplicate.id);
+	// The pipeline card is org-scoped, not conference-scoped: unique on
+	// (organization_id, speaker_profile_id). Without this the DELETE below would take
+	// the duplicate's card, its notes and its stage history with it, silently.
+	const cards = await repoint('crm_pipeline_card', 'organization_id', survivor.id, duplicate.id);
 	// `task` has no uniqueness to respect: two open tasks for the same person are
 	// two tasks, not a conflict.
 	const tasks = await sql`
@@ -104,8 +141,16 @@ async function mergeInto(survivor, duplicate) {
 
 	console.log(
 		`${TAG}   moved ${submissions.moved} submission link(s), ${rosters.moved} roster row(s), ` +
-			`${tasks.length} task(s); dropped ${submissions.dropped + rosters.dropped} redundant link(s)`
+			`${cards.moved} pipeline card(s), ${tasks.length} task(s); ` +
+			`dropped ${submissions.dropped + rosters.dropped} redundant link(s)` +
+			(cards.dropped
+				? ` and ${cards.dropped} pipeline card(s) the survivor already had ` +
+					`(their notes and stage history go with them)`
+				: '')
 	);
+
+	totals.cardsMoved += cards.moved;
+	totals.cardsDropped += cards.dropped;
 }
 
 async function main() {
@@ -137,7 +182,8 @@ async function main() {
 	}
 
 	console.log(
-		`${TAG} done: ${groups} duplicated name(s), ${merged} profile(s) merged` +
+		`${TAG} done: ${groups} duplicated name(s), ${merged} profile(s) merged, ` +
+			`${totals.cardsMoved} pipeline card(s) repointed, ${totals.cardsDropped} dropped as redundant` +
 			(dryRun ? ' (dry-run)' : '')
 	);
 }
