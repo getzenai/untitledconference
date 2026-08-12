@@ -13,6 +13,8 @@ import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import {
 	cfpFormTable,
+	formFieldTable,
+	submissionAnswerTable,
 	submissionSpeakerTable,
 	submissionTable
 } from '$lib/server/db/conference/cfp-schema';
@@ -258,6 +260,22 @@ describe('mySubmissions and myTasks for a co-speaker', () => {
 		if (!saved.ok) throw new Error(`fixture: saveSubmission failed (${saved.reason})`);
 		talkId = saved.submissionId;
 
+		const [form] = await db
+			.select({ id: cfpFormTable.id })
+			.from(cfpFormTable)
+			.where(eq(cfpFormTable.conferenceId, conference.id));
+		const [booleanField] = await db
+			.insert(formFieldTable)
+			.values({
+				cfpFormId: form.id,
+				label: 'Have you given this talk before?',
+				kind: 'boolean'
+			})
+			.returning({ id: formFieldTable.id });
+		await db
+			.insert(submissionAnswerTable)
+			.values({ submissionId: talkId, formFieldId: booleanField.id, value: 'true' });
+
 		// The co-speaker's profile is created by `upsertCoSpeaker` with no account
 		// attached. A task written against it is what an acceptance produces.
 		const [profile] = await db
@@ -291,6 +309,16 @@ describe('mySubmissions and myTasks for a co-speaker', () => {
 
 	it('opens the co-presented talk by direct id', async () => {
 		expect(await mySubmission(coSpeaker.id, talkId)).not.toBeNull();
+	});
+
+	it('returns the field kind needed to present boolean answers', async () => {
+		const detail = await mySubmission(coSpeaker.id, talkId);
+
+		expect(detail?.answers).toContainEqual({
+			label: 'Have you given this talk before?',
+			kind: 'boolean',
+			value: 'true'
+		});
 	});
 
 	it('shows the co-speaker the task written for them', async () => {
