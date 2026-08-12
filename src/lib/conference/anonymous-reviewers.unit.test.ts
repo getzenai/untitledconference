@@ -5,7 +5,7 @@
  * names, which reads as a rendering fault rather than as deliberate anonymity.
  */
 import { describe, expect, it } from 'vitest';
-import { anonymousReviewerLabels } from './anonymous-reviewers';
+import { anonymousReviewerLabels, peerDisplayLabels } from './anonymous-reviewers';
 
 describe('labelling anonymised reviewers', () => {
 	it('numbers them from one within the submission, not by row id', () => {
@@ -49,5 +49,24 @@ describe('labelling anonymised reviewers', () => {
 	it('has nothing to say about a submission nobody hid', () => {
 		expect(anonymousReviewerLabels([{ id: 1, anonymized: false }]).size).toBe(0);
 		expect(anonymousReviewerLabels([]).size).toBe(0);
+	});
+});
+
+describe('peerDisplayLabels', () => {
+	it('numbers every peer, not only anonymised ones', () => {
+		const labels = peerDisplayLabels([{ id: 10 }, { id: 3 }, { id: 10 }]);
+		expect([...labels.entries()]).toEqual([
+			[3, 'Reviewer 1'],
+			[10, 'Reviewer 2']
+		]);
+	});
+
+	it('is stable under shuffle', () => {
+		const a = peerDisplayLabels([{ id: 5 }, { id: 2 }, { id: 9 }]);
+		const b = peerDisplayLabels([{ id: 9 }, { id: 5 }, { id: 2 }]);
+		expect(a.get(2)).toBe('Reviewer 1');
+		expect(b.get(2)).toBe('Reviewer 1');
+		expect(a.get(9)).toBe('Reviewer 3');
+		expect(b.get(9)).toBe('Reviewer 3');
 	});
 });
