@@ -27,6 +27,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
 	ownReviewAccess,
+	recuseReview,
 	requireReviewer,
 	reviewQueue,
 	reviewedConferences,
@@ -716,5 +717,29 @@ describe('a withdrawn submission', () => {
 		});
 
 		expect(result).toEqual({ ok: true });
+	});
+
+	it('refuses recusal so the withdrawn row does not vanish from the queue (#183)', async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'withdrawn' })
+			.where(eq(submissionTable.id, mine));
+
+		const [review] = await db
+			.select({ id: reviewTable.id })
+			.from(reviewTable)
+			.where(and(eq(reviewTable.submissionId, mine), eq(reviewTable.reviewerUserId, ME)));
+
+		const conference = await conferenceNow();
+		expect(await recuseReview(conference.id, ME, mine, review.id)).toEqual({
+			ok: false,
+			reason: 'withdrawn'
+		});
+
+		const [row] = await db
+			.select({ status: reviewTable.status })
+			.from(reviewTable)
+			.where(eq(reviewTable.id, review.id));
+		expect(row.status).toBe('assigned');
 	});
 });
