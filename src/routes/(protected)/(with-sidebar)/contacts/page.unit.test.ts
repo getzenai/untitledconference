@@ -45,7 +45,14 @@ const baseData = {
 			{ company: 'Acme', count: 2 },
 			{ company: 'Globex', count: 1 }
 		]
-	}
+	},
+	segments: [] as Array<{
+		id: number;
+		organizationId: string;
+		name: string;
+		filters: { q?: string; company?: string; jobTitle?: string; tag?: string };
+		createdAt: Date;
+	}>
 };
 
 describe('contacts directory page', () => {
@@ -97,6 +104,32 @@ describe('contacts directory page', () => {
 			}
 		});
 		expect(body).toContain('data-testid="contacts-clear-filters"');
+	});
+
+	it('renders saved segments and a save form when filters are active (CRM-09)', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					...baseData,
+					filters: { tag: 'AI' },
+					segments: [
+						{
+							id: 1,
+							organizationId: 'org-1',
+							name: 'AI Experts',
+							filters: { tag: 'AI' },
+							createdAt: new Date('2027-01-01')
+						}
+					]
+				} as never,
+				form: null
+			}
+		});
+		expect(body).toContain('data-testid="contacts-segments"');
+		expect(body).toContain('data-testid="contacts-save-segment"');
+		expect(body).toContain('data-testid="contacts-segments-list"');
+		expect(body).toContain('AI Experts');
+		expect(body).toContain('/contacts?tag=AI');
 	});
 
 	it('prompts for an organization when the user cannot manage', () => {
