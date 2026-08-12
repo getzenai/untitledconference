@@ -356,3 +356,50 @@ describe('agenda builder readability (#219)', () => {
 		expect(source).toMatch(/TooltipTrigger\s+tabindex=\{-1\}/);
 	});
 });
+
+/**
+ * #231 — the Decision-workflow pattern applied to auto-place. The button writes
+ * immediately, only from the tray, and leaves placed talks where they are. That
+ * has to be said *before* the click; the "Placed N…" line arrives too late.
+ */
+describe('auto-place hint (#231)', () => {
+	const trayTalk = (placementId: number): BoardSession => ({
+		placementId,
+		submissionId: placementId,
+		title: `Waiting talk ${placementId}`,
+		kind: 'talk',
+		status: 'tentative',
+		submissionStatus: 'accepted',
+		trackName: null,
+		formatName: 'Talk',
+		minutes: 30,
+		dayId: null,
+		roomId: null,
+		startMinutes: null,
+		endMinutes: null,
+		speakers: ['Ada']
+	});
+
+	it('says what the button does before anyone clicks it', () => {
+		const body = renderWith(1, 1, { tray: [trayTalk(1), trayTalk(2), trayTalk(3)] });
+
+		expect(body).toContain('data-testid="agenda-autoplace-hint"');
+		expect(body).toContain('Places the 3 waiting talks into free slots.');
+		expect(body).toContain('Nothing already on the grid moves.');
+		// The after-the-fact line is not a substitute — it is absent until submit.
+		expect(body).not.toContain('Move anything you disagree with.');
+	});
+
+	it('uses the singular when one talk is waiting', () => {
+		const body = renderWith(1, 1, { tray: [trayTalk(1)] });
+
+		expect(body).toContain('Places the waiting talk into free slots.');
+	});
+
+	it('stays quiet when the button has nothing to do', () => {
+		const body = renderWith(1, 1, { tray: [] });
+
+		expect(body).not.toContain('data-testid="agenda-autoplace-hint"');
+		expect(body).not.toContain('Nothing already on the grid moves.');
+	});
+});
