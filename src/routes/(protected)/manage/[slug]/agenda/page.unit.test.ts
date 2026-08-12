@@ -337,8 +337,9 @@ describe('agenda builder readability (#219)', () => {
 			'utf8'
 		);
 
-		expect(source).toContain('props.onclick?.(e)');
-		expect(source).toContain('props.onpointerdown?.(e)');
+		// Narrowed as `tip` so svelte-check accepts the bits-ui child props.
+		expect(source).toContain('tip.onclick?.(e)');
+		expect(source).toContain('tip.onpointerdown?.(e)');
 		// Room heads only — session cards stay keyboard-reachable.
 		expect(source).toMatch(/TooltipTrigger\s+tabindex=\{-1\}/);
 	});
