@@ -34,4 +34,11 @@ describe('new conference', () => {
 		expect(html).toContain('/settings/organization/new');
 		expect(html).not.toContain('data-testid="shell-account-links"');
 	});
+
+	it('points the organizer at Settings and the call for papers after create', () => {
+		const html = body(true);
+
+		expect(html).toContain('Settings next');
+		expect(html).toContain('call for papers');
+	});
 });
