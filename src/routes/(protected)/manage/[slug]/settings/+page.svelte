@@ -828,7 +828,14 @@
 				})}
 			{/if}
 
-			<form method="POST" action="?/addTemplate" use:enhance={submitting} class="mt-4 space-y-2">
+			<form
+				method="POST"
+				action="?/addTemplate"
+				use:enhance={addingLines(() => {
+					tasksExpanded = true;
+				})}
+				class="mt-4 space-y-2"
+			>
 				<div class="flex flex-wrap items-end gap-2">
 					<label class="min-w-[12rem] flex-1 text-xs">
 						<span class="text-muted-foreground">New task</span>
