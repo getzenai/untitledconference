@@ -588,12 +588,37 @@ async function queueReviewReminderRow(
 	});
 }
 
-/** Queues one reminder and ignores a repeated click while a successful row exists. */
-export async function queueReviewReminder(
+export type BulkReminderTally = Record<ReminderResult, number>;
+
+/**
+ * Reminds a chosen set of reviewers in one go (ABS-09).
+ *
+ * The per-reviewer rules are unchanged and stay in `queueReviewReminderRow`: a
+ * reviewer with nothing outstanding, no address, or a reminder already waiting is
+ * skipped rather than mailed twice. What is new is that the organizer no longer
+ * pays one page reload per person on a committee of twenty.
+ *
+ * Rows are written one at a time and dispatched once at the end: dispatch talks to
+ * the mail provider, and doing that inside the loop would turn one slow send into
+ * N slow sends while the organizer waits. The tally is returned in full rather than
+ * as a single number, because "sent 3" and "sent 3, skipped 4" are different answers
+ * and the second one is the one that stops a second click.
+ */
+export async function queueReviewReminders(
 	conference: Conference,
-	reviewerUserId: string
-): Promise<ReminderResult> {
-	const result = await queueReviewReminderRow(conference, reviewerUserId);
-	if (result === 'queued') await dispatchConferenceEmails(conference.id);
-	return result;
+	reviewerUserIds: string[]
+): Promise<BulkReminderTally> {
+	const tally: BulkReminderTally = {
+		queued: 0,
+		already_queued: 0,
+		nothing_outstanding: 0,
+		no_email: 0
+	};
+
+	for (const reviewerUserId of new Set(reviewerUserIds)) {
+		tally[await queueReviewReminderRow(conference, reviewerUserId)] += 1;
+	}
+
+	if (tally.queued > 0) await dispatchConferenceEmails(conference.id);
+	return tally;
 }

@@ -21,7 +21,10 @@
 	import GavelIcon from '@lucide/svelte/icons/gavel';
 	import TrendingDownIcon from '@lucide/svelte/icons/trending-down';
 	import TrendingUpIcon from '@lucide/svelte/icons/trending-up';
+	import { enhance } from '$app/forms';
 	import type { Component, Snippet } from 'svelte';
+	import { untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
@@ -58,6 +61,49 @@
 			(a, b) => b.outstanding - a.outstanding || a.name.localeCompare(b.name)
 		)
 	);
+
+	/**
+	 * The reviewers a reminder would actually do something for (ABS-09).
+	 *
+	 * A reviewer who is done, or who already has a reminder waiting, has no checkbox
+	 * at all rather than a checkbox that quietly does nothing: the selection is then
+	 * the same set as the outcome, and "6 selected" means six emails. The server still
+	 * re-checks every one of them — the list on screen is a page-load old, and two
+	 * organizers on the same conference is the normal case, not the exotic one.
+	 */
+	const remindable = $derived(
+		reviewers.filter(
+			(r) => r.outstanding > 0 && r.reminderStatus !== 'queued' && r.reminderStatus !== 'sent'
+		)
+	);
+
+	const remindableIds = $derived(new Set(remindable.map((r) => r.userId)));
+
+	const selected = new SvelteSet<string>();
+	let busy = $state(false);
+
+	// A reviewer who dropped off the remindable list — reminded by someone else, or
+	// finished — must not stay selected across the reload that told us so.
+	$effect(() => {
+		const open = remindableIds;
+		untrack(() => {
+			for (const id of [...selected]) if (!open.has(id)) selected.delete(id);
+		});
+	});
+
+	const allRemindableSelected = $derived(
+		remindable.length > 0 && remindable.every((r) => selected.has(r.userId))
+	);
+
+	const toggleAll = () => {
+		if (allRemindableSelected) selected.clear();
+		else for (const r of remindable) selected.add(r.userId);
+	};
+
+	const toggle = (userId: string) => {
+		if (selected.has(userId)) selected.delete(userId);
+		else selected.add(userId);
+	};
 
 	const trend = $derived(submissionsTrend(d.submissionsOverTime));
 </script>
@@ -292,30 +338,101 @@
 				</p>
 			</div>
 			{#if form?.reminderMessage}
-				<p class="text-sm" role="status">{form.reminderMessage}</p>
+				<p class="text-sm" role="status" data-testid="reminder-message">{form.reminderMessage}</p>
 			{/if}
 		</div>
 		{#if d.reviews.items.length === 0}
 			{@render nothing('No reviewer assignments yet.')}
 		{:else}
-			<div class="mt-3 overflow-x-auto">
-				<table class="w-full text-left text-sm">
-					<thead class="text-muted-foreground text-xs">
-						<tr>
-							<th class="pb-2 font-medium">Reviewer</th>
-							<th class="pb-2 font-medium">Progress</th>
-							<th class="pb-2 text-right font-medium">Reminder</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each reviewers as reviewer (reviewer.userId)}
-							<tr class="border-border border-t">
-								<td class="py-2 pr-4">
-									<p class="font-medium">{reviewer.name}</p>
-									<p class="text-muted-foreground text-xs">{reviewer.email}</p>
-								</td>
-								<td class="w-1/2 py-2 pr-4">
-									<!--
+			<!--
+				One form around the whole table, because the two ways to send a reminder are
+				the same request with a different set of ids: the row button carries its own
+				reviewer in `reviewerUserId` and the checkboxes carry theirs in `reviewerIds`,
+				so neither can pick up the other's selection.
+			-->
+			<form
+				method="POST"
+				action="?/remindReviewers"
+				use:enhance={() => {
+					busy = true;
+					// `finally`, so a dropped connection cannot leave the button dead.
+					return async ({ update }) => {
+						try {
+							await update();
+						} finally {
+							busy = false;
+						}
+					};
+				}}
+			>
+				{#if remindable.length > 0}
+					<div
+						class="border-border bg-muted/40 mt-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2"
+						data-testid="reminder-bulk-bar"
+					>
+						<p class="text-muted-foreground text-sm">
+							{#if selected.size === 0}
+								Tick the reviewers who are behind to chase them in one go.
+							{:else}
+								<span
+									class="text-foreground font-medium tabular-nums"
+									data-testid="reminder-selected-count">{selected.size} selected</span
+								> · one email each, queued now and sent with the next dispatch.
+							{/if}
+						</p>
+						<Button
+							type="submit"
+							size="sm"
+							data-testid="send-reminders"
+							disabled={selected.size === 0 || busy}
+						>
+							Send reminders
+						</Button>
+					</div>
+				{/if}
+				<div class="mt-3 overflow-x-auto">
+					<table class="w-full text-left text-sm">
+						<thead class="text-muted-foreground text-xs">
+							<tr>
+								<th class="w-10 pr-3 pb-2 font-medium">
+									{#if remindable.length > 0}
+										<input
+											type="checkbox"
+											class="border-input accent-primary size-4 rounded"
+											aria-label="Select every reviewer who is behind"
+											data-testid="select-all-reviewers"
+											checked={allRemindableSelected}
+											onchange={toggleAll}
+										/>
+									{/if}
+								</th>
+								<th class="pb-2 font-medium">Reviewer</th>
+								<th class="pb-2 font-medium">Progress</th>
+								<th class="pb-2 text-right font-medium">Reminder</th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each reviewers as reviewer (reviewer.userId)}
+								<tr class="border-border border-t" data-testid="reviewer-row">
+									<td class="py-2 pr-3">
+										{#if remindableIds.has(reviewer.userId)}
+											<input
+												type="checkbox"
+												name="reviewerIds"
+												value={reviewer.userId}
+												class="border-input accent-primary size-4 rounded"
+												aria-label="Select {reviewer.name}"
+												checked={selected.has(reviewer.userId)}
+												onchange={() => toggle(reviewer.userId)}
+											/>
+										{/if}
+									</td>
+									<td class="py-2 pr-4">
+										<p class="font-medium">{reviewer.name}</p>
+										<p class="text-muted-foreground text-xs">{reviewer.email}</p>
+									</td>
+									<td class="w-1/2 py-2 pr-4">
+										<!--
 										The bar is the comparison; the numbers are the answer.
 										Side by side down a column, a dozen bars say "these four are the
 										problem" in one glance, which a dozen "3/8 submitted" lines never
@@ -323,50 +440,66 @@
 										trusted to the pixel, so the count stays and the bar is
 										`aria-hidden`. Same reason the chart above keeps its table.
 									-->
-									<p class="tabular-nums">
-										{reviewer.submitted}/{reviewer.assigned} submitted
-										{#if reviewer.outstanding > 0}
-											<span class="text-muted-foreground">· {reviewer.outstanding} to go</span>
-										{/if}
-									</p>
-									<div
-										class="bg-muted mt-1 h-1.5 w-full overflow-hidden rounded-full"
-										aria-hidden="true"
-									>
-										<!--
+										<p class="tabular-nums">
+											{reviewer.submitted}/{reviewer.assigned} submitted
+											{#if reviewer.outstanding > 0}
+												<span class="text-muted-foreground">· {reviewer.outstanding} to go</span>
+											{/if}
+										</p>
+										<div
+											class="bg-muted mt-1 h-1.5 w-full overflow-hidden rounded-full"
+											aria-hidden="true"
+										>
+											<!--
 											`assigned` is never 0 here — a reviewer only appears in this
 											table because a review row exists — but the guard stays,
 											because the day a recused-only reviewer slips through, a
 											0/0 row should render an empty bar, not `NaN%`.
 										-->
-										<div
-											class="bg-status-good h-full rounded-full"
-											style="width: {reviewer.assigned > 0
-												? (reviewer.submitted / reviewer.assigned) * 100
-												: 0}%"
-										></div>
-									</div>
-								</td>
-								<td class="py-2 text-right">
-									{#if reviewer.outstanding === 0}
-										<StatusBadge status="submitted" label="Complete" />
-									{:else if reviewer.reminderStatus === 'queued' || reviewer.reminderStatus === 'sent'}
-										<StatusBadge
-											status={reviewer.reminderStatus}
-											label={reviewer.reminderStatus === 'queued' ? 'Reminder queued' : 'Reminded'}
-										/>
-									{:else}
-										<form method="POST" action="?/remindReviewer">
-											<input type="hidden" name="reviewerUserId" value={reviewer.userId} />
-											<Button type="submit" variant="outline" size="sm">Send reminder</Button>
-										</form>
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+											<div
+												class="bg-status-good h-full rounded-full"
+												style="width: {reviewer.assigned > 0
+													? (reviewer.submitted / reviewer.assigned) * 100
+													: 0}%"
+											></div>
+										</div>
+									</td>
+									<td class="py-2 text-right">
+										{#if reviewer.outstanding === 0}
+											<StatusBadge status="submitted" label="Complete" />
+										{:else if reviewer.reminderStatus === 'queued' || reviewer.reminderStatus === 'sent'}
+											<StatusBadge
+												status={reviewer.reminderStatus}
+												label={reviewer.reminderStatus === 'queued'
+													? 'Reminder queued'
+													: 'Reminded'}
+											/>
+										{:else}
+											<!--
+												Same form, different action and a different field: `formaction`
+												sends this one reviewer through the single-reviewer path, whose
+												message ("already reminded") is the more useful sentence when
+												exactly one person is meant.
+											-->
+											<Button
+												type="submit"
+												formaction="?/remindReviewer"
+												name="reviewerUserId"
+												value={reviewer.userId}
+												variant="outline"
+												size="sm"
+												disabled={busy}
+											>
+												Send reminder
+											</Button>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</form>
 		{/if}
 	</section>
 
