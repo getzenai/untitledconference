@@ -150,4 +150,34 @@ describe('speaker roster page', () => {
 		expect(body).not.toContain('data-testid="speakers-message"');
 		expect(body).not.toContain('text-status-good');
 	});
+
+	it('never shows an import-scoped answer on the page banner — it lives in the dialog', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [],
+					filters: {},
+					counts: {
+						total: 0,
+						invited: 0,
+						confirmed: 0,
+						declined: 0,
+						cancelled: 0
+					},
+					statuses: ['invited', 'confirmed', 'declined', 'cancelled']
+				} as never,
+				form: { scope: 'import', message: 'Imported 12 speakers.' }
+			}
+		});
+
+		// The page banner is suppressed for the import scope; the answer renders
+		// inside SpeakerImport (in the dialog), not twice under the overlay.
+		expect(body).not.toContain('data-testid="speakers-message"');
+		expect(body).not.toContain('data-testid="speakers-error"');
+		expect(body).not.toContain('Imported 12 speakers.');
+	});
 });

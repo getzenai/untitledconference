@@ -73,6 +73,11 @@ describe('Speaker bulk mail', () => {
 					.click();
 			});
 
+		// The dialog must close on success — the confirmation then sits on the
+		// page, not behind a still-open overlay. Without this, a successful send
+		// reads as "nothing happened" and invites a double-send (#220 review).
+		cy.get('[data-testid="speaker-mail-compose"]').should('not.exist');
+
 		cy.get('[data-testid="speakers-message"]')
 			.should('contain', '2 emails queued')
 			.and('contain', '1 without email skipped');

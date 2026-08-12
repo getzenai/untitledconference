@@ -62,21 +62,26 @@
 		if (form instanceof HTMLFormElement) form.requestSubmit();
 	};
 
-	const submitting = () => {
-		busy = true;
-		return async ({
-			update,
-			result
-		}: {
-			update: () => Promise<void>;
-			result: { type: string };
-		}) => {
-			try {
-				await update();
-				if (result.type === 'success') editingId = null;
-			} finally {
-				busy = false;
-			}
+	const submitting = (onSuccess?: () => void) => {
+		return (_input: unknown) => {
+			busy = true;
+			return async ({
+				update,
+				result
+			}: {
+				update: () => Promise<void>;
+				result: { type: string };
+			}) => {
+				try {
+					await update();
+					if (result.type === 'success') {
+						editingId = null;
+						onSuccess?.();
+					}
+				} finally {
+					busy = false;
+				}
+			};
 		};
 	};
 
@@ -132,7 +137,7 @@
 						{filtered}
 						filters={data.filters}
 						{busy}
-						enhanceForm={submitting}
+						enhanceForm={submitting(() => (composeOpen = false))}
 					/>
 				</Dialog.Content>
 			</Dialog.Root>
@@ -151,7 +156,11 @@
 							Creates an org-wide profile (or reuses one by email) and puts them on this conference.
 						</Dialog.Description>
 					</Dialog.Header>
-					<AddSpeakerForm {statusOptions} {busy} enhanceForm={submitting} />
+					<AddSpeakerForm
+						{statusOptions}
+						{busy}
+						enhanceForm={submitting(() => (addOpen = false))}
+					/>
 				</Dialog.Content>
 			</Dialog.Root>
 
@@ -165,8 +174,12 @@
 				<Dialog.Content class="sm:max-w-lg">
 					<Dialog.Header>
 						<Dialog.Title>Import a list</Dialog.Title>
+						<Dialog.Description>
+							Load speakers from a CSV file or pasted rows; speakers already on the roster by email
+							are skipped.
+						</Dialog.Description>
 					</Dialog.Header>
-					<SpeakerImport embedded {busy} enhanceForm={submitting} {form} />
+					<SpeakerImport embedded {busy} enhanceForm={submitting()} {form} />
 				</Dialog.Content>
 			</Dialog.Root>
 		</div>
@@ -303,7 +316,7 @@
 									id="speaker-status-{speaker.speakerProfileId}"
 									method="POST"
 									action="?/setStatus"
-									use:enhance={submitting}
+									use:enhance={submitting()}
 									class="flex flex-wrap items-center gap-2"
 									data-testid="speaker-status-form"
 								>
@@ -342,7 +355,7 @@
 									<form
 										method="POST"
 										action="?/updateProfile"
-										use:enhance={submitting}
+										use:enhance={submitting()}
 										class="grid max-w-3xl gap-3 sm:grid-cols-2"
 										data-testid="speaker-edit-form"
 									>
