@@ -11,7 +11,9 @@
 	import { enhance } from '$app/forms';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
 	import { optionsToText, type CriterionKind } from '$lib/conference/scorecard-criterion';
+	import { ROUND_WINDOW_TONES } from '$lib/conference/round-window';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 
@@ -240,11 +242,23 @@
 							{/if}
 						</div>
 
-						<p class="text-muted-foreground mt-1.5 text-sm" data-testid="round-summary">
-							{progress(round.assignments, round.completed)}<span class="px-1.5">·</span>{window_(
+						<p
+							class="text-muted-foreground mt-1.5 flex flex-wrap items-center gap-x-1.5 text-sm"
+							data-testid="round-summary"
+						>
+							<!-- The state first, as a badge: whether the round is taking answers right now
+							     is what an organizer scans this list for, and the dates below only say
+							     since or until when. -->
+							<StatusBadge
+								status={round.window.state}
+								tone={ROUND_WINDOW_TONES[round.window.state]}
+								label={round.window.label}
+								class="mr-0.5"
+							/>
+							{progress(round.assignments, round.completed)}<span>·</span>{window_(
 								round.opensAt,
 								round.closesAt
-							)}{#if round.anonymized}<span class="px-1.5">·</span>authors hidden{/if}
+							)}{#if round.anonymized}<span>·</span><span>authors hidden</span>{/if}
 						</p>
 
 						<!-- Scorecard for this round (ABS-03 / ABS-04). -->

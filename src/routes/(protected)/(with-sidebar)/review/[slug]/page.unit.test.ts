@@ -7,6 +7,7 @@
  * that are easy to get wrong when a control becomes a table header: the direction
  * each sort actually means, and that the link is still a link.
  */
+import { roundWindow } from '$lib/conference/round-window';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import type { PageData } from './$types';
@@ -20,12 +21,14 @@ const row = (
 	submissionId: number,
 	title: string,
 	reviewsSubmitted: number,
-	rounds: string[] = ['Round 1']
+	rounds: string[] = ['Round 1'],
+	window = roundWindow(null, null)
 ) => ({
 	submissionId,
 	title,
 	track: 'Platform',
 	rounds,
+	window,
 	reviewsSubmitted,
 	reviewsAssigned: 3,
 	score: 4.2,
@@ -162,5 +165,52 @@ describe('a withdrawn talk', () => {
 		const body = renderQueue([withdrawn()]);
 
 		expect(body).not.toContain('Reviewed<');
+	});
+});
+
+/**
+ * ABS-01 in the queue: a round that is shut asks nothing, and "To do" would be an
+ * instruction the reviewer cannot follow.
+ */
+describe('the window of the rounds a row sits in', () => {
+	const day = 86_400_000;
+	const now = new Date('2027-03-10T12:00:00Z');
+
+	it('replaces To do with the window while the review is outstanding', () => {
+		const closed = renderQueue([
+			row(1, 'A talk', 0, ['Round 1'], roundWindow(null, new Date(now.getTime() - day), now))
+		]);
+
+		expect(closed).toContain('Closed');
+		expect(closed).not.toContain('To do');
+
+		const soon = renderQueue([
+			row(
+				2,
+				'Another talk',
+				0,
+				['Round 1'],
+				roundWindow(new Date(now.getTime() + 2 * day), null, now)
+			)
+		]);
+
+		expect(soon).toContain('Opens in 2 days');
+		expect(soon).not.toContain('To do');
+	});
+
+	it('keeps a filed review reading as Reviewed after the round closes', () => {
+		const body = renderQueue([
+			{
+				...row(1, 'A talk', 1, ['Round 1'], roundWindow(null, new Date(now.getTime() - day), now)),
+				ownReviewSubmitted: true
+			}
+		]);
+
+		expect(body).toContain('Reviewed');
+		expect(body).not.toContain('Closed');
+	});
+
+	it('says To do while the round is running', () => {
+		expect(renderQueue([row(1, 'A talk', 0)])).toContain('To do');
 	});
 });

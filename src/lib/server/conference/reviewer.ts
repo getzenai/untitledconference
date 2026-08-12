@@ -11,6 +11,9 @@
  *   template is not blind.
  * - **Anonymity.** A round can hide the author from its reviewers (ABS-07); then the
  *   speaker names never reach the page.
+ * - **The round's window.** A round that has not opened, or has closed, takes nothing
+ *   (ABS-01). Checked in `saveReview` and not only drawn on the form, for the same
+ *   reason a withdrawn talk is: a POST does not care what the page currently shows.
  *
  * And one thing that deliberately does NOT happen here: saving a review sends no mail.
  * Deciding and telling people are separate acts, and a status that mails on its own
@@ -23,6 +26,12 @@ import {
 	type QueueSort,
 	type ReviewVisibility
 } from '$lib/conference/review-visibility';
+import {
+	combineRoundWindows,
+	roundWindow,
+	roundWindowState,
+	type RoundWindow
+} from '$lib/conference/round-window';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
@@ -282,6 +291,11 @@ export type QueueEntry = {
 	sessionFormat: string | null;
 	/** Every round this reviewer holds this submission in, in board order. */
 	rounds: string[];
+	/**
+	 * Whether any of those rounds is taking answers (ABS-01), so the queue can say
+	 * "opens in 2 days" or "closed" instead of linking to a form that refuses.
+	 */
+	window: RoundWindow;
 	reviewsSubmitted: number;
 	reviewsAssigned: number;
 	/** Null when the mode withholds it, or when nobody has scored yet. */
@@ -316,6 +330,8 @@ export async function reviewQueue(
 			status: reviewTable.status,
 			roundName: reviewRoundTable.name,
 			roundPosition: reviewRoundTable.position,
+			roundOpensAt: reviewRoundTable.opensAt,
+			roundClosesAt: reviewRoundTable.closesAt,
 			title: submissionTable.title,
 			track: trackTable.name,
 			sessionFormat: sessionFormatTable.name,
@@ -355,6 +371,8 @@ type Assignment = {
 	status: string;
 	roundName: string;
 	roundPosition: number;
+	roundOpensAt: Date | null;
+	roundClosesAt: Date | null;
 	title: string;
 	track: string | null;
 	sessionFormat: string | null;
@@ -395,6 +413,9 @@ function queueRow(
 		track: first.track,
 		sessionFormat: first.sessionFormat,
 		rounds: [...mine].sort((a, b) => a.roundPosition - b.roundPosition).map((row) => row.roundName),
+		window: combineRoundWindows(
+			mine.map((row) => roundWindow(row.roundOpensAt, row.roundClosesAt))
+		),
 		reviewsSubmitted: on.filter((r) => r.submitted).length,
 		reviewsAssigned: on.length,
 		score: canSeePeerReviews(mode, ownSubmitted) ? scoresFor(on) : null,
@@ -427,6 +448,11 @@ export type ReviewerSubmission = {
 	/** Empty when the round is anonymised — the identity never leaves the database. */
 	speakers: string[];
 	anonymized: boolean;
+	/**
+	 * When this round takes answers (ABS-01). The form reads it to say why it is shut;
+	 * `saveReview` re-asks it on the POST, so a stale tab buys nothing.
+	 */
+	window: RoundWindow;
 	own: {
 		reviewId: number;
 		status: string;
@@ -492,6 +518,7 @@ export async function reviewerSubmission(
 		...submission,
 		speakers,
 		anonymized: own.anonymized,
+		window: roundWindow(own.opensAt, own.closesAt),
 		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },
 		criteria,
 		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
@@ -514,7 +541,9 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 			submittedAt: reviewTable.submittedAt,
 			comment: reviewTable.comment,
 			roundId: reviewRoundTable.id,
-			anonymized: reviewRoundTable.anonymized
+			anonymized: reviewRoundTable.anonymized,
+			opensAt: reviewRoundTable.opensAt,
+			closesAt: reviewRoundTable.closesAt
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
@@ -633,7 +662,12 @@ export type SaveReviewResult =
 	/** Submitting nothing at all; saving nothing is still fine. */
 	| { ok: false; reason: 'empty_submit' }
 	/** The speaker took the talk back while this form was open. */
-	| { ok: false; reason: 'withdrawn' };
+	| { ok: false; reason: 'withdrawn' }
+	/**
+	 * The round is not taking answers (ABS-01). Two reasons rather than one, because
+	 * "come back on Monday" and "you are too late" ask opposite things of the reader.
+	 */
+	| { ok: false; reason: 'round_not_open' | 'round_closed' };
 
 /**
  * Saves this reviewer's answers.
@@ -673,6 +707,14 @@ export async function saveReview(
 	// working form, and a POST does not care what the page currently draws.
 	const submission = await submissionFor(conference.id, submissionId);
 	if (submission?.status === 'withdrawn') return { ok: false, reason: 'withdrawn' };
+
+	// The round's window (ABS-01), asked here and not only drawn on the form. A date
+	// a POST can go straight through is a note, not a deadline. It gates the DRAFT
+	// too: "save progress" writes the same scores the submit does, so allowing it
+	// after the close would hand back the whole edit through the quieter button.
+	const window = roundWindowState(own.opensAt, own.closesAt);
+	if (window === 'not_yet_open') return { ok: false, reason: 'round_not_open' };
+	if (window === 'closed') return { ok: false, reason: 'round_closed' };
 
 	const criteria = await db
 		.select({

@@ -21,6 +21,11 @@
 
 	const s = $derived(data.submission);
 	const withdrawn = $derived(s.status === 'withdrawn');
+	// Two different reasons the form takes nothing, and they read differently: a
+	// withdrawn talk is gone, a shut round comes back (ABS-01). Both disable the same
+	// buttons, and `saveReview` refuses both regardless of what this page drew.
+	const shut = $derived(s.window.state !== 'open');
+	const locked = $derived(withdrawn || shut);
 	let busy = $state(false);
 
 	const submitting = () => {
@@ -165,6 +170,18 @@
 			/>
 		</div>
 
+		{#if shut}
+			<!-- The answers stay readable for the same reason a withdrawn talk's do — a
+			     review already filed is a record — but nothing here asks for more work. -->
+			<p
+				class="border-status-warn/40 bg-status-warn-bg text-status-warn rounded-md border px-3 py-2 text-sm"
+				role="status"
+				data-testid="round-window-notice"
+			>
+				{s.window.notice}
+			</p>
+		{/if}
+
 		{#if withdrawn}
 			<!-- The answers stay readable — a review already filed is still a record of
 			     what this reviewer thought — but nothing here asks for more work, and
@@ -248,7 +265,7 @@
 					value="submit"
 					variant="outline"
 					size="sm"
-					disabled={busy || withdrawn}
+					disabled={busy || locked}
 				>
 					Update review
 				</Button>
@@ -258,12 +275,12 @@
 					value="draft"
 					variant="ghost"
 					size="sm"
-					disabled={busy || withdrawn}
+					disabled={busy || locked}
 				>
 					Save progress
 				</Button>
 			{:else}
-				<Button type="submit" name="intent" value="submit" size="sm" disabled={busy || withdrawn}>
+				<Button type="submit" name="intent" value="submit" size="sm" disabled={busy || locked}>
 					Submit review
 				</Button>
 				<Button
@@ -272,12 +289,16 @@
 					value="draft"
 					variant="outline"
 					size="sm"
-					disabled={busy || withdrawn}
+					disabled={busy || locked}
 				>
 					Save progress
 				</Button>
 			{/if}
 			{#if s.own.status === 'assigned'}
+				<!-- Still live outside the window, and deliberately: recusing files no
+				     score, it hands work back, and `recuseReview` accepts it whatever the
+				     round's dates say. A button disabled against a server that would take
+				     the POST is the decoration ABS-01 is about. -->
 				<Button
 					type="submit"
 					name="reviewId"
