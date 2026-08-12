@@ -29,7 +29,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
 
 /** "Thursday, 17 September" — the day-tab label the agenda and itinerary show. */
 function dayLabel(date: string): string {
@@ -253,6 +253,98 @@ export async function loadPublicConference(slug: string): Promise<PublicConferen
 		...taxonomy,
 		...assembleProgramme(placements, speakerRows)
 	};
+}
+
+/** A speaker's talks at one other conference, newest conference first. */
+export type SpeakerAppearance = {
+	conferenceSlug: string;
+	conferenceName: string;
+	conferenceStartsOn: string;
+	sessions: {
+		id: string;
+		title: string;
+		startsAt: string;
+		endsAt: string;
+		room: string | null;
+		recordingUrl: string | null;
+	}[];
+};
+
+/**
+ * Every published talk this speaker profile has, across every published conference.
+ *
+ * `speaker_profile` is org-global and `conference_speaker` merely attaches it to an
+ * event, so one row can carry a person through several years of conferences. The
+ * public speaker page is the only place a visitor can see that: the agenda, by
+ * construction, knows about one event.
+ *
+ * The four gates are the same ones `selectPublishedPlacements` applies, plus
+ * `conference.status = 'published'` — otherwise a talk from a draft conference
+ * would surface here with a link to a page that 404s, which is precisely the leak
+ * the directory query avoids on the front door.
+ */
+export async function loadSpeakerAppearances(
+	speakerProfileId: number,
+	options: { excludeConferenceId?: number } = {}
+): Promise<SpeakerAppearance[]> {
+	const rows = await db
+		.select({
+			conferenceId: conferenceTable.id,
+			conferenceSlug: conferenceTable.slug,
+			conferenceName: conferenceTable.name,
+			conferenceStartsOn: conferenceTable.startsOn,
+			placementId: placementTable.id,
+			title: submissionTable.title,
+			startsAt: placementTable.startsAt,
+			endsAt: placementTable.endsAt,
+			room: roomTable.name,
+			recordingUrl: placementTable.recordingUrl
+		})
+		.from(submissionSpeakerTable)
+		.innerJoin(submissionTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
+		.innerJoin(placementTable, eq(placementTable.submissionId, submissionTable.id))
+		.innerJoin(conferenceTable, eq(placementTable.conferenceId, conferenceTable.id))
+		.leftJoin(roomTable, eq(placementTable.roomId, roomTable.id))
+		.where(
+			and(
+				eq(submissionSpeakerTable.speakerProfileId, speakerProfileId),
+				eq(placementTable.status, 'confirmed'),
+				eq(submissionTable.status, 'accepted'),
+				eq(submissionTable.contentApproval, 'approved'),
+				eq(conferenceTable.status, 'published'),
+				options.excludeConferenceId === undefined
+					? undefined
+					: ne(conferenceTable.id, options.excludeConferenceId)
+			)
+		)
+		.orderBy(desc(conferenceTable.startsOn), asc(placementTable.startsAt));
+
+	// Grouped here rather than by the page: the order above is the one the page
+	// renders, and re-sorting a map's values elsewhere is how two surfaces end up
+	// disagreeing about which conference came first.
+	const byConference = new Map<number, SpeakerAppearance>();
+	for (const row of rows) {
+		let group = byConference.get(row.conferenceId);
+		if (!group) {
+			group = {
+				conferenceSlug: row.conferenceSlug,
+				conferenceName: row.conferenceName,
+				conferenceStartsOn: row.conferenceStartsOn ?? '',
+				sessions: []
+			};
+			byConference.set(row.conferenceId, group);
+		}
+		group.sessions.push({
+			id: String(row.placementId),
+			title: row.title,
+			startsAt: iso(row.startsAt),
+			endsAt: iso(row.endsAt),
+			room: row.room,
+			recordingUrl: row.recordingUrl
+		});
+	}
+
+	return [...byConference.values()];
 }
 
 /** One row of the front door: enough to recognise a conference, nothing more. */

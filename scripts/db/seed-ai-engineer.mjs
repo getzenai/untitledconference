@@ -144,11 +144,36 @@ async function importConference(conf) {
 		}
 	}
 
-	// Speakers: dedupe by name within this conference (the World's Fair list has four
-	// repeated names — first occurrence wins, later ones reuse the same profile).
+	// Speakers: dedupe by name across the whole ORGANIZATION, not just this
+	// conference.
+	//
+	// `speaker_profile` is org-global and `conference_speaker` attaches it to one
+	// event, so a person who spoke at both the World's Fair and the Summit must be
+	// one row appearing twice — that join is what the public profile page's talk
+	// history and the `/contacts` directory are built on. Deduping per conference
+	// instead gave three people (Beyang Liu, Kevin Hou, Kyle Corbitt) two profiles
+	// each: their history looked empty and the directory listed them twice.
 	const speakerIds = {};
 	for (const sp of conf.speakers) {
 		if (sp.name in speakerIds) continue;
+
+		const [existing] = await sql`
+			SELECT id FROM speaker_profile
+			WHERE organization_id = ${ORG_ID} AND name = ${sp.name}
+			ORDER BY id
+			LIMIT 1
+		`;
+		if (existing) {
+			speakerIds[sp.name] = existing.id;
+			// The profile is shared; the participation row is per event and is not.
+			await sql`INSERT INTO conference_speaker ${sql({
+				conference_id: conferenceId,
+				speaker_profile_id: existing.id,
+				status: 'confirmed'
+			})}`;
+			continue;
+		}
+
 		const [row] = await sql`INSERT INTO speaker_profile ${sql({
 			organization_id: ORG_ID,
 			name: sp.name,
