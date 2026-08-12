@@ -106,27 +106,36 @@
 			{:else}
 				<ul class="mt-2 space-y-3">
 					{#each s.peers as peer (peer.id)}
-						<li class="border-border rounded-md border p-3">
+						<li class="border-border rounded-md border p-3" data-testid="peer-review">
 							<div class="flex flex-wrap items-center justify-between gap-2">
-								<span class="text-sm font-medium">{peer.reviewer}</span>
+								<div class="min-w-0">
+									<span class="text-sm font-medium">{peer.reviewer}</span>
+									<!-- Round names the scorecard — multi-round talks no longer look like one schema. -->
+									<span class="text-muted-foreground mt-0.5 block text-xs">{peer.roundName}</span>
+								</div>
 								<span class="flex items-center gap-2">
 									<span class="text-sm tabular-nums">{formatScore(peer.score)}</span>
 									<!-- Only submitted peers reach this list; an unfiled one is a count above. -->
 									<StatusBadge status="submitted" label={`Reviewed ${stamp(peer.submittedAt)}`} />
 								</span>
 							</div>
-							{#if peer.comment}
-								<p class="mt-2 text-sm whitespace-pre-line">{peer.comment}</p>
-							{/if}
 							{#if peer.scores.length > 0}
-								<dl class="text-muted-foreground mt-2 flex flex-wrap gap-x-4 text-xs">
+								<dl class="text-muted-foreground mt-2 space-y-1 text-xs">
 									{#each peer.scores as score, si (si)}
-										<div class="flex gap-1">
-											<dt>{score.criterion}:</dt>
-											<dd class="tabular-nums">{score.valueText ?? score.value ?? '—'}</dd>
+										<div class="flex flex-wrap gap-x-1">
+											<dt class="text-muted-foreground">{score.criterion}</dt>
+											<dd class="text-foreground tabular-nums">
+												{score.valueText ?? score.value ?? '—'}
+											</dd>
 										</div>
 									{/each}
 								</dl>
+							{/if}
+							{#if peer.comment}
+								<div class="mt-2">
+									<p class="text-muted-foreground text-xs">Comment</p>
+									<p class="mt-0.5 text-sm whitespace-pre-line">{peer.comment}</p>
+								</div>
 							{/if}
 						</li>
 					{/each}
@@ -224,7 +233,7 @@
 		{/each}
 
 		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Comment to the committee</span>
+			<span class="text-muted-foreground text-xs">Comment</span>
 			<textarea name="comment" rows="4" class="{inputClass} mt-1 w-full"
 				>{s.own.comment ?? ''}</textarea
 			>

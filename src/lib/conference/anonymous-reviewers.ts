@@ -30,7 +30,21 @@ export function anonymousReviewerLabels(
 }
 
 /**
- * The same, for a list spanning several submissions.
+ * Labels every peer review as "Reviewer N" for peer-to-peer display (RV-P1-02).
+ *
+ * Multi-round talks used to mix real names (open rounds) with "Reviewer N"
+ * (anonymised rounds) on one page — that both looks broken and undermines the
+ * anonymity of any hidden round next to a named one. Numbering everyone in
+ * stable review-id order is one schema for all peers; the organizer surface
+ * still has real names via its own path.
+ */
+export function peerDisplayLabels(reviews: { id: number }[]): Map<number, string> {
+	const ids = [...new Set(reviews.map((review) => review.id))].sort((a, b) => a - b);
+	return new Map(ids.map((id, index) => [id, `Reviewer ${index + 1}`]));
+}
+
+/**
+ * The same as `anonymousReviewerLabels`, for a list spanning several submissions.
  *
  * The grouping lives here rather than at the caller because it is part of what
  * the label means: a reviewer's queue and a single talk both print these, and
