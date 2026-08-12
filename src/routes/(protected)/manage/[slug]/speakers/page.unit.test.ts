@@ -90,6 +90,11 @@ describe('speaker roster page', () => {
 		expect(body).not.toContain('data-testid="speaker-mail-body"');
 		expect(body).not.toContain('data-testid="import-csv"');
 		expect(body).not.toContain('Send to 1 speaker');
+		// #64: tall rosters scroll inside a capped box with a sticky header.
+		expect(body).toContain('data-testid="speakers-table-head"');
+		// Class list is emitted before data-testid in SSR attribute order.
+		expect(body).toMatch(/sticky top-0[^>]*data-testid="speakers-table-head"/);
+		expect(body).toContain('max-h-[min(70vh,40rem)]');
 	});
 
 	it('shows empty state when the roster has no rows', () => {

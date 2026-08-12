@@ -90,6 +90,18 @@ describe('organizer agenda layout', () => {
 		expect(six).toContain('data-testid="agenda-room-filter"');
 		expect(six).toContain('All 6 rooms');
 	});
+
+	/**
+	 * #64 scaling: many rooms force horizontal scroll. The time gutter must stick
+	 * so the hour labels stay readable while the organizer pans across columns.
+	 */
+	it('keeps the time gutter sticky inside a horizontal scroll region', () => {
+		const body = renderWith(12);
+		expect(body).toContain('data-testid="agenda-grid-scroll"');
+		expect(body).toContain('data-testid="agenda-time-gutter"');
+		// Class list is emitted before data-testid in SSR attribute order.
+		expect(body).toMatch(/sticky left-0[^>]*data-testid="agenda-time-gutter"/);
+	});
 });
 
 /**

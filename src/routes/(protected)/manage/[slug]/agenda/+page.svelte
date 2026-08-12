@@ -479,13 +479,19 @@
 					gets the full column width; the open-slot control sits under it. Published
 					vs draft is a border colour, not a badge that ate title width. Full strings
 					that CSS truncates come back via shadcn Tooltip (not title=).
+					#64: the time gutter sticks so the organizer never loses "which hour
+					am I in" while panning. Background + z-index so room cards do not
+					paint through the sticky labels.
 				-->
 				<TooltipProvider>
-					<div class="overflow-x-auto">
+					<div class="overflow-x-auto" data-testid="agenda-grid-scroll">
 						<div class="flex w-full" bind:this={gridEl}>
 							<!-- The time axis. Its header spacer matches the room-head height so
 							     gutter labels line up with the columns without measuring. -->
-							<div class="w-14 shrink-0">
+							<div
+								class="bg-background border-border sticky left-0 z-20 w-14 shrink-0 border-r"
+								data-testid="agenda-time-gutter"
+							>
 								<div class="h-14"></div>
 								<div class="relative" style="height: {gridHeight}">
 									{#each gutter as label (label.minutes)}
