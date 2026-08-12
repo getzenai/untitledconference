@@ -84,6 +84,10 @@
 
 	const editKind = (id: number, fallback: CriterionKind): CriterionKind =>
 		editKindById[id] ?? fallback;
+
+	/** Same wording the locked Remove button already shows. */
+	const scoresHangTitle = (scoreCount: number) =>
+		`${scoreCount} review score${scoreCount === 1 ? '' : 's'} hang on this criterion`;
 </script>
 
 <svelte:head>
@@ -258,6 +262,10 @@
 							{:else}
 								<ul class="mt-3 space-y-3" data-testid="criteria-list">
 									{#each criteria as criterion, index (criterion.id)}
+										{@const locked = criterion.scoreCount > 0}
+										{@const shownKind = locked
+											? criterion.kind
+											: editKind(criterion.id, criterion.kind)}
 										<li
 											class="border-border bg-muted/30 rounded-md border p-3"
 											data-testid="criterion-row"
@@ -270,6 +278,13 @@
 												class="space-y-2"
 											>
 												<input type="hidden" name="id" value={criterion.id} />
+												{#if locked}
+													<!-- Disabled controls do not submit; keep kind/scale on the wire. -->
+													<input type="hidden" name="kind" value={criterion.kind} />
+													{#if criterion.kind === 'rating' && criterion.scaleMax != null}
+														<input type="hidden" name="scaleMax" value={criterion.scaleMax} />
+													{/if}
+												{/if}
 												<div class="flex flex-wrap items-end gap-2">
 													<label class="min-w-[10rem] flex-1">
 														<span class="text-muted-foreground text-xs font-medium">Label</span>
@@ -284,10 +299,14 @@
 													<label class="w-28">
 														<span class="text-muted-foreground text-xs font-medium">Type</span>
 														<select
-															name="kind"
-															class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm"
-															value={editKind(criterion.id, criterion.kind)}
+															name={locked ? undefined : 'kind'}
+															class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm disabled:opacity-60"
+															value={shownKind}
+															disabled={locked}
+															title={locked ? scoresHangTitle(criterion.scoreCount) : undefined}
+															data-testid="criterion-kind"
 															onchange={(e) => {
+																if (locked) return;
 																editKindById[criterion.id] = e.currentTarget.value as CriterionKind;
 															}}
 														>
@@ -312,22 +331,24 @@
 													</label>
 												</div>
 
-												{#if editKind(criterion.id, criterion.kind) === 'rating'}
+												{#if shownKind === 'rating'}
 													<label class="block w-28">
 														<span class="text-muted-foreground text-xs font-medium">Scale max</span>
 														<input
-															name="scaleMax"
+															name={locked ? undefined : 'scaleMax'}
 															type="number"
 															min="2"
 															max="10"
 															step="1"
 															value={criterion.scaleMax ?? 5}
 															required
-															class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm"
+															disabled={locked}
+															title={locked ? scoresHangTitle(criterion.scoreCount) : undefined}
+															class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm disabled:opacity-60"
 															data-testid="criterion-scale-max"
 														/>
 													</label>
-												{:else if editKind(criterion.id, criterion.kind) === 'select'}
+												{:else if shownKind === 'select'}
 													<label class="block">
 														<span class="text-muted-foreground text-xs font-medium"
 															>Options (one per line)</span
@@ -388,7 +409,7 @@
 														variant="ghost"
 														disabled={busy || criterion.scoreCount > 0}
 														title={criterion.scoreCount > 0
-															? `${criterion.scoreCount} review score${criterion.scoreCount === 1 ? '' : 's'} hang on this criterion`
+															? scoresHangTitle(criterion.scoreCount)
 															: 'Remove criterion'}
 														data-testid="criterion-remove"
 													>

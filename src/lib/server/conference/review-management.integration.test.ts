@@ -198,7 +198,7 @@ describe('organizer reviewer assignments', () => {
 		);
 		// secondId created; submissionId already; otherSubmissionId is another
 		// conference → invalid/skipped. Duplicate id is de-duped.
-		expect(result).toEqual({ created: 1, already: 1, skipped: 1 });
+		expect(result).toEqual({ created: 1, already: 1, skipped: 1, recused: 0 });
 
 		const first = await reviewAssignmentMatrix(conference.id, submissionId);
 		const second = await reviewAssignmentMatrix(conference.id, secondId);
@@ -216,7 +216,7 @@ describe('organizer reviewer assignments', () => {
 			roundId,
 			SPEAKER_REVIEWER
 		);
-		expect(speakerResult).toEqual({ created: 0, already: 0, skipped: 1 });
+		expect(speakerResult).toEqual({ created: 0, already: 0, skipped: 1, recused: 0 });
 
 		const targets = await conferenceAssignmentTargets(conference.id);
 		expect(targets).toHaveLength(1);
@@ -301,6 +301,58 @@ describe('organizer reviewer assignments', () => {
 				)
 			);
 		expect(rows).toEqual([]);
+	});
+
+	it('bulk-assign leaves recused rows alone and counts them separately', async () => {
+		const [freshId] = (
+			await db
+				.insert(submissionTable)
+				.values({
+					conferenceId: conference.id,
+					title: `Bulk recused ${suffix}`,
+					status: 'submitted'
+				})
+				.returning({ id: submissionTable.id })
+		).map((row) => row.id);
+
+		await db.insert(reviewTable).values({
+			reviewRoundId: roundId,
+			submissionId,
+			reviewerUserId: ROUND_REVIEWER,
+			status: 'recused'
+		});
+
+		const result = await assignReviewerToSubmissions(
+			conference.id,
+			[submissionId, freshId],
+			roundId,
+			ROUND_REVIEWER
+		);
+		expect(result).toEqual({ created: 1, already: 0, skipped: 0, recused: 1 });
+
+		const [stillRecused] = await db
+			.select({ status: reviewTable.status })
+			.from(reviewTable)
+			.where(
+				and(
+					eq(reviewTable.reviewRoundId, roundId),
+					eq(reviewTable.submissionId, submissionId),
+					eq(reviewTable.reviewerUserId, ROUND_REVIEWER)
+				)
+			);
+		expect(stillRecused?.status).toBe('recused');
+
+		// Single-cell reassign still restores — that click is deliberate.
+		expect(
+			await setReviewAssignment(conference.id, submissionId, roundId, ROUND_REVIEWER, true)
+		).toBe('assigned');
+
+		await db
+			.delete(reviewTable)
+			.where(
+				and(eq(reviewTable.reviewRoundId, roundId), eq(reviewTable.reviewerUserId, ROUND_REVIEWER))
+			);
+		await db.delete(submissionTable).where(eq(submissionTable.id, freshId));
 	});
 
 	it('keeps a submitted review when an organizer tries to unassign it', async () => {
