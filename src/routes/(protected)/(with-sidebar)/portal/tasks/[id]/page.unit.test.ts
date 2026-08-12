@@ -115,4 +115,11 @@ describe('speaker task detail', () => {
 		expect(body).not.toContain('Confirm your participation');
 		expect(body).not.toContain('Open my speaker profile');
 	});
+
+	it('does not call a completed task overdue', () => {
+		const body = draw(task({ status: 'done', dueOn: new Date('2020-01-01T12:00:00Z') }));
+
+		expect(body).toContain('Due Wednesday, 1 January 2020');
+		expect(body).not.toContain('— overdue');
+	});
 });
