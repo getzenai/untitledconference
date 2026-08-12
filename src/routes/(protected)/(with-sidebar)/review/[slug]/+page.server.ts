@@ -2,7 +2,7 @@ import type { QueueSort } from '$lib/conference/review-visibility';
 import { requireReviewer, reviewQueue } from '$lib/server/conference/reviewer';
 import type { PageServerLoad } from './$types';
 
-const SORTS: QueueSort[] = ['coverage', 'score'];
+const SORTS: QueueSort[] = ['coverage', 'score', 'title', 'track'];
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireReviewer(locals.user!.id, params.slug);

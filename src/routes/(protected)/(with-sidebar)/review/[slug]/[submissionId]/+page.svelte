@@ -218,12 +218,36 @@
 		</label>
 
 		<div class="flex flex-wrap gap-2">
-			<Button type="submit" name="intent" value="submit" size="sm" disabled={busy}>
-				Submit review
-			</Button>
-			<Button type="submit" name="intent" value="draft" variant="outline" size="sm" disabled={busy}>
-				Save progress
-			</Button>
+			{#if s.own.status === 'submitted'}
+				<!-- Already filed: keep edit open, but do not look like a first submit. -->
+				<Button
+					type="submit"
+					name="intent"
+					value="submit"
+					variant="outline"
+					size="sm"
+					disabled={busy}
+				>
+					Update review
+				</Button>
+				<Button type="submit" name="intent" value="draft" variant="ghost" size="sm" disabled={busy}>
+					Save progress
+				</Button>
+			{:else}
+				<Button type="submit" name="intent" value="submit" size="sm" disabled={busy}>
+					Submit review
+				</Button>
+				<Button
+					type="submit"
+					name="intent"
+					value="draft"
+					variant="outline"
+					size="sm"
+					disabled={busy}
+				>
+					Save progress
+				</Button>
+			{/if}
 			{#if s.own.status === 'assigned'}
 				<Button
 					type="submit"
