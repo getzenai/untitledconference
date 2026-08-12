@@ -23,19 +23,7 @@ import {
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
-import {
-	and,
-	asc,
-	count,
-	desc,
-	eq,
-	ilike,
-	inArray,
-	isNotNull,
-	or,
-	sql,
-	type SQL
-} from 'drizzle-orm';
+import { and, asc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
 import { guessSortName } from './cfp-submission';
 import {
 	addSpeakerToConference,
@@ -389,6 +377,44 @@ export type ImportContactsResult =
 	| { ok: true; added: number; skipped: string[] }
 	| { ok: false; problem: string };
 
+async function importOneRow(
+	tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+	organizationId: string,
+	row: SpeakerCsvRow,
+	skipped: string[]
+): Promise<'added' | 'skipped'> {
+	const name = row.name?.trim() ?? '';
+	if (!name) throw new AbortImport(`Row ${row.line}: A name is required.`);
+	const email = trimOrNull(row.email);
+	if (email) {
+		const [existing] = await tx
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.email, email)
+				)
+			)
+			.limit(1);
+		if (existing) {
+			skipped.push(name);
+			return 'skipped';
+		}
+	}
+	await tx.insert(speakerProfileTable).values({
+		organizationId,
+		name: name.slice(0, 200),
+		sortName: guessSortName(name).slice(0, 200),
+		email,
+		jobTitle: trimOrNull(row.jobTitle),
+		company: trimOrNull(row.company),
+		bio: trimOrNull(row.bio),
+		notes: trimOrNull(row.notes)
+	});
+	return 'added';
+}
+
 /** Bulk-create org contacts from a CSV (CRM-05). Does not place anyone on a roster. */
 export async function importContacts(
 	userId: string,
@@ -406,43 +432,10 @@ export async function importContacts(
 		return await db.transaction(async (tx) => {
 			let added = 0;
 			const skipped: string[] = [];
-
 			for (const row of rows) {
-				const name = row.name?.trim() ?? '';
-				if (!name) throw new AbortImport(`Row ${row.line}: A name is required.`);
-				const email = trimOrNull(row.email);
-
-				if (email) {
-					const [existing] = await tx
-						.select({ id: speakerProfileTable.id })
-						.from(speakerProfileTable)
-						.where(
-							and(
-								eq(speakerProfileTable.organizationId, organizationId),
-								eq(speakerProfileTable.email, email)
-							)
-						)
-						.limit(1);
-					if (existing) {
-						skipped.push(name);
-						continue;
-					}
-				}
-
-				await tx.insert(speakerProfileTable).values({
-					organizationId,
-					name: name.slice(0, 200),
-					sortName: guessSortName(name).slice(0, 200),
-					email,
-					jobTitle: trimOrNull(row.jobTitle),
-					company: trimOrNull(row.company),
-					bio: trimOrNull(row.bio),
-					notes: trimOrNull(row.notes)
-				});
-				added += 1;
+				if ((await importOneRow(tx, organizationId, row, skipped)) === 'added') added += 1;
 			}
-
-			return { ok: true, added, skipped };
+			return { ok: true as const, added, skipped };
 		});
 	} catch (err) {
 		if (err instanceof AbortImport) return { ok: false, problem: err.problem };
@@ -576,92 +569,5 @@ export async function contactFilterOptions(userId: string): Promise<{
 	};
 }
 
-export type CrmCompanyBucket = {
-	company: string;
-	count: number;
-};
-
-export type CrmOverview = {
-	/** Speaker profiles in orgs the user administers. */
-	totalContacts: number;
-	/** Distinct conferences that already have at least one directory contact on the roster. */
-	eventsWithSpeakers: number;
-	/** Contacts linked to two or more events — the "returning speaker" KPI. */
-	returningSpeakers: number;
-	/** Top companies by contact count (analytics widget; drill-through via company filter). */
-	topCompanies: CrmCompanyBucket[];
-};
-
-const TOP_COMPANIES_LIMIT = 8;
-
-/**
- * Org-wide CRM dashboard numbers (CRM-12).
- *
- * Counts match the unfiltered directory so the total-contacts KPI is consistent
- * with the table below. Top companies feed the analytics widget and link into
- * the existing company filter on this same page.
- */
-export async function getCrmOverview(userId: string): Promise<CrmOverview> {
-	const empty: CrmOverview = {
-		totalContacts: 0,
-		eventsWithSpeakers: 0,
-		returningSpeakers: 0,
-		topCompanies: []
-	};
-	const orgIds = await organizerOrganizationIds(userId);
-	if (orgIds.length === 0) return empty;
-
-	const orgScope = inArray(speakerProfileTable.organizationId, orgIds);
-
-	const [[totalRow], eventRows, multiEventRows, companyRows] = await Promise.all([
-		db.select({ n: count() }).from(speakerProfileTable).where(orgScope),
-		db
-			.select({
-				conferenceId: conferenceSpeakerTable.conferenceId
-			})
-			.from(conferenceSpeakerTable)
-			.innerJoin(
-				speakerProfileTable,
-				eq(speakerProfileTable.id, conferenceSpeakerTable.speakerProfileId)
-			)
-			.where(orgScope)
-			.groupBy(conferenceSpeakerTable.conferenceId),
-		db
-			.select({
-				speakerProfileId: conferenceSpeakerTable.speakerProfileId
-			})
-			.from(conferenceSpeakerTable)
-			.innerJoin(
-				speakerProfileTable,
-				eq(speakerProfileTable.id, conferenceSpeakerTable.speakerProfileId)
-			)
-			.where(orgScope)
-			.groupBy(conferenceSpeakerTable.speakerProfileId)
-			.having(sql`count(*) >= 2`),
-		db
-			.select({
-				company: speakerProfileTable.company,
-				n: sql<number>`count(*)::int`
-			})
-			.from(speakerProfileTable)
-			.where(
-				and(
-					orgScope,
-					isNotNull(speakerProfileTable.company),
-					sql`trim(${speakerProfileTable.company}) <> ''`
-				)
-			)
-			.groupBy(speakerProfileTable.company)
-			.orderBy(desc(sql`count(*)`), asc(speakerProfileTable.company))
-			.limit(TOP_COMPANIES_LIMIT)
-	]);
-
-	return {
-		totalContacts: Number(totalRow?.n ?? 0),
-		eventsWithSpeakers: eventRows.length,
-		returningSpeakers: multiEventRows.length,
-		topCompanies: companyRows
-			.filter((r): r is { company: string; n: number } => Boolean(r.company?.trim()))
-			.map((r) => ({ company: r.company!.trim(), count: Number(r.n) }))
-	};
-}
+export { getCrmOverview } from './crm-overview';
+export type { CrmCompanyBucket, CrmOverview } from './crm-overview';
