@@ -2,6 +2,9 @@
  * The agenda may be wide — it is a grid — but it must not be flush against the rail,
  * and twenty rooms must not mean twenty cards with no way to narrow them.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { BoardSession, Conflict } from '$lib/server/conference/agenda';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -322,5 +325,21 @@ describe('agenda builder readability (#219)', () => {
 		// Full title is rendered (in trigger text and/or tooltip content) — not lost.
 		expect(body).toContain('Tooltip-worthy title that is longer than the column');
 		expect(body).toContain('Room 1');
+	});
+
+	/**
+	 * Review on #222: `{...props}` then bare `onclick`/`onpointerdown` dropped
+	 * bits-ui's handlers. Source contract — SSR does not exercise the merge.
+	 */
+	it('forwards TooltipTrigger pointer handlers before drag/click, and keeps room names out of the tab order', () => {
+		const source = readFileSync(
+			join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'),
+			'utf8'
+		);
+
+		expect(source).toContain('props.onclick?.(e)');
+		expect(source).toContain('props.onpointerdown?.(e)');
+		// Room heads only — session cards stay keyboard-reachable.
+		expect(source).toMatch(/TooltipTrigger\s+tabindex=\{-1\}/);
 	});
 });

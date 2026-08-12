@@ -510,7 +510,13 @@
 										data-testid="agenda-room-head"
 									>
 										<Tooltip>
-											<TooltipTrigger>
+											<!--
+												Room name is mouse-tooltip only — full name is already in the
+												DOM. TooltipTrigger defaults tabindex=0, which would add a
+												tab stop per room (World's Fair ≈ 20). Keep it out of the
+												sequence; the session card below stays a real control.
+											-->
+											<TooltipTrigger tabindex={-1}>
 												{#snippet child({ props })}
 													<h3
 														{...props}
@@ -603,17 +609,30 @@
 													<Tooltip>
 														<TooltipTrigger>
 															{#snippet child({ props })}
+																<!--
+																	Svelte 5: attributes after `{...props}` win. Our own
+																	onclick/onpointerdown would drop bits-ui's handlers —
+																	#onpointerdown is the only guard that stops mousedown
+																	focus from opening the tooltip immediately, and
+																	#onclick closes it. Call the forwarded handlers first,
+																	then ours.
+																-->
 																<button
 																	{...props}
 																	type="button"
 																	data-testid="agenda-edit-slot-{session.placementId}"
-																	onclick={() => slotClicked(room, session.startMinutes ?? 0)}
-																	onpointerdown={(e) =>
+																	onclick={(e) => {
+																		props.onclick?.(e);
+																		slotClicked(room, session.startMinutes ?? 0);
+																	}}
+																	onpointerdown={(e) => {
+																		props.onpointerdown?.(e);
 																		drag.begin(e, {
 																			placementId: session.placementId,
 																			title: session.title,
 																			roomId: room.id
-																		})}
+																		});
+																	}}
 																	class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none"
 																>
 																	<span class="sr-only">{published ? 'Published' : 'Draft'}</span>
