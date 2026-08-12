@@ -68,7 +68,7 @@ describe('conference settings config surface', () => {
 					templates: [],
 					pending: {}
 				} as never,
-				form: { error: 'That start date is not a real date.', section: null }
+				form: { error: 'That start date is not a real date.', section: 'dates' }
 			}
 		});
 
@@ -76,6 +76,11 @@ describe('conference settings config surface', () => {
 		expect(body).toContain('role="alert"');
 		expect(body).toContain('text-status-bad');
 		expect(body).toContain('That start date is not a real date.');
+		// Date errors land inside the dates section, not as a floating page banner —
+		// that is the whole point of section-scoped feedback after the jump nav.
+		expect(body).toMatch(
+			/data-testid="settings-dates"[\s\S]*data-testid="settings-error"[\s\S]*That start date/
+		);
 		// The claim is that the failure did not come back on the success channel, and
 		// this is the assertion that says exactly that. It used to be backed up by
 		// searching the whole page for `text-status-good` and `role="status"` — but the
@@ -96,7 +101,7 @@ describe('conference settings config surface', () => {
 					templates: [],
 					pending: {}
 				} as never,
-				form: { message: 'Dates saved.', section: null }
+				form: { message: 'Dates saved.', section: 'dates' }
 			}
 		});
 
@@ -104,6 +109,9 @@ describe('conference settings config surface', () => {
 		expect(body).toContain('role="status"');
 		expect(body).toContain('text-status-good');
 		expect(body).toContain('Dates saved.');
+		expect(body).toMatch(
+			/data-testid="settings-dates"[\s\S]*data-testid="settings-message"[\s\S]*Dates saved/
+		);
 		expect(body).not.toContain('data-testid="settings-error"');
 		expect(body).not.toContain('text-status-bad');
 		expect(body).not.toContain('role="alert"');
@@ -539,5 +547,135 @@ describe('editing a room, track or format in place', () => {
 
 		expect(unmeasured).toContain('name="minutes"');
 		expect(unmeasured).not.toContain('value="0"');
+	});
+});
+
+/**
+ * The section nav (#153). Six sections stacked in one column made this the
+ * longest page in the product: you had to scroll past the rooms to find out
+ * that session formats exist at all. The nav is the fix, and the thing that
+ * makes it a fix rather than decoration is that every entry points at a section
+ * that is really on the page — a jump list with a dead link is worse than no
+ * jump list. These assertions are what catches a renamed or dropped section.
+ */
+describe('settings section nav', () => {
+	const body = () =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: { rooms: [], tracks: [], formats: [] },
+					templates: [],
+					pending: {}
+				} as never,
+				form: null
+			}
+		}).body;
+
+	const ANCHORS = ['visibility', 'dates', 'rooms', 'tracks', 'formats', 'tasks'];
+
+	it('offers a jump to every section without moving anything off the page', () => {
+		const rendered = body();
+
+		for (const anchor of ANCHORS) {
+			expect(rendered).toContain(`href="#${anchor}"`);
+			expect(rendered).toContain(`id="${anchor}"`);
+		}
+		// Everything still renders at once — this is a table of contents, not tabs.
+		// Hiding five of six sections behind a click would put the page into a
+		// state that every one of its six form posts would have to preserve.
+		expect(rendered).toContain('data-testid="settings-visibility"');
+		expect(rendered).toContain('data-testid="settings-task-templates"');
+	});
+
+	it('marks a current entry before any script has run', () => {
+		// Server-rendered, so the nav does not arrive as six identical links and
+		// then jump. The observer takes over from here.
+		expect(body()).toContain('aria-current="true"');
+	});
+
+	it('labels the jump list with the section names from the brief', () => {
+		const rendered = body();
+		for (const label of [
+			'General',
+			'Dates',
+			'Rooms',
+			'Tracks',
+			'Session formats',
+			'Speaker tasks'
+		]) {
+			expect(rendered).toContain(label);
+		}
+		expect(rendered).toContain('data-testid="settings-section-nav"');
+	});
+});
+
+/**
+ * Long structure lists start collapsed (#153). Five rows is enough to recognise
+ * the list; the rest opens on demand. Without this the jump nav would still
+ * force a long scroll through a venue with twelve rooms.
+ */
+describe('settings list preview', () => {
+	const manyRooms = Array.from({ length: 7 }, (_, i) => ({
+		id: i + 1,
+		name: `Room ${i + 1}`,
+		position: i
+	}));
+
+	it('shows a preview of long room lists and a control to open the rest', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: { rooms: manyRooms, tracks: [], formats: [] },
+					templates: [],
+					pending: {}
+				} as never,
+				form: null
+			}
+		});
+
+		// Five visible, the rest gated behind the control.
+		expect(body.match(/data-testid="settings-room-row"/g)?.length).toBe(5);
+		expect(body).toContain('data-testid="settings-show-more-rooms"');
+		expect(body).toContain('Show all 7 rooms');
+		expect(body).toContain('Room 1');
+		expect(body).toContain('Room 5');
+		expect(body).not.toContain('Room 6');
+		expect(body).not.toContain('Room 7');
+	});
+
+	it('does not show the expand control when the list fits the preview', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					config: {
+						rooms: [
+							{ id: 1, name: 'Main Stage', position: 0 },
+							{ id: 2, name: 'Room B', position: 1 }
+						],
+						tracks: [],
+						formats: []
+					},
+					templates: [],
+					pending: {}
+				} as never,
+				form: null
+			}
+		});
+
+		expect(body).not.toContain('data-testid="settings-show-more-rooms"');
+		expect(body).toContain('Main Stage');
+		expect(body).toContain('Room B');
 	});
 });
