@@ -75,7 +75,7 @@
 					} else if (signInData?.user) {
 						toast.success('Registration completed successfully!');
 
-						await goto('/home');
+						await goto('/home', { invalidateAll: true });
 					} else {
 						toast.success('Registration completed! Please log in with your new password.');
 
