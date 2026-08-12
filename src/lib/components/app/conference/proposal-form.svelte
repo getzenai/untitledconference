@@ -16,6 +16,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { draftFromFormData } from '$lib/conference/pending-proposal';
+	import { onMount } from 'svelte';
 	import {
 		ALL_FIXED_QUESTIONS_SHOWN,
 		asks,
@@ -47,7 +49,6 @@
 			closed?: boolean;
 		} | null;
 		signedIn: boolean;
-		signInHref: string;
 		submitLabel?: string;
 		/**
 		 * A proposal that is already in has no draft state to fall back to: saving it
@@ -55,6 +56,13 @@
 		 * drawn rather than being drawn and refused.
 		 */
 		allowDraft?: boolean;
+		/**
+		 * Signed-out submit: the page parks the draft and sends them to login.
+		 * The form does not own storage — it only reads the fields.
+		 */
+		onSignIn?: (draft: ProposalDraft) => void;
+		/** After login restored a draft: send it. The button they clicked said submit. */
+		autoSubmit?: boolean;
 	};
 
 	let {
@@ -65,9 +73,10 @@
 		initial,
 		form = null,
 		signedIn,
-		signInHref,
 		submitLabel = 'Submit proposal',
-		allowDraft = true
+		allowDraft = true,
+		onSignIn,
+		autoSubmit = false
 	}: Props = $props();
 
 	let sessionFormatId = $state(initial.sessionFormatId);
@@ -143,7 +152,16 @@
 		if (!sortNameTouched) sortName = suggestSortName(value);
 	}
 
-	const submitting = () => {
+	let formEl = $state<HTMLFormElement | undefined>();
+
+	const submitting = ({ formData, cancel }: { formData: FormData; cancel: () => void }) => {
+		// The click said submit. Without a session the POST would redirect to
+		// login and drop the body, so we park the draft and let the page go there.
+		if (!signedIn) {
+			cancel();
+			if (onSignIn) onSignIn(draftFromFormData(formData));
+			return;
+		}
 		busy = true;
 		// `finally`, not the success path: a network failure would otherwise leave
 		// every button disabled with no way back except a reload.
@@ -155,6 +173,12 @@
 			}
 		};
 	};
+
+	onMount(() => {
+		if (!autoSubmit || !formEl) return;
+		const submit = formEl.querySelector<HTMLButtonElement>('button[formaction="?/submit"]');
+		if (submit) formEl.requestSubmit(submit);
+	});
 </script>
 
 {#if form?.closed}
@@ -163,7 +187,7 @@
 	</p>
 {/if}
 
-<form method="POST" use:enhance={submitting} class="mt-6 space-y-8">
+<form bind:this={formEl} method="POST" use:enhance={submitting} class="mt-6 space-y-8">
 	<section class="space-y-4">
 		<h3 class="text-sm font-medium">Your talk</h3>
 
@@ -427,8 +451,12 @@
 		</div>
 	{:else}
 		<div class="flex flex-wrap items-center gap-3 border-t pt-6">
-			<Button href={signInHref}>Sign in to submit</Button>
-			<span class="text-muted-foreground text-sm">Signing in takes you back to this form.</span>
+			<Button type="submit" formaction="?/submit" data-testid="cfp-sign-in-to-submit">
+				Sign in to submit
+			</Button>
+			<span class="text-muted-foreground text-sm">
+				We'll send this proposal as soon as you sign in.
+			</span>
 		</div>
 	{/if}
 </form>

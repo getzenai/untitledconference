@@ -5,10 +5,13 @@
 	 * edit page renders, so finishing a draft never shows a different question set
 	 * than starting one did.
 	 */
+	import { goto } from '$app/navigation';
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
-	import { emptyProposal } from '$lib/conference/proposal-draft';
+	import { consumePendingProposal, writePendingProposal } from '$lib/conference/pending-proposal';
+	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import { proseBlocks } from '$lib/conference/prose';
 	import { formatDayLong, isoDay } from '$lib/conference/public-view';
+	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
 
@@ -16,6 +19,24 @@
 	const intro = $derived(proseBlocks(call.form.description));
 	const signedIn = $derived(Boolean(data.user));
 	const signInHref = $derived(`/login?returnTo=/c/${call.conference.slug}/cfp`);
+
+	/**
+	 * Filled in after hydrate so SSR and the first client render stay identical.
+	 * A pending draft consumed here is the one "Sign in to submit" parked.
+	 */
+	let restored = $state<ProposalDraft | null>(null);
+
+	onMount(() => {
+		const draft = consumePendingProposal(sessionStorage, data.call.conference.slug);
+		if (draft && !data.existing) restored = draft;
+	});
+
+	const resume = $derived(Boolean(signedIn && restored && !data.existing));
+
+	function stashAndSignIn(draft: ProposalDraft) {
+		writePendingProposal(sessionStorage, data.call.conference.slug, draft);
+		void goto(signInHref);
+	}
 
 	const closesLabel = $derived(
 		call.form.closesAt ? formatDayLong(isoDay(call.form.closesAt)) : null
@@ -96,15 +117,32 @@
 			</p>
 		{/if}
 
-		<ProposalForm
-			fields={call.fields}
-			fixed={call.fixed}
-			formats={call.formats}
-			tracks={call.tracks}
-			initial={emptyProposal()}
-			{form}
-			{signedIn}
-			{signInHref}
-		/>
+		{#if resume}
+			<p
+				class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm"
+				data-testid="cfp-resume-after-signin"
+				role="status"
+			>
+				{#if form?.errors || form?.fieldErrors}
+					You are signed in — press Submit to finish.
+				{:else}
+					You are signed in — submitting the proposal you wrote.
+				{/if}
+			</p>
+		{/if}
+
+		{#key restored}
+			<ProposalForm
+				fields={call.fields}
+				fixed={call.fixed}
+				formats={call.formats}
+				tracks={call.tracks}
+				initial={restored ?? emptyProposal()}
+				{form}
+				{signedIn}
+				onSignIn={stashAndSignIn}
+				autoSubmit={resume}
+			/>
+		{/key}
 	{/if}
 </div>

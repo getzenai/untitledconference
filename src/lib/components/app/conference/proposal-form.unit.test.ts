@@ -23,8 +23,7 @@ const body = (hidden: string | null) =>
 			formats: [{ id: 1, name: 'Talk', minutes: 30 }],
 			tracks: [{ id: 2, name: 'Platform' }],
 			initial: emptyProposal(),
-			signedIn: true,
-			signInHref: '/login'
+			signedIn: true
 		}
 	}).body;
 
@@ -65,6 +64,26 @@ describe('the proposal form', () => {
 		expect(posts(html, 'title')).toBe(true);
 		expect(posts(html, 'sessionFormatId')).toBe(true);
 		expect(posts(html, 'speakerCompany')).toBe(true);
+	});
+
+	it('lets a signed-out visitor submit the form they just filled (#236)', () => {
+		const html = render(ProposalForm, {
+			props: {
+				fields: [],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: false
+			}
+		}).body;
+
+		expect(html).toContain('Sign in to submit');
+		expect(html).toContain('data-testid="cfp-sign-in-to-submit"');
+		expect(html).toContain("We'll send this proposal as soon as you sign in.");
+		// Without this the JS-less POST has no action name, SvelteKit looks for
+		// `default`, and the visitor gets a 404 instead of /login.
+		expect(html).toContain('formaction="?/submit"');
 	});
 
 	it('keeps the three that identify the talk and the speaker, whatever is stored', () => {
@@ -121,8 +140,7 @@ describe('the proposal form', () => {
 				formats: [{ id: 1, name: 'Talk', minutes: 30 }],
 				tracks: [{ id: 2, name: 'Platform' }],
 				initial: { ...emptyProposal(), sessionFormatId: 1, trackId: 2 },
-				signedIn: true,
-				signInHref: '/login'
+				signedIn: true
 			}
 		}).body;
 
