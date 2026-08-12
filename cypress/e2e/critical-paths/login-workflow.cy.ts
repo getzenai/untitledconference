@@ -1,4 +1,3 @@
-import { CrudPage } from '../../support/pages/crud.page';
 import { HomePage } from '../../support/pages/home.page';
 import { LoginPage } from '../../support/pages/login.page';
 
@@ -19,7 +18,6 @@ function assertSharedShell() {
 describe('Critical Login Workflow', () => {
 	const loginPage = new LoginPage();
 	const homePage = new HomePage();
-	const crudPage = new CrudPage();
 
 	it('Login -> Navigate -> Perform Protected Action', () => {
 		cy.createTestUser({ organizationName: 'Login Workflow Org' }).then((user) => {
@@ -29,12 +27,14 @@ describe('Critical Login Workflow', () => {
 			homePage.shouldBeLoggedIn();
 
 			// STEP 2: Navigate to protected content
-			crudPage.visit();
-			cy.url().should('include', '/examples/crud');
+			cy.visit('/manage');
+			cy.url().should('include', '/manage');
 
-			// STEP 3: Verify the protected page is functional
-			crudPage.createButton().should('be.visible');
-			cy.contains('Existing Example Objects').should('be.visible');
+			// STEP 3: Verify the protected page is functional. This user owns an
+			// organization, so the page offers the action rather than the "create an
+			// organization first" empty state.
+			cy.contains('h1', 'My conferences').should('be.visible');
+			cy.get('a[href="/manage/new"]').should('be.visible');
 		});
 	});
 

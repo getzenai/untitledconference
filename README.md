@@ -16,7 +16,7 @@ Live: **[untitledconference.com](https://untitledconference.com)**
 
 **Public programme.** Conference, speakers, agenda and gallery pages under `/c/<slug>`. Attendees build a personal itinerary and export it as `.ics`; the agenda is embeddable elsewhere with `?embed=1`.
 
-**Email.** Invitations, verification and speaker-workflow mail through [Resend](https://resend.com). Every message is a row in an outbox table that a dispatcher drains, so without an API key a local install sends nothing and loses nothing — the mail simply stays queued.
+**Email.** Speaker-workflow mail through [Resend](https://resend.com). Every message is a row in an outbox table that a dispatcher drains, so without an API key a local install sends nothing and loses nothing — the mail simply stays queued.
 
 ### Two interfaces most conference tools do not have
 

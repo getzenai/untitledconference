@@ -130,16 +130,7 @@ else
     export SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG="${SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG:-false}"
 fi
 
-if [ -n "${AZURE_OPENAI_API_KEY:-}" ] && [ -n "${AZURE_RESOURCE_NAME:-}" ] && [ -n "${AZURE_OPENAI_DEPLOYMENT_NAME:-}" ]; then
-    export AI_PROVIDER="${AI_PROVIDER:-azure}"
-else
-    export AI_PROVIDER="${AI_PROVIDER:-mock}"
-    if [ -n "${AZURE_OPENAI_API_KEY:-}" ]; then
-        echo -e "  ${YELLOW}⚠${RESET} Azure OpenAI API key found but missing AZURE_RESOURCE_NAME or AZURE_OPENAI_DEPLOYMENT_NAME — using mock provider"
-    fi
-fi
-
-echo -e "${DIM}Config: BETTER_AUTH_URL=$BETTER_AUTH_URL | LOG_LEVEL=$LOG_LEVEL | AI_PROVIDER=$AI_PROVIDER${RESET}"
+echo -e "${DIM}Config: BETTER_AUTH_URL=$BETTER_AUTH_URL | LOG_LEVEL=$LOG_LEVEL${RESET}"
 echo ""
 
 # Run the command (default: npm run dev:vite)

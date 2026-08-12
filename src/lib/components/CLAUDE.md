@@ -4,8 +4,8 @@
 
 ```
 components/
-    ui/                   # shadcn-svelte primitives (bits-ui based) — see below
-    document-editor/       # Tiptap-based rich text editor + extensions
+    ui/                    # shadcn-svelte primitives (bits-ui based) — see below
+    app/                   # this product's own components (conference/, auth/, pickers)
     app-sidebar.svelte     # Feature/layout components at the top level
     nav-*.svelte
     file-upload.svelte
@@ -17,8 +17,8 @@ components/
   etc.), built on `bits-ui`. These are meant to be regenerated via the shadcn-svelte CLI — avoid
   hand-editing them for one-off needs; wrap or compose instead so a future regeneration doesn't
   clobber custom logic.
-- Everything else is a feature/layout component living at the top level or in its own subdirectory
-  for multi-file features (`document-editor/`).
+- Everything else is a feature/layout component living at the top level or in its own
+  subdirectory for multi-file features (`app/conference/`).
 - Use the `cn()` helper from `$lib/utils` to merge Tailwind classes conditionally:
   `class={cn('base-classes', conditional && 'conditional-class')}`.
 
@@ -71,13 +71,11 @@ reordered:
 
 ## Internationalization
 
-`messages/en.json` and `messages/de.json` plus ParaglideJS (`$lib/paraglide/messages`) are wired up
-and demonstrated in `src/routes/(protected)/(with-sidebar)/examples/paraglide/+page.svelte`. This
-is scaffolding for a project that wants i18n from day one — it is **not** yet an enforced
-convention across the existing components: most feature components (`nav-user.svelte`,
-`app-sidebar.svelte`, etc.) currently use hardcoded English strings. If your project needs i18n,
-follow the `examples/paraglide` page as the pattern; if not, hardcoded strings match the rest of
-the codebase as it stands.
+`messages/en.json` and `messages/de.json` plus ParaglideJS (`$lib/paraglide/messages`) are wired
+up, but this is **not** an enforced convention: the feature components (`nav-user.svelte`,
+`app-sidebar.svelte`, the whole conference UI) use hardcoded English. Import `m` from
+`$lib/paraglide/messages` if you are adding translated copy; hardcoded English matches the rest
+of the codebase as it stands.
 
 ## Forms (Superforms + Formsnap)
 

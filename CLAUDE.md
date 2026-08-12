@@ -15,15 +15,15 @@ The domain lives in `src/lib/conference/` (pure logic, unit-testable) and
 Area-specific conventions live in the CLAUDE.md closest to the code. Check that one before
 assuming a rule from here applies:
 
-| File                            | Covers                                                    |
-| ------------------------------- | --------------------------------------------------------- |
-| `src/lib/server/CLAUDE.md`      | env access, logging, email outbox, AI provider, ownership |
-| `src/lib/server/db/CLAUDE.md`   | Drizzle schema conventions, migrations, test utils        |
-| `src/lib/server/jobs/CLAUDE.md` | pg-boss queue and the standalone worker                   |
-| `src/lib/components/CLAUDE.md`  | Svelte 5 runes, shadcn-svelte/bits-ui, forms, i18n        |
-| `src/routes/api/v1/CLAUDE.md`   | API tiers and where auth is enforced                      |
-| `cypress/CLAUDE.md`             | E2E structure, selectors, what bites                      |
-| `ai-dev-docs/`                  | dense howtos: Better Auth, Superforms, Zod, redirects     |
+| File                            | Covers                                                |
+| ------------------------------- | ----------------------------------------------------- |
+| `src/lib/server/CLAUDE.md`      | env access, logging, the two mail paths, ownership    |
+| `src/lib/server/db/CLAUDE.md`   | Drizzle schema conventions, migrations, test utils    |
+| `src/lib/server/jobs/CLAUDE.md` | pg-boss queue and the standalone worker               |
+| `src/lib/components/CLAUDE.md`  | Svelte 5 runes, shadcn-svelte/bits-ui, forms, i18n    |
+| `src/routes/api/v1/CLAUDE.md`   | API tiers and where auth is enforced                  |
+| `cypress/CLAUDE.md`             | E2E structure, selectors, what bites                  |
+| `ai-dev-docs/`                  | dense howtos: Better Auth, Superforms, Zod, redirects |
 
 ## Rules that are not obvious from the code
 

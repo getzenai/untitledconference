@@ -4,7 +4,6 @@
 	"project": ["src/**/*.ts", "src/**/*.svelte"],
 	"ignore": ["src/lib/paraglide/**", "src/lib/components/ui/**", "src/app.d.ts"],
 	"ignoreDependencies": [
-		"@ai-sdk/svelte",
 		"@inlang/plugin-m-function-matcher",
 		"@inlang/plugin-message-format",
 		"@tailwindcss/forms",

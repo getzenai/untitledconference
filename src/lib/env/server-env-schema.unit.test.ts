@@ -35,39 +35,6 @@ describe('serverEnvSchema — required fields & defaults', () => {
 	});
 });
 
-describe('serverEnvSchema — AI_PROVIDER conditional requirement', () => {
-	const azureVars = {
-		AZURE_OPENAI_API_KEY: 'key',
-		AZURE_RESOURCE_NAME: 'resource',
-		AZURE_OPENAI_DEPLOYMENT_NAME: 'deployment'
-	};
-
-	it('requires all Azure vars when AI_PROVIDER="azure"', () => {
-		const result = serverEnvSchema.safeParse({ ...base, AI_PROVIDER: 'azure' });
-		expect(result.success).toBe(false);
-		const paths = issuePaths(result);
-		expect(paths).toContain('AZURE_OPENAI_API_KEY');
-		expect(paths).toContain('AZURE_RESOURCE_NAME');
-		expect(paths).toContain('AZURE_OPENAI_DEPLOYMENT_NAME');
-	});
-
-	it('passes when AI_PROVIDER="azure" and all Azure vars are present', () => {
-		const result = serverEnvSchema.safeParse({ ...base, AI_PROVIDER: 'azure', ...azureVars });
-		expect(result.success).toBe(true);
-	});
-
-	it('applies the requirement case-insensitively (AI_PROVIDER="AZURE")', () => {
-		const result = serverEnvSchema.safeParse({ ...base, AI_PROVIDER: 'AZURE' });
-		expect(result.success).toBe(false);
-		expect(issuePaths(result)).toContain('AZURE_OPENAI_API_KEY');
-	});
-
-	it('does NOT require Azure vars when AI_PROVIDER is unset (auto-detect)', () => {
-		const result = serverEnvSchema.safeParse({ ...base });
-		expect(result.success).toBe(true);
-	});
-});
-
 describe('serverEnvSchema — SendGrid conditional requirement', () => {
 	it('requires both SendGrid fields when SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=true', () => {
 		const result = serverEnvSchema.safeParse({

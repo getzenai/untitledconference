@@ -89,11 +89,9 @@ Avoid CSS class selectors and deep DOM paths — they break on styling changes.
 ## Writing a new spec
 
 ```typescript
-import { CrudPage } from '../../support/pages/crud.page';
 import type { TestUser } from '../../support/globals';
 
 describe('Feature', () => {
-	const crudPage = new CrudPage();
 	let testUser: TestUser;
 
 	before(() => {
@@ -107,12 +105,16 @@ describe('Feature', () => {
 	});
 
 	it('does the thing', () => {
-		crudPage.visit();
-		crudPage.createItem('Name', 'Description');
-		crudPage.shouldHaveItem('Name');
+		cy.visit('/manage');
+		cy.waitForHydration();
+		cy.get('a[href="/manage/new"]').click();
+		cy.url().should('include', '/manage/new');
 	});
 });
 ```
+
+A conference to work against is usually cheaper to set up through
+`POST /api/v1/test/agenda-fixture` than through the UI — see `date-picker.cy.ts`.
 
 ## Best practices
 

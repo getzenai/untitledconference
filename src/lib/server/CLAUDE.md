@@ -44,19 +44,20 @@ attributes whose key names a credential.
 
 ## Email
 
-Mail is an outbox: every message is a row in `emailLogTable`, and
+**There are two paths, and they do not share a transport.**
+
+Conference mail is an outbox: every message is a row in `emailLogTable`, and
 `conference/email-dispatcher.ts` drains it through Resend. Without `RESEND_API_KEY` and
-`RESEND_FROM` there is no transport, and the dispatcher returns `disabled: true` with the rows
+`RESEND_FROM` there is no transport and the dispatcher returns `disabled: true` with the rows
 left queued — that is how the app runs locally and in CI with no mail credentials, and why a
-missing key loses nothing. Templates are plain functions in `email-templates.ts` returning
-`{ subject, text, html }`. Keep that shape for anything else that calls a paid external API.
+missing key loses nothing.
 
-## AI provider
+Auth mail — verification, password reset, invitations — goes the other way: `sendEmail()` in
+`services/email-service.ts` calls SendGrid directly from `src/lib/auth.ts`, with no queue.
+`SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG` gates it, and production has it **off**, so those messages
+are logged and never sent. Anything new that mails a user belongs in the outbox, not here.
 
-`AIProviderFactory.create()` picks a provider from `AI_PROVIDER`, auto-detects Azure OpenAI from
-its three variables, and otherwise returns `MockProvider`. **The app runs with no AI credentials
-at all** — code calling a provider must tolerate the mock, and must check optional methods
-(`provider.transformText?`) before calling them.
+Templates are plain functions in `email-templates.ts` returning `{ subject, text, html }`.
 
 ## Ownership checks
 

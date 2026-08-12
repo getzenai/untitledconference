@@ -9,7 +9,6 @@ import * as contentSchema from './conference/content-schema';
 import * as emailSchema from './conference/email-schema';
 import * as programSchema from './conference/program-schema';
 import * as reviewSchema from './conference/review-schema';
-import * as exampleSchema from './examples/crud-example-schema';
 
 const logger = createLogger('TestUtils');
 
@@ -44,7 +43,6 @@ export function createTestDatabase(connectionId: string = 'default') {
 		const db = drizzle(client, {
 			schema: {
 				...authSchema,
-				...exampleSchema,
 				...conferenceSchema,
 				...cfpSchema,
 				...reviewSchema,
@@ -97,9 +95,6 @@ export async function cleanupTestDatabase(connectionId: string = 'default') {
 		// Order matters due to foreign key constraints
 		// Delete in reverse dependency order to avoid foreign key violations
 
-		// Delete example objects first (references user and organization)
-		await db.delete(exampleSchema.exampleObjectsTable);
-
 		// Delete organization-related data
 		await db.delete(authSchema.invitation);
 		await db.delete(authSchema.member);
@@ -131,12 +126,10 @@ export async function seedTestData(connectionId: string = 'default'): Promise<Te
 	);
 
 	await setupOrganizationMembership(organization.id, users, connectionId);
-	const exampleObjects = await createTestExampleObjects(organization.id, users, connectionId);
 
 	return {
 		users,
-		organization,
-		exampleObjects
+		organization
 	};
 }
 
@@ -198,39 +191,6 @@ async function setupOrganizationMembership(
 			role: 'member'
 		}
 	]);
-}
-
-/**
- * Helper function to create test example objects
- */
-async function createTestExampleObjects(
-	organizationId: string,
-	users: { user1: TestUser; user2: TestUser; admin: TestUser },
-	connectionId: string = 'default'
-) {
-	const db = createTestDatabase(connectionId);
-
-	const exampleObject1 = await db
-		.insert(exampleSchema.exampleObjectsTable)
-		.values({
-			name: 'Test Object 1',
-			description: 'First test object',
-			userId: users.user1.id,
-			organizationId
-		})
-		.returning();
-
-	const exampleObject2 = await db
-		.insert(exampleSchema.exampleObjectsTable)
-		.values({
-			name: 'Test Object 2',
-			description: 'Second test object',
-			userId: users.user2.id,
-			organizationId
-		})
-		.returning();
-
-	return [exampleObject1[0], exampleObject2[0]];
 }
 
 /**
@@ -335,34 +295,6 @@ export async function createTestMembership(
 
 	const [createdMember] = await db.insert(authSchema.member).values(member).returning();
 	return createdMember;
-}
-
-/**
- * Helper to create test example objects for CRUD testing
- */
-export async function createTestExampleObject(
-	params: {
-		name: string;
-		description?: string;
-		userId: string;
-		organizationId?: string;
-	},
-	connectionId: string = 'default'
-): Promise<TestExampleObject> {
-	const db = createTestDatabase(connectionId);
-
-	const exampleObject = {
-		name: params.name,
-		description: params.description,
-		userId: params.userId,
-		organizationId: params.organizationId
-	};
-
-	const [created] = await db
-		.insert(exampleSchema.exampleObjectsTable)
-		.values(exampleObject)
-		.returning();
-	return created;
 }
 
 /**
@@ -475,16 +407,6 @@ export interface TestMember {
 	createdAt: Date;
 }
 
-export interface TestExampleObject {
-	id: number;
-	name: string;
-	description: string | null;
-	userId: string;
-	organizationId: string | null;
-	createdAt: Date;
-	updatedAt: Date;
-}
-
 export interface TestFixtures {
 	users: {
 		user1: TestUser;
@@ -492,7 +414,6 @@ export interface TestFixtures {
 		admin: TestUser;
 	};
 	organization: TestOrganization;
-	exampleObjects: TestExampleObject[];
 }
 
 /**
