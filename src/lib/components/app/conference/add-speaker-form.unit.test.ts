@@ -23,7 +23,12 @@ const statusOptions = [
 describe('add speaker form', () => {
 	it('posts to ?/add with every roster field and a default status', () => {
 		const { body } = render(AddForm, {
-			props: { statusOptions, busy: false, enhanceForm: (() => ({})) as never }
+			props: {
+				statusOptions,
+				busy: false,
+				enhanceForm: (() => ({})) as never,
+				form: null
+			}
 		});
 
 		expect(body).toContain('action="?/add"');
@@ -34,5 +39,19 @@ describe('add speaker form', () => {
 		expect(body).toContain('data-testid="add-company"');
 		expect(body).toContain('data-testid="add-bio"');
 		expect(body).toContain('Add to roster');
+	});
+
+	it('renders a scoped add error in place, so it is not lost behind the dialog', () => {
+		const { body } = render(AddForm, {
+			props: {
+				statusOptions,
+				busy: false,
+				enhanceForm: (() => ({})) as never,
+				form: { scope: 'add', error: 'That speaker is already on this conference roster.' }
+			}
+		});
+
+		expect(body).toContain('data-testid="add-error"');
+		expect(body).toContain('That speaker is already on this conference roster.');
 	});
 });

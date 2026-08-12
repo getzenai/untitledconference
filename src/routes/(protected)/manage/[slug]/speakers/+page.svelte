@@ -137,6 +137,7 @@
 						{filtered}
 						filters={data.filters}
 						{busy}
+						{form}
 						enhanceForm={submitting(() => (composeOpen = false))}
 					/>
 				</Dialog.Content>
@@ -159,6 +160,7 @@
 					<AddSpeakerForm
 						{statusOptions}
 						{busy}
+						{form}
 						enhanceForm={submitting(() => (addOpen = false))}
 					/>
 				</Dialog.Content>
@@ -187,8 +189,9 @@
 </div>
 
 <div class="space-y-6 px-6 py-5">
-	{#if form?.scope === 'import'}
-		<!-- Nothing here: the import answers inside its own dialog, above. -->
+	{#if form?.scope === 'import' || form?.scope === 'add' || form?.scope === 'compose'}
+		<!-- Scoped actions answer inside their own dialog: import, compose and add
+			 render the result where the click was, never behind the overlay. -->
 	{:else if form?.error}
 		<p
 			class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"

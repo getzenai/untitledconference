@@ -15,12 +15,14 @@
 	let {
 		statusOptions,
 		busy,
-		enhanceForm
+		enhanceForm,
+		form
 	}: {
 		statusOptions: { value: string; label: string }[];
 		busy: boolean;
 		/** The page's shared enhanced-action handler (disables with the other forms). */
 		enhanceForm: Parameters<typeof enhance>[1];
+		form: { scope?: string; message?: string; error?: string } | null;
 	} = $props();
 </script>
 
@@ -82,4 +84,22 @@
 	<div class="sm:col-span-2">
 		<Button type="submit" size="sm" disabled={busy} data-testid="add-submit">Add to roster</Button>
 	</div>
+
+	{#if form?.scope === 'add' && form?.error}
+		<p
+			class="border-status-bad text-status-bad rounded-md border px-3 py-2 text-sm sm:col-span-2"
+			role="alert"
+			data-testid="add-error"
+		>
+			{form.error}
+		</p>
+	{:else if form?.scope === 'add' && form?.message}
+		<p
+			class="border-status-good text-status-good rounded-md border px-3 py-2 text-sm sm:col-span-2"
+			role="status"
+			data-testid="add-message"
+		>
+			{form.message}
+		</p>
+	{/if}
 </form>

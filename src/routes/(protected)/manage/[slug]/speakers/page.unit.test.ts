@@ -151,7 +151,8 @@ describe('speaker roster page', () => {
 		expect(body).not.toContain('text-status-good');
 	});
 
-	it('never shows an import-scoped answer on the page banner — it lives in the dialog', () => {
+	it('never shows a dialog-scoped answer on the page banner — it lives beside the click', () => {
+		// Import answers inside its own dialog.
 		const { body } = render(Page, {
 			props: {
 				data: {
@@ -174,10 +175,40 @@ describe('speaker roster page', () => {
 			}
 		});
 
-		// The page banner is suppressed for the import scope; the answer renders
-		// inside SpeakerImport (in the dialog), not twice under the overlay.
 		expect(body).not.toContain('data-testid="speakers-message"');
 		expect(body).not.toContain('data-testid="speakers-error"');
 		expect(body).not.toContain('Imported 12 speakers.');
+
+		// Compose and add scoped failures must not surface here either: the dialog
+		// stays open on failure, so a page banner would sit behind the overlay —
+		// the double-confirmation this class of bug is about (#220 review round 2).
+		for (const scope of ['add', 'compose'] as const) {
+			const failed = render(Page, {
+				props: {
+					data: {
+						user: { id: 'organizer-1', name: 'Jordan' },
+						impersonating: null,
+						analytics: { apiKey: undefined, host: undefined },
+						conference,
+						speakers: [],
+						filters: {},
+						counts: {
+							total: 0,
+							invited: 0,
+							confirmed: 0,
+							declined: 0,
+							cancelled: 0
+						},
+						statuses: ['invited', 'confirmed', 'declined', 'cancelled']
+					} as never,
+					form: { scope, error: `A ${scope} error.` }
+				}
+			});
+
+			expect(failed.body).not.toContain('data-testid="speakers-message"');
+			expect(failed.body).not.toContain('data-testid="speakers-error"');
+			expect(failed.body).not.toContain('A add error.');
+			expect(failed.body).not.toContain('A compose error.');
+		}
 	});
 });

@@ -21,7 +21,8 @@ describe('speaker compose form', () => {
 				filtered: true,
 				filters: { q: 'ada', status: 'confirmed' },
 				busy: false,
-				enhanceForm: (() => ({})) as never
+				enhanceForm: (() => ({})) as never,
+				form: null
 			}
 		});
 
@@ -42,12 +43,29 @@ describe('speaker compose form', () => {
 				filtered: false,
 				filters: {},
 				busy: false,
-				enhanceForm: (() => ({})) as never
+				enhanceForm: (() => ({})) as never,
+				form: null
 			}
 		});
 
 		expect(body).toContain('2 recipients with an email address');
 		expect(body).not.toContain('in the current filter');
 		expect(body).toContain('Send to 2 speakers');
+	});
+
+	it('renders a scoped compose error in place, so it is not lost behind the dialog', () => {
+		const { body } = render(Compose, {
+			props: {
+				recipients: 0,
+				filtered: false,
+				filters: {},
+				busy: false,
+				enhanceForm: (() => ({})) as never,
+				form: { scope: 'compose', error: 'No speakers in this filter have an email address.' }
+			}
+		});
+
+		expect(body).toContain('data-testid="compose-error"');
+		expect(body).toContain('No speakers in this filter have an email address.');
 	});
 });

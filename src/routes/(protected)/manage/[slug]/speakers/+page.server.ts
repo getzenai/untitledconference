@@ -121,12 +121,15 @@ export const actions: Actions = {
 
 		if (!result.ok) {
 			if (result.reason === 'already_on_roster') {
-				return fail(400, { error: 'That speaker is already on this conference roster.' });
+				return fail(400, {
+					scope: 'add',
+					error: 'That speaker is already on this conference roster.'
+				});
 			}
 			if (result.reason === 'invalid') {
-				return fail(400, { error: result.message });
+				return fail(400, { scope: 'add', error: result.message });
 			}
-			return fail(400, { error: 'Could not add the speaker.' });
+			return fail(400, { scope: 'add', error: 'Could not add the speaker.' });
 		}
 
 		return { message: 'Speaker added to the roster.' };
@@ -223,10 +226,13 @@ export const actions: Actions = {
 	compose: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const mail = parseMail(await request.formData());
-		if (!mail.ok) return fail(400, { error: mail.error });
+		if (!mail.ok) return fail(400, { scope: 'compose', error: mail.error });
 		const queued = await queueSpeakerMail(conference.id, mail.filters, mail.subject, mail.body);
 		if (queued.queued === 0) {
-			return fail(400, { error: 'No speakers in this filter have an email address.' });
+			return fail(400, {
+				scope: 'compose',
+				error: 'No speakers in this filter have an email address.'
+			});
 		}
 		const dispatch = await dispatchConferenceEmails(conference.id);
 		return { message: deliveryMessage(queued, dispatch) };
