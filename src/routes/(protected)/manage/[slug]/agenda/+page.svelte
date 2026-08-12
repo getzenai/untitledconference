@@ -104,6 +104,9 @@
 	);
 
 	const unscheduled = $derived(board.tray.length);
+	const autoPlaceHint = $derived(
+		`Places the ${unscheduled} waiting ${unscheduled === 1 ? 'talk' : 'talks'} into free slots. Nothing already on the grid moves.`
+	);
 	const everythingPublished = $derived(
 		board.placed.length > 0 && board.placed.every((p) => p.status === 'confirmed')
 	);
@@ -298,6 +301,11 @@
 					Fill the empty slots
 				</Button>
 			</form>
+			{#if unscheduled > 0}
+				<p class="text-muted-foreground text-xs" data-testid="agenda-autoplace-hint">
+					{autoPlaceHint}
+				</p>
+			{/if}
 			<form method="POST" action="?/publish" use:enhance={submitting}>
 				<input type="hidden" name="published" value={everythingPublished ? 'false' : 'true'} />
 				<Button type="submit" disabled={busy || board.placed.length === 0}>
