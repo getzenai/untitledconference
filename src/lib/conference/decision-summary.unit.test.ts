@@ -151,4 +151,10 @@ describe('describeBulkAssign', () => {
 			'1 assignment created. 2 submissions could not be assigned to that reviewer.'
 		);
 	});
+
+	it('names recusals bulk left alone so the organizer sees the override that did not happen', () => {
+		expect(describeBulkAssign({ created: 40, already: 0, skipped: 0, recused: 3 })).toBe(
+			'40 assignments created. 3 recused seats left alone — flip each on the submission if you mean to override.'
+		);
+	});
 });
