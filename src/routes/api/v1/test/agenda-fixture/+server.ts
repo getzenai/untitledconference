@@ -43,8 +43,15 @@ type FixtureRequest = {
 	name?: string;
 	/** ISO calendar dates. One day is enough for a grid; two exercise the tabs. */
 	days?: string[];
-	/** Titles of the accepted submissions that should land in the tray. */
+	/** Titles of the submissions that should land in the tray (or the table). */
 	sessions?: string[];
+	/**
+	 * Status for every session in this fixture. Defaults to `accepted` so the
+	 * agenda tray still fills the way it always has. Specs that exercise the
+	 * still-to-review filter pass `submitted`: accepted talks are decisions, not
+	 * review work, and would never show under that filter.
+	 */
+	sessionStatus?: 'submitted' | 'in_review' | 'accepted';
 	/**
 	 * Which of those titles already carry a handed-in review (#122).
 	 *
@@ -92,22 +99,25 @@ async function addTracks(conferenceId: number, names: string[]): Promise<number[
 }
 
 /**
- * One accepted submission with a speaker on it.
+ * One submission with a speaker on it.
  *
- * Accepted with no placement row: `backfillTray` in the agenda load turns
- * exactly that state into a tray entry, which is the path a real acceptance
- * takes. Inserting a placement here directly would skip it.
+ * Default status is `accepted` with no placement row: `backfillTray` in the
+ * agenda load turns exactly that state into a tray entry, which is the path a
+ * real acceptance takes. Inserting a placement here directly would skip it.
+ * Callers that need live-pipeline rows (still-to-review) pass a different status.
  */
-async function addAcceptedSession(
+async function addSession(
 	conferenceId: number,
 	organizationId: string,
 	title: string,
 	index: number,
-	trackId: number | null = null
+	trackId: number | null = null,
+	status: 'submitted' | 'in_review' | 'accepted' = 'accepted'
 ): Promise<void> {
+	const decided = status === 'accepted' ? new Date() : null;
 	const [submission] = await db
 		.insert(submissionTable)
-		.values({ conferenceId, title, status: 'accepted', decidedAt: new Date(), trackId })
+		.values({ conferenceId, title, status, decidedAt: decided, trackId })
 		.returning();
 
 	const [speaker] = await db
@@ -175,6 +185,7 @@ type Fixture = {
 	name: string;
 	days: string[];
 	sessions: string[];
+	sessionStatus: 'submitted' | 'in_review' | 'accepted';
 	reviewed: string[];
 	tracks: string[];
 };
@@ -189,6 +200,7 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		name: body.name ?? 'Fixture Conference',
 		days: body.days ?? DEFAULT_DAYS,
 		sessions: body.sessions ?? DEFAULT_SESSIONS,
+		sessionStatus: body.sessionStatus ?? 'accepted',
 		reviewed: body.reviewed ?? [],
 		tracks: body.tracks ?? []
 	};
@@ -229,12 +241,13 @@ export const POST: RequestHandler = async ({ request }) => {
 	for (const [index, title] of sessions.entries()) {
 		// Only the first session gets the first track, so a filter that ignores its
 		// parameter and returns everything is distinguishable from one that works.
-		await addAcceptedSession(
+		await addSession(
 			conference.id,
 			organizationId,
 			title,
 			index,
-			index === 0 ? (trackIds[0] ?? null) : null
+			index === 0 ? (trackIds[0] ?? null) : null,
+			fixture.sessionStatus
 		);
 	}
 

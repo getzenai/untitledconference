@@ -41,6 +41,9 @@ describe('Submissions table', () => {
 					slug,
 					days: ['2028-05-10'],
 					sessions: ['Zeta talk', 'Middle talk', 'Alpha talk'],
+					// Live pipeline, not accepted: still-to-review only includes
+					// submitted/in_review. Accepted talks are decisions and never match.
+					sessionStatus: 'submitted',
 					// One track, on 'Zeta talk' only — a track filter that ignores its
 					// parameter returns all three and is caught.
 					tracks: ['Platform'],
