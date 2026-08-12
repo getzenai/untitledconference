@@ -382,6 +382,21 @@
 								{#if item.formatName}<span class="px-1">·</span>{item.formatName}{/if}
 								<span class="px-1">·</span>{item.minutes} min
 							</p>
+							{#if item.submissionStatus === 'rejected'}
+								<p
+									class="text-status-bad mt-1.5 text-xs font-medium"
+									data-testid="rejected-placement-badge"
+								>
+									Declined — still placed
+								</p>
+							{:else if item.submissionStatus === 'waitlisted'}
+								<p
+									class="text-status-warn mt-1.5 text-xs font-medium"
+									data-testid="rejected-placement-badge"
+								>
+									Waitlisted — still placed
+								</p>
+							{/if}
 
 							<p class="text-muted-foreground mt-2 text-xs">
 								Drag it onto the grid, or open a slot to put it there.
@@ -585,6 +600,23 @@
 															{session.status === 'confirmed' ? 'Published' : 'Draft'}
 														</Badge>
 													</span>
+													{#if session.submissionStatus === 'rejected'}
+														<span
+															class="text-status-bad block min-w-0 text-xs font-medium"
+															data-testid="rejected-placement-badge"
+															title="This talk was declined but its slot remains — remove or reassign it."
+														>
+															Declined
+														</span>
+													{:else if session.submissionStatus === 'waitlisted'}
+														<span
+															class="text-status-warn block min-w-0 text-xs font-medium"
+															data-testid="rejected-placement-badge"
+															title="This talk is waitlisted but its slot remains — remove or reassign it."
+														>
+															Waitlisted
+														</span>
+													{/if}
 
 													{#each clashes as clash, ci (ci)}
 														<span

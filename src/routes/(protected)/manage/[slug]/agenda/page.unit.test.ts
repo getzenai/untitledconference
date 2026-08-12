@@ -130,6 +130,7 @@ describe('agenda card text overflow (#154)', () => {
 		title,
 		kind: 'talk',
 		status: 'tentative',
+		submissionStatus: 'accepted',
 		trackName: 'Platform Engineering',
 		formatName: 'Talk',
 		minutes: 30,
@@ -167,5 +168,17 @@ describe('agenda card text overflow (#154)', () => {
 		// Full conflict text stays on the element for hover / AT even if clipped.
 		expect(body).toContain(`title="${conflictDetail}"`);
 		expect(body).toContain(`title="${longTitle}"`);
+	});
+
+	it('marks a declined talk that still has a slot (#9)', () => {
+		const declined: BoardSession = {
+			...placedSession(9, 'A talk that was declined after scheduling'),
+			status: 'confirmed',
+			submissionStatus: 'rejected'
+		};
+		const body = renderWith(1, 1, { placed: [declined], tray: [] });
+
+		expect(body).toContain('data-testid="rejected-placement-badge"');
+		expect(body).toContain('Declined');
 	});
 });
