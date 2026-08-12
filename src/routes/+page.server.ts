@@ -15,9 +15,14 @@ import type { PageServerLoad } from './$types';
  * It lists rather than redirects to the single conference on purpose. The app is
  * multi-tenant — a redirect would have to pick a favourite, and would start
  * lying the moment a second organizer published.
+ *
+ * `?home=0` is the way back out (#237). The redirect stays the default — that part
+ * was right — but a signed-in user who follows a link to the product page, or wants
+ * to re-read what this promises before recommending it, hit a wall with no way
+ * around it. One bypass, spelled the way it reads: do not send me home.
  */
-export const load: PageServerLoad = async ({ locals }) => {
-	if (locals.user) redirect(303, '/home');
+export const load: PageServerLoad = async ({ locals, url }) => {
+	if (locals.user && url.searchParams.get('home') !== '0') redirect(303, '/home');
 
 	return { conferences: await publicConferenceDirectory() };
 };
