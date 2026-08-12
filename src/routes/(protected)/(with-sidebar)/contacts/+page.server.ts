@@ -8,6 +8,7 @@
  * on the same org-level surface. Segments re-apply saved filters (dynamic).
  */
 import { readSpeakerCsv } from '$lib/conference/speaker-csv';
+import { duplicateNameIds } from '$lib/server/conference/contact-merge';
 import {
 	contactFilterOptions,
 	createContact,
@@ -71,7 +72,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			organizationId: null as string | null,
 			canManage: false,
 			overview: emptyOverview,
-			segments: []
+			segments: [],
+			duplicateIds: [] as number[]
 		};
 	}
 
@@ -82,11 +84,12 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			: orgIds[0];
 
 	const filters = parseFilters(url);
-	const [contacts, filterOptions, overview, segments] = await Promise.all([
+	const [contacts, filterOptions, overview, segments, dupIds] = await Promise.all([
 		listContacts(userId, filters),
 		contactFilterOptions(userId),
 		getCrmOverview(userId),
-		listSegments(userId)
+		listSegments(userId),
+		duplicateNameIds(userId)
 	]);
 
 	return {
@@ -96,7 +99,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		organizationId,
 		canManage: true,
 		overview,
-		segments
+		segments,
+		duplicateIds: [...dupIds]
 	};
 };
 
