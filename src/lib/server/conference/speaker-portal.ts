@@ -201,7 +201,11 @@ export async function mySubmission(userId: string, submissionId: number) {
 
 	const [answers, speakers] = await Promise.all([
 		db
-			.select({ label: formFieldTable.label, value: submissionAnswerTable.value })
+			.select({
+				label: formFieldTable.label,
+				kind: formFieldTable.kind,
+				value: submissionAnswerTable.value
+			})
 			.from(submissionAnswerTable)
 			.innerJoin(formFieldTable, eq(formFieldTable.id, submissionAnswerTable.formFieldId))
 			.where(eq(submissionAnswerTable.submissionId, submissionId))
