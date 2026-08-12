@@ -308,10 +308,19 @@
 			{/if}
 		</section>
 
-		<section class="border-border bg-card rounded-lg border p-5">
-			<div class="flex items-baseline justify-between">
+		<section class="border-border bg-card rounded-lg border p-5" data-testid="submission-reviews">
+			<div class="flex flex-wrap items-baseline justify-between gap-2">
 				<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Reviews</h2>
-				<span class="font-medium tabular-nums">Ø {formatScore(s.score)}</span>
+				<div class="flex flex-wrap items-center gap-3">
+					<span class="font-medium tabular-nums">Ø {formatScore(s.score)}</span>
+					<a
+						class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
+						href="{base}/rounds"
+						data-testid="edit-scorecard-link"
+					>
+						Scorecard &amp; weights
+					</a>
+				</div>
 			</div>
 
 			{#if s.reviews.length === 0}
@@ -380,7 +389,7 @@
 					<p class="text-muted-foreground text-sm">
 						Reviews are written by the reviewers assigned below. To write one yourself, take a
 						reviewer seat in
-						<a class="underline underline-offset-4" href="{base}/people">Team &amp; reviewers</a>
+						<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>
 						<!--
 							The second half names the step that is actually next: with no round
 							yet, "assign yourself to a round" points at a control that is not
@@ -468,14 +477,14 @@
 	</div>
 
 	<div class="space-y-4">
-		<section class="border-border bg-card rounded-lg border p-4">
+		<section class="border-border bg-card rounded-lg border p-4" data-testid="submission-speakers">
 			<h2 class="text-sm font-medium">{s.speakers.length === 1 ? 'Speaker' : 'Speakers'}</h2>
 			{#if s.speakers.length === 0}
 				<p class="text-muted-foreground mt-2 text-sm">No speaker on this submission.</p>
 			{:else}
 				<ul class="mt-2 space-y-3">
 					{#each s.speakers as speaker (speaker.id)}
-						<li class="flex items-center gap-3">
+						<li class="flex items-center gap-3" data-testid="speaker-row">
 							{#if speaker.headshotUrl}
 								<img
 									src={speaker.headshotUrl}
@@ -492,11 +501,26 @@
 							{/if}
 							<div class="min-w-0 text-sm">
 								<div class="font-medium">{speaker.name}</div>
-								<div class="text-muted-foreground truncate">
-									{[speaker.jobTitle, speaker.company].filter(Boolean).join(', ') ||
-										speaker.roleLabel ||
-										'—'}
-								</div>
+								<!--
+									ABS-11: the CFP stores roleLabel on co-presenters, but job title /
+									company used to win the single subtitle line and hide the role
+									entirely whenever either was set. Role is its own line so it is
+									always visible when the submitter gave one.
+								-->
+								{#if speaker.roleLabel}
+									<div class="text-muted-foreground text-xs" data-testid="speaker-role">
+										{speaker.roleLabel}
+									</div>
+								{:else if speaker.isPrimary}
+									<div class="text-muted-foreground text-xs" data-testid="speaker-role">
+										Primary speaker
+									</div>
+								{/if}
+								{#if speaker.jobTitle || speaker.company}
+									<div class="text-muted-foreground truncate text-xs">
+										{[speaker.jobTitle, speaker.company].filter(Boolean).join(', ')}
+									</div>
+								{/if}
 							</div>
 						</li>
 					{/each}

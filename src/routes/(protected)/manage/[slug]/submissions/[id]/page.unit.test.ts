@@ -27,6 +27,15 @@ type Extras = {
 	form?: ActionData;
 	keyTakeaway?: string | null;
 	audienceLevel?: string | null;
+	speakers?: {
+		id: number;
+		name: string;
+		jobTitle: string | null;
+		company: string | null;
+		headshotUrl: string | null;
+		isPrimary: boolean;
+		roleLabel: string | null;
+	}[];
 };
 
 function renderPage(
@@ -60,7 +69,7 @@ function renderPage(
 					sessionMinutes: null,
 					sponsorTier: null,
 					sponsorNote: null,
-					speakers: [],
+					speakers: extras.speakers ?? [],
 					answers: [],
 					reviews: [],
 					score: null,
@@ -198,6 +207,57 @@ describe('the organizer own-review door', () => {
 
 		expect(noRounds).toContain('create a review round.');
 		expect(noRounds).not.toContain('assign yourself to a round');
+	});
+});
+
+/**
+ * ABS-11: co-author role on the organizer detail.
+ *
+ * The CFP stores roleLabel; the list only shows "Priya +1". The detail is where
+ * the role must appear — and it must not hide behind job title / company.
+ */
+describe('co-author roles on the detail (ABS-11)', () => {
+	it('shows the stored role even when job title and company are set', () => {
+		const body = renderPage('submitted', null, null, null, 'one', null, {
+			speakers: [
+				{
+					id: 1,
+					name: 'Priya Raman',
+					jobTitle: 'Staff Engineer',
+					company: 'Acme',
+					headshotUrl: null,
+					isPrimary: true,
+					roleLabel: null
+				},
+				{
+					id: 2,
+					name: 'Zoe Adler',
+					jobTitle: 'Principal',
+					company: 'Beta Co',
+					headshotUrl: null,
+					isPrimary: false,
+					roleLabel: 'Co-presenter'
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="submission-speakers"');
+		expect(body).toContain('Zoe Adler');
+		expect(body).toContain('data-testid="speaker-role"');
+		expect(body).toContain('Co-presenter');
+		// Job title must not replace the role — both should be on the page.
+		expect(body).toContain('Principal');
+		expect(body).toContain('Beta Co');
+		// Primary without a custom label still gets a readable role.
+		expect(body).toContain('Primary speaker');
+	});
+
+	it('points from the reviews block to the scorecard editor', () => {
+		const body = renderPage('submitted');
+
+		expect(body).toContain('data-testid="edit-scorecard-link"');
+		expect(body).toContain('href="/manage/test-conf/rounds"');
+		expect(body).toContain('Scorecard &amp; weights');
 	});
 });
 

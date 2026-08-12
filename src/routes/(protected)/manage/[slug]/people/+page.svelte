@@ -26,13 +26,17 @@
 </script>
 
 <svelte:head>
-	<title>Team &amp; reviewers — {data.conference.name}</title>
+	<title>Reviewer pool — {data.conference.name}</title>
 </svelte:head>
 
 <div class="border-border bg-card border-b px-6 py-5">
-	<h1 class="text-lg font-semibold tracking-tight">Team &amp; reviewers</h1>
+	<h1 class="text-lg font-semibold tracking-tight">Reviewer pool</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
-		Invite the committee, limit who reviews each track, and follow their assignments.
+		Invite the committee, limit who reviews each track, and follow their assignments. Scorecards and
+		weights for each round live under
+		<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/rounds"
+			>Rounds &amp; scorecards</a
+		>.
 	</p>
 </div>
 

@@ -91,14 +91,18 @@
 </script>
 
 <svelte:head>
-	<title>Review rounds — {data.conference.name}</title>
+	<title>Rounds &amp; scorecards — {data.conference.name}</title>
 </svelte:head>
 
 <div class="border-border bg-card border-b px-6 py-5">
-	<h1 class="text-lg font-semibold tracking-tight">Review rounds</h1>
+	<h1 class="text-lg font-semibold tracking-tight">Rounds &amp; scorecards</h1>
 	<p class="text-muted-foreground mt-0.5 text-sm">
-		A submission is assigned to reviewers within a round. Set the window, then build the scorecard —
-		criteria, types, and weights.
+		Each review round has its own open/close window and scorecard. Add criteria (rating, select, or
+		text), set their weights. A submission's average weights the criteria, then counts every
+		reviewer equally. Assign reviewers from the
+		<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/people"
+			>reviewer pool</a
+		>.
 	</p>
 </div>
 
