@@ -15,6 +15,20 @@ import {
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
+/**
+ * A round's window, read the way the call for papers reads its own (`cfp/+page.server.ts`).
+ *
+ * The page converts the picker's local wall time to an ISO instant before submitting,
+ * because only the browser knows which zone the organizer typed in. A submit without
+ * JavaScript sends bare wall time, and that is read as UTC — stated rather than pretended.
+ */
+const when = (form: FormData, name: string) => {
+	const raw = String(form.get(name) ?? '').trim();
+	if (!raw) return null;
+	const value = new Date(raw);
+	return Number.isNaN(value.getTime()) ? null : value;
+};
+
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 	return { rounds: await reviewRounds(conference.id) };
@@ -27,7 +41,9 @@ export const actions: Actions = {
 
 		const result = await addReviewRound(conference.id, {
 			name: String(form.get('name') ?? ''),
-			anonymized: form.get('anonymized') === 'on'
+			anonymized: form.get('anonymized') === 'on',
+			opensAt: when(form, 'opensAt'),
+			closesAt: when(form, 'closesAt')
 		});
 
 		if (!result.ok) return fail(400, { message: result.message });
@@ -43,7 +59,9 @@ export const actions: Actions = {
 
 		const result = await renameReviewRound(conference.id, id, {
 			name: String(form.get('name') ?? ''),
-			anonymized: form.get('anonymized') === 'on'
+			anonymized: form.get('anonymized') === 'on',
+			opensAt: when(form, 'opensAt'),
+			closesAt: when(form, 'closesAt')
 		});
 
 		if (!result.ok) return fail(400, { message: result.message });
