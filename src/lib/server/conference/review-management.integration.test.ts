@@ -18,6 +18,8 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+	assignReviewerToSubmissions,
+	conferenceAssignmentTargets,
 	queueReviewReminder,
 	reviewAssignmentMatrix,
 	reviewerProgress,
@@ -164,6 +166,65 @@ describe('organizer reviewer assignments', () => {
 		expect(
 			after[0].reviewers.find((reviewer) => reviewer.userId === CONFERENCE_REVIEWER)?.status
 		).toBe('assigned');
+	});
+
+	/**
+	 * ABS-06: one reviewer onto many selected submissions. Existing rows stay,
+	 * speaker/outsider pairs skip, and the matrix on each submission is the
+	 * source of truth after the batch.
+	 */
+	it('assigns one reviewer across several submissions without double-writing', async () => {
+		const [secondId] = (
+			await db
+				.insert(submissionTable)
+				.values({
+					conferenceId: conference.id,
+					title: `Bulk second ${suffix}`,
+					status: 'submitted'
+				})
+				.returning({ id: submissionTable.id })
+		).map((row) => row.id);
+
+		// Pre-assign one of the two so the batch reports "already".
+		expect(
+			await setReviewAssignment(conference.id, submissionId, roundId, CONFERENCE_REVIEWER, true)
+		).toBe('assigned');
+
+		const result = await assignReviewerToSubmissions(
+			conference.id,
+			[submissionId, secondId, secondId, otherSubmissionId],
+			roundId,
+			CONFERENCE_REVIEWER
+		);
+		// secondId created; submissionId already; otherSubmissionId is another
+		// conference → invalid/skipped. Duplicate id is de-duped.
+		expect(result).toEqual({ created: 1, already: 1, skipped: 1 });
+
+		const first = await reviewAssignmentMatrix(conference.id, submissionId);
+		const second = await reviewAssignmentMatrix(conference.id, secondId);
+		expect(
+			first[0].reviewers.find((reviewer) => reviewer.userId === CONFERENCE_REVIEWER)?.status
+		).toBe('assigned');
+		expect(
+			second[0].reviewers.find((reviewer) => reviewer.userId === CONFERENCE_REVIEWER)?.status
+		).toBe('assigned');
+
+		// Speaker on the first submission cannot take the seat via bulk either.
+		const speakerResult = await assignReviewerToSubmissions(
+			conference.id,
+			[submissionId],
+			roundId,
+			SPEAKER_REVIEWER
+		);
+		expect(speakerResult).toEqual({ created: 0, already: 0, skipped: 1 });
+
+		const targets = await conferenceAssignmentTargets(conference.id);
+		expect(targets).toHaveLength(1);
+		expect(targets[0].reviewers.map((reviewer) => reviewer.userId).sort()).toEqual(
+			[CONFERENCE_REVIEWER, ROUND_REVIEWER, SPEAKER_REVIEWER].sort()
+		);
+
+		await db.delete(submissionTable).where(eq(submissionTable.id, secondId));
 	});
 
 	it('enforces the committee track allow-list in both the matrix and the write', async () => {

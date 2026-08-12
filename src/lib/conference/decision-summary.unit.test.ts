@@ -1,7 +1,12 @@
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import type { DecisionResult } from '$lib/server/conference/decisions';
 import { describe, expect, it } from 'vitest';
-import { describeDecision, describeNotification, notificationTone } from './decision-summary';
+import {
+	describeBulkAssign,
+	describeDecision,
+	describeNotification,
+	notificationTone
+} from './decision-summary';
 
 const result = (over: Partial<DecisionResult> = {}): DecisionResult => ({
 	decided: 0,
@@ -125,5 +130,25 @@ describe('describeNotification', () => {
 				})
 			)
 		).toBe('good');
+	});
+});
+
+describe('describeBulkAssign', () => {
+	it('names created and already-assigned rows the way the DoD reads them', () => {
+		expect(describeBulkAssign({ created: 3, already: 2, skipped: 0 })).toBe(
+			'3 assignments created. 2 already assigned, left untouched.'
+		);
+	});
+
+	it('stays honest when everything was already assigned', () => {
+		expect(describeBulkAssign({ created: 0, already: 4, skipped: 0 })).toBe(
+			'4 already assigned, left untouched.'
+		);
+	});
+
+	it('counts ineligible pairs without claiming they landed', () => {
+		expect(describeBulkAssign({ created: 1, already: 0, skipped: 2 })).toBe(
+			'1 assignment created. 2 submissions could not be assigned to that reviewer.'
+		);
 	});
 });
