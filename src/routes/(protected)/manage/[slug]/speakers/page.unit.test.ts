@@ -44,19 +44,8 @@ const speaker = {
 	hasAccount: false
 };
 
-const baseData = {
-	user: { id: 'organizer-1', name: 'Jordan' },
-	impersonating: null,
-	analytics: { apiKey: undefined, host: undefined },
-	conference,
-	speakers: [],
-	filters: {},
-	counts: { total: 0, invited: 0, confirmed: 0, declined: 0, cancelled: 0 },
-	statuses: ['invited', 'confirmed', 'declined', 'cancelled']
-};
-
 describe('speaker roster page', () => {
-	it('lists speakers with identity and status controls, plus add form', () => {
+	it('lists speakers at rest — roster and filters visible, writes behind dialogs', () => {
 		const { body } = render(Page, {
 			props: {
 				data: {
@@ -81,19 +70,26 @@ describe('speaker roster page', () => {
 
 		expect(body).toContain('data-testid="speakers-table"');
 		expect(body).toContain('data-testid="speakers-filters"');
+		// The write entry points are present as triggers…
 		expect(body).toContain('data-testid="speakers-add"');
+		expect(body).toContain('data-testid="speaker-mail-open"');
+		expect(body).toContain('data-testid="speakers-import-open"');
 		expect(body).toContain('Priya Raman');
 		expect(body).toContain('priya@example.com');
 		expect(body).toContain('Staff Engineer');
 		expect(body).toContain('Acme');
-		expect(body).toContain('action="?/add"');
 		expect(body).toContain('action="?/setStatus"');
 		expect(body).toContain('data-testid="speaker-status-select"');
 		expect(body).toContain('data-testid="speakers-search"');
 		expect(body).toContain('data-testid="speakers-status-filter"');
-		expect(body).toContain('data-testid="speaker-mail-compose"');
-		expect(body).toContain('action="?/compose"');
-		expect(body).toContain('Send to 1 speaker');
+		// …but at rest the write forms themselves are behind dialogs, not in the DOM.
+		expect(body).not.toContain('action="?/add"');
+		expect(body).not.toContain('action="?/compose"');
+		expect(body).not.toContain('action="?/import"');
+		expect(body).not.toContain('data-testid="add-name"');
+		expect(body).not.toContain('data-testid="speaker-mail-body"');
+		expect(body).not.toContain('data-testid="import-csv"');
+		expect(body).not.toContain('Send to 1 speaker');
 	});
 
 	it('shows empty state when the roster has no rows', () => {
@@ -154,43 +150,65 @@ describe('speaker roster page', () => {
 		expect(body).not.toContain('data-testid="speakers-message"');
 		expect(body).not.toContain('text-status-good');
 	});
-	it('offers both ways into an import: a file and a paste box, one action', () => {
-		const { body } = render(Page, {
-			props: { data: baseData as never, form: null }
-		});
 
-		expect(body).toContain('data-testid="speakers-import"');
-		expect(body).toContain('action="?/import"');
-		expect(body).toContain('enctype="multipart/form-data"');
-		expect(body).toContain('data-testid="import-file"');
-		expect(body).toContain('data-testid="import-csv"');
-	});
-
-	it('answers an import inside the import section, not a screen away at the top', () => {
+	it('never shows a dialog-scoped answer on the page banner — it lives beside the click', () => {
+		// Import answers inside its own dialog.
 		const { body } = render(Page, {
 			props: {
-				data: baseData as never,
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [],
+					filters: {},
+					counts: {
+						total: 0,
+						invited: 0,
+						confirmed: 0,
+						declined: 0,
+						cancelled: 0
+					},
+					statuses: ['invited', 'confirmed', 'declined', 'cancelled']
+				} as never,
 				form: { scope: 'import', message: 'Imported 12 speakers.' }
 			}
 		});
 
-		expect(body).toContain('data-testid="import-message"');
-		expect(body).toContain('Imported 12 speakers.');
-		// The page-level banner stays out of it: two confirmations of one submit,
-		// one of them off-screen, is what sends somebody reloading to check.
 		expect(body).not.toContain('data-testid="speakers-message"');
-	});
-
-	it('renders a refused import as an alert in the same place', () => {
-		const { body } = render(Page, {
-			props: {
-				data: baseData as never,
-				form: { scope: 'import', error: 'Row 7 has no name. Every speaker needs one.' }
-			}
-		});
-
-		expect(body).toContain('data-testid="import-error"');
-		expect(body).toContain('Row 7 has no name.');
 		expect(body).not.toContain('data-testid="speakers-error"');
+		expect(body).not.toContain('Imported 12 speakers.');
+
+		// Compose and add scoped failures must not surface here either: the dialog
+		// stays open on failure, so a page banner would sit behind the overlay —
+		// the double-confirmation this class of bug is about (#220 review round 2).
+		for (const scope of ['add', 'compose'] as const) {
+			const failed = render(Page, {
+				props: {
+					data: {
+						user: { id: 'organizer-1', name: 'Jordan' },
+						impersonating: null,
+						analytics: { apiKey: undefined, host: undefined },
+						conference,
+						speakers: [],
+						filters: {},
+						counts: {
+							total: 0,
+							invited: 0,
+							confirmed: 0,
+							declined: 0,
+							cancelled: 0
+						},
+						statuses: ['invited', 'confirmed', 'declined', 'cancelled']
+					} as never,
+					form: { scope, error: `A ${scope} error.` }
+				}
+			});
+
+			expect(failed.body).not.toContain('data-testid="speakers-message"');
+			expect(failed.body).not.toContain('data-testid="speakers-error"');
+			expect(failed.body).not.toContain('A add error.');
+			expect(failed.body).not.toContain('A compose error.');
+		}
 	});
 });
