@@ -252,6 +252,25 @@
 					<span class="text-foreground">· {data.pagination.matching} match the filter</span>
 				{/if}
 			</p>
+			<!--
+				Named doors into the rest of abstract management. The rail has them too,
+				but an agent (or organizer) sitting on this table is hunting by word —
+				scorecard, weight, pool, export — and those words used to appear only
+				after a second click into a vaguely labelled section.
+			-->
+			<p
+				class="text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs"
+				data-testid="submissions-abs-links"
+			>
+				<a class="underline underline-offset-4" href="{base}/rounds">Scorecards &amp; weights</a>
+				<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>
+				<a
+					class="underline underline-offset-4"
+					href={exportHref}
+					download
+					data-testid="export-csv-inline">Export scores (CSV)</a
+				>
+			</p>
 		</div>
 		<div class="flex gap-2">
 			<!-- The file is the view: same filters, same order, every matching row. The
@@ -261,7 +280,7 @@
 			     rail now, on every organizer page, so this row keeps just the action
 			     that belongs to this screen. -->
 			<Button href={exportHref} variant="outline" download data-testid="export-csv">
-				Export CSV
+				Export scores (CSV)
 			</Button>
 		</div>
 	</div>

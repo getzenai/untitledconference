@@ -104,3 +104,32 @@ describe('draft state in the shell', () => {
 		expect(body).toContain('href="/c/devflow-2028"');
 	});
 });
+
+/**
+ * Labels name the work, not only the route. An agent hunting "scorecard" or
+ * "reviewer pool" used to find neither word on the rail.
+ */
+describe('abstract-management labels on the rail', () => {
+	it('names scorecards and the reviewer pool on the destinations that hold them', () => {
+		const empty = (() => '') as unknown as import('svelte').Snippet;
+		const { body } = render(Layout, {
+			props: {
+				data: {
+					conference,
+					user: { id: 'owner-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined }
+				} as never,
+				children: empty
+			}
+		});
+
+		expect(body).toContain('Rounds &amp; scorecards');
+		expect(body).toContain('href="/manage/devflow-2028/rounds"');
+		expect(body).toContain('Reviewer pool');
+		expect(body).toContain('href="/manage/devflow-2028/people"');
+		// Old vague labels that hid the work behind a second click.
+		expect(body).not.toContain('>Review rounds<');
+		expect(body).not.toContain('>Team &amp; reviewers<');
+	});
+});

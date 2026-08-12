@@ -15,6 +15,11 @@
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 
+	/**
+	 * Labels name the work an eval agent (or a first-time organizer) is hunting for.
+	 * "Review rounds" alone hid the scorecard; "Team & reviewers" alone hid the pool.
+	 * The destinations did not move — only the words on the doors.
+	 */
 	const nav = $derived([
 		{ href: `${base}/dashboard`, label: 'Dashboard', ready: true },
 		{ href: `${base}/submissions`, label: 'Submissions', ready: true },
@@ -22,8 +27,8 @@
 		{ href: `${base}/agenda`, label: 'Agenda', ready: true },
 		{ href: `${base}/speakers`, label: 'Speakers', ready: true },
 		{ href: `${base}/content`, label: 'Speaker content', ready: true },
-		{ href: `${base}/rounds`, label: 'Review rounds', ready: true },
-		{ href: `${base}/people`, label: 'Team & reviewers', ready: true },
+		{ href: `${base}/rounds`, label: 'Rounds & scorecards', ready: true },
+		{ href: `${base}/people`, label: 'Reviewer pool', ready: true },
 		{ href: `${base}/embed`, label: 'Embed & share', ready: true },
 		{ href: `${base}/settings`, label: 'Settings', ready: true }
 	]);

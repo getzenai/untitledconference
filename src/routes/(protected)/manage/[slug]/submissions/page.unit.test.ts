@@ -136,6 +136,22 @@ describe('organizer submission decisions', () => {
 		expect(body).not.toContain('formaction="?/assign"');
 	});
 
+	/**
+	 * Named doors off the table: scorecard, pool, export. The rail has them too;
+	 * this strip is for an agent already on Submissions hunting by word.
+	 */
+	it('names scorecards, the reviewer pool and the scores export from the header', () => {
+		const body = renderPage();
+
+		expect(body).toContain('data-testid="submissions-abs-links"');
+		expect(body).toContain('Scorecards &amp; weights');
+		expect(body).toContain('href="/manage/test-conf/rounds"');
+		expect(body).toContain('Reviewer pool');
+		expect(body).toContain('href="/manage/test-conf/people"');
+		expect(body).toContain('Export scores (CSV)');
+		expect(body).toContain('data-testid="export-csv"');
+	});
+
 	it('shows whether each current decision has been notified', () => {
 		const unsent = renderPage();
 		expect(unsent).toContain('Notification');
