@@ -27,7 +27,31 @@ const emptyDashboard = {
 	submissionsOverTime: []
 };
 
-function page(outstanding: number, reminderStatus: null | 'queued' = null) {
+type Reviewer = {
+	userId: string;
+	name: string;
+	email: string;
+	assigned: number;
+	submitted: number;
+	outstanding: number;
+	reminderStatus: null | 'queued' | 'sent';
+};
+
+const reviewer = (
+	userId: string,
+	outstanding: number,
+	reminderStatus: Reviewer['reminderStatus'] = null
+): Reviewer => ({
+	userId,
+	name: `Riley ${userId}`,
+	email: `${userId}@example.com`,
+	assigned: 3,
+	submitted: 3 - outstanding,
+	outstanding,
+	reminderStatus
+});
+
+function pageWith(items: Reviewer[]) {
 	return render(Page, {
 		props: {
 			data: {
@@ -38,20 +62,10 @@ function page(outstanding: number, reminderStatus: null | 'queued' = null) {
 				dashboard: {
 					...emptyDashboard,
 					reviews: {
-						assigned: 3,
-						submitted: 3 - outstanding,
-						outstanding,
-						items: [
-							{
-								userId: 'reviewer-1',
-								name: 'Riley Reviewer',
-								email: 'riley@example.com',
-								assigned: 3,
-								submitted: 3 - outstanding,
-								outstanding,
-								reminderStatus
-							}
-						]
+						assigned: items.reduce((sum, item) => sum + item.assigned, 0),
+						submitted: items.reduce((sum, item) => sum + item.submitted, 0),
+						outstanding: items.reduce((sum, item) => sum + item.outstanding, 0),
+						items
 					}
 				}
 			} as PageData,
@@ -60,13 +74,17 @@ function page(outstanding: number, reminderStatus: null | 'queued' = null) {
 	}).body;
 }
 
+function page(outstanding: number, reminderStatus: null | 'queued' = null) {
+	return pageWith([reviewer('reviewer-1', outstanding, reminderStatus)]);
+}
+
 describe('per-reviewer progress', () => {
 	it('shows assigned versus submitted and exposes a reminder for outstanding work', () => {
 		const body = page(2);
 
 		expect(body).toContain('Reviewer progress');
 		expect(body).toContain('1/3 submitted');
-		expect(body).toContain('action="?/remindReviewer"');
+		expect(body).toContain('formaction="?/remindReviewer"');
 		expect(body).toContain('Send reminder');
 	});
 
@@ -75,6 +93,41 @@ describe('per-reviewer progress', () => {
 
 		expect(body).toContain('Reminder queued');
 		expect(body).not.toContain('Send reminder');
+	});
+});
+
+/**
+ * ABS-09. The checkbox is the promise that the button will do something, so the
+ * cases that matter are the ones where it must NOT appear: a reviewer who is
+ * finished and a reviewer who is already carrying a reminder.
+ */
+describe('bulk reminders', () => {
+	it('offers a selection and a bulk action while somebody is behind', () => {
+		const body = pageWith([reviewer('reviewer-1', 2), reviewer('reviewer-2', 1)]);
+
+		expect(body).toContain('action="?/remindReviewers"');
+		expect(body).toContain('data-testid="send-reminders"');
+		expect(body).toContain('name="reviewerIds" value="reviewer-1"');
+		expect(body).toContain('name="reviewerIds" value="reviewer-2"');
+	});
+
+	it('leaves out the checkbox for reviewers a reminder would skip', () => {
+		const body = pageWith([
+			reviewer('behind', 2),
+			reviewer('done', 0),
+			reviewer('already-chased', 2, 'sent')
+		]);
+
+		expect(body).toContain('name="reviewerIds" value="behind"');
+		expect(body).not.toContain('value="done"');
+		expect(body).not.toContain('value="already-chased"');
+	});
+
+	it('hides the bulk bar entirely when nobody can be reminded', () => {
+		const body = pageWith([reviewer('done', 0)]);
+
+		expect(body).not.toContain('data-testid="reminder-bulk-bar"');
+		expect(body).not.toContain('data-testid="select-all-reviewers"');
 	});
 });
 
