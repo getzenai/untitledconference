@@ -27,8 +27,13 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { tick } from 'svelte';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import {
+		Tooltip,
+		TooltipContent,
+		TooltipProvider,
+		TooltipTrigger
+	} from '$lib/components/ui/tooltip';
 	import { blockRows, gridSlots, laneLayout, type GridFrame } from '$lib/conference/agenda-grid';
 	import { formatDayLong } from '$lib/conference/public-view';
 	import { DragController } from './drag-controller.svelte';
@@ -468,195 +473,246 @@
 					</label>
 				{/if}
 
-				<div class="overflow-x-auto">
-					<div class="flex w-full" bind:this={gridEl}>
-						<!-- The time axis. Its header spacer is fixed-height so the labels
-						     line up with the columns without measuring anything. -->
-						<div class="w-14 shrink-0">
-							<div class="h-9"></div>
-							<div class="relative" style="height: {gridHeight}">
-								{#each gutter as label (label.minutes)}
-									<span
-										class="text-muted-foreground border-border absolute inset-x-0 border-t pt-0.5 pr-2 text-right text-xs tabular-nums"
-										style="top: {label.top}"
-									>
-										{timeLabel(label.minutes)}
-									</span>
-								{/each}
-							</div>
-						</div>
-
-						{#each visibleRooms as room (room.id)}
-							<div
-								class="border-border min-w-36 flex-1 overflow-hidden border-l"
-								data-testid="agenda-room-card"
-								data-room-id={room.id}
-							>
-								<!--
-									The room name wins the width, because it is what tells an
-									organizer which column they are looking at. #166 stopped the row
-									from overflowing, but the button beside the name still refuses to
-									shrink, so in a 9rem column the name kept about forty pixels and
-									every heading on the grid read "M…", "R…", "W…". The public
-									agenda, which has no button in this row, shows the same rooms in
-									full — so it was never the width itself.
-
-									The button keeps its job, its testid and its place in the tab
-									order; only its label is now short, with the whole sentence in the
-									accessible name.
-								-->
-								<div class="flex h-9 min-w-0 items-center justify-between gap-1 px-1.5">
-									<h3 class="min-w-0 flex-1 truncate text-sm font-medium" title={room.name}>
-										{room.name}
-									</h3>
-									<Button
-										type="button"
-										size="sm"
-										variant="ghost"
-										class="h-6 shrink-0 px-1.5 text-xs"
-										aria-label="Open a slot in {room.name}"
-										title="Open a slot in {room.name}"
-										data-testid="agenda-open-slot-{room.id}"
-										onclick={() => openSlot(room, data.slots[0].minutes)}
-									>
-										+ slot
-									</Button>
-								</div>
-
-								<div class="relative min-w-0" data-column-body style="height: {gridHeight}">
-									<!--
-										One button per slot, all of them out of the tab order. The
-										keyboard route into a slot is the room's "Open a slot"
-										button and the editor's day/time/room selects; putting 36
-										empty cells per room into the tab sequence would bury it.
-									-->
-									{#each frame.slots as minutes, i (minutes)}
-										<button
-											type="button"
-											tabindex="-1"
-											aria-label="{room.name} at {timeLabel(minutes)}"
-											data-testid="agenda-slot-cell"
-											data-room-id={room.id}
-											data-start-minutes={minutes}
-											onclick={() => slotClicked(room, minutes)}
-											class="absolute inset-x-0 {i % LABEL_EVERY === 0
-												? 'border-border border-t'
-												: ''} {drag.hover?.roomId === room.id &&
-											drag.hover?.startMinutes === minutes
-												? 'bg-primary/20'
-												: 'hover:bg-muted/60'}"
-											style="top: {i * ROW_REM}rem; height: {ROW_REM}rem"
-										></button>
+				<!--
+					#219: with many rooms (World's Fair scale) column headers used to put
+					"+ slot" beside the name, so similar room prefixes all read "M…". Name
+					gets the full column width; the open-slot control sits under it. Published
+					vs draft is a border colour, not a badge that ate title width. Full strings
+					that CSS truncates come back via shadcn Tooltip (not title=).
+				-->
+				<TooltipProvider>
+					<div class="overflow-x-auto">
+						<div class="flex w-full" bind:this={gridEl}>
+							<!-- The time axis. Its header spacer matches the room-head height so
+							     gutter labels line up with the columns without measuring. -->
+							<div class="w-14 shrink-0">
+								<div class="h-14"></div>
+								<div class="relative" style="height: {gridHeight}">
+									{#each gutter as label (label.minutes)}
+										<span
+											class="text-muted-foreground border-border absolute inset-x-0 border-t pt-0.5 pr-2 text-right text-xs tabular-nums"
+											style="top: {label.top}"
+										>
+											{timeLabel(label.minutes)}
+										</span>
 									{/each}
+								</div>
+							</div>
 
-									{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
-										{@const rows = blockRows(frame, session)}
-										{@const clashes = clashesFor(session.placementId)}
-										{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
-										{#if rows}
+							{#each visibleRooms as room (room.id)}
+								<div
+									class="border-border min-w-36 flex-1 overflow-hidden border-l"
+									data-testid="agenda-room-card"
+									data-room-id={room.id}
+								>
+									<div
+										class="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
+										data-testid="agenda-room-head"
+									>
+										<Tooltip>
 											<!--
-												Title first — the clock is already on the grid axis, so the
-												card's job is the talk name. One truncated line + title=
-												keeps it readable even in a 15-minute slot; min-h-8 floors
-												the card so short durations do not collapse past that line.
-												min-w-0 + overflow-hidden still clip width (#154 / #166);
-												nothing here changes DnD keys or drop targets.
+												Room name is mouse-tooltip only — full name is already in the
+												DOM. TooltipTrigger defaults tabindex=0, which would add a
+												tab stop per room (World's Fair ≈ 20). Keep it out of the
+												sequence; the session card below stays a real control.
 											-->
-											<div
-												data-testid="agenda-placed-session"
-												data-placement-id={session.placementId}
-												class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
-												0
-													? 'border-status-bad bg-status-bad/10'
-													: 'border-border bg-card'} {drag.dragging?.placementId ===
-												session.placementId
-													? 'opacity-40'
-													: ''}"
-												style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
-													ROW_REM}rem; left: calc({(lane / lanes) *
-													100}% + 0.125rem); width: calc({100 /
-													lanes}% - 0.25rem); max-width: calc({100 / lanes}% - 0.25rem)"
-											>
-												<button
-													type="button"
-													data-testid="agenda-edit-slot-{session.placementId}"
-													onclick={() => slotClicked(room, session.startMinutes ?? 0)}
-													onpointerdown={(e) =>
-														drag.begin(e, {
-															placementId: session.placementId,
-															title: session.title,
-															roomId: room.id
-														})}
-													class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none"
+											<TooltipTrigger tabindex={-1}>
+												{#snippet child({ props })}
+													<h3
+														{...props}
+														data-testid="agenda-room-name"
+														class="w-full min-w-0 truncate text-sm font-medium"
+													>
+														{room.name}
+													</h3>
+												{/snippet}
+											</TooltipTrigger>
+											<TooltipContent side="bottom" class="max-w-xs">
+												{room.name}
+											</TooltipContent>
+										</Tooltip>
+										<Button
+											type="button"
+											size="sm"
+											variant="ghost"
+											class="h-6 w-full justify-start px-0 text-xs"
+											aria-label="Open a slot in {room.name}"
+											data-testid="agenda-open-slot-{room.id}"
+											onclick={() => openSlot(room, data.slots[0].minutes)}
+										>
+											+ slot
+										</Button>
+									</div>
+
+									<div class="relative min-w-0" data-column-body style="height: {gridHeight}">
+										<!--
+											One button per slot, all of them out of the tab order. The
+											keyboard route into a slot is the room's "Open a slot"
+											button and the editor's day/time/room selects; putting 36
+											empty cells per room into the tab sequence would bury it.
+										-->
+										{#each frame.slots as minutes, i (minutes)}
+											<button
+												type="button"
+												tabindex="-1"
+												aria-label="{room.name} at {timeLabel(minutes)}"
+												data-testid="agenda-slot-cell"
+												data-room-id={room.id}
+												data-start-minutes={minutes}
+												onclick={() => slotClicked(room, minutes)}
+												class="absolute inset-x-0 {i % LABEL_EVERY === 0
+													? 'border-border border-t'
+													: ''} {drag.hover?.roomId === room.id &&
+												drag.hover?.startMinutes === minutes
+													? 'bg-primary/20'
+													: 'hover:bg-muted/60'}"
+												style="top: {i * ROW_REM}rem; height: {ROW_REM}rem"
+											></button>
+										{/each}
+
+										{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
+											{@const rows = blockRows(frame, session)}
+											{@const clashes = clashesFor(session.placementId)}
+											{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
+											{@const published = session.status === 'confirmed'}
+											{#if rows}
+												<!--
+													Title first — the clock is already on the grid axis, so the
+													card's job is the talk name. Colour codes publish state so the
+													title keeps the full card width (#219); clash colour wins.
+													min-w-0 + overflow-hidden still clip width (#154 / #166);
+													nothing here changes DnD keys or drop targets.
+												-->
+												<div
+													data-testid="agenda-placed-session"
+													data-placement-id={session.placementId}
+													data-publish-state={published ? 'published' : 'draft'}
+													class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
+													0
+														? 'border-status-bad bg-status-bad/10'
+														: published
+															? 'border-status-good bg-status-good-bg'
+															: 'border-border bg-card'} {drag.dragging?.placementId ===
+													session.placementId
+														? 'opacity-40'
+														: ''}"
+													style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
+														ROW_REM}rem; left: calc({(lane / lanes) *
+														100}% + 0.125rem); width: calc({100 /
+														lanes}% - 0.25rem); max-width: calc({100 / lanes}% - 0.25rem)"
 												>
-													<span class="flex min-h-0 min-w-0 shrink-0 items-center gap-1">
-														<span
-															data-testid="agenda-session-title"
-															class="min-w-0 flex-1 truncate text-sm leading-tight font-medium"
-															title={session.title}>{session.title}</span
-														>
-														<Badge
-															class="shrink-0"
-															variant={session.status === 'confirmed' ? 'secondary' : 'outline'}
-														>
-															{session.status === 'confirmed' ? 'Published' : 'Draft'}
-														</Badge>
-													</span>
-													<!-- Clock is secondary: the grid axis already places the block.
-													     Kept small so short slots still read the title first, and so
-													     existing E2E can pin a drop by the range text. -->
-													<span
-														class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
-													>
-														{timeLabel(session.startMinutes)}–{timeLabel(session.endMinutes)}
-													</span>
-													{#if session.submissionStatus === 'rejected'}
-														<span
-															class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
-															data-testid="rejected-placement-badge"
-															title="This talk was declined but its slot remains — remove or reassign it."
-														>
-															Declined
-														</span>
-													{:else if session.submissionStatus === 'waitlisted'}
-														<span
-															class="text-status-warn block min-w-0 shrink truncate text-xs font-medium"
-															data-testid="rejected-placement-badge"
-															title="This talk is waitlisted but its slot remains — remove or reassign it."
-														>
-															Waitlisted
-														</span>
-													{/if}
+													<!--
+														Tooltip lives on the card button itself (child-snippet merge)
+														so the title never nests a second interactive control inside
+														the drag/edit button — Cypress still finds the same testids.
+													-->
+													<Tooltip>
+														<TooltipTrigger>
+															{#snippet child({ props })}
+																<!--
+																	Svelte 5: attributes after `{...props}` win. Our own
+																	onclick/onpointerdown would drop bits-ui's handlers —
+																	#onpointerdown is the only guard that stops mousedown
+																	focus from opening the tooltip immediately, and
+																	#onclick closes it. Call the forwarded handlers first,
+																	then ours.
 
-													{#each clashes as clash, ci (ci)}
-														<span
-															data-testid="agenda-conflict"
-															class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
-															title={clash}
-														>
-															{clash}
-														</span>
-													{/each}
+																	bits-ui types the child snippet's props as `{}`, so
+																	narrow the two handlers we actually forward — not `any`.
+																-->
+																{@const tip = props as {
+																	onclick?: (e: MouseEvent) => void;
+																	onpointerdown?: (e: PointerEvent) => void;
+																}}
+																<button
+																	{...props}
+																	type="button"
+																	data-testid="agenda-edit-slot-{session.placementId}"
+																	onclick={(e) => {
+																		tip.onclick?.(e);
+																		slotClicked(room, session.startMinutes ?? 0);
+																	}}
+																	onpointerdown={(e) => {
+																		tip.onpointerdown?.(e);
+																		drag.begin(e, {
+																			placementId: session.placementId,
+																			title: session.title,
+																			roomId: room.id
+																		});
+																	}}
+																	class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none"
+																>
+																	<span class="sr-only">{published ? 'Published' : 'Draft'}</span>
+																	<span
+																		data-testid="agenda-session-title"
+																		class="block min-w-0 shrink-0 truncate text-sm leading-tight font-medium"
+																	>
+																		{session.title}
+																	</span>
+																	<!-- Clock is secondary: the grid axis already places the block.
+																	     Kept small so short slots still read the title first, and so
+																	     existing E2E can pin a drop by the range text. -->
+																	<span
+																		class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
+																	>
+																		{timeLabel(session.startMinutes)}–{timeLabel(
+																			session.endMinutes
+																		)}
+																	</span>
+																	{#if session.submissionStatus === 'rejected'}
+																		<span
+																			class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
+																			data-testid="rejected-placement-badge"
+																			title="This talk was declined but its slot remains — remove or reassign it."
+																		>
+																			Declined
+																		</span>
+																	{:else if session.submissionStatus === 'waitlisted'}
+																		<span
+																			class="text-status-warn block min-w-0 shrink truncate text-xs font-medium"
+																			data-testid="rejected-placement-badge"
+																			title="This talk is waitlisted but its slot remains — remove or reassign it."
+																		>
+																			Waitlisted
+																		</span>
+																	{/if}
 
-													<span
-														class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
-														title={session.trackName
-															? `${speakerLine} · ${session.trackName}`
-															: speakerLine}
-													>
-														{speakerLine}
-														{#if session.trackName}<span class="px-1">·</span
-															>{session.trackName}{/if}
-													</span>
-												</button>
-											</div>
-										{/if}
-									{/each}
+																	{#each clashes as clash, ci (ci)}
+																		<span
+																			data-testid="agenda-conflict"
+																			class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
+																			title={clash}
+																		>
+																			{clash}
+																		</span>
+																	{/each}
+
+																	<span
+																		class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
+																		title={session.trackName
+																			? `${speakerLine} · ${session.trackName}`
+																			: speakerLine}
+																	>
+																		{speakerLine}
+																		{#if session.trackName}<span class="px-1">·</span
+																			>{session.trackName}{/if}
+																	</span>
+																</button>
+															{/snippet}
+														</TooltipTrigger>
+														<TooltipContent side="top" class="max-w-xs">
+															{session.title}
+														</TooltipContent>
+													</Tooltip>
+												</div>
+											{/if}
+										{/each}
+									</div>
 								</div>
-							</div>
-						{/each}
+							{/each}
+						</div>
 					</div>
-				</div>
+				</TooltipProvider>
 
 				<p class="text-muted-foreground mt-3 text-xs">
 					Drag a session to move it. Click a slot to open it — that is also how a session swaps
