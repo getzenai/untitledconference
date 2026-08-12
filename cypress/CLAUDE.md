@@ -29,7 +29,7 @@ SKIP_BUILD=true npm run test:e2e                                    # reuse the 
 ```
 
 `scripts/run-e2e.sh` pushes the schema to `TEST_DATABASE_URL`, builds the app,
-starts `vite preview` on port 5174, and runs Cypress against it. If
+starts `vite preview` on a free port, and runs Cypress against it. If
 `TEST_DATABASE_URL` is unset it falls back to the local Docker test database
 (`docker compose up -d test-db`, port 5433). No Infisical secrets are needed:
 E2E runs with a throwaway `BETTER_AUTH_SECRET` and `ENABLE_TEST_ENDPOINTS=true`.

@@ -23,9 +23,9 @@ else
   echo "(Test DB not running on port 5433 — skipping integration tests)"
 fi
 
-# Opportunistic: E2E tests if test DB is available (run-e2e.sh starts its own preview server on :5174)
+# Opportunistic: E2E tests if test DB is available (run-e2e.sh starts its own preview server)
 if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
-  echo "=== Pre-push: E2E tests (test DB detected — preview server starts on :5174) ==="
+  echo "=== Pre-push: E2E tests (test DB detected — preview server gets a free port) ==="
   TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}" BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-test-secret-for-hooks}" npm run test:e2e
 else
   echo "(Test DB not running on port 5433 — skipping E2E tests)"
