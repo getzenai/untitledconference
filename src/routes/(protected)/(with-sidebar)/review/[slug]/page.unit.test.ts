@@ -29,7 +29,8 @@ const row = (
 	reviewsSubmitted,
 	reviewsAssigned: 3,
 	score: 4.2,
-	ownReviewSubmitted: false
+	ownReviewSubmitted: false,
+	withdrawn: false
 });
 
 function renderQueue(
@@ -117,5 +118,49 @@ describe('a submission held in more than one round', () => {
 
 	it('stays quiet when there is only one round to name', () => {
 		expect(renderQueue([row(1, 'Held once', 0)])).not.toContain('Round 1 ·');
+	});
+});
+
+/**
+ * A talk the speaker took back (RV-P1-01). It stood in the queue as "To do" with a
+ * live review form — the reviewer was being asked to spend an hour on a talk that
+ * had left.
+ */
+describe('a withdrawn talk', () => {
+	const withdrawn = (over: Partial<ReturnType<typeof row>> = {}) => ({
+		...row(3, 'A compiler in an afternoon', 0),
+		withdrawn: true,
+		...over
+	});
+
+	it('is labelled withdrawn rather than asked for', () => {
+		const body = renderQueue([withdrawn()]);
+
+		expect(body).toContain('Withdrawn');
+		// The exact regression: it must not still read as work owed.
+		expect(body).not.toContain('To do');
+	});
+
+	it('is out of the count, so a finished queue reads finished', () => {
+		// One real talk, reviewed; one withdrawn. The reviewer owes nothing.
+		const body = renderQueue([
+			{ ...row(1, 'Reviewed talk', 2), ownReviewSubmitted: true },
+			withdrawn()
+		]);
+
+		expect(body).toContain('1 of 1 reviewed');
+		expect(body).not.toContain('1 of 2 reviewed');
+	});
+
+	it('still lists the talk, because vanishing looks like never-assigned', () => {
+		const body = renderQueue([withdrawn()]);
+
+		expect(body).toContain('A compiler in an afternoon');
+	});
+
+	it('does not borrow the "Reviewed" badge from a review this person never filed', () => {
+		const body = renderQueue([withdrawn()]);
+
+		expect(body).not.toContain('Reviewed<');
 	});
 });

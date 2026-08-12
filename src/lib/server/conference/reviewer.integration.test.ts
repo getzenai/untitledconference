@@ -647,3 +647,74 @@ describe('the own-review door on the organizer page', () => {
 		await expect(reviewerSubmission(await conferenceNow(), ME, mine)).resolves.toBeNull();
 	});
 });
+
+/**
+ * RV-P1-01: the speaker took the talk back.
+ *
+ * It stood in the queue as "To do" with a live form, so a reviewer could spend an
+ * hour on a talk that had left — and could file the review afterwards, because the
+ * only thing stopping them was a page that no longer drew the button.
+ */
+describe('a withdrawn submission', () => {
+	beforeEach(async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, mine));
+	});
+
+	it('is still listed, but marked withdrawn rather than outstanding', async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'withdrawn' })
+			.where(eq(submissionTable.id, mine));
+
+		const queue = await reviewQueue(await conferenceNow(), ME);
+		const row = queue.find((q) => q.submissionId === mine);
+
+		// Listed — a row that vanishes is indistinguishable from one never assigned.
+		expect(row).toBeDefined();
+		expect(row!.withdrawn).toBe(true);
+		// And honest about what this reviewer actually filed.
+		expect(row!.ownReviewSubmitted).toBe(false);
+	});
+
+	it('leaves a live talk unmarked', async () => {
+		const queue = await reviewQueue(await conferenceNow(), ME);
+
+		expect(queue.find((q) => q.submissionId === mine)!.withdrawn).toBe(false);
+	});
+
+	it('refuses a review filed against it, however the request arrives', async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'withdrawn' })
+			.where(eq(submissionTable.id, mine));
+
+		// The stale-tab case: the page is gone, the POST is not.
+		const result = await saveReview(await conferenceNow(), ME, mine, {
+			answers: { [criterionId]: '5' },
+			comment: 'Filed after the withdrawal.',
+			submit: true
+		});
+
+		expect(result).toEqual({ ok: false, reason: 'withdrawn' });
+
+		const [row] = await db
+			.select({ status: reviewTable.status, comment: reviewTable.comment })
+			.from(reviewTable)
+			.where(and(eq(reviewTable.submissionId, mine), eq(reviewTable.reviewerUserId, ME)));
+		expect(row.status).not.toBe('submitted');
+		expect(row.comment).not.toBe('Filed after the withdrawal.');
+	});
+
+	it('still accepts a review while the talk is live, so the guard is not blanket', async () => {
+		const result = await saveReview(await conferenceNow(), ME, mine, {
+			answers: { [criterionId]: '4' },
+			comment: 'Filed while it was live.',
+			submit: true
+		});
+
+		expect(result).toEqual({ ok: true });
+	});
+});

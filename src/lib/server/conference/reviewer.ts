@@ -286,6 +286,13 @@ export type QueueEntry = {
 	score: number | null;
 	/** True only when this reviewer has filed in *every* round they hold it in. */
 	ownReviewSubmitted: boolean;
+	/**
+	 * The speaker took the talk back. Kept in the queue rather than dropped, the
+	 * same way an anonymised review is labelled rather than hidden: a row that
+	 * silently disappears is indistinguishable from one that was never assigned,
+	 * and a reviewer who already read it deserves to know why it stopped mattering.
+	 */
+	withdrawn: boolean;
 };
 
 /**
@@ -309,7 +316,8 @@ export async function reviewQueue(
 			roundPosition: reviewRoundTable.position,
 			title: submissionTable.title,
 			track: trackTable.name,
-			sessionFormat: sessionFormatTable.name
+			sessionFormat: sessionFormatTable.name,
+			submissionStatus: submissionTable.status
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
@@ -348,6 +356,7 @@ type Assignment = {
 	title: string;
 	track: string | null;
 	sessionFormat: string | null;
+	submissionStatus: string;
 };
 
 /**
@@ -376,6 +385,7 @@ function queueRow(
 	// Outstanding in any round means outstanding: the queue is a to-do list, and
 	// finishing round 1 does not answer round 2.
 	const ownSubmitted = mine.every((row) => row.status === 'submitted');
+	const withdrawn = first.submissionStatus === 'withdrawn';
 
 	return {
 		submissionId: first.submissionId,
@@ -386,7 +396,12 @@ function queueRow(
 		reviewsSubmitted: on.filter((r) => r.submitted).length,
 		reviewsAssigned: on.length,
 		score: canSeePeerReviews(mode, ownSubmitted) ? scoresFor(on) : null,
-		ownReviewSubmitted: ownSubmitted
+		// Left honest: this says whether THIS reviewer filed, and the blind mode keys
+		// off it. Whether the talk still needs anyone is `withdrawn`, and the page
+		// reads the two separately — folding them together would badge a withdrawn
+		// talk "Reviewed" and hand out peer scores the reader has not earned.
+		ownReviewSubmitted: ownSubmitted,
+		withdrawn
 	};
 }
 
@@ -400,6 +415,8 @@ function scoresFor(reviews: (PeerReview & { submissionId: number })[]): number |
 export type ReviewerSubmission = {
 	id: number;
 	title: string;
+	/** `withdrawn` closes the form: the talk is gone and no answer is wanted. */
+	status: string;
 	abstract: string | null;
 	keyTakeaway: string | null;
 	audienceLevel: string | null;
@@ -519,6 +536,7 @@ async function submissionFor(conferenceId: number, submissionId: number) {
 		.select({
 			id: submissionTable.id,
 			title: submissionTable.title,
+			status: submissionTable.status,
 			abstract: submissionTable.abstract,
 			keyTakeaway: submissionTable.keyTakeaway,
 			audienceLevel: submissionTable.audienceLevel,
@@ -611,7 +629,9 @@ export type SaveReviewResult =
 	/** Not this reviewer's to write — the caller owes a 404, not a validation message. */
 	| { ok: false; reason: 'not_assigned' }
 	/** Submitting nothing at all; saving nothing is still fine. */
-	| { ok: false; reason: 'empty_submit' };
+	| { ok: false; reason: 'empty_submit' }
+	/** The speaker took the talk back while this form was open. */
+	| { ok: false; reason: 'withdrawn' };
 
 /**
  * Saves this reviewer's answers.
@@ -645,6 +665,12 @@ export async function saveReview(
 	// the assignment is the permission.
 	const own = await ownReview(conference.id, userId, submissionId);
 	if (!own) return { ok: false, reason: 'not_assigned' };
+
+	// Checked here rather than only hidden on the page. The queue stops offering a
+	// withdrawn talk, but a tab opened before the speaker pulled it still holds a
+	// working form, and a POST does not care what the page currently draws.
+	const submission = await submissionFor(conference.id, submissionId);
+	if (submission?.status === 'withdrawn') return { ok: false, reason: 'withdrawn' };
 
 	const criteria = await db
 		.select({
