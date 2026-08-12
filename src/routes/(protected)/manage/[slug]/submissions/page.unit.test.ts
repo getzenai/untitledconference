@@ -59,12 +59,24 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	reviewsAssigned: 0
 });
 
+const assignmentTargets = [
+	{
+		id: 10,
+		name: 'Screening',
+		reviewers: [
+			{ userId: 'rev-1', name: 'Riley Reviewer', email: 'riley@example.com' },
+			{ userId: 'rev-2', name: 'Sam Score', email: 'sam@example.com' }
+		]
+	}
+];
+
 function renderPage(
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	sort: PageData['sort'] = 'newest',
 	query = '',
 	filters: PageData['filters'] = {},
-	notificationResult: NotificationResult | null = null
+	notificationResult: NotificationResult | null = null,
+	targets = assignmentTargets
 ) {
 	currentUrl.value = new URL(`https://example.test/manage/test-conf/submissions${query}`);
 	return render(Page, {
@@ -80,7 +92,8 @@ function renderPage(
 				filters,
 				sort,
 				counts: { total: 2, undecided: 1, unreviewed: 2 },
-				notificationStatuses: { 1: notificationStatus, 2: null }
+				notificationStatuses: { 1: notificationStatus, 2: null },
+				assignmentTargets: targets
 			} as PageData,
 			form: notificationResult ? { notificationResult } : null
 		}
@@ -97,6 +110,30 @@ describe('organizer submission decisions', () => {
 		expect(body).toContain('Decisions do not notify speakers;');
 		expect(body).toMatch(/notifications\s+are sent separately after the programme is checked\./);
 		expect(body).not.toContain('automatically notif');
+	});
+
+	/**
+	 * ABS-06: selection already exists for decide/notify; bulk assign rides the
+	 * same checkboxes with a third action. Without a round there is nothing to
+	 * assign to, so the controls stay off the page rather than offering a dead form.
+	 */
+	it('offers bulk reviewer assignment next to the decision buttons', () => {
+		const body = renderPage();
+
+		expect(body).toContain('data-testid="bulk-assign"');
+		expect(body).toContain('formaction="?/assign"');
+		expect(body).toContain('Assign reviewer');
+		expect(body).toContain('data-testid="bulk-assign-round"');
+		expect(body).toContain('data-testid="bulk-assign-reviewer"');
+		expect(body).toContain('name="roundId"');
+		expect(body).toContain('name="reviewerUserId"');
+	});
+
+	it('hides bulk assign when the conference has no review rounds yet', () => {
+		const body = renderPage(null, 'newest', '', {}, null, []);
+
+		expect(body).not.toContain('data-testid="bulk-assign"');
+		expect(body).not.toContain('formaction="?/assign"');
 	});
 
 	it('shows whether each current decision has been notified', () => {

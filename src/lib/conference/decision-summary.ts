@@ -93,6 +93,27 @@ export function describeNotification(result: NotificationResult): string {
 	return parts.join(' ');
 }
 
+/** Confirmation after bulk reviewer assignment on the submissions table (ABS-06). */
+export function describeBulkAssign(result: {
+	created: number;
+	already: number;
+	skipped: number;
+}): string {
+	const parts: string[] = [];
+	if (result.created > 0) {
+		parts.push(`${plural(result.created, 'assignment')} created.`);
+	}
+	if (result.already > 0) {
+		// Always name the count — the DoD asks for N created / M already, not a vague shrug.
+		parts.push(`${result.already} already assigned, left untouched.`);
+	}
+	if (result.skipped > 0) {
+		parts.push(`${plural(result.skipped, 'submission')} could not be assigned to that reviewer.`);
+	}
+	// Empty batch after a mis-click should still read as a completed action.
+	return parts.length > 0 ? parts.join(' ') : 'Nothing to assign.';
+}
+
 export type NotificationTone = 'good' | 'warn' | 'bad';
 
 /** The colour and live-region urgency must agree with the delivery result. */
