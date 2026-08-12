@@ -71,11 +71,6 @@
 						"type": "command",
 						"command": ".claude/hooks/block-destructive.sh",
 						"timeout": 5
-					},
-					{
-						"type": "command",
-						"command": ".claude/hooks/remind-deep-review.sh",
-						"timeout": 5
 					}
 				]
 			},

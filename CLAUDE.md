@@ -52,13 +52,6 @@ green pre-push is a good predictor of green CI.
 Scale the effort to the risk of the change. A timing-out E2E test almost always means the
 selector is wrong, not that the timeout is too short — never paper over it with `cy.wait(ms)`.
 
-### Deep Review Verification
-
-Every implementation plan includes `/deep-review` as a verification step, and it runs before
-pushing: 3–5 agents per cycle from different perspectives (security, architecture, correctness,
-performance, API), up to 3 cycles, stopping early when no critical or high findings remain.
-CRITICAL and HIGH are always fixed; MEDIUM and LOW are judged in context.
-
 ## Svelte MCP server
 
 `.mcp.json` wires the official server at `https://mcp.svelte.dev/mcp`; `.claude/settings.json`
