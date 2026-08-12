@@ -80,6 +80,11 @@ export type BoardSession = {
 	title: string;
 	kind: string;
 	status: string;
+	/**
+	 * Decision on the linked submission, when this placement is a talk.
+	 * Confirmed slots can outlive a Decline (#9): the grid must say so.
+	 */
+	submissionStatus: string | null;
 	trackName: string | null;
 	formatName: string | null;
 	minutes: number;
@@ -107,6 +112,7 @@ type PlacementRow = {
 	status: string;
 	blockTitle: string | null;
 	submissionTitle: string | null;
+	submissionStatus: string | null;
 	trackName: string | null;
 	formatName: string | null;
 	formatMinutes: number | null;
@@ -125,6 +131,7 @@ function selectPlacements(conferenceId: number) {
 			status: placementTable.status,
 			blockTitle: placementTable.title,
 			submissionTitle: submissionTable.title,
+			submissionStatus: submissionTable.status,
 			trackName: trackTable.name,
 			formatName: sessionFormatTable.name,
 			formatMinutes: sessionFormatTable.minutes,
@@ -171,6 +178,7 @@ function toSession(row: PlacementRow, speakers: Map<number, string[]>): BoardSes
 		title: row.submissionTitle ?? row.blockTitle ?? 'Untitled',
 		kind: row.kind,
 		status: row.status,
+		submissionStatus: row.submissionStatus,
 		trackName: row.trackName,
 		formatName: row.formatName,
 		minutes: row.formatMinutes ?? DEFAULT_MINUTES,
