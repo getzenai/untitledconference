@@ -30,11 +30,22 @@ type Peer = {
 	score: number | null;
 };
 
+type Criterion = {
+	id: number;
+	label: string;
+	kind: string;
+	scaleMax: number | null;
+	options: string | null;
+	value: number | null;
+	valueText: string | null;
+};
+
 function page(
 	status: 'assigned' | 'submitted',
 	opts: {
 		submissionStatus?: string;
 		peers?: Peer[];
+		criteria?: Criterion[];
 		/** The round's window (ABS-01); no dates means a round that is simply open. */
 		window?: ReturnType<typeof roundWindow>;
 	} = {}
@@ -62,7 +73,7 @@ function page(
 					anonymized: false,
 					window,
 					own: { reviewId: 42, status, comment: null },
-					criteria: [],
+					criteria: opts.criteria ?? [],
 					peers,
 					peersPending: 0,
 					peersWithheld: false
@@ -183,7 +194,11 @@ describe('peer review display', () => {
 					submittedAt: new Date('2027-02-20T00:00:00Z'),
 					scores: [
 						{ criterion: 'Programme fit', value: 3, valueText: null },
-						{ criterion: 'Committee notes', value: null, valueText: 'Tighten abstract.' }
+						{
+							criterion: 'How it sits in the programme',
+							value: null,
+							valueText: 'Tighten abstract.'
+						}
 					],
 					score: 3
 				},
@@ -207,11 +222,49 @@ describe('peer review display', () => {
 		expect(body).toContain('Round 2 — Final');
 		expect(body).toContain('Programme fit');
 		expect(body).toContain('Relevance');
-		// Shared comment heading for peer free-text (and own form)
-		expect(body).toContain('Comment');
+		// Same heading as the form, so a reviewer can tell which box lands here.
+		expect(body).toContain('Overall comment');
 		expect(body).toContain('Solid but familiar.');
 		// No real-name leak fixtures
 		expect(body).not.toContain('Inés');
 		expect(body).not.toContain('Delgado');
+	});
+});
+
+/**
+ * #241: two prose boxes on one form used to share the word "Comment" / "Notes".
+ * They are different things; the labels have to say so.
+ */
+describe('the two prose boxes (#241)', () => {
+	it('names the overall comment and says who reads it', () => {
+		const body = page('assigned');
+
+		expect(body).toContain('Overall comment');
+		expect(body).toContain('Your verdict on this talk.');
+		expect(body).toContain('unless the round is anonymised');
+		expect(body).toContain('name="comment"');
+	});
+
+	it('marks a free-text criterion as part of the scorecard, not the comment', () => {
+		const body = page('assigned', {
+			criteria: [
+				{
+					id: 9,
+					label: 'Where it fits the programme',
+					kind: 'text',
+					scaleMax: null,
+					options: null,
+					value: null,
+					valueText: null
+				}
+			]
+		});
+
+		expect(body).toContain('Where it fits the programme');
+		expect(body).toContain("Part of this round's scorecard — not the overall comment below.");
+		expect(body).toContain('name="criterion-9"');
+		// A rating does not get that line: only the text box can be mistaken for
+		// the comment.
+		expect(body).not.toContain('This round has no scorecard yet');
 	});
 });
