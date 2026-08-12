@@ -294,8 +294,8 @@ describe('mySubmissions and myTasks for a co-speaker', () => {
 	});
 
 	it('shows the co-speaker the task written for them', async () => {
-		const ids = (await myTasks(coSpeaker.id)).map((t) => t.id);
-		expect(ids).toContain(taskId);
+		const tasks = await myTasks(coSpeaker.id);
+		expect(tasks).toContainEqual(expect.objectContaining({ id: taskId, submissionId: talkId }));
 	});
 
 	it('still shows the submitter their own talk', async () => {
