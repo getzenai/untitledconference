@@ -181,7 +181,12 @@ describe('removeReviewer', () => {
 
 describe('committee and assignment membership contract', () => {
 	it('lets a freshly added reviewer be assigned to a submission', async () => {
-		const round = await addReviewRound(conference.id, { name: 'Screening', anonymized: false });
+		const round = await addReviewRound(conference.id, {
+			name: 'Screening',
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
+		});
 		expect(round.ok).toBe(true);
 		if (!round.ok) return;
 
@@ -211,18 +216,24 @@ describe('committee and assignment membership contract', () => {
 	it('shows every round-scoped reviewer that assignment accepts, once per person', async () => {
 		const screening = await addReviewRound(conference.id, {
 			name: 'Round-scoped screening',
-			anonymized: false
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
 		});
 		const final = await addReviewRound(conference.id, {
 			name: 'Round-scoped final',
-			anonymized: false
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
 		});
 		expect(screening.ok).toBe(true);
 		expect(final.ok).toBe(true);
 		if (!screening.ok || !final.ok) return;
 		const foreign = await addReviewRound(otherConference.id, {
 			name: 'Other conference round',
-			anonymized: false
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
 		});
 		expect(foreign.ok).toBe(true);
 		if (!foreign.ok) return;

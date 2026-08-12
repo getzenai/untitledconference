@@ -22,8 +22,18 @@ import {
 	addReviewRound,
 	deleteReviewRound,
 	renameReviewRound,
-	reviewRounds
+	reviewRounds,
+	type RoundInput
 } from './review-rounds';
+
+/** A round with no window, which is the shape most of these cases are about. */
+const roundInput = (name: string, extra: Partial<RoundInput> = {}): RoundInput => ({
+	name,
+	anonymized: false,
+	opensAt: null,
+	closesAt: null,
+	...extra
+});
 
 const suffix = `rounds-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -63,10 +73,13 @@ afterAll(async () => {
 
 describe('addReviewRound', () => {
 	it('creates the conference evaluation plan with the first round and reuses it after', async () => {
-		const first = await addReviewRound(conference.id, { name: 'Screening', anonymized: false });
+		const first = await addReviewRound(conference.id, roundInput('Screening'));
 		expect(first.ok).toBe(true);
 
-		const second = await addReviewRound(conference.id, { name: 'Programme', anonymized: true });
+		const second = await addReviewRound(
+			conference.id,
+			roundInput('Programme', { anonymized: true })
+		);
 		expect(second.ok).toBe(true);
 
 		const plans = await db
@@ -84,14 +97,54 @@ describe('addReviewRound', () => {
 	});
 
 	it('refuses a nameless round', async () => {
-		const result = await addReviewRound(conference.id, { name: '   ', anonymized: false });
+		const result = await addReviewRound(conference.id, roundInput('   '));
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.message).toMatch(/name/i);
 	});
 
+	it('stores the round’s window and reads it back', async () => {
+		const opensAt = new Date('2027-02-01T09:00:00.000Z');
+		const closesAt = new Date('2027-03-01T22:59:00.000Z');
+		const created = await addReviewRound(
+			conference.id,
+			roundInput('Dated round', { opensAt, closesAt })
+		);
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const round = (await reviewRounds(conference.id)).find((r) => r.id === created.id);
+		expect(round?.opensAt?.toISOString()).toBe(opensAt.toISOString());
+		expect(round?.closesAt?.toISOString()).toBe(closesAt.toISOString());
+	});
+
+	it('keeps a round with only one end of the window', async () => {
+		const closesAt = new Date('2027-04-01T22:59:00.000Z');
+		const created = await addReviewRound(conference.id, roundInput('Closes only', { closesAt }));
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const round = (await reviewRounds(conference.id)).find((r) => r.id === created.id);
+		expect(round?.opensAt).toBeNull();
+		expect(round?.closesAt?.toISOString()).toBe(closesAt.toISOString());
+	});
+
+	it('refuses a window that closes before it opens', async () => {
+		const result = await addReviewRound(
+			conference.id,
+			roundInput('Backwards', {
+				opensAt: new Date('2027-03-01T09:00:00.000Z'),
+				closesAt: new Date('2027-02-01T09:00:00.000Z')
+			})
+		);
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.message).toMatch(/close/i);
+		expect((await reviewRounds(conference.id)).map((r) => r.name)).not.toContain('Backwards');
+	});
+
 	it('keeps one conference’s rounds out of another’s list', async () => {
-		await addReviewRound(otherConference.id, { name: 'Elsewhere', anonymized: false });
+		await addReviewRound(otherConference.id, roundInput('Elsewhere'));
 
 		expect((await reviewRounds(conference.id)).map((r) => r.name)).not.toContain('Elsewhere');
 		expect((await reviewRounds(otherConference.id)).map((r) => r.name)).toEqual(['Elsewhere']);
@@ -100,7 +153,7 @@ describe('addReviewRound', () => {
 
 describe('reviewRounds counts', () => {
 	it('reports assignments and how many are filed', async () => {
-		const created = await addReviewRound(conference.id, { name: 'Counted', anonymized: false });
+		const created = await addReviewRound(conference.id, roundInput('Counted'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
@@ -131,7 +184,7 @@ describe('reviewRounds counts', () => {
 	});
 
 	it('reports a fresh round as empty rather than omitting it', async () => {
-		const created = await addReviewRound(conference.id, { name: 'Empty', anonymized: false });
+		const created = await addReviewRound(conference.id, roundInput('Empty'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
@@ -144,7 +197,7 @@ describe('reviewRounds counts', () => {
 
 describe('deleteReviewRound', () => {
 	it('removes a round nobody has been assigned in', async () => {
-		const created = await addReviewRound(conference.id, { name: 'Throwaway', anonymized: false });
+		const created = await addReviewRound(conference.id, roundInput('Throwaway'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
@@ -153,7 +206,7 @@ describe('deleteReviewRound', () => {
 	});
 
 	it('refuses to delete a round that already carries assignments', async () => {
-		const created = await addReviewRound(conference.id, { name: 'In use', anonymized: false });
+		const created = await addReviewRound(conference.id, roundInput('In use'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
@@ -174,7 +227,7 @@ describe('deleteReviewRound', () => {
 	});
 
 	it('refuses a round id from another conference', async () => {
-		const mine = await addReviewRound(otherConference.id, { name: 'Not yours', anonymized: false });
+		const mine = await addReviewRound(otherConference.id, roundInput('Not yours'));
 		expect(mine.ok).toBe(true);
 		if (!mine.ok) return;
 
@@ -191,7 +244,7 @@ describe('deleteReviewRound', () => {
  */
 describe('renameReviewRound', () => {
 	it('renames a round and keeps its assignments', async () => {
-		const created = await addReviewRound(conference.id, { name: 'Rond 1', anonymized: false });
+		const created = await addReviewRound(conference.id, roundInput('Rond 1'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
@@ -206,9 +259,9 @@ describe('renameReviewRound', () => {
 			status: 'assigned'
 		});
 
-		expect(
-			await renameReviewRound(conference.id, created.id, { name: 'Round 1', anonymized: false })
-		).toEqual({ ok: true });
+		expect(await renameReviewRound(conference.id, created.id, roundInput('Round 1'))).toEqual({
+			ok: true
+		});
 
 		const round = (await reviewRounds(conference.id)).find((r) => r.id === created.id);
 		expect(round?.name).toBe('Round 1');
@@ -216,13 +269,40 @@ describe('renameReviewRound', () => {
 		expect(round?.assignments).toBe(1);
 	});
 
+	it('saves a window onto an existing round and clears it again', async () => {
+		const created = await addReviewRound(conference.id, roundInput('Undated'));
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const closesAt = new Date('2027-05-01T22:59:00.000Z');
+		expect(
+			await renameReviewRound(conference.id, created.id, roundInput('Undated', { closesAt }))
+		).toEqual({ ok: true });
+		expect(
+			(await reviewRounds(conference.id)).find((r) => r.id === created.id)?.closesAt?.toISOString()
+		).toBe(closesAt.toISOString());
+
+		// Clearing the picker has to reach the column: a date nobody can remove is
+		// worse than one nobody set.
+		expect(await renameReviewRound(conference.id, created.id, roundInput('Undated'))).toEqual({
+			ok: true
+		});
+		expect(
+			(await reviewRounds(conference.id)).find((r) => r.id === created.id)?.closesAt
+		).toBeNull();
+	});
+
 	it('changes whether the round hides reviewers, including on reviews already filed', async () => {
-		const created = await addReviewRound(conference.id, { name: 'Open round', anonymized: false });
+		const created = await addReviewRound(conference.id, roundInput('Open round'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
 		expect(
-			await renameReviewRound(conference.id, created.id, { name: 'Blind round', anonymized: true })
+			await renameReviewRound(
+				conference.id,
+				created.id,
+				roundInput('Blind round', { anonymized: true })
+			)
 		).toEqual({ ok: true });
 
 		const round = (await reviewRounds(conference.id)).find((r) => r.id === created.id);
@@ -230,17 +310,11 @@ describe('renameReviewRound', () => {
 	});
 
 	it('refuses an empty name rather than storing one', async () => {
-		const created = await addReviewRound(conference.id, {
-			name: 'Keeps its name',
-			anonymized: false
-		});
+		const created = await addReviewRound(conference.id, roundInput('Keeps its name'));
 		expect(created.ok).toBe(true);
 		if (!created.ok) return;
 
-		const result = await renameReviewRound(conference.id, created.id, {
-			name: '   ',
-			anonymized: false
-		});
+		const result = await renameReviewRound(conference.id, created.id, roundInput('   '));
 
 		expect(result.ok).toBe(false);
 		expect((await reviewRounds(conference.id)).find((r) => r.id === created.id)?.name).toBe(
@@ -249,17 +323,15 @@ describe('renameReviewRound', () => {
 	});
 
 	it('refuses a round id from another conference', async () => {
-		const theirs = await addReviewRound(otherConference.id, {
-			name: 'Theirs',
-			anonymized: false
-		});
+		const theirs = await addReviewRound(otherConference.id, roundInput('Theirs'));
 		expect(theirs.ok).toBe(true);
 		if (!theirs.ok) return;
 
-		const result = await renameReviewRound(conference.id, theirs.id, {
-			name: 'Renamed by a stranger',
-			anonymized: true
-		});
+		const result = await renameReviewRound(
+			conference.id,
+			theirs.id,
+			roundInput('Renamed by a stranger', { anonymized: true })
+		);
 
 		expect(result.ok).toBe(false);
 		const untouched = (await reviewRounds(otherConference.id)).find((r) => r.id === theirs.id);

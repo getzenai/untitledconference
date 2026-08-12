@@ -31,6 +31,8 @@ export type ReviewRound = {
 	id: number;
 	name: string;
 	anonymized: boolean;
+	opensAt: Date | null;
+	closesAt: Date | null;
 	position: number;
 	/** Assignments written against this round, for the "is anyone working?" line. */
 	assignments: number;
@@ -41,6 +43,17 @@ export type ReviewRound = {
 export type RoundInput = {
 	name: string;
 	anonymized: boolean;
+	/**
+	 * When the round runs. Both halves are optional: a committee that reads until
+	 * it is done has a round with no dates, and saying "none" has to stay cheaper
+	 * than inventing a deadline.
+	 *
+	 * Recorded, not enforced. Nothing here closes a reviewer out of a round whose
+	 * `closesAt` has passed — that would be a new gate on work already assigned,
+	 * and it is not what the round dates are being added for.
+	 */
+	opensAt: Date | null;
+	closesAt: Date | null;
 };
 
 /** What went wrong, in the words the form prints. `null` means it is fine. */
@@ -58,6 +71,8 @@ export async function reviewRounds(conferenceId: number): Promise<ReviewRound[]>
 			id: reviewRoundTable.id,
 			name: reviewRoundTable.name,
 			anonymized: reviewRoundTable.anonymized,
+			opensAt: reviewRoundTable.opensAt,
+			closesAt: reviewRoundTable.closesAt,
 			position: reviewRoundTable.position,
 			assignments: count(reviewTable.id),
 			completed: sql<number>`count(*) filter (where ${reviewTable.status} = 'submitted')::int`
@@ -73,6 +88,11 @@ export async function reviewRounds(conferenceId: number): Promise<ReviewRound[]>
 export function roundProblem(input: RoundInput): RoundProblem {
 	if (!input.name.trim()) return 'Give the round a name.';
 	if (input.name.trim().length > MAX_NAME) return `Keep the name under ${MAX_NAME} characters.`;
+	// A window that closes before it opens is a typo every time, and storing it
+	// would print a round nobody can read as either open or closed.
+	if (input.opensAt && input.closesAt && input.closesAt.getTime() <= input.opensAt.getTime()) {
+		return 'The round has to close after it opens.';
+	}
 	return null;
 }
 
@@ -121,6 +141,8 @@ export async function addReviewRound(
 				evaluationPlanId: planId,
 				name: input.name.trim().slice(0, MAX_NAME),
 				anonymized: input.anonymized,
+				opensAt: input.opensAt,
+				closesAt: input.closesAt,
 				position: total
 			})
 			.returning({ id: reviewRoundTable.id });
@@ -178,6 +200,9 @@ export async function deleteReviewRound(
  * reviews. Changing it re-labels reviews that already exist, which is the point —
  * a round switched to anonymous must hide the names already filed under it, not
  * only the next ones.
+ *
+ * The open/close window rides along on the same save for the same reason a name
+ * does: a date typed into the wrong round is corrected, not deleted and re-added.
  */
 export async function renameReviewRound(
 	conferenceId: number,
@@ -202,7 +227,12 @@ export async function renameReviewRound(
 
 	await db
 		.update(reviewRoundTable)
-		.set({ name: input.name.trim().slice(0, MAX_NAME), anonymized: input.anonymized })
+		.set({
+			name: input.name.trim().slice(0, MAX_NAME),
+			anonymized: input.anonymized,
+			opensAt: input.opensAt,
+			closesAt: input.closesAt
+		})
 		.where(eq(reviewRoundTable.id, roundId));
 
 	return { ok: true };
