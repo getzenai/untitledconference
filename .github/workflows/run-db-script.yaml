@@ -48,14 +48,15 @@ jobs:
         run: npm ci
 
       - name: Validate script input
+        env:
+          SCRIPT: ${{ inputs.script }}
         run: |
-          script="${{ inputs.script }}"
-          if [[ "$script" == */* || "$script" == "" ]]; then
-            echo "::error::script must be a bare filename inside scripts/db/, got: $script"
+          if [[ "$SCRIPT" == */* || "$SCRIPT" == "" ]]; then
+            echo "::error::script must be a bare filename inside scripts/db/, got: $SCRIPT"
             exit 1
           fi
-          if [ ! -f "scripts/db/$script" ]; then
-            echo "::error::scripts/db/$script does not exist"
+          if [ ! -f "scripts/db/$SCRIPT" ]; then
+            echo "::error::scripts/db/$SCRIPT does not exist"
             exit 1
           fi
 
@@ -78,9 +79,12 @@ jobs:
           fi
 
       - name: Run script
+        env:
+          SCRIPT: ${{ inputs.script }}
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
           args=()
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "$DRY_RUN" = "true" ]; then
             args+=(--dry-run)
           fi
-          DATABASE_URL="$NEON_CONNECTION_STRING" node "scripts/db/${{ inputs.script }}" "${args[@]}"
+          DATABASE_URL="$NEON_CONNECTION_STRING" node "scripts/db/$SCRIPT" "${args[@]}"
