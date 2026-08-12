@@ -794,14 +794,21 @@ export const CRITERIA = [
 	},
 	{
 		round: 0,
-		label: 'Notes for the committee',
+		label: 'Where it fits the programme',
 		kind: 'text',
 		scaleMax: null,
 		options: null,
 		weight: '1'
 	},
 	{ round: 1, label: 'Programme fit', kind: 'rating', scaleMax: 5, options: null, weight: '2' },
-	{ round: 1, label: 'Committee notes', kind: 'text', scaleMax: null, options: null, weight: '1' }
+	{
+		round: 1,
+		label: 'How it sits in the programme',
+		kind: 'text',
+		scaleMax: null,
+		options: null,
+		weight: '1'
+	}
 ];
 
 /** Mail that has already gone out, so the history screen is not a single row. */
