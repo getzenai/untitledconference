@@ -20,7 +20,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
 	assignReviewerToSubmissions,
 	conferenceAssignmentTargets,
-	queueReviewReminder,
+	queueReviewReminders,
 	reviewAssignmentMatrix,
 	reviewerProgress,
 	setReviewAssignment
@@ -364,8 +364,12 @@ describe('reviewer progress and reminders', () => {
 			status: 'assigned'
 		});
 
-		expect(await queueReviewReminder(conference, CONFERENCE_REVIEWER)).toBe('queued');
-		expect(await queueReviewReminder(conference, CONFERENCE_REVIEWER)).toBe('already_queued');
+		expect(await queueReviewReminders(conference, [CONFERENCE_REVIEWER])).toMatchObject({
+			queued: 1
+		});
+		expect(await queueReviewReminders(conference, [CONFERENCE_REVIEWER])).toMatchObject({
+			already_queued: 1
+		});
 
 		let reminders = await db
 			.select()
@@ -383,12 +387,44 @@ describe('reviewer progress and reminders', () => {
 			.update(emailLogTable)
 			.set({ status: 'failed' })
 			.where(eq(emailLogTable.id, reminders[0].id));
-		expect(await queueReviewReminder(conference, CONFERENCE_REVIEWER)).toBe('queued');
+		expect(await queueReviewReminders(conference, [CONFERENCE_REVIEWER])).toMatchObject({
+			queued: 1
+		});
 		reminders = await db
 			.select()
 			.from(emailLogTable)
 			.where(eq(emailLogTable.template, 'review_reminder'));
 		expect(reminders).toHaveLength(2);
+	});
+
+	/**
+	 * ABS-09. The point of the tally is that a mixed selection is normal: the
+	 * organizer ticks the box next to everybody and the function decides who a
+	 * reminder is actually for. One caller, three different outcomes, one email.
+	 */
+	it('reminds a mixed selection and accounts for everyone it skipped', async () => {
+		await db.insert(reviewTable).values({
+			reviewRoundId: roundId,
+			submissionId,
+			reviewerUserId: CONFERENCE_REVIEWER,
+			status: 'assigned'
+		});
+
+		expect(
+			await queueReviewReminders(conference, [
+				CONFERENCE_REVIEWER,
+				// Assigned nothing, so there is nothing to chase them about.
+				ROUND_REVIEWER,
+				// No such account: the address is what an email needs, and there is none.
+				`ghost-${suffix}`,
+				// The same person twice — one tick, one click, one email.
+				CONFERENCE_REVIEWER
+			])
+		).toEqual({ queued: 1, already_queued: 0, nothing_outstanding: 1, no_email: 1 });
+
+		expect(
+			await db.select().from(emailLogTable).where(eq(emailLogTable.template, 'review_reminder'))
+		).toHaveLength(1);
 	});
 });
 
