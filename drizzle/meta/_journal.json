@@ -1,111 +1,111 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1747601178582,
-      "tag": "0000_merged_initial_schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1786230000000,
-      "tag": "0001_documents_content_markdown",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1786235250444,
-      "tag": "0002_add-passkey-oauth-jwks",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1786291017198,
-      "tag": "0003_conference_domain",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1786292045486,
-      "tag": "0004_speaker_sort_name",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1786305963018,
-      "tag": "0005_glamorous_xorn",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1786308715495,
-      "tag": "0006_bouncy_sleeper",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1786311023539,
-      "tag": "0007_opposite_valeria_richards",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1786368515848,
-      "tag": "0008_cheerful_sharon_ventura",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1786372349380,
-      "tag": "0009_conference_slug_unique",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1786448019672,
-      "tag": "0010_reviewer_invitation",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1786448720146,
-      "tag": "0011_invitation_created_at",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1786483888214,
-      "tag": "0012_cfp_hidden_fixed_fields",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1786535528835,
-      "tag": "0013_speaker_profile_tags",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1786537522004,
-      "tag": "0014_crm_pipeline",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1747601178582,
+			"tag": "0000_merged_initial_schema",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1786230000000,
+			"tag": "0001_documents_content_markdown",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1786235250444,
+			"tag": "0002_add-passkey-oauth-jwks",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1786291017198,
+			"tag": "0003_conference_domain",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1786292045486,
+			"tag": "0004_speaker_sort_name",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1786305963018,
+			"tag": "0005_glamorous_xorn",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1786308715495,
+			"tag": "0006_bouncy_sleeper",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1786311023539,
+			"tag": "0007_opposite_valeria_richards",
+			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1786368515848,
+			"tag": "0008_cheerful_sharon_ventura",
+			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1786372349380,
+			"tag": "0009_conference_slug_unique",
+			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1786448019672,
+			"tag": "0010_reviewer_invitation",
+			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1786448720146,
+			"tag": "0011_invitation_created_at",
+			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "7",
+			"when": 1786483888214,
+			"tag": "0012_cfp_hidden_fixed_fields",
+			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1786535528835,
+			"tag": "0013_speaker_profile_tags",
+			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "7",
+			"when": 1786537522004,
+			"tag": "0014_crm_pipeline",
+			"breakpoints": true
+		}
+	]
 }
