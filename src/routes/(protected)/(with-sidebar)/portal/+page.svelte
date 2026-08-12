@@ -14,6 +14,37 @@
 
 	const open = $derived(data.tasks.filter((t) => t.status === 'open'));
 	const settled = $derived(data.tasks.filter((t) => t.status !== 'open'));
+	type Task = (typeof data.tasks)[number];
+	type TaskGroup = {
+		key: string;
+		title: string;
+		conferenceName: string;
+		tasks: Task[];
+	};
+
+	const groupBySession = (tasks: Task[]) => {
+		const groups: TaskGroup[] = [];
+
+		for (const task of tasks) {
+			const key = `${task.conference.slug}:${task.submissionId ?? 'event-wide'}`;
+			const existing = groups.find((group) => group.key === key);
+			if (existing) {
+				existing.tasks.push(task);
+				continue;
+			}
+
+			groups.push({
+				key,
+				title: task.submissionTitle ?? 'Event-wide tasks',
+				conferenceName: task.conference.name,
+				tasks: [task]
+			});
+		}
+
+		return groups;
+	};
+
+	const openGroups = $derived(groupBySession(open));
 
 	const statusTone: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
 		draft: 'outline',
@@ -90,33 +121,37 @@
 				</p>
 			</EmptyState>
 		{:else}
-			<ul class="divide-border mt-3 divide-y">
-				{#each open as task (task.id)}
-					<li class="flex flex-wrap items-start justify-between gap-3 py-3">
-						<div>
-							<a class="text-sm font-medium hover:underline" href="/portal/tasks/{task.id}">
-								{task.title}
-							</a>
-							<p class="text-muted-foreground mt-0.5 text-sm">
-								{task.conference.name}{#if task.submissionTitle}<span class="px-1.5">·</span
-									>{task.submissionTitle}{/if}
-							</p>
-							{#if task.instructions}
-								<p class="text-muted-foreground mt-1 text-sm">{task.instructions}</p>
-							{/if}
-						</div>
-						<span
-							class="text-sm {overdue(task.dueOn)
-								? 'text-status-bad font-medium'
-								: 'text-muted-foreground'}"
-						>
-							<!-- One expression rather than an {#if} block: Svelte trims the whitespace
-							     that starts a block, and the line read "11 Aug— overdue" without it. -->
-							{dueLabel(task.dueOn)}{overdue(task.dueOn) ? ' — overdue' : ''}
-						</span>
-					</li>
+			<div class="mt-4 space-y-6">
+				{#each openGroups as group (group.key)}
+					<section aria-labelledby="task-group-{group.key}">
+						<h3 id="task-group-{group.key}" class="font-medium">{group.title}</h3>
+						<p class="text-muted-foreground mt-0.5 text-sm">{group.conferenceName}</p>
+						<ul class="divide-border mt-2 divide-y border-y">
+							{#each group.tasks as task (task.id)}
+								<li class="flex flex-wrap items-start justify-between gap-3 py-3">
+									<div>
+										<a class="text-sm font-medium hover:underline" href="/portal/tasks/{task.id}">
+											{task.title}
+										</a>
+										{#if task.instructions}
+											<p class="text-muted-foreground mt-1 text-sm">{task.instructions}</p>
+										{/if}
+									</div>
+									<span
+										class="text-sm {overdue(task.dueOn)
+											? 'text-status-bad font-medium'
+											: 'text-muted-foreground'}"
+									>
+										<!-- One expression rather than an {#if} block: Svelte trims the whitespace
+										     that starts a block, and the line read "11 Aug— overdue" without it. -->
+										{dueLabel(task.dueOn)}{overdue(task.dueOn) ? ' — overdue' : ''}
+									</span>
+								</li>
+							{/each}
+						</ul>
+					</section>
 				{/each}
-			</ul>
+			</div>
 		{/if}
 
 		{#if settled.length > 0}
@@ -127,7 +162,12 @@
 				<ul class="divide-border mt-2 divide-y">
 					{#each settled as task (task.id)}
 						<li class="py-2">
-							<a class="text-sm hover:underline" href="/portal/tasks/{task.id}">{task.title}</a>
+							<a
+								class="text-sm hover:underline"
+								href="/portal/tasks/{task.id}"
+								aria-label={`${task.title} — ${task.submissionTitle ? `${task.submissionTitle}, ` : ''}${task.conference.name}`}
+								>{task.title}</a
+							>
 							<span class="text-muted-foreground ml-2 text-sm">{task.conference.name}</span>
 						</li>
 					{/each}

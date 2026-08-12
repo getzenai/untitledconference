@@ -60,7 +60,9 @@
 		if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
 		return date.toLocaleDateString('en-GB', options);
 	});
-	const overdue = $derived(Boolean(task.dueOn && new Date(task.dueOn) < new Date()));
+	const overdue = $derived(
+		task.status !== 'done' && Boolean(task.dueOn && new Date(task.dueOn) < new Date())
+	);
 	const sessionWhen = $derived.by(() => {
 		if (!task.sessionStartsAt) return null;
 		const starts = new Date(task.sessionStartsAt);

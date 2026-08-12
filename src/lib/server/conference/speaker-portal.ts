@@ -114,6 +114,7 @@ export async function mySubmissions(userId: string): Promise<PortalSubmission[]>
 
 export type PortalTask = {
 	id: number;
+	submissionId: number | null;
 	title: string;
 	instructions: string | null;
 	status: string;
@@ -135,6 +136,7 @@ export async function myTasks(userId: string): Promise<PortalTask[]> {
 	return db
 		.select({
 			id: taskTable.id,
+			submissionId: taskTable.submissionId,
 			title: taskTable.title,
 			instructions: taskTable.instructions,
 			status: taskTable.status,
