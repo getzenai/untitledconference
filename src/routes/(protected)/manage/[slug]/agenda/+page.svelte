@@ -592,7 +592,7 @@
 													<span class="flex min-h-0 min-w-0 shrink-0 items-center gap-1">
 														<span
 															data-testid="agenda-session-title"
-															class="min-w-0 flex-1 truncate text-sm font-medium leading-tight"
+															class="min-w-0 flex-1 truncate text-sm leading-tight font-medium"
 															title={session.title}>{session.title}</span
 														>
 														<Badge
@@ -639,7 +639,7 @@
 													{/each}
 
 													<span
-														class="text-muted-foreground mt-0.5 block min-w-0 min-h-0 shrink truncate text-xs"
+														class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
 														title={session.trackName
 															? `${speakerLine} · ${session.trackName}`
 															: speakerLine}
