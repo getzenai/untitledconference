@@ -616,17 +616,24 @@
 																	focus from opening the tooltip immediately, and
 																	#onclick closes it. Call the forwarded handlers first,
 																	then ours.
+
+																	bits-ui types the child snippet's props as `{}`, so
+																	narrow the two handlers we actually forward — not `any`.
 																-->
+																{@const tip = props as {
+																	onclick?: (e: MouseEvent) => void;
+																	onpointerdown?: (e: PointerEvent) => void;
+																}}
 																<button
 																	{...props}
 																	type="button"
 																	data-testid="agenda-edit-slot-{session.placementId}"
 																	onclick={(e) => {
-																		props.onclick?.(e);
+																		tip.onclick?.(e);
 																		slotClicked(room, session.startMinutes ?? 0);
 																	}}
 																	onpointerdown={(e) => {
-																		props.onpointerdown?.(e);
+																		tip.onpointerdown?.(e);
 																		drag.begin(e, {
 																			placementId: session.placementId,
 																			title: session.title,
