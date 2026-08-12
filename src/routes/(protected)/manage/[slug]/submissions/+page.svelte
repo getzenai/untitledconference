@@ -8,6 +8,9 @@
 	 * never one at a time. That is the only way the "submissions per hour" measure in
 	 * ROLES_AND_JOURNEYS moves.
 	 */
+	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
+	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
+	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
 	import {
@@ -406,9 +409,15 @@
 						{label}
 						<!-- `aria-sort` above already told a screen reader the state; the arrow is
 						     the same fact for everyone else, so it is hidden rather than read twice. -->
-						<span aria-hidden="true" class="text-[0.9em] leading-none">
-							{state.active ? (state.ascending ? '↑' : '↓') : '↕'}
-						</span>
+						{#if state.active}
+							{#if state.ascending}
+								<ArrowUpIcon aria-hidden="true" class="size-3.5" />
+							{:else}
+								<ArrowDownIcon aria-hidden="true" class="size-3.5" />
+							{/if}
+						{:else}
+							<ChevronsUpDownIcon aria-hidden="true" class="size-3.5" />
+						{/if}
 					</a>
 				</th>
 			{/snippet}

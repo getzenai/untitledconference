@@ -35,13 +35,24 @@
 		withdrawn: 'Withdrawn'
 	};
 
+	/**
+	 * The year appears only when it is not this one.
+	 *
+	 * The list is sorted by deadline and spans a CFP, so without it the run reads
+	 * "Tue, 25 Aug" and then "Wed, 14 Apr" — which looks like the sort is broken
+	 * rather than like the next year has begun. Printing the year on every row
+	 * would pay for that with noise on the rows that are actually due soon.
+	 */
 	const dueLabel = (dueOn: Date | string | null) => {
 		if (!dueOn) return 'No deadline';
-		return new Date(dueOn).toLocaleDateString('en-GB', {
+		const date = new Date(dueOn);
+		const options: Intl.DateTimeFormatOptions = {
 			weekday: 'short',
 			day: 'numeric',
 			month: 'short'
-		});
+		};
+		if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
+		return date.toLocaleDateString('en-GB', options);
 	};
 
 	const overdue = (dueOn: Date | string | null) => Boolean(dueOn && new Date(dueOn) < new Date());
@@ -99,8 +110,9 @@
 								? 'text-status-bad font-medium'
 								: 'text-muted-foreground'}"
 						>
-							{dueLabel(task.dueOn)}{#if overdue(task.dueOn)}
-								— overdue{/if}
+							<!-- One expression rather than an {#if} block: Svelte trims the whitespace
+							     that starts a block, and the line read "11 Aug— overdue" without it. -->
+							{dueLabel(task.dueOn)}{overdue(task.dueOn) ? ' — overdue' : ''}
 						</span>
 					</li>
 				{/each}

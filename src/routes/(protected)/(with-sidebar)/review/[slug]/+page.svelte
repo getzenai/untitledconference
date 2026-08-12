@@ -6,6 +6,9 @@
 	 * reviews first is the working list, highest score first is the decision agenda.
 	 * Both are URL state, so either is a link somebody can send.
 	 */
+	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
+	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
+	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import { QUEUE_SORTS } from '$lib/conference/review-visibility';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -87,9 +90,18 @@
 					: ''}"
 			>
 				{label}
-				<span aria-hidden="true" class="text-[0.9em] leading-none">
-					{active ? (direction === 'ascending' ? '↑' : '↓') : '↕'}
-				</span>
+				<!-- An icon, not an arrow character: "↕" is emoji-eligible and macOS renders it
+				     as a blue emoji tile next to a grey text "↑", so the two headers of the same
+				     table disagreed about what a sort indicator looks like. -->
+				{#if active}
+					{#if direction === 'ascending'}
+						<ArrowUpIcon aria-hidden="true" class="size-3.5" />
+					{:else}
+						<ArrowDownIcon aria-hidden="true" class="size-3.5" />
+					{/if}
+				{:else}
+					<ChevronsUpDownIcon aria-hidden="true" class="size-3.5" />
+				{/if}
 			</a>
 		</th>
 	{/snippet}

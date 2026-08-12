@@ -173,9 +173,11 @@
 		{#each s.criteria as criterion (criterion.id)}
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">
-					{criterion.label}{#if criterion.kind === 'rating' && criterion.scaleMax}
-						<span> (1–{criterion.scaleMax})</span>
-					{/if}
+					<!-- One expression rather than an {#if} block: Svelte trims the whitespace that
+					     starts a block, and the label read "Relevance(1–5)" without it. -->
+					{criterion.label}{criterion.kind === 'rating' && criterion.scaleMax
+						? ` (1–${criterion.scaleMax})`
+						: ''}
 				</span>
 
 				{#if criterion.kind === 'rating'}
