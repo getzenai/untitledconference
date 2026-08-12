@@ -13,11 +13,18 @@
  */
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	conferenceSpeakerTable,
+	conferenceTable,
+	roomTable,
+	speakerProfileTable
+} from '$lib/server/db/conference/conference-schema';
 import { deliverableTable, taskTable } from '$lib/server/db/conference/content-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { actions } from './+page.server';
+import { actions, load } from './+page.server';
 
 const suffix = `upload-guard-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -25,6 +32,7 @@ const speakerUserId = `speaker-${suffix}`;
 
 let fileTaskId = 0;
 let actionTaskId = 0;
+let speakerProfileId = 0;
 
 /** What the action was asked to store, in order. Empty means nothing was put. */
 let stored: string[] = [];
@@ -51,6 +59,19 @@ function uploadEvent(taskId: number) {
 			}
 		}
 	} as unknown as Parameters<typeof actions.upload>[0];
+}
+
+function participationEvent(taskId: number, decision: string) {
+	const body = new FormData();
+	body.set('decision', decision);
+	return {
+		request: new Request(`http://localhost/portal/tasks/${taskId}?/participation`, {
+			method: 'POST',
+			body
+		}),
+		params: { id: String(taskId) },
+		locals: { user: { id: speakerUserId } }
+	} as unknown as Parameters<typeof actions.participation>[0];
 }
 
 beforeAll(async () => {
@@ -84,6 +105,32 @@ beforeAll(async () => {
 		.insert(speakerProfileTable)
 		.values({ organizationId, userId: speakerUserId, name: 'A Speaker', sortName: 'Speaker, A' })
 		.returning();
+	await db.insert(conferenceSpeakerTable).values({
+		conferenceId: conference.id,
+		speakerProfileId: profile.id,
+		status: 'invited'
+	});
+	const [submission] = await db
+		.insert(submissionTable)
+		.values({
+			conferenceId: conference.id,
+			title: 'Shipping without the wait',
+			status: 'accepted'
+		})
+		.returning();
+	const [room] = await db
+		.insert(roomTable)
+		.values({ conferenceId: conference.id, name: 'Main Stage' })
+		.returning();
+	await db.insert(placementTable).values({
+		conferenceId: conference.id,
+		submissionId: submission.id,
+		kind: 'session',
+		status: 'confirmed',
+		startsAt: new Date('2027-05-12T09:00:00Z'),
+		endsAt: new Date('2027-05-12T09:45:00Z'),
+		roomId: room.id
+	});
 
 	const [fileTask] = await db
 		.insert(taskTable)
@@ -99,6 +146,7 @@ beforeAll(async () => {
 		.values({
 			conferenceId: conference.id,
 			speakerProfileId: profile.id,
+			submissionId: submission.id,
 			title: 'Confirm participation',
 			kind: 'action'
 		})
@@ -106,6 +154,7 @@ beforeAll(async () => {
 
 	fileTaskId = fileTask.id;
 	actionTaskId = actionTask.id;
+	speakerProfileId = profile.id;
 });
 
 afterAll(async () => {
@@ -167,5 +216,42 @@ describe('?/upload', () => {
 			.from(taskTable)
 			.where(eq(taskTable.id, fileTaskId));
 		expect(task.status).toBe('submitted');
+	});
+});
+
+describe('?/participation', () => {
+	it('loads the accepted session and its confirmed time and room', async () => {
+		const data = await load({
+			params: { id: String(actionTaskId) },
+			locals: { user: { id: speakerUserId } }
+		} as never);
+		if (!data) throw new Error('Task load returned no data');
+
+		expect(data.task).toMatchObject({
+			submissionTitle: 'Shipping without the wait',
+			sessionStartsAt: new Date('2027-05-12T09:00:00Z'),
+			sessionEndsAt: new Date('2027-05-12T09:45:00Z'),
+			sessionRoom: 'Main Stage',
+			participationStatus: 'invited'
+		});
+	});
+
+	it('turns a real response into roster state and a completed task', async () => {
+		const result = (await actions.participation(participationEvent(actionTaskId, 'confirmed'))) as {
+			participation: string;
+		};
+		expect(result.participation).toBe('confirmed');
+
+		const [membership] = await db
+			.select({ status: conferenceSpeakerTable.status })
+			.from(conferenceSpeakerTable)
+			.where(eq(conferenceSpeakerTable.speakerProfileId, speakerProfileId));
+		const [task] = await db
+			.select({ status: taskTable.status })
+			.from(taskTable)
+			.where(eq(taskTable.id, actionTaskId));
+
+		expect(membership.status).toBe('confirmed');
+		expect(task.status).toBe('done');
 	});
 });
