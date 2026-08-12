@@ -16,10 +16,13 @@
 
 	let {
 		busy = false,
+		embedded = false,
 		enhanceForm,
 		form
 	}: {
 		busy?: boolean;
+		/** Render without the card wrapper and heading when nested inside a dialog (issue #220). */
+		embedded?: boolean;
 		/** The page's shared submit handler, so this form disables with the others. */
 		enhanceForm: Parameters<typeof enhance>[1];
 		form: { scope?: string; message?: string; error?: string } | null;
@@ -34,11 +37,13 @@
 	const csvExample = ['name,email,company', 'Ada Bennett,ada@example.com,Globex'].join('\n');
 </script>
 
-<section
-	class="border-border bg-card max-w-3xl rounded-lg border p-4"
+<div
+	class={embedded ? 'space-y-3' : 'border-border bg-card max-w-3xl rounded-lg border p-4'}
 	data-testid="speakers-import"
 >
-	<h2 class="text-sm font-semibold">Import a list</h2>
+	{#if !embedded}
+		<h2 class="text-sm font-semibold">Import a list</h2>
+	{/if}
 	<p class="text-muted-foreground mt-0.5 text-xs">
 		A CSV with a header row. <code class="text-foreground">name</code> is the only column that has
 		to be there; <code class="text-foreground">email</code>,
@@ -108,4 +113,4 @@
 			Import speakers
 		</Button>
 	</form>
-</section>
+</div>

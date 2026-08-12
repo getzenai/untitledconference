@@ -61,6 +61,8 @@ describe('Speaker bulk mail', () => {
 		cy.url().should('include', 'status=confirmed');
 		cy.get('[data-testid="speaker-row"]').should('have.length', 3);
 
+		// Compose lives behind a dialog (issue #220): open it, then fill and send.
+		cy.get('[data-testid="speaker-mail-open"]').click();
 		cy.get('[data-testid="speaker-mail-compose"]')
 			.should('contain', '2 recipients with an email address in the current filter')
 			.within(() => {

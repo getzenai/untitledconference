@@ -8,11 +8,14 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
-	import AppSelect from '$lib/components/app/app-select.svelte';
-	import { tick } from 'svelte';
+	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
+	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
-	import { Button } from '$lib/components/ui/button';
+	import { tick } from 'svelte';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
@@ -30,6 +33,9 @@
 
 	let busy = $state(false);
 	let editingId = $state<number | null>(null);
+	let composeOpen = $state(false);
+	let addOpen = $state(false);
+	let importOpen = $state(false);
 
 	const statusOptions = $derived(
 		data.statuses.map((status: string) => ({ value: status, label: status }))
@@ -104,12 +110,72 @@
 				{/if}
 			</p>
 		</div>
+
+		<div class="flex flex-wrap items-center gap-2">
+			<Dialog.Root bind:open={composeOpen}>
+				<Dialog.Trigger
+					class={buttonVariants({ size: 'sm', variant: 'secondary' })}
+					data-testid="speaker-mail-open"
+				>
+					Email speakers
+				</Dialog.Trigger>
+				<Dialog.Content class="sm:max-w-lg" data-testid="speaker-mail-compose">
+					<Dialog.Header>
+						<Dialog.Title>Email speakers</Dialog.Title>
+						<Dialog.Description>
+							One message to the addresses in the current filter. Delivery is recorded in the
+							conference mail log.
+						</Dialog.Description>
+					</Dialog.Header>
+					<ComposeForm
+						recipients={mailRecipients}
+						{filtered}
+						filters={data.filters}
+						{busy}
+						enhanceForm={submitting}
+					/>
+				</Dialog.Content>
+			</Dialog.Root>
+
+			<Dialog.Root bind:open={addOpen}>
+				<Dialog.Trigger
+					class={buttonVariants({ size: 'sm', variant: 'secondary' })}
+					data-testid="speakers-add"
+				>
+					Add speaker
+				</Dialog.Trigger>
+				<Dialog.Content class="sm:max-w-lg">
+					<Dialog.Header>
+						<Dialog.Title>Add a speaker</Dialog.Title>
+						<Dialog.Description>
+							Creates an org-wide profile (or reuses one by email) and puts them on this conference.
+						</Dialog.Description>
+					</Dialog.Header>
+					<AddSpeakerForm {statusOptions} {busy} enhanceForm={submitting} />
+				</Dialog.Content>
+			</Dialog.Root>
+
+			<Dialog.Root bind:open={importOpen}>
+				<Dialog.Trigger
+					class={buttonVariants({ size: 'sm', variant: 'secondary' })}
+					data-testid="speakers-import-open"
+				>
+					Import
+				</Dialog.Trigger>
+				<Dialog.Content class="sm:max-w-lg">
+					<Dialog.Header>
+						<Dialog.Title>Import a list</Dialog.Title>
+					</Dialog.Header>
+					<SpeakerImport embedded {busy} enhanceForm={submitting} {form} />
+				</Dialog.Content>
+			</Dialog.Root>
+		</div>
 	</div>
 </div>
 
 <div class="space-y-6 px-6 py-5">
 	{#if form?.scope === 'import'}
-		<!-- Nothing here: the import answers inside its own section, below. -->
+		<!-- Nothing here: the import answers inside its own dialog, above. -->
 	{:else if form?.error}
 		<p
 			class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
@@ -189,135 +255,8 @@
 		{/each}
 	</div>
 
-	<!-- Organizer-authored mail follows the same URL filters as the roster. -->
-	<section
-		class="border-border bg-card max-w-3xl rounded-lg border p-4"
-		data-testid="speaker-mail-compose"
-	>
-		<h2 class="text-sm font-semibold">Email filtered speakers</h2>
-		<p class="text-muted-foreground mt-0.5 text-xs">
-			{mailRecipients} recipient{mailRecipients === 1 ? '' : 's'} with an email address
-			{#if filtered}
-				in the current filter{/if}. Delivery is recorded in the conference mail log.
-		</p>
-		<form method="POST" action="?/compose" use:enhance={submitting} class="mt-3 grid gap-3">
-			<input type="hidden" name="q" value={data.filters.q ?? ''} />
-			<input type="hidden" name="status" value={data.filters.status ?? ''} />
-			<div>
-				<label
-					class="text-muted-foreground mb-1 block text-xs font-medium"
-					for="speaker-mail-subject"
-				>
-					Subject
-				</label>
-				<Input
-					id="speaker-mail-subject"
-					name="subject"
-					maxlength={200}
-					required
-					data-testid="speaker-mail-subject"
-				/>
-			</div>
-			<div>
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="speaker-mail-body">
-					Message
-				</label>
-				<textarea
-					id="speaker-mail-body"
-					name="body"
-					rows="5"
-					maxlength="10000"
-					required
-					class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-					data-testid="speaker-mail-body"
-				></textarea>
-			</div>
-			<div>
-				<Button
-					type="submit"
-					size="sm"
-					disabled={busy || mailRecipients === 0}
-					data-testid="speaker-mail-submit"
-				>
-					Send to {mailRecipients} speaker{mailRecipients === 1 ? '' : 's'}
-				</Button>
-			</div>
-		</form>
-	</section>
-
-	<!-- Add speaker -->
-	<section class="border-border bg-card max-w-3xl rounded-lg border p-4" data-testid="speakers-add">
-		<h2 class="text-sm font-semibold">Add a speaker</h2>
-		<p class="text-muted-foreground mt-0.5 text-xs">
-			Creates an org-wide profile (or reuses one by email) and puts them on this conference.
-		</p>
-		<form
-			method="POST"
-			action="?/add"
-			use:enhance={submitting}
-			class="mt-3 grid gap-3 sm:grid-cols-2"
-		>
-			<div class="sm:col-span-2">
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-name">
-					Name <span class="text-status-bad">*</span>
-				</label>
-				<Input id="add-name" name="name" required autocomplete="name" data-testid="add-name" />
-			</div>
-			<div>
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-email">
-					Email
-				</label>
-				<Input
-					id="add-email"
-					name="email"
-					type="email"
-					autocomplete="email"
-					data-testid="add-email"
-				/>
-			</div>
-			<div>
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-status">
-					Status
-				</label>
-				<AppSelect
-					id="add-status"
-					name="status"
-					testId="add-status"
-					value="invited"
-					options={statusOptions}
-				/>
-			</div>
-			<div>
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-job">
-					Job title
-				</label>
-				<Input id="add-job" name="jobTitle" data-testid="add-jobTitle" />
-			</div>
-			<div>
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-company">
-					Company
-				</label>
-				<Input id="add-company" name="company" data-testid="add-company" />
-			</div>
-			<div class="sm:col-span-2">
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-bio">Bio</label
-				>
-				<textarea
-					id="add-bio"
-					name="bio"
-					rows="2"
-					class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-					data-testid="add-bio"
-				></textarea>
-			</div>
-			<div class="sm:col-span-2">
-				<Button type="submit" size="sm" disabled={busy} data-testid="add-submit"
-					>Add to roster</Button
-				>
-			</div>
-		</form>
-	</section>
-	<SpeakerImport {busy} enhanceForm={submitting} {form} />
+	<!-- The compose, add and import forms live in the header dialogs above; at
+		 rest this list is a list. -->
 
 	<!-- Roster table -->
 	{#if data.speakers.length === 0}
