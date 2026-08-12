@@ -206,6 +206,8 @@ jobs:
     name: Integration Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
 
+    # The `test` database is only a control connection. The npm script creates
+    # and drops a unique database for the run on this Postgres service.
     services:
       postgres:
         image: postgres:18
@@ -255,6 +257,8 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [build, unit-tests, integration-tests]
 
+    # E2E gets another disposable per-run database on this service; it never
+    # reuses the integration job's fixtures or schema state.
     services:
       postgres:
         image: postgres:18

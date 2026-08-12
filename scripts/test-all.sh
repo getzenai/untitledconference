@@ -48,10 +48,11 @@ if ! pg_isready -h localhost -p 5433 -q 2>/dev/null; then
   done
 fi
 
-# Ensure TEST_DATABASE_URL is set (default: local Docker test DB)
+# Set the control URL. Integration and E2E each create and clean up their own
+# disposable database on this server.
 if [ -z "${TEST_DATABASE_URL:-}" ]; then
   export TEST_DATABASE_URL="postgres://root:mysecretpassword@localhost:5433/test"
-  echo -e "${YELLOW}TEST_DATABASE_URL not set — using local Docker test DB${NC}"
+  echo -e "${YELLOW}TEST_DATABASE_URL not set — using local Docker test server${NC}"
 fi
 
 echo -e "\n${GREEN}Starting test suites...${NC}"

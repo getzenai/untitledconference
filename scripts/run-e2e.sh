@@ -8,9 +8,9 @@
 #   ./scripts/run-e2e.sh --spec cypress/e2e/critical-paths/login-workflow.cy.ts
 #
 # Database:
-#   TEST_DATABASE_URL is used if set (env or .env, e.g. from Infisical via
-#   ./scripts/infisical/dev-from-infisical.sh); otherwise it falls back to the
-#   local Docker test database from docker-compose.yml (port 5433).
+#   The npm scripts wrap this runner with scripts/test/with-isolated-db.mjs.
+#   TEST_DATABASE_URL supplies the server credentials, and the wrapper creates a
+#   disposable database for this run so concurrent worktrees cannot collide.
 #
 # No real secrets are needed: E2E runs with a throwaway BETTER_AUTH_SECRET and
 # the test endpoints enabled, exactly like the CI job does.

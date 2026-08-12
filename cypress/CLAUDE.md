@@ -28,11 +28,13 @@ npm run test:e2e:spec -- cypress/e2e/critical-paths/login-workflow.cy.ts   # one
 SKIP_BUILD=true npm run test:e2e                                    # reuse the previous build
 ```
 
-`scripts/run-e2e.sh` pushes the schema to `TEST_DATABASE_URL`, builds the app,
-starts `vite preview` on a free port, and runs Cypress against it. If
-`TEST_DATABASE_URL` is unset it falls back to the local Docker test database
-(`docker compose up -d test-db`, port 5433). No Infisical secrets are needed:
-E2E runs with a throwaway `BETTER_AUTH_SECRET` and `ENABLE_TEST_ENDPOINTS=true`.
+The npm scripts create a unique database on the `TEST_DATABASE_URL` server, then
+`scripts/run-e2e.sh` pushes its schema, builds the app, starts `vite preview` on a
+free port, and runs Cypress against it. The database is force-dropped afterwards,
+including on test failure. If `TEST_DATABASE_URL` is unset, the control connection
+falls back to the local Docker test server (`docker compose up -d test-db`, port
+5433). No Infisical secrets are needed: E2E runs with a throwaway
+`BETTER_AUTH_SECRET` and `ENABLE_TEST_ENDPOINTS=true`.
 
 ## Custom commands
 
