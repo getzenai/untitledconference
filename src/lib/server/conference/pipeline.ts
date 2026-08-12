@@ -123,41 +123,25 @@ export function boardByStage(cards: PipelineCard[]): Record<PipelineStage, Pipel
 	return board;
 }
 
-export async function getPipelineCard(
-	userId: string,
-	cardId: number
-): Promise<PipelineCardDetail | null> {
-	if (!Number.isInteger(cardId) || cardId <= 0) return null;
-	const orgIds = await organizerOrganizationIds(userId);
-	if (orgIds.length === 0) return null;
+const cardSelect = {
+	id: crmPipelineCardTable.id,
+	organizationId: crmPipelineCardTable.organizationId,
+	speakerProfileId: crmPipelineCardTable.speakerProfileId,
+	stage: crmPipelineCardTable.stage,
+	notes: crmPipelineCardTable.notes,
+	score: crmPipelineCardTable.score,
+	rationale: crmPipelineCardTable.rationale,
+	updatedAt: crmPipelineCardTable.updatedAt,
+	name: speakerProfileTable.name,
+	email: speakerProfileTable.email,
+	company: speakerProfileTable.company,
+	jobTitle: speakerProfileTable.jobTitle
+};
 
-	const [row] = await db
-		.select({
-			id: crmPipelineCardTable.id,
-			organizationId: crmPipelineCardTable.organizationId,
-			speakerProfileId: crmPipelineCardTable.speakerProfileId,
-			stage: crmPipelineCardTable.stage,
-			notes: crmPipelineCardTable.notes,
-			score: crmPipelineCardTable.score,
-			rationale: crmPipelineCardTable.rationale,
-			updatedAt: crmPipelineCardTable.updatedAt,
-			name: speakerProfileTable.name,
-			email: speakerProfileTable.email,
-			company: speakerProfileTable.company,
-			jobTitle: speakerProfileTable.jobTitle
-		})
-		.from(crmPipelineCardTable)
-		.innerJoin(
-			speakerProfileTable,
-			eq(speakerProfileTable.id, crmPipelineCardTable.speakerProfileId)
-		)
-		.where(
-			and(eq(crmPipelineCardTable.id, cardId), inArray(crmPipelineCardTable.organizationId, orgIds))
-		)
-		.limit(1);
-
-	if (!row || !isPipelineStage(row.stage)) return null;
-
+async function loadStageHistory(
+	cardId: number,
+	fallbackStage: PipelineStage
+): Promise<StageHistoryEntry[]> {
 	const historyRows = await db
 		.select({
 			id: crmPipelineStageHistoryTable.id,
@@ -169,26 +153,36 @@ export async function getPipelineCard(
 		.where(eq(crmPipelineStageHistoryTable.cardId, cardId))
 		.orderBy(desc(crmPipelineStageHistoryTable.changedAt), desc(crmPipelineStageHistoryTable.id));
 
-	return {
-		id: row.id,
-		organizationId: row.organizationId,
-		speakerProfileId: row.speakerProfileId,
-		stage: row.stage,
-		notes: row.notes,
-		score: row.score,
-		rationale: row.rationale,
-		name: row.name,
-		email: row.email,
-		company: row.company,
-		jobTitle: row.jobTitle,
-		updatedAt: row.updatedAt,
-		history: historyRows.map((h) => ({
-			id: h.id,
-			fromStage: h.fromStage && isPipelineStage(h.fromStage) ? h.fromStage : null,
-			toStage: (isPipelineStage(h.toStage) ? h.toStage : row.stage) as PipelineStage,
-			changedAt: h.changedAt
-		}))
-	};
+	return historyRows.map((h) => ({
+		id: h.id,
+		fromStage: h.fromStage && isPipelineStage(h.fromStage) ? h.fromStage : null,
+		toStage: (isPipelineStage(h.toStage) ? h.toStage : fallbackStage) as PipelineStage,
+		changedAt: h.changedAt
+	}));
+}
+
+export async function getPipelineCard(
+	userId: string,
+	cardId: number
+): Promise<PipelineCardDetail | null> {
+	if (!Number.isInteger(cardId) || cardId <= 0) return null;
+	const orgIds = await organizerOrganizationIds(userId);
+	if (orgIds.length === 0) return null;
+
+	const [row] = await db
+		.select(cardSelect)
+		.from(crmPipelineCardTable)
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, crmPipelineCardTable.speakerProfileId)
+		)
+		.where(
+			and(eq(crmPipelineCardTable.id, cardId), inArray(crmPipelineCardTable.organizationId, orgIds))
+		)
+		.limit(1);
+
+	if (!row || !isPipelineStage(row.stage)) return null;
+	return { ...row, stage: row.stage, history: await loadStageHistory(cardId, row.stage) };
 }
 
 export type EnrollPipelineInput = {
@@ -196,6 +190,34 @@ export type EnrollPipelineInput = {
 	score?: number | null;
 	rationale?: string | null;
 };
+
+function clampScore(score: number | null | undefined): number | null {
+	if (score == null || Number.isNaN(Number(score))) return null;
+	return Math.max(0, Math.min(100, Math.round(Number(score))));
+}
+
+async function insertEnrolledCard(
+	userId: string,
+	organizationId: string,
+	speakerProfileId: number,
+	stage: PipelineStage,
+	score: number | null,
+	rationale: string | null
+): Promise<number> {
+	return db.transaction(async (tx) => {
+		const [created] = await tx
+			.insert(crmPipelineCardTable)
+			.values({ organizationId, speakerProfileId, stage, score, rationale })
+			.returning({ id: crmPipelineCardTable.id });
+		await tx.insert(crmPipelineStageHistoryTable).values({
+			cardId: created.id,
+			fromStage: null,
+			toStage: stage,
+			changedByUserId: userId
+		});
+		return created.id;
+	});
+}
 
 /** Enroll a directory contact onto the board (CRM-07). */
 export async function enrollContact(
@@ -206,15 +228,11 @@ export async function enrollContact(
 	if (!Number.isInteger(speakerProfileId) || speakerProfileId <= 0) {
 		return { ok: false, reason: 'not_found' };
 	}
-
 	const orgIds = await organizerOrganizationIds(userId);
 	if (orgIds.length === 0) return { ok: false, reason: 'forbidden' };
 
 	const [profile] = await db
-		.select({
-			id: speakerProfileTable.id,
-			organizationId: speakerProfileTable.organizationId
-		})
+		.select({ id: speakerProfileTable.id, organizationId: speakerProfileTable.organizationId })
 		.from(speakerProfileTable)
 		.where(
 			and(
@@ -223,16 +241,7 @@ export async function enrollContact(
 			)
 		)
 		.limit(1);
-
 	if (!profile) return { ok: false, reason: 'not_found' };
-
-	const stage: PipelineStage =
-		input.stage && isPipelineStage(input.stage) ? input.stage : 'identified';
-	const score =
-		input.score == null || Number.isNaN(Number(input.score))
-			? null
-			: Math.max(0, Math.min(100, Math.round(Number(input.score))));
-	const rationale = trimOrNull(input.rationale);
 
 	const [existing] = await db
 		.select({ id: crmPipelineCardTable.id })
@@ -244,31 +253,18 @@ export async function enrollContact(
 			)
 		)
 		.limit(1);
-
 	if (existing) return { ok: false, reason: 'already_enrolled', cardId: existing.id };
 
-	const cardId = await db.transaction(async (tx) => {
-		const [created] = await tx
-			.insert(crmPipelineCardTable)
-			.values({
-				organizationId: profile.organizationId,
-				speakerProfileId,
-				stage,
-				score,
-				rationale
-			})
-			.returning({ id: crmPipelineCardTable.id });
-
-		await tx.insert(crmPipelineStageHistoryTable).values({
-			cardId: created.id,
-			fromStage: null,
-			toStage: stage,
-			changedByUserId: userId
-		});
-
-		return created.id;
-	});
-
+	const stage: PipelineStage =
+		input.stage && isPipelineStage(input.stage) ? input.stage : 'identified';
+	const cardId = await insertEnrolledCard(
+		userId,
+		profile.organizationId,
+		speakerProfileId,
+		stage,
+		clampScore(input.score),
+		trimOrNull(input.rationale)
+	);
 	return { ok: true, cardId };
 }
 
