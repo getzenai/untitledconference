@@ -62,12 +62,21 @@ export const actions: Actions = {
 			// Two different failures, two different answers. Calling an empty submit
 			// "not assigned to you" would send the reviewer looking for a permission
 			// problem they do not have.
-			return saved.reason === 'not_assigned'
-				? fail(404, { message: 'This submission is not assigned to you.' })
-				: fail(400, {
-						message:
-							'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
-					});
+			if (saved.reason === 'not_assigned') {
+				return fail(404, { message: 'This submission is not assigned to you.' });
+			}
+			// Withdrawn is neither a permission problem nor a validation one: the talk
+			// left while this form was open, and the reviewer needs to know that rather
+			// than be told to write more.
+			if (saved.reason === 'withdrawn') {
+				return fail(409, {
+					message: 'The speaker withdrew this talk, so it no longer needs a review.'
+				});
+			}
+			return fail(400, {
+				message:
+					'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
+			});
 		}
 
 		return {
