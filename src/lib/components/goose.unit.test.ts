@@ -35,6 +35,8 @@ describe('goose.svelte easter egg wiring', () => {
 	it('gates the shake on reduced motion; silent has no poke handler', () => {
 		expect(source).toContain('prefersReducedMotion');
 		expect(source).toContain('goosePokeEffects');
+		// Reduced-motion path still has a non-motion state change (opacity flash).
+		expect(source).toContain('goose-flash');
 
 		// Silent branch is a bare svg — no button, no FeatherConfetti inside it.
 		const silentBlock = source.slice(source.indexOf('{#if silent}'), source.indexOf('{:else}'));

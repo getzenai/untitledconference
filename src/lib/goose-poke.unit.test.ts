@@ -12,14 +12,18 @@ describe('goosePokeEffects', () => {
 		expect(first.confettiTrigger).toBe(1);
 		expect(second.confettiTrigger).toBe(2);
 		expect(first.shake).toBe(true);
+		expect(first.flash).toBe(false);
 		expect(second.shake).toBe(true);
 	});
 
-	it('still bumps confetti under reduced motion, but skips the shake', () => {
+	it('under reduced motion: no confetti bump, no shake, but a flash', () => {
 		const result = goosePokeEffects({ confettiTrigger: 4, prefersReducedMotion: true });
 
-		expect(result.confettiTrigger).toBe(5);
+		// Confetti is motion; leave the counter alone. FeatherConfetti also self-gates.
+		expect(result.confettiTrigger).toBe(4);
 		expect(result.shake).toBe(false);
+		// Reduced motion forbids movement, not state change — a dim/bright is enough.
+		expect(result.flash).toBe(true);
 	});
 });
 

@@ -1,9 +1,10 @@
 /**
  * Pure click-effect math for the non-silent goose.
  *
- * The component owns the markup, the sound, and the animation class; this module
- * owns the numbers so a unit test can assert "second click still fires confetti"
- * and "reduced motion skips the shake" without mounting Svelte or waiting on CSS.
+ * The component owns the markup, the sound, and the visual class; this module
+ * owns the numbers so a unit test can assert "second click still fires confetti",
+ * "reduced motion skips motion", and "reduced motion still gets a state change"
+ * without mounting Svelte or waiting on CSS.
  */
 
 export type GoosePokeInput = {
@@ -13,10 +14,15 @@ export type GoosePokeInput = {
 };
 
 export type GoosePokeResult = {
-	/** Always increments so a second honk re-fires the burst. */
+	/** Increments only when confetti may run — second honk re-fires the burst. */
 	confettiTrigger: number;
-	/** Whether to run the shake class. Honk is decided by the caller (always). */
+	/** Full-motion shake. Never together with `flash`. */
 	shake: boolean;
+	/**
+	 * Non-motion state change for reduced-motion users. Honk may already play;
+	 * without this, muted + reduced-motion looks like a dead button.
+	 */
+	flash: boolean;
 };
 
 /**
@@ -24,9 +30,17 @@ export type GoosePokeResult = {
  * Silent instances never call this.
  */
 export function goosePokeEffects(input: GoosePokeInput): GoosePokeResult {
+	if (input.prefersReducedMotion) {
+		return {
+			confettiTrigger: input.confettiTrigger,
+			shake: false,
+			flash: true
+		};
+	}
 	return {
 		confettiTrigger: input.confettiTrigger + 1,
-		shake: !input.prefersReducedMotion
+		shake: true,
+		flash: false
 	};
 }
 

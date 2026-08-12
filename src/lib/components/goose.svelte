@@ -4,7 +4,8 @@
 	 * outline/eyes. Dark: only white and orange darken — no invert, no hue flip.
 	 *
 	 * Non-silent: click honks, drops feathers (FeatherConfetti counter), and
-	 * shakes briefly. Silent: decorative only — no button, no motion, no sound.
+	 * shakes briefly. Under prefers-reduced-motion: honk + a brief opacity flash
+	 * (no motion, no particles). Silent: decorative only — no button, no effects.
 	 */
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
 	import { playRandomHonk } from '$lib/goose-honk';
@@ -20,6 +21,9 @@
 	/** Counter, not boolean — bumping re-fires FeatherConfetti on every click. */
 	let confettiTrigger = $state(0);
 	let shaking = $state(false);
+	/** Reduced-motion feedback: opacity class, not a keyframe animation. */
+	let flashing = $state(false);
+	let flashTimer: ReturnType<typeof setTimeout> | undefined;
 
 	function poke() {
 		playRandomHonk();
@@ -28,6 +32,21 @@
 			prefersReducedMotion: prefersReducedMotion()
 		});
 		confettiTrigger = next.confettiTrigger;
+
+		if (next.flash) {
+			shaking = false;
+			// Instant state change — not a multi-frame animation. Clear first so a
+			// rapid re-click restarts the hold time.
+			if (flashTimer !== undefined) clearTimeout(flashTimer);
+			flashing = true;
+			flashTimer = setTimeout(() => {
+				flashing = false;
+				flashTimer = undefined;
+			}, 180);
+			return;
+		}
+
+		flashing = false;
 		if (!next.shake) {
 			shaking = false;
 			return;
@@ -89,8 +108,8 @@
 		class="focus-visible:ring-ring appearance-none border-0 bg-transparent p-0 leading-none focus-visible:ring-[3px] focus-visible:outline-none"
 	>
 		<!--
-			Shake lives on the SVG, never the button: a transform on the button
-			would walk the focus ring. FeatherConfetti is fixed + pointer-events
+			Shake and flash live on the SVG, never the button: a transform on the
+			button would walk the focus ring. FeatherConfetti is fixed + pointer-events
 			none, so the burst never shifts layout around the goose.
 		-->
 		<svg
@@ -98,7 +117,8 @@
 			class={cn(
 				'cursor-pointer text-black dark:text-neutral-950',
 				className,
-				shaking && 'goose-shake'
+				shaking && 'goose-shake',
+				flashing && 'goose-flash'
 			)}
 			stroke="currentColor"
 			stroke-width="2.3"
@@ -116,6 +136,11 @@
 <style>
 	.goose-shake {
 		animation: goose-shake 450ms ease-in-out;
+	}
+
+	/* Instant opacity hold — no keyframes. Used only under reduced motion. */
+	.goose-flash {
+		opacity: 0.55;
 	}
 
 	@keyframes goose-shake {
