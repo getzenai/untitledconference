@@ -31,6 +31,9 @@
 	// gutter readable without coarsening the placement underneath it.
 	const SLOT_MINUTES = 15;
 	const LABEL_EVERY = 2; // every 30 minutes
+	// Two rows is 30 minutes: the shortest card the grid draws, and the only one
+	// whose content does not fit at the normal padding.
+	const COMPACT_ROWS = 2;
 	const bounds = $derived.by(() => {
 		if (daySessions.length === 0) return null;
 		const starts = daySessions.map((s) => s.start.getTime());
@@ -208,23 +211,36 @@
 				{#each daySessions as session (session.id)}
 					{@const col = columnOf(session)}
 					{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
+					{@const compact = rowOf(session.end) - rowOf(session.start) <= COMPACT_ROWS}
 					<!--
 						min-w-0 + overflow-hidden keep long titles inside narrow room
 						columns; title= exposes the full string when the card clips.
+
+						A 30-minute card is two 1.5rem rows, so 47px: p-2 leaves 31px for
+						content while two lines of leading-tight text-sm need 35px, and the
+						second line was cut mid-word with no ellipsis — which reads as broken
+						rather than shortened. Compact cards therefore pad by 4px instead of
+						8, which is the whole deficit, and clamp the title so anything longer
+						still ends in an ellipsis. The meta line is dropped rather than
+						clipped invisibly; the dialog behind the card carries it.
 					-->
 					<button
 						type="button"
 						onclick={() => (selected = session)}
-						class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border p-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+						class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none {compact
+							? 'p-1'
+							: 'p-2'}"
 						style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(session.start)} / {rowOf(
 							session.end
 						)};"
 						title={session.title}
 					>
-						<span class="block w-full min-w-0 text-sm leading-tight font-medium break-words"
-							>{session.title}</span
+						<span
+							class="w-full min-w-0 text-sm leading-tight font-medium {compact
+								? 'line-clamp-2'
+								: 'block break-words'}">{session.title}</span
 						>
-						{#if meta}
+						{#if meta && !compact}
 							<span class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs">
 								{meta}
 							</span>
