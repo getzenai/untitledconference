@@ -619,10 +619,11 @@
 										variant="outline"
 										class="h-7 px-2 text-xs"
 										disabled={busy}
+										title="Assign this task to accepted speakers who do not have it yet. New acceptances already get templates automatically."
 									>
 										Give to {data.pending[template.id]} accepted {data.pending[template.id] === 1
 											? 'speaker'
-											: 'speakers'}
+											: 'speakers'} still missing it
 									</Button>
 								</form>
 							{/if}
