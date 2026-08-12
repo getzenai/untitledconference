@@ -32,6 +32,18 @@ fi
 
 export TEST_DATABASE_URL="${TEST_DATABASE_URL:-postgres://root:mysecretpassword@localhost:5433/test}"
 export DATABASE_URL="$TEST_DATABASE_URL"
+# Allocate a port for this run so a preview left behind by another worktree
+# cannot silently receive the Cypress traffic. There is a small race between
+# releasing this probe socket and starting Vite; --strictPort below turns that
+# race into a loud failure instead of falling through to a foreign server.
+E2E_PORT="${E2E_PORT:-$(node --input-type=module -e '
+    import net from "node:net";
+    const server = net.createServer();
+    server.listen(0, "127.0.0.1", () => {
+        console.log(server.address().port);
+        server.close();
+    });
+')}"
 # `vite preview` emulates the Worker's bindings from wrangler.jsonc, so the app
 # reads HYPERDRIVE.connectionString here exactly as it does in production. Left
 # alone that is wrangler's `localConnectionString`, which points at a fixed
@@ -39,11 +51,12 @@ export DATABASE_URL="$TEST_DATABASE_URL"
 # — every page a 500, and nothing naming the cause. This is wrangler's own
 # override, and it keeps the address in one place: TEST_DATABASE_URL.
 export WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE="$TEST_DATABASE_URL"
-# This script owns the preview server, so the auth base URL is fixed to it -
+# This script owns the preview server, so the auth base URL is fixed to it —
 # a stale BETTER_AUTH_URL from .env (e.g. the dev server on :5173) would make
 # Better Auth mint links and cookies for the wrong origin.
-export BETTER_AUTH_URL="http://localhost:5174"
-export BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:5174,http://127.0.0.1:5174"
+export BETTER_AUTH_URL="http://127.0.0.1:$E2E_PORT"
+export BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:$E2E_PORT,http://127.0.0.1:$E2E_PORT"
+export CYPRESS_BASE_URL="$BETTER_AUTH_URL"
 export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-e2e-local-secret-not-a-real-credential}"
 export ENABLE_TEST_ENDPOINTS=true
 export REQUIRE_EMAIL_VERIFICATION=false
@@ -80,6 +93,6 @@ fi
 echo ""
 echo "=== Starting preview server and running Cypress ==="
 npx start-server-and-test \
-    "npm run preview -- --port 5174" \
-    "http://localhost:5174" \
+    "npm run preview -- --host 127.0.0.1 --port $E2E_PORT --strictPort" \
+    "$BETTER_AUTH_URL" \
     "npx cypress $CYPRESS_CMD $*"
