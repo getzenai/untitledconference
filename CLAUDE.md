@@ -108,7 +108,7 @@ projects, so double-check the filename when adding a new test.
 
 ```bash
 npm run test:unit          # vitest --project unit — no DB needed
-npm run test:integration   # vitest --project integration — needs TEST_DATABASE_URL (docker compose up -d gives one on :5433)
+npm run test:integration   # isolated per-run DB — needs the test Postgres server (Docker :5433)
 npm run test:e2e           # full E2E suite — see e2e/CLAUDE.md
 npm run test               # unit, then integration, then e2e, in that order
 npm run test:all           # ./scripts/test-all.sh — the comprehensive local runner
@@ -128,6 +128,10 @@ npm run format            # Format code
 `npm run test:e2e` runs `scripts/run-e2e.sh`: push schema to `TEST_DATABASE_URL`,
 build, start `vite preview` on a free port, run Cypress. Set `SKIP_BUILD=true` to
 reuse an existing build. No Infisical secrets are needed for E2E.
+
+Integration and E2E commands create a unique database on the server identified by
+`TEST_DATABASE_URL` and force-drop it after the run. Concurrent worktrees therefore
+share only the Postgres server, never fixtures or schema state.
 
 ### E2E Test Debugging
 
