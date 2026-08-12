@@ -13,6 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
 	createContact,
 	getContact,
+	getCrmOverview,
 	importContacts,
 	listContacts,
 	pushContactToConference,
@@ -236,6 +237,86 @@ describe('importContacts (CRM-05)', () => {
 		await importContacts(organizerId, organizationId, [row]);
 		const second = await importContacts(organizerId, organizationId, [row]);
 		expect(second).toEqual({ ok: true, added: 0, skipped: ['Dup'] });
+	});
+
+	it('rolls back earlier rows when a later CSV row has no name', async () => {
+		const result = await importContacts(organizerId, organizationId, [
+			{
+				line: 2,
+				name: 'Should Roll Back',
+				email: `rollback-${suffix}@example.com`,
+				jobTitle: null,
+				company: null,
+				bio: null,
+				notes: null,
+				status: null
+			},
+			{
+				line: 3,
+				name: '',
+				email: `blank-${suffix}@example.com`,
+				jobTitle: null,
+				company: null,
+				bio: null,
+				notes: null,
+				status: null
+			}
+		]);
+		expect(result).toEqual({
+			ok: false,
+			problem: 'Row 3: A name is required.'
+		});
+		expect(await listContacts(organizerId)).toEqual([]);
+	});
+});
+
+describe('getCrmOverview (CRM-12)', () => {
+	it('reports total contacts, events with speakers, returning speakers, and top companies', async () => {
+		const acmeA = await createContact(organizerId, organizationId, {
+			name: 'Acme One',
+			email: `acme1-${suffix}@example.com`,
+			company: 'Acme'
+		});
+		const acmeB = await createContact(organizerId, organizationId, {
+			name: 'Acme Two',
+			email: `acme2-${suffix}@example.com`,
+			company: 'Acme'
+		});
+		const globex = await createContact(organizerId, organizationId, {
+			name: 'Globex One',
+			email: `globex1-${suffix}@example.com`,
+			company: 'Globex'
+		});
+		expect(acmeA.ok && acmeB.ok && globex.ok).toBe(true);
+		if (!acmeA.ok || !acmeB.ok || !globex.ok) return;
+
+		// Acme One on both events → returning speaker; Acme Two on A only.
+		await pushContactToConference(organizerId, acmeA.speakerProfileId, slugA);
+		await pushContactToConference(organizerId, acmeA.speakerProfileId, slugB);
+		await pushContactToConference(organizerId, acmeB.speakerProfileId, slugA);
+
+		const overview = await getCrmOverview(organizerId);
+		expect(overview.totalContacts).toBe(3);
+		expect(overview.eventsWithSpeakers).toBe(2);
+		expect(overview.returningSpeakers).toBe(1);
+		expect(overview.topCompanies).toEqual([
+			{ company: 'Acme', count: 2 },
+			{ company: 'Globex', count: 1 }
+		]);
+	});
+
+	it('is empty for a user who does not administer any organization', async () => {
+		await createContact(organizerId, organizationId, {
+			name: 'Hidden',
+			email: `hidden-ov-${suffix}@example.com`,
+			company: 'Acme'
+		});
+		expect(await getCrmOverview(outsiderId)).toEqual({
+			totalContacts: 0,
+			eventsWithSpeakers: 0,
+			returningSpeakers: 0,
+			topCompanies: []
+		});
 	});
 });
 
