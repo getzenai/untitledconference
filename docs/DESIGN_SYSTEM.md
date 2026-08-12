@@ -239,11 +239,11 @@ and the meaning at once — it is the tool you submit with.
 - **Where she belongs:** empty states, the marketing page, 404, the README.
 - **Where she does not:** the submissions table, the reviewer queue, the agenda grid. Those
   screens are judged on how many rows fit on one screen.
-- **Solid, not outline.** The body carries a solid gray fill (`goose.svelte` on the marketing
-  page inlines the drawing so it can pick a Tailwind gray for the body and a dark orange for
-  the bill and feet, with a darker shade of each in dark mode — a plain color swap, not an
-  `invert()` filter). `static/mascot/goose.svg` mirrors those colors as fixed hex values for
-  contexts without Tailwind, like the README.
+- **Solid, not outline.** White plumage, orange bill and feet (`orange-500`), black outline
+  and eyes (`goose.svelte` on the marketing page inlines the drawing so it can use Tailwind
+  classes; in dark mode only the white and the orange darken — `neutral-300` / `orange-700` —
+  a plain color swap, not an `invert()` filter). `static/mascot/goose.svg` mirrors the light
+  palette as fixed hex values for contexts without Tailwind, like the README.
 - **Click, and she honks.** Every goose on the marketing page except the header logo plays a
   random honk from `static/sounds/honk/` on click, loaded lazily so the landing page pays
   nothing for audio until someone clicks.
