@@ -216,8 +216,8 @@
 		>
 			<h2 class="text-sm font-semibold">Start with the structure</h2>
 			<p class="text-muted-foreground mt-1 text-sm">
-				Rooms, tracks and session formats below are what speakers pick when they submit.
-				When those look right, open
+				Rooms, tracks and session formats below are what speakers pick when they submit. When those
+				look right, open
 				<a class="underline underline-offset-4" href="{base}/cfp">Call for papers</a>
 				to publish the form and set its dates.
 			</p>
