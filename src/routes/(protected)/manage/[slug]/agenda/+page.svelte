@@ -555,15 +555,17 @@
 										{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
 										{#if rows}
 											<!--
-												min-w-0 + overflow-hidden keep long titles, speaker lists and
-												conflict badges inside the slot, even when a clash splits the
-												column into narrow lanes. title= keeps the full conflict text
-												reachable when the badge has to wrap or clip.
+												Title first — the clock is already on the grid axis, so the
+												card's job is the talk name. One truncated line + title=
+												keeps it readable even in a 15-minute slot; min-h-8 floors
+												the card so short durations do not collapse past that line.
+												min-w-0 + overflow-hidden still clip width (#154 / #166);
+												nothing here changes DnD keys or drop targets.
 											-->
 											<div
 												data-testid="agenda-placed-session"
 												data-placement-id={session.placementId}
-												class="absolute z-10 min-w-0 overflow-hidden rounded-md border {clashes.length >
+												class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
 												0
 													? 'border-status-bad bg-status-bad/10'
 													: 'border-border bg-card'} {drag.dragging?.placementId ===
@@ -585,14 +587,14 @@
 															title: session.title,
 															roomId: room.id
 														})}
-													class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-1 text-left select-none"
+													class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none"
 												>
-													<span
-														class="flex min-w-0 items-baseline justify-between gap-1 text-xs tabular-nums"
-													>
-														<span class="min-w-0 truncate font-medium">
-															{timeLabel(session.startMinutes)}–{timeLabel(session.endMinutes)}
-														</span>
+													<span class="flex min-h-0 min-w-0 shrink-0 items-center gap-1">
+														<span
+															data-testid="agenda-session-title"
+															class="min-w-0 flex-1 truncate text-sm leading-tight font-medium"
+															title={session.title}>{session.title}</span
+														>
 														<Badge
 															class="shrink-0"
 															variant={session.status === 'confirmed' ? 'secondary' : 'outline'}
@@ -600,9 +602,17 @@
 															{session.status === 'confirmed' ? 'Published' : 'Draft'}
 														</Badge>
 													</span>
+													<!-- Clock is secondary: the grid axis already places the block.
+													     Kept small so short slots still read the title first, and so
+													     existing E2E can pin a drop by the range text. -->
+													<span
+														class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
+													>
+														{timeLabel(session.startMinutes)}–{timeLabel(session.endMinutes)}
+													</span>
 													{#if session.submissionStatus === 'rejected'}
 														<span
-															class="text-status-bad block min-w-0 text-xs font-medium"
+															class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
 															data-testid="rejected-placement-badge"
 															title="This talk was declined but its slot remains — remove or reassign it."
 														>
@@ -610,7 +620,7 @@
 														</span>
 													{:else if session.submissionStatus === 'waitlisted'}
 														<span
-															class="text-status-warn block min-w-0 text-xs font-medium"
+															class="text-status-warn block min-w-0 shrink truncate text-xs font-medium"
 															data-testid="rejected-placement-badge"
 															title="This talk is waitlisted but its slot remains — remove or reassign it."
 														>
@@ -621,7 +631,7 @@
 													{#each clashes as clash, ci (ci)}
 														<span
 															data-testid="agenda-conflict"
-															class="text-status-bad block min-w-0 text-xs font-medium break-words"
+															class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
 															title={clash}
 														>
 															{clash}
@@ -629,11 +639,7 @@
 													{/each}
 
 													<span
-														class="mt-0.5 block min-w-0 text-sm leading-tight break-words"
-														title={session.title}>{session.title}</span
-													>
-													<span
-														class="text-muted-foreground block min-w-0 truncate text-xs"
+														class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
 														title={session.trackName
 															? `${speakerLine} · ${session.trackName}`
 															: speakerLine}
