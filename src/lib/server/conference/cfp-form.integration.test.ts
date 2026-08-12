@@ -103,6 +103,24 @@ describe('creating the form', () => {
 		expect(second.title).toBe('DevFlow CFP');
 	});
 
+	it('after create stays draft until published — the public path stays dark', async () => {
+		const created = await createCfpForm(conference.id, 'Fresh CFP');
+		expect(created.status).toBe('draft');
+		expect(await publishedFormFor(conference.id)).toBeNull();
+
+		await updateCfpForm(conference.id, {
+			title: created.title,
+			description: '',
+			opensAt: null,
+			closesAt: null,
+			status: 'published'
+		});
+
+		const live = await publishedFormFor(conference.id);
+		expect(live?.form.status).toBe('published');
+		expect(live?.form.id).toBe(created.id);
+	});
+
 	it('only exposes a published or closed form to the public loader', async () => {
 		await createCfpForm(conference.id, 'DevFlow CFP');
 		expect(await publishedFormFor(conference.id)).toBeNull();

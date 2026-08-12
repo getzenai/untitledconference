@@ -34,7 +34,7 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, count, eq, exists, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
 import { orderFor, submittedReviewCount, type SubmissionSort } from './submission-sort';
 
 export type SubmissionFilters = {
@@ -163,12 +163,17 @@ function pushScore(
  * speaker's work in progress, and putting it on the reviewers' pile would be
  * reading somebody's notebook.
  *
- * Deliberately about reviews and not about the decision. A rejected talk with no
- * review does show up here — the status checkboxes are right beside this one, and
- * a filter that quietly folded a second rule in would make them lie.
+ * Review work only: submitted or in_review with no handed-in review yet. A talk
+ * that already carries a decision is not "still to review" — use the status filters
+ * for those.
  */
 function needsReviewWhere(conferenceId: number) {
-	return and(ne(submissionTable.status, 'draft'), sql`${submittedReviewCount(conferenceId)} = 0`)!;
+	// Live pipeline only: accepted/rejected/waitlisted/withdrawn are decisions, not
+	// review work — even if nobody ever scored them. Drafts are the speaker's WIP.
+	return and(
+		inArray(submissionTable.status, ['submitted', 'in_review']),
+		sql`${submittedReviewCount(conferenceId)} = 0`
+	)!;
 }
 
 /** The SQL predicate behind the filter bar. */
