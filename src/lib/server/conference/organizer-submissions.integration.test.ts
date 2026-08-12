@@ -519,6 +519,36 @@ describe('the still-to-review filter (#122)', () => {
 	 * is not review work — and it would be on this list forever, since nobody can
 	 * review it.
 	 */
+
+	it('leaves decided talks out even when nobody reviewed them', async () => {
+		await pile();
+		await addSubmission(conference, 'Already accepted', 5);
+		await addSubmission(conference, 'Already withdrawn', 6);
+		await db
+			.update(submissionTable)
+			.set({ status: 'accepted' })
+			.where(
+				and(
+					eq(submissionTable.conferenceId, conference.id),
+					eq(submissionTable.title, 'Already accepted')
+				)
+			);
+		await db
+			.update(submissionTable)
+			.set({ status: 'withdrawn' })
+			.where(
+				and(
+					eq(submissionTable.conferenceId, conference.id),
+					eq(submissionTable.title, 'Already withdrawn')
+				)
+			);
+
+		const titles = await titlesOf();
+		expect(titles).toEqual(['Assigned talk', 'Untouched talk']);
+		expect(titles).not.toContain('Already accepted');
+		expect(titles).not.toContain('Already withdrawn');
+	});
+
 	it('leaves drafts out', async () => {
 		await pile();
 

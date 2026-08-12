@@ -41,6 +41,9 @@ describe('Submissions table', () => {
 					slug,
 					days: ['2028-05-10'],
 					sessions: ['Zeta talk', 'Middle talk', 'Alpha talk'],
+					// Live pipeline, not accepted: still-to-review only includes
+					// submitted/in_review. Accepted talks are decisions and never match.
+					sessionStatus: 'submitted',
 					// One track, on 'Zeta talk' only — a track filter that ignores its
 					// parameter returns all three and is caught.
 					tracks: ['Platform'],
@@ -74,13 +77,14 @@ describe('Submissions table', () => {
 	});
 
 	/**
-	 * What is left to review (#122).
+	 * What is left to review: submitted/in_review with no handed-in review.
 	 *
-	 * Both halves need a pile where some talks are reviewed and some are not, which
-	 * is why the fixture files one review. Only a real navigation can prove that the
-	 * checkbox becomes a query parameter, the loader reads it, and the rows that
-	 * come back are the right ones — the unit test can only prove the control is on
-	 * the page.
+	 * Fixture sessions are `submitted` (not accepted) so they match the live-pipeline
+	 * predicate. Both halves need a pile where some talks are reviewed and some are
+	 * not, which is why the fixture files one review. Only a real navigation can prove
+	 * that the checkbox becomes a query parameter, the loader reads it, and the rows
+	 * that come back are the right ones — the unit test can only prove the control is
+	 * on the page.
 	 */
 	describe('still to review', () => {
 		beforeEach(() => {

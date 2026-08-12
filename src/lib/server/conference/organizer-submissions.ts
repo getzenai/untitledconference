@@ -34,7 +34,7 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, count, eq, exists, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
 import { orderFor, submittedReviewCount, type SubmissionSort } from './submission-sort';
 
 export type SubmissionFilters = {
@@ -152,23 +152,29 @@ function pushScore(
 }
 
 /**
- * Still to be reviewed: not a draft, and not one review handed in yet (#122).
+ * Still to be reviewed: live pipeline only, and not one review handed in yet.
  *
  * The most-asked-for filter on this screen, and the definition is the one already
  * printed in the page header — the same expression feeds both, so the filter and
  * the count above it cannot drift apart. A filter that shows 14 rows under a
  * header saying 12 is a bug report, not a feature.
  *
- * Drafts are out because a draft has not been handed in at all: it is the
- * speaker's work in progress, and putting it on the reviewers' pile would be
- * reading somebody's notebook.
+ * Scope is submitted/in_review only. Fabian's journey review: accepted and
+ * withdrawn talks with no reviews still showed under "still to review", which
+ * reads as open work when the decision is already made. Those are decisions —
+ * use the status checkboxes for them. Drafts stay out for the same reason as
+ * always: a draft has not been handed in; putting it on the reviewers' pile
+ * would be reading somebody's notebook.
  *
- * Deliberately about reviews and not about the decision. A rejected talk with no
- * review does show up here — the status checkboxes are right beside this one, and
- * a filter that quietly folded a second rule in would make them lie.
+ * AND with a status checkbox is intentional and can be empty: "accepted" +
+ * still-to-review is a guaranteed empty set (accepted is never in the live
+ * pipeline). That is okay — the checkboxes still mean what they say.
  */
 function needsReviewWhere(conferenceId: number) {
-	return and(ne(submissionTable.status, 'draft'), sql`${submittedReviewCount(conferenceId)} = 0`)!;
+	return and(
+		inArray(submissionTable.status, ['submitted', 'in_review']),
+		sql`${submittedReviewCount(conferenceId)} = 0`
+	)!;
 }
 
 /** The SQL predicate behind the filter bar. */
@@ -177,6 +183,8 @@ function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
 
 	if (filters.needsReview) where.push(needsReviewWhere(conferenceId));
 
+	// Status checkboxes AND with still-to-review. Accepted + still-to-review is
+	// empty by construction (see needsReviewWhere) — not a bug.
 	if (filters.status?.length) {
 		where.push(inArray(submissionTable.status, filters.status as Submission['status'][]));
 	}
