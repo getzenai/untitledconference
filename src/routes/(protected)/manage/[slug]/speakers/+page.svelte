@@ -298,7 +298,7 @@
 		>
 			<table class="w-full min-w-[40rem] text-left text-sm">
 				<thead
-					class="border-border bg-muted/40 sticky top-0 z-10 border-b text-xs"
+					class="border-border bg-muted sticky top-0 z-10 border-b text-xs"
 					data-testid="speakers-table-head"
 				>
 					<tr>
