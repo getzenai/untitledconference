@@ -481,6 +481,169 @@ describe('saving a review', () => {
 });
 
 /**
+ * ABS-01. #207 gave the round an `opensAt`/`closesAt` pair and recorded it without
+ * enforcing it. These are the POSTs that a date has to refuse to be a date: hiding
+ * the buttons is not the guard, and a reviewer with a stale tab never sees them.
+ */
+describe('the round’s window', () => {
+	const DAY = 86_400_000;
+
+	/** Puts my round in a window without touching anything else about it. */
+	async function windowIs(opensAt: Date | null, closesAt: Date | null) {
+		await db
+			.update(reviewRoundTable)
+			.set({ opensAt, closesAt })
+			.where(eq(reviewRoundTable.id, roundId));
+		return conferenceNow();
+	}
+
+	/** A function, not a constant: `criterionId` is only set in `beforeEach`. */
+	/** A second round on the same talk, assigned to me, after round 1 in board order. */
+	async function secondRoundOn(
+		submissionId: number,
+		window: { opensAt?: Date; closesAt?: Date }
+	): Promise<number> {
+		const [plan] = await db
+			.select()
+			.from(evaluationPlanTable)
+			.where(eq(evaluationPlanTable.conferenceId, conference.id));
+		const [second] = await db
+			.insert(reviewRoundTable)
+			.values({
+				evaluationPlanId: plan.id,
+				name: 'Second look',
+				position: 2,
+				opensAt: window.opensAt ?? null,
+				closesAt: window.closesAt ?? null
+			})
+			.returning();
+		await db.insert(reviewTable).values({
+			reviewRoundId: second.id,
+			submissionId,
+			reviewerUserId: ME,
+			status: 'assigned'
+		});
+		return second.id;
+	}
+
+	const answers = () => ({ answers: { [criterionId]: '4' }, comment: 'On time', submit: true });
+
+	it('takes the review while the round is running', async () => {
+		const now = await windowIs(new Date(Date.now() - DAY), new Date(Date.now() + DAY));
+		expect(await saveReview(now, ME, mine, answers())).toEqual({ ok: true });
+	});
+
+	it('refuses before the round opens', async () => {
+		const now = await windowIs(new Date(Date.now() + DAY), null);
+
+		expect(await saveReview(now, ME, mine, answers())).toEqual({
+			ok: false,
+			reason: 'round_not_open'
+		});
+		// Nothing was written on the way to the refusal.
+		expect((await reviewerSubmission(now, ME, mine))?.criteria[0].value).toBeNull();
+	});
+
+	it('refuses after the round closes, and refuses the draft too', async () => {
+		const now = await windowIs(null, new Date(Date.now() - DAY));
+
+		expect(await saveReview(now, ME, mine, answers())).toEqual({
+			ok: false,
+			reason: 'round_closed'
+		});
+		// "Save progress" writes the same scores the submit does, so leaving it open
+		// would hand the whole edit back through the quieter button.
+		expect(await saveReview(now, ME, mine, { ...answers(), submit: false })).toEqual({
+			ok: false,
+			reason: 'round_closed'
+		});
+		expect((await reviewerSubmission(now, ME, mine))?.criteria[0].value).toBeNull();
+	});
+
+	it('will not let a review already filed be changed after the close', async () => {
+		const open = await windowIs(null, new Date(Date.now() + DAY));
+		expect(await saveReview(open, ME, mine, answers())).toEqual({ ok: true });
+
+		const shut = await windowIs(null, new Date(Date.now() - DAY));
+		expect(
+			await saveReview(shut, ME, mine, {
+				answers: { [criterionId]: '1' },
+				comment: '',
+				submit: true
+			})
+		).toEqual({ ok: false, reason: 'round_closed' });
+		expect((await reviewerSubmission(shut, ME, mine))?.criteria[0].value).toBe(4);
+	});
+
+	it('leaves a round with no dates open — the old conferences are not locked out', async () => {
+		const now = await windowIs(null, null);
+		expect(await saveReview(now, ME, mine, answers())).toEqual({ ok: true });
+	});
+
+	it('tells the queue and the scorecard the same thing the POST is judged by', async () => {
+		const closesAt = new Date(Date.now() - DAY);
+		const now = await windowIs(null, closesAt);
+
+		const [row] = (await reviewQueue(now, ME)).filter((r) => r.submissionId === mine);
+		expect(row.window.state).toBe('closed');
+		expect(row.window.label).toBe('Closed');
+		expect((await reviewerSubmission(now, ME, mine))?.window.state).toBe('closed');
+		expect((await reviewerSubmission(now, ME, mine))?.window.notice).toContain('closed on');
+	});
+
+	/**
+	 * The queue and the form have to name the SAME round. `ownReview` used to take
+	 * whichever row Postgres returned first, which was harmless while only
+	 * `anonymized` hung off it — with the window on it, the queue would say "To do"
+	 * from the open round and the page behind the link would refuse from the closed
+	 * one.
+	 */
+	it('opens the form on the round that still wants work, not the shut one', async () => {
+		// The closed round is round 1: lower position, lower id, so it is the row an
+		// unordered query hands back.
+		await windowIs(null, new Date(Date.now() - DAY));
+		const openRoundId = await secondRoundOn(mine, { closesAt: new Date(Date.now() + DAY) });
+
+		const now = await conferenceNow();
+		const submission = await reviewerSubmission(now, ME, mine);
+		expect(submission?.window.state).toBe('open');
+		// And it really is the second round's form: filing has to land there.
+		expect(await saveReview(now, ME, mine, answers())).toEqual({ ok: true });
+		const [filed] = await db
+			.select({ roundId: reviewTable.reviewRoundId })
+			.from(reviewTable)
+			.where(and(eq(reviewTable.id, submission!.own.reviewId)));
+		expect(filed.roundId).toBe(openRoundId);
+	});
+
+	it('falls back to a shut round when every round I hold it in is shut', async () => {
+		await windowIs(null, new Date(Date.now() - DAY));
+		await secondRoundOn(mine, { opensAt: new Date(Date.now() + DAY) });
+
+		const now = await conferenceNow();
+		// "Opens tomorrow" is a thing to come back for; "closed" is not, so the
+		// waiting round speaks for both.
+		expect((await reviewerSubmission(now, ME, mine))?.window.state).toBe('not_yet_open');
+		expect(await saveReview(now, ME, mine, answers())).toEqual({
+			ok: false,
+			reason: 'round_not_open'
+		});
+	});
+
+	it('lets an open round win over a closed one when I hold the talk in both', async () => {
+		await windowIs(null, new Date(Date.now() - DAY));
+		// A second, still-running round on the same talk: the queue's job is to say
+		// whether anything is asked of me, and something is.
+		await secondRoundOn(mine, { closesAt: new Date(Date.now() + DAY) });
+
+		const [row] = (await reviewQueue(await conferenceNow(), ME)).filter(
+			(r) => r.submissionId === mine
+		);
+		expect(row.window.state).toBe('open');
+	});
+});
+
+/**
  * #33. `blind_until_reviewed` unlocks the peers on a status flag, which makes the flag
  * worth gaming. Both exploits are about the flag, not about the reading rule — the
  * withholding query itself was already right.

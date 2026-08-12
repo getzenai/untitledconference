@@ -1,3 +1,4 @@
+import { roundWindow } from '$lib/conference/round-window';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import type { PageData } from './$types';
@@ -31,10 +32,16 @@ type Peer = {
 
 function page(
 	status: 'assigned' | 'submitted',
-	opts: { submissionStatus?: string; peers?: Peer[] } = {}
+	opts: {
+		submissionStatus?: string;
+		peers?: Peer[];
+		/** The round's window (ABS-01); no dates means a round that is simply open. */
+		window?: ReturnType<typeof roundWindow>;
+	} = {}
 ) {
 	const submissionStatus = opts.submissionStatus ?? 'in_review';
 	const peers = opts.peers ?? [];
+	const window = opts.window ?? roundWindow(null, null);
 	return render(Page, {
 		props: {
 			data: {
@@ -53,6 +60,7 @@ function page(
 					sessionFormat: null,
 					speakers: [],
 					anonymized: false,
+					window,
 					own: { reviewId: 42, status, comment: null },
 					criteria: [],
 					peers,
@@ -117,6 +125,48 @@ describe('the form on a withdrawn talk', () => {
 		const body = page('assigned', { submissionStatus: 'in_review' });
 
 		expect(body).not.toContain('no longer needs a review');
+	});
+});
+
+/**
+ * ABS-01 on the page. The guard is `saveReview`, not this markup — but a form that
+ * still invites answers after the round shut is why somebody types them.
+ */
+describe('the form outside the round window', () => {
+	const day = 86_400_000;
+	const now = new Date('2027-03-10T12:00:00Z');
+
+	it('says when a not-yet-open round opens and disables both writes', () => {
+		const body = page('assigned', {
+			window: roundWindow(new Date(now.getTime() + 2 * day), null, now)
+		});
+
+		expect(body).toContain('data-testid="round-window-notice"');
+		expect(body).toContain('This review round opens in 2 days');
+		expect(body).toContain('Nothing can be filed until then.');
+		// Submit and save progress, both dead; recuse stays live because the server
+		// still accepts it.
+		expect(body).toMatch(/disabled=""[^>]*name="intent"/);
+		expect(body).not.toMatch(/disabled=""[^>]*formaction="\?\/recuse"/);
+	});
+
+	it('says a closed round is closed', () => {
+		const body = page('assigned', {
+			window: roundWindow(null, new Date(now.getTime() - day), now)
+		});
+
+		expect(body).toContain('This review round closed on');
+		expect(body).toContain('Reviews can no longer be filed or changed.');
+		expect(body).toMatch(/disabled=""[^>]*name="intent"/);
+	});
+
+	it('leaves the form open while the round is running', () => {
+		const body = page('assigned', {
+			window: roundWindow(new Date(now.getTime() - day), new Date(now.getTime() + day), now)
+		});
+
+		expect(body).not.toContain('data-testid="round-window-notice"');
+		expect(body).not.toMatch(/disabled=""[^>]*name="intent"/);
 	});
 });
 

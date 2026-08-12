@@ -19,6 +19,7 @@
  * Scoped to one conference in the query itself, like `task-templates.ts` — a
  * round id arriving from a form is never trusted on its own.
  */
+import { roundWindow, type RoundWindow } from '$lib/conference/round-window';
 import { db } from '$lib/server/db';
 import {
 	evaluationPlanTable,
@@ -33,6 +34,11 @@ export type ReviewRound = {
 	anonymized: boolean;
 	opensAt: Date | null;
 	closesAt: Date | null;
+	/**
+	 * Where those two dates put the round right now (ABS-01), worded on the server so
+	 * "Opens in 2 days" is not counted again in the reader's zone after hydration.
+	 */
+	window: RoundWindow;
 	position: number;
 	/** Assignments written against this round, for the "is anyone working?" line. */
 	assignments: number;
@@ -48,9 +54,10 @@ export type RoundInput = {
 	 * it is done has a round with no dates, and saying "none" has to stay cheaper
 	 * than inventing a deadline.
 	 *
-	 * Recorded, not enforced. Nothing here closes a reviewer out of a round whose
-	 * `closesAt` has passed — that would be a new gate on work already assigned,
-	 * and it is not what the round dates are being added for.
+	 * Enforced since ABS-01: `saveReview` refuses a round that has not opened or has
+	 * closed, and the reviewer's queue and scorecard say so instead of drawing a form
+	 * that would be rejected. The dates are set here; the one place that decides what
+	 * they mean is `$lib/conference/round-window`.
 	 */
 	opensAt: Date | null;
 	closesAt: Date | null;
@@ -66,7 +73,7 @@ const MAX_ROUNDS = 20;
 const DEFAULT_PLAN_NAME = 'Review plan';
 
 export async function reviewRounds(conferenceId: number): Promise<ReviewRound[]> {
-	return db
+	const rows = await db
 		.select({
 			id: reviewRoundTable.id,
 			name: reviewRoundTable.name,
@@ -83,6 +90,8 @@ export async function reviewRounds(conferenceId: number): Promise<ReviewRound[]>
 		.where(eq(evaluationPlanTable.conferenceId, conferenceId))
 		.groupBy(reviewRoundTable.id)
 		.orderBy(asc(reviewRoundTable.position), asc(reviewRoundTable.id));
+
+	return rows.map((row) => ({ ...row, window: roundWindow(row.opensAt, row.closesAt) }));
 }
 
 export function roundProblem(input: RoundInput): RoundProblem {
