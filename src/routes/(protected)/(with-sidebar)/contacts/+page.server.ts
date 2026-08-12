@@ -1,17 +1,21 @@
 /**
- * Org-wide speaker directory (CRM-01 / CRM-02 / CRM-05).
+ * Org-wide speaker directory (CRM-01 / CRM-02 / CRM-05) plus CRM overview (CRM-12).
  *
  * Outside any single event: every contact in organizations the user owns or
  * administers. Filters live in the URL so a search is shareable and survives reload.
+ * The overview KPIs/widgets sit above the table so the eval finds dashboard evidence
+ * on the same org-level surface.
  */
 import { readSpeakerCsv } from '$lib/conference/speaker-csv';
 import {
 	contactFilterOptions,
 	createContact,
+	getCrmOverview,
 	importContacts,
 	listContacts,
 	organizerOrganizationIds,
-	type ContactFilters
+	type ContactFilters,
+	type CrmOverview
 } from '$lib/server/conference/contacts';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -46,6 +50,13 @@ function optionalText(form: FormData, key: string): string | null {
 	return value === '' ? null : value;
 }
 
+const emptyOverview: CrmOverview = {
+	totalContacts: 0,
+	eventsWithSpeakers: 0,
+	returningSpeakers: 0,
+	topCompanies: []
+};
+
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const userId = locals.user!.id;
 	const orgIds = await organizerOrganizationIds(userId);
@@ -56,7 +67,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			filters: parseFilters(url),
 			filterOptions: { companies: [], jobTitles: [], tags: [] },
 			organizationId: null as string | null,
-			canManage: false
+			canManage: false,
+			overview: emptyOverview
 		};
 	}
 
@@ -67,9 +79,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			: orgIds[0];
 
 	const filters = parseFilters(url);
-	const [contacts, filterOptions] = await Promise.all([
+	const [contacts, filterOptions, overview] = await Promise.all([
 		listContacts(userId, filters),
-		contactFilterOptions(userId)
+		contactFilterOptions(userId),
+		getCrmOverview(userId)
 	]);
 
 	return {
@@ -77,7 +90,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		filters,
 		filterOptions,
 		organizationId,
-		canManage: true
+		canManage: true,
+		overview
 	};
 };
 

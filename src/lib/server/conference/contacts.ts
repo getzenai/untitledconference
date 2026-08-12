@@ -23,7 +23,19 @@ import {
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
-import { and, asc, eq, ilike, inArray, or, type SQL } from 'drizzle-orm';
+import {
+	and,
+	asc,
+	count,
+	desc,
+	eq,
+	ilike,
+	inArray,
+	isNotNull,
+	or,
+	sql,
+	type SQL
+} from 'drizzle-orm';
 import { guessSortName } from './cfp-submission';
 import {
 	addSpeakerToConference,
@@ -34,6 +46,14 @@ import {
 } from './speakers';
 
 const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
+
+/** Thrown inside importContacts so Drizzle rolls the transaction back. */
+class AbortImport extends Error {
+	constructor(readonly problem: string) {
+		super(problem);
+		this.name = 'AbortImport';
+	}
+}
 
 export type ContactFilters = {
 	q?: string;
@@ -380,47 +400,54 @@ export async function importContacts(
 		return { ok: false, problem: 'You do not administer this organization.' };
 	}
 
-	return db.transaction(async (tx) => {
-		let added = 0;
-		const skipped: string[] = [];
+	// Throw on bad rows so Drizzle rolls back — a plain `return { ok: false }` would
+	// commit every insert that already ran in the transaction.
+	try {
+		return await db.transaction(async (tx) => {
+			let added = 0;
+			const skipped: string[] = [];
 
-		for (const row of rows) {
-			const name = row.name?.trim() ?? '';
-			if (!name) return { ok: false, problem: `Row ${row.line}: A name is required.` };
-			const email = trimOrNull(row.email);
+			for (const row of rows) {
+				const name = row.name?.trim() ?? '';
+				if (!name) throw new AbortImport(`Row ${row.line}: A name is required.`);
+				const email = trimOrNull(row.email);
 
-			if (email) {
-				const [existing] = await tx
-					.select({ id: speakerProfileTable.id })
-					.from(speakerProfileTable)
-					.where(
-						and(
-							eq(speakerProfileTable.organizationId, organizationId),
-							eq(speakerProfileTable.email, email)
+				if (email) {
+					const [existing] = await tx
+						.select({ id: speakerProfileTable.id })
+						.from(speakerProfileTable)
+						.where(
+							and(
+								eq(speakerProfileTable.organizationId, organizationId),
+								eq(speakerProfileTable.email, email)
+							)
 						)
-					)
-					.limit(1);
-				if (existing) {
-					skipped.push(name);
-					continue;
+						.limit(1);
+					if (existing) {
+						skipped.push(name);
+						continue;
+					}
 				}
+
+				await tx.insert(speakerProfileTable).values({
+					organizationId,
+					name: name.slice(0, 200),
+					sortName: guessSortName(name).slice(0, 200),
+					email,
+					jobTitle: trimOrNull(row.jobTitle),
+					company: trimOrNull(row.company),
+					bio: trimOrNull(row.bio),
+					notes: trimOrNull(row.notes)
+				});
+				added += 1;
 			}
 
-			await tx.insert(speakerProfileTable).values({
-				organizationId,
-				name: name.slice(0, 200),
-				sortName: guessSortName(name).slice(0, 200),
-				email,
-				jobTitle: trimOrNull(row.jobTitle),
-				company: trimOrNull(row.company),
-				bio: trimOrNull(row.bio),
-				notes: trimOrNull(row.notes)
-			});
-			added += 1;
-		}
-
-		return { ok: true, added, skipped };
-	});
+			return { ok: true, added, skipped };
+		});
+	} catch (err) {
+		if (err instanceof AbortImport) return { ok: false, problem: err.problem };
+		throw err;
+	}
 }
 
 /**
@@ -546,5 +573,95 @@ export async function contactFilterOptions(userId: string): Promise<{
 		companies: [...companies].sort(sort),
 		jobTitles: [...jobTitles].sort(sort),
 		tags: [...tags].sort(sort)
+	};
+}
+
+export type CrmCompanyBucket = {
+	company: string;
+	count: number;
+};
+
+export type CrmOverview = {
+	/** Speaker profiles in orgs the user administers. */
+	totalContacts: number;
+	/** Distinct conferences that already have at least one directory contact on the roster. */
+	eventsWithSpeakers: number;
+	/** Contacts linked to two or more events — the "returning speaker" KPI. */
+	returningSpeakers: number;
+	/** Top companies by contact count (analytics widget; drill-through via company filter). */
+	topCompanies: CrmCompanyBucket[];
+};
+
+const TOP_COMPANIES_LIMIT = 8;
+
+/**
+ * Org-wide CRM dashboard numbers (CRM-12).
+ *
+ * Counts match the unfiltered directory so the total-contacts KPI is consistent
+ * with the table below. Top companies feed the analytics widget and link into
+ * the existing company filter on this same page.
+ */
+export async function getCrmOverview(userId: string): Promise<CrmOverview> {
+	const empty: CrmOverview = {
+		totalContacts: 0,
+		eventsWithSpeakers: 0,
+		returningSpeakers: 0,
+		topCompanies: []
+	};
+	const orgIds = await organizerOrganizationIds(userId);
+	if (orgIds.length === 0) return empty;
+
+	const orgScope = inArray(speakerProfileTable.organizationId, orgIds);
+
+	const [[totalRow], eventRows, multiEventRows, companyRows] = await Promise.all([
+		db.select({ n: count() }).from(speakerProfileTable).where(orgScope),
+		db
+			.select({
+				conferenceId: conferenceSpeakerTable.conferenceId
+			})
+			.from(conferenceSpeakerTable)
+			.innerJoin(
+				speakerProfileTable,
+				eq(speakerProfileTable.id, conferenceSpeakerTable.speakerProfileId)
+			)
+			.where(orgScope)
+			.groupBy(conferenceSpeakerTable.conferenceId),
+		db
+			.select({
+				speakerProfileId: conferenceSpeakerTable.speakerProfileId
+			})
+			.from(conferenceSpeakerTable)
+			.innerJoin(
+				speakerProfileTable,
+				eq(speakerProfileTable.id, conferenceSpeakerTable.speakerProfileId)
+			)
+			.where(orgScope)
+			.groupBy(conferenceSpeakerTable.speakerProfileId)
+			.having(sql`count(*) >= 2`),
+		db
+			.select({
+				company: speakerProfileTable.company,
+				n: sql<number>`count(*)::int`
+			})
+			.from(speakerProfileTable)
+			.where(
+				and(
+					orgScope,
+					isNotNull(speakerProfileTable.company),
+					sql`trim(${speakerProfileTable.company}) <> ''`
+				)
+			)
+			.groupBy(speakerProfileTable.company)
+			.orderBy(desc(sql`count(*)`), asc(speakerProfileTable.company))
+			.limit(TOP_COMPANIES_LIMIT)
+	]);
+
+	return {
+		totalContacts: Number(totalRow?.n ?? 0),
+		eventsWithSpeakers: eventRows.length,
+		returningSpeakers: multiEventRows.length,
+		topCompanies: companyRows
+			.filter((r): r is { company: string; n: number } => Boolean(r.company?.trim()))
+			.map((r) => ({ company: r.company!.trim(), count: Number(r.n) }))
 	};
 }

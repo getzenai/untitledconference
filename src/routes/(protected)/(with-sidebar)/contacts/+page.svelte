@@ -1,6 +1,7 @@
 <script lang="ts">
 	/**
-	 * Speaker CRM directory — org-wide contacts across events (CRM-01 / CRM-02 / CRM-05).
+	 * Speaker CRM directory — org-wide contacts across events (CRM-01 / CRM-02 / CRM-05)
+	 * plus overview KPIs and top-companies analytics (CRM-12).
 	 */
 	import { enhance } from '$app/forms';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
@@ -39,6 +40,11 @@
 		{ value: '', label: 'Any tag' },
 		...data.filterOptions.tags.map((t: string) => ({ value: t, label: t }))
 	]);
+
+	const overview = $derived(data.overview);
+	const maxCompanyCount = $derived(
+		overview.topCompanies.reduce((m: number, c: { count: number }) => Math.max(m, c.count), 1)
+	);
 </script>
 
 <svelte:head>
@@ -87,6 +93,85 @@
 				{form.message}
 			</p>
 		{/if}
+
+		<!-- CRM-12: org-wide metrics + analytics widget above the directory. -->
+		<section class="space-y-3" aria-label="CRM overview" data-testid="crm-overview">
+			<div class="grid gap-3 sm:grid-cols-3" data-testid="crm-kpis">
+				<div class="border-border bg-card rounded-lg border p-4">
+					<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+						Total contacts
+					</p>
+					<p
+						class="mt-1 text-2xl font-semibold tracking-tight tabular-nums"
+						data-testid="crm-kpi-total-contacts"
+					>
+						{overview.totalContacts}
+					</p>
+				</div>
+				<div class="border-border bg-card rounded-lg border p-4">
+					<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+						Events with speakers
+					</p>
+					<p
+						class="mt-1 text-2xl font-semibold tracking-tight tabular-nums"
+						data-testid="crm-kpi-events"
+					>
+						{overview.eventsWithSpeakers}
+					</p>
+				</div>
+				<div class="border-border bg-card rounded-lg border p-4">
+					<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+						Returning speakers
+					</p>
+					<p
+						class="mt-1 text-2xl font-semibold tracking-tight tabular-nums"
+						data-testid="crm-kpi-returning"
+					>
+						{overview.returningSpeakers}
+					</p>
+					<p class="text-muted-foreground mt-1 text-xs">On two or more events</p>
+				</div>
+			</div>
+
+			<div class="border-border bg-card rounded-lg border p-4" data-testid="crm-top-companies">
+				<div class="flex flex-wrap items-baseline justify-between gap-2">
+					<h2 class="text-sm font-semibold tracking-tight">Top companies</h2>
+					<p class="text-muted-foreground text-xs">Click a company to filter the directory</p>
+				</div>
+				{#if overview.topCompanies.length === 0}
+					<p class="text-muted-foreground mt-3 text-sm" data-testid="crm-top-companies-empty">
+						No company data yet — add company on contacts to fill this chart.
+					</p>
+				{:else}
+					<ul class="mt-3 space-y-2" data-testid="crm-top-companies-list">
+						{#each overview.topCompanies as bucket (bucket.company)}
+							<li>
+								<a
+									href="/contacts?company={encodeURIComponent(bucket.company)}"
+									class="hover:bg-muted/40 focus-visible:ring-ring group flex items-center gap-3 rounded-md px-1 py-1 focus-visible:ring-[3px] focus-visible:outline-none"
+									data-testid="crm-company-link"
+									data-company={bucket.company}
+								>
+									<span class="min-w-0 flex-1 truncate text-sm font-medium">{bucket.company}</span>
+									<span
+										class="bg-muted relative h-2 w-28 shrink-0 overflow-hidden rounded-full sm:w-40"
+										aria-hidden="true"
+									>
+										<span
+											class="bg-primary absolute inset-y-0 left-0 rounded-full"
+											style="width: {(bucket.count / maxCompanyCount) * 100}%"
+										></span>
+									</span>
+									<span class="text-muted-foreground w-8 shrink-0 text-right text-sm tabular-nums">
+										{bucket.count}
+									</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</section>
 
 		<!-- Multi-criteria filters (CRM-02): GET so the URL is the source of truth. -->
 		<form

@@ -1,5 +1,5 @@
 /**
- * Contacts directory surface (CRM-01 / CRM-02): searchable table + filters.
+ * Contacts directory surface (CRM-01 / CRM-02 / CRM-12): table, filters, overview.
  */
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,7 +36,16 @@ const baseData = {
 		tags: ['keynote']
 	},
 	organizationId: 'org-1',
-	canManage: true
+	canManage: true,
+	overview: {
+		totalContacts: 3,
+		eventsWithSpeakers: 2,
+		returningSpeakers: 1,
+		topCompanies: [
+			{ company: 'Acme', count: 2 },
+			{ company: 'Globex', count: 1 }
+		]
+	}
 };
 
 describe('contacts directory page', () => {
@@ -55,6 +64,26 @@ describe('contacts directory page', () => {
 		expect(body).toContain('priya@example.com');
 		expect(body).toContain('DevFlow');
 		expect(body).toContain('/contacts/5');
+	});
+
+	it('renders CRM overview KPIs and a populated top-companies widget (CRM-12)', () => {
+		const { body } = render(Page, {
+			props: { data: baseData as never, form: null }
+		});
+
+		expect(body).toContain('data-testid="crm-overview"');
+		expect(body).toContain('data-testid="crm-kpi-total-contacts"');
+		expect(body).toContain('data-testid="crm-kpi-events"');
+		expect(body).toContain('data-testid="crm-kpi-returning"');
+		expect(body).toContain('data-testid="crm-top-companies"');
+		expect(body).toContain('data-testid="crm-top-companies-list"');
+		// KPI values
+		expect(body).toMatch(/crm-kpi-total-contacts"[^>]*>\s*3/);
+		expect(body).toMatch(/crm-kpi-events"[^>]*>\s*2/);
+		expect(body).toMatch(/crm-kpi-returning"[^>]*>\s*1/);
+		// Widget drill-through uses the existing company filter
+		expect(body).toContain('/contacts?company=Acme');
+		expect(body).toContain('Globex');
 	});
 
 	it('shows Clear when filters are active', () => {
