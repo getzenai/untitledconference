@@ -103,7 +103,9 @@ describe('the front page a visitor sees', () => {
 		expect(body).toContain('For reviewers');
 		expect(body).toContain('For organizers');
 		expect(body).toContain('Create your event');
-		expect(body).toContain('/mascot/goose.svg');
+		// The mascot is inlined (not an <img src>) so it can take the site's
+		// colors — check for the goose's own path data instead of a file path.
+		expect(body).toContain('M50 4C60 4 66 11 66 21');
 		// Two ways in, and neither may quietly disappear: the CTA for someone new,
 		// the sign-in for someone who has been here.
 		expect(body).toContain('href="/register"');

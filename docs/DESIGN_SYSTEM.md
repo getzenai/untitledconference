@@ -239,9 +239,14 @@ and the meaning at once — it is the tool you submit with.
 - **Where she belongs:** empty states, the marketing page, 404, the README.
 - **Where she does not:** the submissions table, the reviewer queue, the agenda grid. Those
   screens are judged on how many rows fit on one screen.
-- **Ink, not illustration.** Everything but the bill and the feet is `currentColor`, so she
-  needs no dark-mode variant. The bill is `--act`, and it is the same yellow as the create
-  button on purpose.
+- **Solid, not outline.** The body carries a solid gray fill (`goose.svelte` on the marketing
+  page inlines the drawing so it can pick a Tailwind gray for the body and a dark orange for
+  the bill and feet, with a darker shade of each in dark mode — a plain color swap, not an
+  `invert()` filter). `static/mascot/goose.svg` mirrors those colors as fixed hex values for
+  contexts without Tailwind, like the README.
+- **Click, and she honks.** Every goose on the marketing page except the header logo plays a
+  random honk from `static/sounds/honk/` on click, loaded lazily so the landing page pays
+  nothing for audio until someone clicks.
 - **She is ours.** Drawn by hand as SVG paths, not generated and not traced from anyone's
   artwork. That provenance is the point: a mascot is a trademark eventually, and "where did
   this drawing come from" is a question with an answer.
