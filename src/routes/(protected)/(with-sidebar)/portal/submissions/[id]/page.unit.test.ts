@@ -56,7 +56,7 @@ describe('speaker submission detail', () => {
 	it('does not send an accepted speaker in a circle back to the portal root', () => {
 		const body = draw();
 
-		expect(body).toContain('Anything else the organizers need from you appears under What is due');
+		expect(body).toContain('Anything else the organizers need from you appears under Your tasks');
 		// The only portal-root link left is the explicit breadcrumb above the page.
 		expect(body.match(/href="\/portal"/g)).toHaveLength(1);
 	});
