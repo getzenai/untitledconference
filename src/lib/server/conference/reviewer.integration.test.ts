@@ -498,6 +498,34 @@ describe('the round’s window', () => {
 	}
 
 	/** A function, not a constant: `criterionId` is only set in `beforeEach`. */
+	/** A second round on the same talk, assigned to me, after round 1 in board order. */
+	async function secondRoundOn(
+		submissionId: number,
+		window: { opensAt?: Date; closesAt?: Date }
+	): Promise<number> {
+		const [plan] = await db
+			.select()
+			.from(evaluationPlanTable)
+			.where(eq(evaluationPlanTable.conferenceId, conference.id));
+		const [second] = await db
+			.insert(reviewRoundTable)
+			.values({
+				evaluationPlanId: plan.id,
+				name: 'Second look',
+				position: 2,
+				opensAt: window.opensAt ?? null,
+				closesAt: window.closesAt ?? null
+			})
+			.returning();
+		await db.insert(reviewTable).values({
+			reviewRoundId: second.id,
+			submissionId,
+			reviewerUserId: ME,
+			status: 'assigned'
+		});
+		return second.id;
+	}
+
 	const answers = () => ({ answers: { [criterionId]: '4' }, comment: 'On time', submit: true });
 
 	it('takes the review while the round is running', async () => {
@@ -563,29 +591,50 @@ describe('the round’s window', () => {
 		expect((await reviewerSubmission(now, ME, mine))?.window.notice).toContain('closed on');
 	});
 
+	/**
+	 * The queue and the form have to name the SAME round. `ownReview` used to take
+	 * whichever row Postgres returned first, which was harmless while only
+	 * `anonymized` hung off it — with the window on it, the queue would say "To do"
+	 * from the open round and the page behind the link would refuse from the closed
+	 * one.
+	 */
+	it('opens the form on the round that still wants work, not the shut one', async () => {
+		// The closed round is round 1: lower position, lower id, so it is the row an
+		// unordered query hands back.
+		await windowIs(null, new Date(Date.now() - DAY));
+		const openRoundId = await secondRoundOn(mine, { closesAt: new Date(Date.now() + DAY) });
+
+		const now = await conferenceNow();
+		const submission = await reviewerSubmission(now, ME, mine);
+		expect(submission?.window.state).toBe('open');
+		// And it really is the second round's form: filing has to land there.
+		expect(await saveReview(now, ME, mine, answers())).toEqual({ ok: true });
+		const [filed] = await db
+			.select({ roundId: reviewTable.reviewRoundId })
+			.from(reviewTable)
+			.where(and(eq(reviewTable.id, submission!.own.reviewId)));
+		expect(filed.roundId).toBe(openRoundId);
+	});
+
+	it('falls back to a shut round when every round I hold it in is shut', async () => {
+		await windowIs(null, new Date(Date.now() - DAY));
+		await secondRoundOn(mine, { opensAt: new Date(Date.now() + DAY) });
+
+		const now = await conferenceNow();
+		// "Opens tomorrow" is a thing to come back for; "closed" is not, so the
+		// waiting round speaks for both.
+		expect((await reviewerSubmission(now, ME, mine))?.window.state).toBe('not_yet_open');
+		expect(await saveReview(now, ME, mine, answers())).toEqual({
+			ok: false,
+			reason: 'round_not_open'
+		});
+	});
+
 	it('lets an open round win over a closed one when I hold the talk in both', async () => {
 		await windowIs(null, new Date(Date.now() - DAY));
 		// A second, still-running round on the same talk: the queue's job is to say
 		// whether anything is asked of me, and something is.
-		const [plan] = await db
-			.select()
-			.from(evaluationPlanTable)
-			.where(eq(evaluationPlanTable.conferenceId, conference.id));
-		const [second] = await db
-			.insert(reviewRoundTable)
-			.values({
-				evaluationPlanId: plan.id,
-				name: 'Second look',
-				position: 2,
-				closesAt: new Date(Date.now() + DAY)
-			})
-			.returning();
-		await db.insert(reviewTable).values({
-			reviewRoundId: second.id,
-			submissionId: mine,
-			reviewerUserId: ME,
-			status: 'assigned'
-		});
+		await secondRoundOn(mine, { closesAt: new Date(Date.now() + DAY) });
 
 		const [row] = (await reviewQueue(await conferenceNow(), ME)).filter(
 			(r) => r.submissionId === mine

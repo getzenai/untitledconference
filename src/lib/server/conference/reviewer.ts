@@ -27,9 +27,9 @@ import {
 	type ReviewVisibility
 } from '$lib/conference/review-visibility';
 import {
+	byRoundWindowPriority,
 	combineRoundWindows,
 	roundWindow,
-	roundWindowState,
 	type RoundWindow
 } from '$lib/conference/round-window';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
@@ -406,15 +406,18 @@ function queueRow(
 	// finishing round 1 does not answer round 2.
 	const ownSubmitted = mine.every((row) => row.status === 'submitted');
 	const withdrawn = first.submissionStatus === 'withdrawn';
+	const inBoardOrder = [...mine].sort((a, b) => a.roundPosition - b.roundPosition);
 
 	return {
 		submissionId: first.submissionId,
 		title: first.title,
 		track: first.track,
 		sessionFormat: first.sessionFormat,
-		rounds: [...mine].sort((a, b) => a.roundPosition - b.roundPosition).map((row) => row.roundName),
+		rounds: inBoardOrder.map((row) => row.roundName),
+		// Built from the same rows in the same order `ownReview` reads them, so the
+		// window this row advertises is the window of the round the link leads to.
 		window: combineRoundWindows(
-			mine.map((row) => roundWindow(row.roundOpensAt, row.roundClosesAt))
+			inBoardOrder.map((row) => roundWindow(row.roundOpensAt, row.roundClosesAt))
 		),
 		reviewsSubmitted: on.filter((r) => r.submitted).length,
 		reviewsAssigned: on.length,
@@ -518,7 +521,7 @@ export async function reviewerSubmission(
 		...submission,
 		speakers,
 		anonymized: own.anonymized,
-		window: roundWindow(own.opensAt, own.closesAt),
+		window: own.window,
 		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },
 		criteria,
 		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
@@ -532,9 +535,21 @@ export async function reviewerSubmission(
  *
  * Everything else on the page hangs off it: no row means not assigned, which is a 404
  * rather than an empty page.
+ *
+ * A reviewer can hold the same submission in several rounds — the queue says so in as
+ * many words — so this can match more than one row, and *which* one it is now decides
+ * whether the form is locked and whether `saveReview` refuses (ABS-01). It used to be
+ * `.limit(1)` with no order, which was harmless while only `anonymized` and the
+ * comment hung off it. It is not harmless now: the queue would say "To do" from the
+ * open round while the page it links to reported the closed one, depending on which
+ * row Postgres happened to return.
+ *
+ * So the same rule the queue uses picks it — `byRoundWindowPriority`, the round that
+ * still wants work first — and the query orders by round position and id underneath,
+ * so equal states resolve the same way on every request.
  */
 async function ownReview(conferenceId: number, userId: string, submissionId: number) {
-	const [own] = await db
+	const rows = await db
 		.select({
 			reviewId: reviewTable.id,
 			status: reviewTable.status,
@@ -556,7 +571,11 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 				ne(reviewTable.status, 'recused')
 			)
 		)
-		.limit(1);
+		.orderBy(asc(reviewRoundTable.position), asc(reviewTable.id));
+
+	const [own] = rows
+		.map((row) => ({ ...row, window: roundWindow(row.opensAt, row.closesAt) }))
+		.sort((a, b) => byRoundWindowPriority(a.window, b.window));
 
 	return own ?? null;
 }
@@ -712,9 +731,8 @@ export async function saveReview(
 	// a POST can go straight through is a note, not a deadline. It gates the DRAFT
 	// too: "save progress" writes the same scores the submit does, so allowing it
 	// after the close would hand back the whole edit through the quieter button.
-	const window = roundWindowState(own.opensAt, own.closesAt);
-	if (window === 'not_yet_open') return { ok: false, reason: 'round_not_open' };
-	if (window === 'closed') return { ok: false, reason: 'round_closed' };
+	if (own.window.state === 'not_yet_open') return { ok: false, reason: 'round_not_open' };
+	if (own.window.state === 'closed') return { ok: false, reason: 'round_closed' };
 
 	const criteria = await db
 		.select({

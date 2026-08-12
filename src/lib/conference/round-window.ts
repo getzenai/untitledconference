@@ -80,15 +80,29 @@ export function roundWindow(
  * them. Between two shut rounds the one that is only waiting wins over the one that is
  * over, for the same reason — "opens tomorrow" is a thing to come back for, "closed"
  * is not.
+ *
+ * The same order picks which of those rounds the reviewer's form belongs to
+ * (`ownReview`). One rule for both: if the queue says "To do" and the page it links to
+ * says "closed", the reviewer is being sent to work the server will refuse.
  */
 export function combineRoundWindows(windows: RoundWindow[]): RoundWindow {
 	if (windows.length === 0) return roundWindow(null, null);
-	return (
-		windows.find((w) => w.state === 'open') ??
-		windows.find((w) => w.state === 'not_yet_open') ??
-		windows[0]
-	);
+	return [...windows].sort(byRoundWindowPriority)[0];
 }
+
+/**
+ * Which of a reviewer's rounds on one submission speaks for the others.
+ *
+ * A comparator rather than a `find`, because the caller with the rows — not just the
+ * windows — has to reach the same answer. `Array.prototype.sort` is stable, so ties
+ * keep the order the query produced; give it rows in a deterministic order and the
+ * choice is deterministic too.
+ */
+export function byRoundWindowPriority(a: RoundWindowFacts, b: RoundWindowFacts): number {
+	return STATE_PRIORITY[a.state] - STATE_PRIORITY[b.state];
+}
+
+const STATE_PRIORITY: Record<RoundWindowState, number> = { open: 0, not_yet_open: 1, closed: 2 };
 
 /** Whole days between now and `when`, rounded up: "in 2 days" while any of day 2 is left. */
 function daysUntil(when: Date, now: Date): number {
