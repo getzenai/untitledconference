@@ -424,7 +424,7 @@ export async function removeTrack(conferenceId: number, trackId: number): Promis
 			.from(membershipTrackTable)
 			.where(eq(membershipTrackTable.trackId, trackId));
 		if (reviewers > 0) {
-			return `${plural(reviewers, 'reviewer')} ${reviewers === 1 ? 'is' : 'are'} limited to this track. Change that under Team & reviewers first — removing the track here would widen them to every track instead.`;
+			return `${plural(reviewers, 'reviewer')} ${reviewers === 1 ? 'is' : 'are'} limited to this track. Change that under Reviewer pool first — removing the track here would widen them to every track instead.`;
 		}
 
 		await tx

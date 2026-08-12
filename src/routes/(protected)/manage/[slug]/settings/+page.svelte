@@ -320,7 +320,7 @@
 	<p class="text-muted-foreground mt-0.5 text-sm">
 		Whether this conference is public, plus its dates, rooms, tracks and session formats. Reviewer
 		visibility is under
-		<a class="underline underline-offset-4" href="{base}/people">Team &amp; reviewers</a>.
+		<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>.
 	</p>
 </div>
 
