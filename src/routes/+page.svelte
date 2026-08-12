@@ -26,10 +26,10 @@
 </script>
 
 <svelte:head>
-	<title>untitledconference — run your event from call to stage</title>
+	<title>untitledconference — run your conference from call to stage</title>
 	<meta
 		name="description"
-		content="Open-source event programme management for calls for proposals, collaborative review, speaker operations and published agendas."
+		content="Open-source conference programme management for calls for proposals, collaborative review, speaker operations and published agendas."
 	/>
 </svelte:head>
 
@@ -59,7 +59,7 @@
 				>
 				<a
 					class="text-muted-foreground hover:text-foreground text-sm transition-colors"
-					href="#live-events">Live events</a
+					href="#live-events">Live conferences</a
 				>
 				<a
 					class="text-muted-foreground hover:text-foreground text-sm transition-colors"
@@ -89,12 +89,12 @@
 				<div class="max-w-2xl">
 					<Badge variant="outline" class="bg-background/70 rounded-full px-3 py-1 backdrop-blur">
 						<span class="bg-act mr-1 size-1.5 rounded-full"></span>
-						Open source event operations
+						Open source conference operations
 					</Badge>
 					<h1
 						class="mt-6 text-4xl leading-[1.02] font-semibold tracking-[-0.045em] sm:text-6xl lg:text-7xl"
 					>
-						Run the whole event.<br />
+						Run the whole conference.<br />
 						<span class="text-muted-foreground">Lose the handoffs.</span>
 					</h1>
 					<p class="text-muted-foreground mt-6 max-w-xl text-base leading-7 sm:text-lg">
@@ -103,12 +103,12 @@
 					</p>
 					<div class="mt-8 flex flex-wrap items-center gap-3">
 						<Button href="/register" variant="act" size="lg">
-							Create your event
+							Create your conference
 							<ArrowRightIcon />
 						</Button>
 						{#if data.conferences.length > 0}
 							<Button href="/c/{data.conferences[0].slug}" variant="outline" size="lg">
-								Explore a live event
+								Explore a live conference
 							</Button>
 						{:else}
 							<Button href={REPO_URL} variant="outline" size="lg">
@@ -328,8 +328,8 @@
 						A workflow your whole team can follow.
 					</h2>
 					<p class="text-muted-foreground mt-4 leading-7">
-						Every role gets a focused view. Organizers keep the whole event in sight without turning
-						everyone into an admin.
+						Every role gets a focused view. Organizers keep the whole conference in sight without
+						turning everyone into an admin.
 					</p>
 					<Button href="/register" variant="outline" class="mt-7"
 						>Start with your call <ArrowRightIcon /></Button
@@ -400,7 +400,7 @@
 				<div class="bg-background p-8 sm:p-10">
 					<p class="text-sm font-semibold">For speakers</p>
 					<p class="text-muted-foreground mt-3 text-sm leading-6">
-						Submit, collaborate and handle event requests from one focused portal.
+						Submit, collaborate and handle conference requests from one focused portal.
 					</p>
 				</div>
 			</div>
@@ -413,11 +413,11 @@
 						<p class="text-muted-foreground text-xs font-semibold tracking-widest uppercase">
 							Proof, not a directory
 						</p>
-						<h2 class="mt-3 text-3xl font-semibold tracking-tight">See a published event.</h2>
+						<h2 class="mt-3 text-3xl font-semibold tracking-tight">See a published conference.</h2>
 					</div>
 					<p class="text-muted-foreground max-w-lg text-sm leading-6">
-						Public event pages need no account. Each one can also be embedded into the organizer's
-						own website.
+						Public conference pages need no account. Each one can also be embedded into the
+						organizer's own website.
 					</p>
 				</div>
 
@@ -427,7 +427,7 @@
 					>
 						<p class="font-medium">Nothing published yet.</p>
 						<p class="text-muted-foreground mt-1">
-							The first public event on this instance will appear here.
+							The first public conference on this instance will appear here.
 						</p>
 					</div>
 				{:else}
@@ -464,18 +464,18 @@
 			>
 				<div class="relative z-10 max-w-2xl">
 					<p class="text-background/65 text-xs font-semibold tracking-widest uppercase">
-						Your event can have one home
+						Your conference can have one home
 					</p>
 					<h2 class="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">
 						Ready when the programme is.
 					</h2>
 					<p class="text-background/70 mt-4 max-w-xl leading-7">
-						Start with the next call. Keep the reviews, people and schedule connected as the event
-						grows.
+						Start with the next call. Keep the reviews, people and schedule connected as the
+						conference grows.
 					</p>
 					<div class="mt-8 flex flex-wrap gap-3">
 						<Button href="/register" variant="act" size="lg"
-							>Create your event <ArrowRightIcon /></Button
+							>Create your conference <ArrowRightIcon /></Button
 						>
 						<Button
 							href={REPO_URL}
