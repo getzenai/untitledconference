@@ -114,7 +114,9 @@ async function ownedCriterion(conferenceId: number, criterionId: number) {
 	const [row] = await db
 		.select({
 			id: scorecardCriterionTable.id,
-			reviewRoundId: scorecardCriterionTable.reviewRoundId
+			reviewRoundId: scorecardCriterionTable.reviewRoundId,
+			kind: scorecardCriterionTable.kind,
+			scaleMax: scorecardCriterionTable.scaleMax
 		})
 		.from(scorecardCriterionTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, scorecardCriterionTable.reviewRoundId))
@@ -127,6 +129,19 @@ async function ownedCriterion(conferenceId: number, criterionId: number) {
 		)
 		.limit(1);
 	return row ?? null;
+}
+
+async function hangingScoreCount(criterionId: number): Promise<number> {
+	const [{ total }] = await db
+		.select({ total: count() })
+		.from(reviewScoreTable)
+		.where(eq(reviewScoreTable.scorecardCriterionId, criterionId));
+	return total;
+}
+
+function scoreHangMessage(action: string, total: number): string {
+	const noun = total === 1 ? 'review score' : 'review scores';
+	return `Cannot ${action} — ${total} ${noun} hang on this criterion.`;
 }
 
 export async function addScorecardCriterion(
@@ -171,6 +186,12 @@ export async function addScorecardCriterion(
 	return { ok: true, id: created.id };
 }
 
+/**
+ * Updates a criterion. Label and weight stay free while scores hang (weight is
+ * meant to re-rank after the fact — ABS-04). Kind changes and a shrinking
+ * scaleMax are refused: the first zeros the aggregate silently, the second lets
+ * a stored value overshoot the new maximum.
+ */
 export async function updateScorecardCriterion(
 	conferenceId: number,
 	criterionId: number,
@@ -181,6 +202,20 @@ export async function updateScorecardCriterion(
 
 	const owned = await ownedCriterion(conferenceId, criterionId);
 	if (!owned) return { ok: false, message: 'No such criterion.' };
+
+	const hanging = await hangingScoreCount(criterionId);
+	if (hanging > 0) {
+		if (parsed.values.kind !== owned.kind) {
+			return { ok: false, message: scoreHangMessage('change type', hanging) };
+		}
+		if (
+			owned.scaleMax != null &&
+			parsed.values.scaleMax != null &&
+			parsed.values.scaleMax < owned.scaleMax
+		) {
+			return { ok: false, message: scoreHangMessage('shrink the scale', hanging) };
+		}
+	}
 
 	await db
 		.update(scorecardCriterionTable)
@@ -203,17 +238,9 @@ export async function deleteScorecardCriterion(
 	const owned = await ownedCriterion(conferenceId, criterionId);
 	if (!owned) return { ok: false, message: 'No such criterion.' };
 
-	const [{ total }] = await db
-		.select({ total: count() })
-		.from(reviewScoreTable)
-		.where(eq(reviewScoreTable.scorecardCriterionId, criterionId));
-
+	const total = await hangingScoreCount(criterionId);
 	if (total > 0) {
-		const noun = total === 1 ? 'review score' : 'review scores';
-		return {
-			ok: false,
-			message: `Cannot delete — ${total} ${noun} hang on this criterion.`
-		};
+		return { ok: false, message: scoreHangMessage('delete', total) };
 	}
 
 	await db.delete(scorecardCriterionTable).where(eq(scorecardCriterionTable.id, criterionId));

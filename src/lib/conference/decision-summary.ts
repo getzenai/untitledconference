@@ -98,6 +98,8 @@ export function describeBulkAssign(result: {
 	created: number;
 	already: number;
 	skipped: number;
+	/** Recusals bulk left alone (optional so older call sites still type-check). */
+	recused?: number;
 }): string {
 	const parts: string[] = [];
 	if (result.created > 0) {
@@ -106,6 +108,9 @@ export function describeBulkAssign(result: {
 	if (result.already > 0) {
 		// Always name the count — the DoD asks for N created / M already, not a vague shrug.
 		parts.push(`${result.already} already assigned, left untouched.`);
+	}
+	if ((result.recused ?? 0) > 0) {
+		parts.push(`${result.recused} recused — left alone.`);
 	}
 	if (result.skipped > 0) {
 		parts.push(`${plural(result.skipped, 'submission')} could not be assigned to that reviewer.`);

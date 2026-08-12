@@ -217,6 +217,138 @@ describe('scorecard criteria CRUD (ABS-03)', () => {
 		);
 		expect(list.map((c) => c.label)).toEqual(['Second', 'First']);
 	});
+
+	it('blocks kind change while review scores hang on the criterion', async () => {
+		const created = await addScorecardCriterion(conference.id, roundId, {
+			label: 'Kind-locked',
+			kind: 'rating',
+			scaleMax: 5,
+			optionsText: '',
+			weight: 1
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: `Kind lock ${suffix}`,
+				status: 'submitted'
+			})
+			.returning({ id: submissionTable.id });
+		const [review] = await db
+			.insert(reviewTable)
+			.values({
+				reviewRoundId: roundId,
+				submissionId: submission.id,
+				reviewerUserId: reviewerId,
+				status: 'submitted',
+				submittedAt: new Date()
+			})
+			.returning({ id: reviewTable.id });
+		await db.insert(reviewScoreTable).values({
+			reviewId: review.id,
+			scorecardCriterionId: created.id!,
+			valueNumber: '4'
+		});
+
+		const blocked = await updateScorecardCriterion(conference.id, created.id!, {
+			label: 'Kind-locked',
+			kind: 'text',
+			scaleMax: null,
+			optionsText: '',
+			weight: 1
+		});
+		expect(blocked.ok).toBe(false);
+		if (blocked.ok) return;
+		expect(blocked.message).toMatch(/change type/);
+		expect(blocked.message).toMatch(/1 review score/);
+
+		// Label and weight stay free — weight is supposed to re-rank after the fact.
+		const weightOk = await updateScorecardCriterion(conference.id, created.id!, {
+			label: 'Kind-locked (renamed)',
+			kind: 'rating',
+			scaleMax: 5,
+			optionsText: '',
+			weight: 2
+		});
+		expect(weightOk.ok).toBe(true);
+		const row = (await scorecardCriteria(conference.id)).find((c) => c.id === created.id);
+		expect(row).toMatchObject({ label: 'Kind-locked (renamed)', kind: 'rating', weight: 2 });
+
+		await db.delete(reviewScoreTable).where(eq(reviewScoreTable.reviewId, review.id));
+		await db.delete(reviewTable).where(eq(reviewTable.id, review.id));
+		await db.delete(submissionTable).where(eq(submissionTable.id, submission.id));
+		await deleteScorecardCriterion(conference.id, created.id!);
+	});
+
+	it('blocks a shrinking scaleMax while review scores hang on the criterion', async () => {
+		const created = await addScorecardCriterion(conference.id, roundId, {
+			label: 'Scale-locked',
+			kind: 'rating',
+			scaleMax: 10,
+			optionsText: '',
+			weight: 1
+		});
+		expect(created.ok).toBe(true);
+		if (!created.ok) return;
+
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: `Scale lock ${suffix}`,
+				status: 'submitted'
+			})
+			.returning({ id: submissionTable.id });
+		const [review] = await db
+			.insert(reviewTable)
+			.values({
+				reviewRoundId: roundId,
+				submissionId: submission.id,
+				reviewerUserId: reviewerId,
+				status: 'submitted',
+				submittedAt: new Date()
+			})
+			.returning({ id: reviewTable.id });
+		// A stored 8 on a 1..10 scale becomes 8/5 = 1.6 if the max drops to 5.
+		await db.insert(reviewScoreTable).values({
+			reviewId: review.id,
+			scorecardCriterionId: created.id!,
+			valueNumber: '8'
+		});
+
+		const blocked = await updateScorecardCriterion(conference.id, created.id!, {
+			label: 'Scale-locked',
+			kind: 'rating',
+			scaleMax: 5,
+			optionsText: '',
+			weight: 1
+		});
+		expect(blocked.ok).toBe(false);
+		if (blocked.ok) return;
+		expect(blocked.message).toMatch(/shrink the scale/);
+		expect(blocked.message).toMatch(/1 review score/);
+
+		// Widening the scale does not overshoot the old maximum — allowed.
+		const wider = await updateScorecardCriterion(conference.id, created.id!, {
+			label: 'Scale-locked',
+			kind: 'rating',
+			scaleMax: 10,
+			optionsText: '',
+			weight: 1
+		});
+		expect(wider.ok).toBe(true);
+
+		const still = (await scorecardCriteria(conference.id)).find((c) => c.id === created.id);
+		expect(still?.scaleMax).toBe(10);
+
+		await db.delete(reviewScoreTable).where(eq(reviewScoreTable.reviewId, review.id));
+		await db.delete(reviewTable).where(eq(reviewTable.id, review.id));
+		await db.delete(submissionTable).where(eq(submissionTable.id, submission.id));
+		await deleteScorecardCriterion(conference.id, created.id!);
+	});
 });
 
 describe('weighted aggregate through stored criteria (ABS-04)', () => {

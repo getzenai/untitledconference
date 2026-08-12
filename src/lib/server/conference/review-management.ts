@@ -202,7 +202,14 @@ export async function reviewAssignmentMatrix(
 	}));
 }
 
-export type AssignmentResult = 'assigned' | 'unassigned' | 'unchanged' | 'complete' | 'invalid';
+export type AssignmentResult =
+	| 'assigned'
+	| 'unassigned'
+	| 'unchanged'
+	| 'complete'
+	| 'invalid'
+	/** Bulk path only: an existing recusal was left alone (not restored). */
+	| 'recused';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type AssignmentInput = {
@@ -211,6 +218,12 @@ type AssignmentInput = {
 	roundId: number;
 	reviewerUserId: string;
 	assigned: boolean;
+};
+
+/** Single-cell assign restores a recusal on purpose; bulk must not. */
+type AssignOptions = {
+	/** When false, leave `recused` rows alone and report `recused`. Default true. */
+	restoreRecused?: boolean;
 };
 
 async function validAssignmentTarget(tx: Tx, input: AssignmentInput) {
@@ -341,14 +354,32 @@ async function removeAssignment(tx: Tx, input: AssignmentInput): Promise<Assignm
 	return completed ? 'complete' : 'unchanged';
 }
 
-async function addAssignment(tx: Tx, input: AssignmentInput): Promise<AssignmentResult> {
+async function addAssignment(
+	tx: Tx,
+	input: AssignmentInput,
+	options: AssignOptions = {}
+): Promise<AssignmentResult> {
 	if (!(await eligibleReviewer(tx, input))) return 'invalid';
-	const restored = await tx
-		.update(reviewTable)
-		.set({ status: 'assigned', submittedAt: null })
-		.where(and(assignmentKey(input), eq(reviewTable.status, 'recused')))
-		.returning({ id: reviewTable.id });
-	if (restored.length > 0) return 'assigned';
+
+	const restoreRecused = options.restoreRecused !== false;
+
+	if (restoreRecused) {
+		// Detail-page reassign: the organizer clicked this exact cell after a recusal.
+		const restored = await tx
+			.update(reviewTable)
+			.set({ status: 'assigned', submittedAt: null })
+			.where(and(assignmentKey(input), eq(reviewTable.status, 'recused')))
+			.returning({ id: reviewTable.id });
+		if (restored.length > 0) return 'assigned';
+	} else {
+		// Bulk: never silently override a reviewer's conflict declaration.
+		const [recused] = await tx
+			.select({ id: reviewTable.id })
+			.from(reviewTable)
+			.where(and(assignmentKey(input), eq(reviewTable.status, 'recused')))
+			.limit(1);
+		if (recused) return 'recused';
+	}
 
 	const inserted = await tx
 		.insert(reviewTable)
@@ -364,9 +395,13 @@ async function addAssignment(tx: Tx, input: AssignmentInput): Promise<Assignment
 	return inserted.length > 0 ? 'assigned' : 'unchanged';
 }
 
-async function updateAssignment(tx: Tx, input: AssignmentInput): Promise<AssignmentResult> {
+async function updateAssignment(
+	tx: Tx,
+	input: AssignmentInput,
+	options: AssignOptions = {}
+): Promise<AssignmentResult> {
 	if (!(await validAssignmentTarget(tx, input))) return 'invalid';
-	return input.assigned ? addAssignment(tx, input) : removeAssignment(tx, input);
+	return input.assigned ? addAssignment(tx, input, options) : removeAssignment(tx, input);
 }
 
 /** Adds or removes one exact (round, submission, reviewer) assignment. */
@@ -430,12 +465,16 @@ export type BulkAssignResult = {
 	already: number;
 	/** Reviewer not eligible for that submission (speaker, track, wrong conference). */
 	skipped: number;
+	/** Existing recusals left alone — not restored by bulk. */
+	recused: number;
 };
 
 /**
  * Assign one reviewer to many submissions in a single transaction (ABS-06).
  *
- * Existing assignments are counted as `already` and not rewritten. Ineligible
+ * Existing assignments are counted as `already` and not rewritten. Recused rows
+ * stay recused and are counted separately — bulk must not override a reviewer's
+ * conflict declaration without a deliberate single-cell reassign. Ineligible
  * pairs are counted as `skipped` rather than failing the whole batch — the
  * organizer still gets the ones that could land.
  */
@@ -446,27 +485,33 @@ export async function assignReviewerToSubmissions(
 	reviewerUserId: string
 ): Promise<BulkAssignResult> {
 	const ids = [...new Set(submissionIds.filter((id) => Number.isInteger(id) && id > 0))];
-	if (ids.length === 0) return { created: 0, already: 0, skipped: 0 };
+	if (ids.length === 0) return { created: 0, already: 0, skipped: 0, recused: 0 };
 
 	return db.transaction(async (tx) => {
 		let created = 0;
 		let already = 0;
 		let skipped = 0;
+		let recused = 0;
 
 		for (const submissionId of ids) {
-			const result = await updateAssignment(tx, {
-				conferenceId,
-				submissionId,
-				roundId,
-				reviewerUserId,
-				assigned: true
-			});
+			const result = await updateAssignment(
+				tx,
+				{
+					conferenceId,
+					submissionId,
+					roundId,
+					reviewerUserId,
+					assigned: true
+				},
+				{ restoreRecused: false }
+			);
 			if (result === 'assigned') created += 1;
-			else if (result === 'unchanged') already += 1;
+			else if (result === 'unchanged' || result === 'complete') already += 1;
+			else if (result === 'recused') recused += 1;
 			else skipped += 1;
 		}
 
-		return { created, already, skipped };
+		return { created, already, skipped, recused };
 	});
 }
 
