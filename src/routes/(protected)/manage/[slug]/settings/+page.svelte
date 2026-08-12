@@ -208,6 +208,22 @@
 </div>
 
 <div class="space-y-6 px-6 py-5">
+	{#if data.setup}
+		<section
+			class="border-border bg-muted/40 max-w-2xl rounded-lg border p-4"
+			data-testid="settings-setup-hint"
+			role="status"
+		>
+			<h2 class="text-sm font-semibold">Start with the structure</h2>
+			<p class="text-muted-foreground mt-1 text-sm">
+				Rooms, tracks and session formats below are what speakers pick when they submit.
+				When those look right, open
+				<a class="underline underline-offset-4" href="{base}/cfp">Call for papers</a>
+				to publish the form and set its dates.
+			</p>
+		</section>
+	{/if}
+
 	{@render feedback(null)}
 
 	<!--
