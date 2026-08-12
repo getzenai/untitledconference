@@ -67,6 +67,26 @@ describe('the proposal form', () => {
 		expect(posts(html, 'speakerCompany')).toBe(true);
 	});
 
+	it('lets a signed-out visitor submit the form they just filled (#236)', () => {
+		const html = render(ProposalForm, {
+			props: {
+				fields: [],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: false,
+				signInHref: '/login?returnTo=/c/devflow/cfp'
+			}
+		}).body;
+
+		expect(html).toContain('Sign in to submit');
+		expect(html).toContain('data-testid="cfp-sign-in-to-submit"');
+		expect(html).toContain("We'll send this proposal as soon as you sign in.");
+		// A link would GET away and drop the fields. This has to be a submit.
+		expect(html).not.toContain('href="/login?returnTo=/c/devflow/cfp"');
+	});
+
 	it('keeps the three that identify the talk and the speaker, whatever is stored', () => {
 		// Every removable key at once — the emptiest form the product allows.
 		const html = body(

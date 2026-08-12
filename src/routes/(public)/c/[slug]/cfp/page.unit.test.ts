@@ -113,6 +113,13 @@ describe('the public call for papers', () => {
 		expect(body).toContain('Call for papers');
 		expect(body).toContain('<form');
 	});
+
+	it('offers to send the filled form after sign-in, not a blank one (#236)', () => {
+		const body = renderCfp('open', null);
+
+		expect(body).toContain('Sign in to submit');
+		expect(body).toContain("We'll send this proposal as soon as you sign in.");
+	});
 });
 
 describe('pointing a returning submitter at what they already sent', () => {
