@@ -19,3 +19,6 @@ project.inlang/
 
 # Agent scratch worktrees (11 GB of checkouts, not source)
 .claude/worktrees/
+
+# Agent scratch dir (3 GB of checkout copies, not source)
+.scratch/
