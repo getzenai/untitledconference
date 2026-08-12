@@ -94,11 +94,23 @@ const journal = JSON.parse(readFileSync('./drizzle/meta/_journal.json', 'utf8'))
  * A journal out of order is always a bug, so it fails here, before anything runs.
  */
 function assertJournalIsOrdered() {
-	const out = journal.entries.filter((e, i, all) => i > 0 && e.when <= all[i - 1].when);
-	if (out.length === 0) return;
+	// Report the entry whose timestamp is too HIGH, not the one that trips over
+	// it. In the failure this guard exists for, 0001 was the fake and 0002 was
+	// merely its first victim — naming 0002 would send whoever is fixing it to a
+	// perfectly healthy line.
+	const breaks = journal.entries
+		.map((entry, i, all) => ({ culprit: all[i - 1], victim: entry }))
+		.filter(({ culprit, victim }) => culprit && victim.when <= culprit.when);
+
+	if (breaks.length === 0) return;
 
 	console.error('[migrate] Journal timestamps are not increasing:');
-	for (const entry of out) console.error(`[migrate]   ${entry.tag} (when: ${entry.when})`);
+	for (const { culprit, victim } of breaks) {
+		console.error(
+			`[migrate]   ${culprit.tag} (when: ${culprit.when}) is not before ` +
+				`${victim.tag} (when: ${victim.when}) — fix ${culprit.tag}`
+		);
+	}
 	console.error(
 		'[migrate] Drizzle compares each migration against the highest applied timestamp, ' +
 			'so a migration after one of these would be skipped without an error. ' +
@@ -117,15 +129,24 @@ function assertJournalIsOrdered() {
  * what is on disk with what the database says it ran.
  */
 async function assertNothingSkipped(client) {
-	const applied = await client`
-		SELECT created_at FROM drizzle.__drizzle_migrations
-	`.catch(() => null);
-
-	if (!applied) {
-		console.error('[migrate] Could not read drizzle.__drizzle_migrations');
+	let applied;
+	try {
+		applied = await client`SELECT created_at FROM drizzle.__drizzle_migrations`;
+	} catch (error) {
+		// A missing table, a permission error and an unreachable database all end
+		// up here and are three different problems. Swallowing the reason would
+		// leave whoever hits this with a dead end instead of a next step.
+		console.error(
+			'[migrate] Could not read drizzle.__drizzle_migrations:',
+			error instanceof Error ? error.message : error
+		);
+		if (error?.code) console.error('[migrate] sqlstate:', error.code);
 		process.exit(1);
 	}
 
+	// Compared on `created_at` alone, not on the hash: this answers "did every
+	// committed migration run", not "did the file change after it ran". The
+	// second question is worth asking, and this is not the guard that asks it.
 	const recorded = new Set(applied.map((row) => String(row.created_at)));
 	const missing = journal.entries.filter((entry) => !recorded.has(String(entry.when)));
 	if (missing.length === 0) {
