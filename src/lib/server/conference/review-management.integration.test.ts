@@ -198,7 +198,7 @@ describe('organizer reviewer assignments', () => {
 		);
 		// secondId created; submissionId already; otherSubmissionId is another
 		// conference → invalid/skipped. Duplicate id is de-duped.
-		expect(result).toEqual({ created: 1, already: 1, skipped: 1 });
+		expect(result).toEqual({ created: 1, already: 1, skipped: 1, recused: 0 });
 
 		const first = await reviewAssignmentMatrix(conference.id, submissionId);
 		const second = await reviewAssignmentMatrix(conference.id, secondId);
@@ -216,7 +216,7 @@ describe('organizer reviewer assignments', () => {
 			roundId,
 			SPEAKER_REVIEWER
 		);
-		expect(speakerResult).toEqual({ created: 0, already: 0, skipped: 1 });
+		expect(speakerResult).toEqual({ created: 0, already: 0, skipped: 1, recused: 0 });
 
 		const targets = await conferenceAssignmentTargets(conference.id);
 		expect(targets).toHaveLength(1);
@@ -301,6 +301,47 @@ describe('organizer reviewer assignments', () => {
 				)
 			);
 		expect(rows).toEqual([]);
+	});
+
+	it('bulk assign leaves recused seats alone and names them separately', async () => {
+		const [secondId] = (
+			await db
+				.insert(submissionTable)
+				.values({
+					conferenceId: conference.id,
+					title: `Recused bulk ${suffix}`,
+					status: 'submitted'
+				})
+				.returning({ id: submissionTable.id })
+		).map((row) => row.id);
+
+		await db.insert(reviewTable).values({
+			reviewRoundId: roundId,
+			submissionId: secondId,
+			reviewerUserId: ROUND_REVIEWER,
+			status: 'recused'
+		});
+
+		const result = await assignReviewerToSubmissions(
+			conference.id,
+			[submissionId, secondId],
+			roundId,
+			ROUND_REVIEWER
+		);
+		expect(result).toEqual({ created: 1, already: 0, skipped: 0, recused: 1 });
+
+		const matrix = await reviewAssignmentMatrix(conference.id, secondId);
+		expect(
+			matrix[0].reviewers.find((reviewer) => reviewer.userId === ROUND_REVIEWER)?.status
+		).toBe('recused');
+
+		// Single-cell path still restores deliberately.
+		expect(
+			await setReviewAssignment(conference.id, secondId, roundId, ROUND_REVIEWER, true)
+		).toBe('assigned');
+
+		await db.delete(reviewTable).where(eq(reviewTable.submissionId, secondId));
+		await db.delete(submissionTable).where(eq(submissionTable.id, secondId));
 	});
 
 	it('keeps a submitted review when an organizer tries to unassign it', async () => {

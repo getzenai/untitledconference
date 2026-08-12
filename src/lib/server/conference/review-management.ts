@@ -202,7 +202,14 @@ export async function reviewAssignmentMatrix(
 	}));
 }
 
-export type AssignmentResult = 'assigned' | 'unassigned' | 'unchanged' | 'complete' | 'invalid';
+export type AssignmentResult =
+	| 'assigned'
+	| 'unassigned'
+	| 'unchanged'
+	| 'complete'
+	| 'invalid'
+	/** A recused seat the caller chose not to restore (bulk path). */
+	| 'recused';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type AssignmentInput = {
@@ -211,6 +218,12 @@ type AssignmentInput = {
 	roundId: number;
 	reviewerUserId: string;
 	assigned: boolean;
+	/**
+	 * When true (default), a recused row is raised back to `assigned` — the
+	 * single-cell toggle on the detail page. Bulk assign sets this false so a
+	 * batch cannot silently override a reviewer's declared conflict.
+	 */
+	restoreRecused?: boolean;
 };
 
 async function validAssignmentTarget(tx: Tx, input: AssignmentInput) {
@@ -343,12 +356,24 @@ async function removeAssignment(tx: Tx, input: AssignmentInput): Promise<Assignm
 
 async function addAssignment(tx: Tx, input: AssignmentInput): Promise<AssignmentResult> {
 	if (!(await eligibleReviewer(tx, input))) return 'invalid';
-	const restored = await tx
-		.update(reviewTable)
-		.set({ status: 'assigned', submittedAt: null })
-		.where(and(assignmentKey(input), eq(reviewTable.status, 'recused')))
-		.returning({ id: reviewTable.id });
-	if (restored.length > 0) return 'assigned';
+
+	// Bulk assign must not walk over a declared conflict. Detect first so the
+	// confirmation can name the seats instead of billing them as "created".
+	if (input.restoreRecused === false) {
+		const [recused] = await tx
+			.select({ id: reviewTable.id })
+			.from(reviewTable)
+			.where(and(assignmentKey(input), eq(reviewTable.status, 'recused')))
+			.limit(1);
+		if (recused) return 'recused';
+	} else {
+		const restored = await tx
+			.update(reviewTable)
+			.set({ status: 'assigned', submittedAt: null })
+			.where(and(assignmentKey(input), eq(reviewTable.status, 'recused')))
+			.returning({ id: reviewTable.id });
+		if (restored.length > 0) return 'assigned';
+	}
 
 	const inserted = await tx
 		.insert(reviewTable)
@@ -430,6 +455,11 @@ export type BulkAssignResult = {
 	already: number;
 	/** Reviewer not eligible for that submission (speaker, track, wrong conference). */
 	skipped: number;
+	/**
+	 * Seats the reviewer already recused — bulk leaves them recused so a batch
+	 * cannot override a declared conflict without looking at each cell.
+	 */
+	recused: number;
 };
 
 /**
@@ -437,7 +467,8 @@ export type BulkAssignResult = {
  *
  * Existing assignments are counted as `already` and not rewritten. Ineligible
  * pairs are counted as `skipped` rather than failing the whole batch — the
- * organizer still gets the ones that could land.
+ * organizer still gets the ones that could land. Recused seats stay recused and
+ * are named separately in the confirmation (they are not "created").
  */
 export async function assignReviewerToSubmissions(
 	conferenceId: number,
@@ -446,12 +477,13 @@ export async function assignReviewerToSubmissions(
 	reviewerUserId: string
 ): Promise<BulkAssignResult> {
 	const ids = [...new Set(submissionIds.filter((id) => Number.isInteger(id) && id > 0))];
-	if (ids.length === 0) return { created: 0, already: 0, skipped: 0 };
+	if (ids.length === 0) return { created: 0, already: 0, skipped: 0, recused: 0 };
 
 	return db.transaction(async (tx) => {
 		let created = 0;
 		let already = 0;
 		let skipped = 0;
+		let recused = 0;
 
 		for (const submissionId of ids) {
 			const result = await updateAssignment(tx, {
@@ -459,14 +491,16 @@ export async function assignReviewerToSubmissions(
 				submissionId,
 				roundId,
 				reviewerUserId,
-				assigned: true
+				assigned: true,
+				restoreRecused: false
 			});
 			if (result === 'assigned') created += 1;
 			else if (result === 'unchanged') already += 1;
+			else if (result === 'recused') recused += 1;
 			else skipped += 1;
 		}
 
-		return { created, already, skipped };
+		return { created, already, skipped, recused };
 	});
 }
 
