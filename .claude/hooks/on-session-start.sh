@@ -47,8 +47,7 @@ if [ "$SESSION_TYPE" = "compact" ]; then
   CONTEXT="$CONTEXT\n- PostToolUse auto-formats .ts/.js/.svelte/.md/.json files after edits"
   CONTEXT="$CONTEXT\n- Pre-push hook runs integration + E2E tests if services are running"
   CONTEXT="$CONTEXT\n- Safety hooks block destructive commands (rm -rf, force push, etc.) and protect .env/lock files"
-  CONTEXT="$CONTEXT\n- Spec-first workflow: update screen specs before changing screen-affecting code (see CLAUDE.md)"
-  CONTEXT="$CONTEXT\n- Available commands: /test, /git_commit, /git_pr, /pre_commit, /verify_screen"
+  CONTEXT="$CONTEXT\n- Available commands: /test, /git_commit, /git_pr, /pre_commit"
 fi
 
 # Output as additionalContext

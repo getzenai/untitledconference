@@ -98,7 +98,7 @@ function deriveServiceName(): string {
 			return origin;
 		}
 	}
-	return 'sveltekit-vibe-starter';
+	return 'untitledconference';
 }
 
 function deriveDeploymentEnvironment(): string {

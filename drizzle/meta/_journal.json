@@ -113,6 +113,13 @@
 			"when": 1786538757461,
 			"tag": "0015_crm_segments",
 			"breakpoints": true
+		},
+		{
+			"idx": 16,
+			"version": "7",
+			"when": 1786572185038,
+			"tag": "0016_drop_starter_tables",
+			"breakpoints": true
 		}
 	]
 }

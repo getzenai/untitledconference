@@ -1,111 +1,108 @@
-# SvelteKit Vibe Starter
+# untitledconference
 
-A production-ready SvelteKit starter template with PostgreSQL, authentication, and comprehensive testing.
+Run a conference programme from the open call to the published agenda — in one place, instead of a call-for-papers tool, a spreadsheet of reviews, a mail merge to speakers and a schedule someone maintains by hand.
 
-## Quick Start
-
-### Prerequisites
-
-- Node.js 22+
-- Infisical CLI (`infisical login` required for secret management)
-- Docker (only for Local Docker mode)
-
-### Cloud DB Mode (recommended)
-
-```bash
-npm install
-npm run dev          # fetches secrets from Infisical, starts dev server
-```
-
-### Local Docker Mode
-
-```bash
-npm install
-docker compose up -d           # start dev-db + test-db
-cp .env.example .env           # uncomment DATABASE_URL and TEST_DATABASE_URL
-npm run dev                    # .env DB URLs used, rest from Infisical
-```
-
-Visit http://localhost:5173
+Live: **[untitledconference.com](https://untitledconference.com)**
 
 ## Features
 
-- **SvelteKit** - Full-stack framework with SSR
-- **PostgreSQL** - Database with Drizzle ORM
-- **Better Auth** - Authentication with organizations
-- **Shadcn/ui** - Pre-configured UI components
-- **Testing** - Unit, integration, and E2E tests
-- **Infisical Cloud** - All secrets managed securely
-- **TypeScript** - Full type safety
+**Call for proposals.** A public CFP per conference with your own questions, including ones that only appear when an earlier answer calls for them. Speakers save drafts, add co-speakers, and edit until the call closes.
 
-## Database
+**Review.** Submissions go into review rounds. Reviewers can be scoped to a track, and a round is either open or blind until reviewed — in the second, you see the others' scores only after submitting your own, which is what keeps the first score posted from becoming everybody's prior. Decisions come out of the round, not out of someone's inbox.
 
-```bash
-npm run db:push          # Push schema to dev database
-npm run db:push:test     # Push schema to test database
-npm run db:studio        # Open Drizzle Studio
-```
+**Speaker portal.** Accepted speakers get one page for their profile, headshot, files, deliverables and open tasks, and see what is still missing without being told.
 
-All database commands automatically get credentials from Infisical (or .env for DB URLs).
+**Agenda builder.** Accepted sessions are placed by drag and drop across rooms and time slots. The grid flags the conflicts you would otherwise find on the day: a speaker in two rooms at once, a room double-booked.
 
-## Background Jobs
+**Public programme.** Conference, speakers, agenda and gallery pages under `/c/<slug>`. Attendees build a personal itinerary and export it as `.ics`; the agenda is embeddable elsewhere with `?embed=1`.
 
-[pg-boss](https://github.com/timgit/pg-boss) job queue, stored in the same Postgres database.
+**Email.** Speaker-workflow mail through [Resend](https://resend.com). Every message is a row in an outbox table that a dispatcher drains, so without an API key a local install sends nothing and loses nothing — the mail simply stays queued.
 
-```bash
-npm run jobs:worker:dev   # run the worker locally (separate from `npm run dev`)
-npm run jobs:worker       # production: runs build/worker.js, emitted by `npm run build`
-```
+### Two interfaces most conference tools do not have
 
-Enqueue from any server code with `await myJob.enqueue({ ... })`. In production the worker
-runs as a second container from the same image (see the `worker` service in
-`scripts/hetzner-deploy/docker-compose.prod.yml`).
+**An MCP server** at `/api/v1/mcp`, so an AI agent can work against your data with the same permissions as the person who authorised it. It speaks streamable HTTP and carries a full OAuth 2.1 provider — discovery under `/.well-known`, PKCE, a consent screen, JWKS-verified tokens — which means you connect Claude or any other MCP client by URL and approve it in the browser, with no key to paste anywhere. Tools today: `get_my_profile`, `list_my_organizations`.
 
-See `src/lib/server/jobs/CLAUDE.md` for how to add a job, schedule cron jobs, and how the
-worker is deployed.
+**A REST API** under `/api/v1`. Which directory an endpoint lives in decides its authentication: `public/` is open (`public/health` is the uptime probe), `protected/` requires a session and is rejected centrally before the handler runs, `test/` answers only where `ENABLE_TEST_ENDPOINTS=true`. Adding an endpoint to the right tier is the whole configuration.
 
-## Testing
+## Built with
+
+[SvelteKit](https://svelte.dev/docs/kit) and Svelte 5 · TypeScript · Tailwind CSS with [shadcn-svelte](https://shadcn-svelte.com) · [Drizzle ORM](https://orm.drizzle.team) on PostgreSQL · [Better Auth](https://www.better-auth.com) (organizations, passkeys, OAuth provider) · [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) for i18n · Vitest and [Cypress](https://www.cypress.io) · PostHog and OpenTelemetry, both optional and off unless configured.
+
+In production it runs as a Cloudflare Worker: Neon Postgres reached through a Hyperdrive binding, uploads in R2, static assets on Cloudflare's edge.
+
+## Installation
+
+Requirements: Node.js 22+, Docker (for the local databases).
 
 ```bash
-npm run test           # Run all tests
-npm run test:e2e       # E2E tests only
-npm run lint           # Code quality check
-npm run format         # Format code
+git clone https://github.com/getzenai/untitledconference.git
+cd untitledconference
+npm install
+
+docker compose up -d          # dev database on :5432, test database on :5433
+cp .env.example .env          # uncomment DATABASE_URL, TEST_DATABASE_URL, BETTER_AUTH_SECRET
+
+npm run db:push               # create the schema
+npm run dev                   # http://localhost:5173
 ```
 
-For E2E test development, see `/cypress/CLAUDE.md`.
+Register the first account through the UI — it becomes the admin. `npm run db:push` and `npm run dev` read `.env` first and consult [Infisical](https://infisical.com) only for values still missing, so nothing here needs an Infisical account; it is how this project's own developers share their secrets, not a dependency of the app.
 
-## Authentication
-
-Uses [Better Auth](https://www.better-auth.com) with organization support.
-
-## UI Components
-
-Pre-installed [shadcn/ui](https://ui.shadcn.com) components in `src/lib/components/ui/`.
-
-## Internationalization
-
-Powered by Paraglide. Edit translations in `messages/en.json`.
-
-## Documentation
-
-VitePress documentation site:
+Optional, to look at a full conference rather than an empty one:
 
 ```bash
-npm run docs:dev   # Start docs server
+DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/dev" \
+  node scripts/db/seed-devflow.mjs
 ```
 
-## Building
+That writes a conference mid-review: thirty proposals across every status, two review rounds with scores from three reviewers, speaker tasks in every state, and sign-in credentials for an organizer, two speakers and three reviewers (see `DEMO_PASSWORD` in `scripts/db/seed-data.mjs`). It is idempotent — it drops the demo organization first.
+
+## Usage
 
 ```bash
-npm run build    # Production build (no secrets needed — lazy Proxy pattern)
-npm run preview  # Preview production build
+npm run dev              # dev server on :5173
+npm run dev:cf           # the same app inside workerd, as it runs in production
+npm run build            # production build
+npm run preview          # serve that build locally
+
+npm run check            # svelte-check and types
+npm run lint             # Prettier and ESLint
+npm run format           # write Prettier fixes
+
+npm run test:unit        # no database needed
+npm run test:integration # against a throwaway database on the :5433 server
+npm run test:e2e         # Cypress, full browser journeys
+npm run test             # all three, in that order
+
+npm run db:push          # push the schema (development)
+npm run db:generate      # write a migration from schema changes
+npm run db:migrate       # apply migrations
+npm run db:studio        # Drizzle Studio on :5555
 ```
 
-## AI Agent Instructions
-
-For Claude Code and other AI agents, see `/CLAUDE.md` for detailed codebase instructions and conventions.
+Integration and E2E runs each create their own database on the test server and drop it afterwards, so parallel checkouts never share fixtures.
 
 ## Deployment
 
-See `scripts/azure-managed-setup/` for Azure Container Apps deployment. Secret management uses Infisical Cloud (see `scripts/infisical/`).
+The app targets Cloudflare Workers through `@sveltejs/adapter-cloudflare`. `wrangler.jsonc` declares the domain, the R2 bucket for speaker uploads and the Hyperdrive binding that pools Postgres connections at the edge; it carries only non-secret configuration.
+
+```bash
+npx wrangler r2 bucket create untitledconference-uploads
+npx wrangler hyperdrive create untitledconference-db --connection-string "postgres://…"
+# put the returned id into wrangler.jsonc, and point the domain at your own
+
+npx wrangler secret put BETTER_AUTH_SECRET
+npx wrangler secret put RESEND_API_KEY       # optional; without it, no mail is sent
+
+npm run build && npx wrangler deploy
+```
+
+Use the Neon project's **direct** endpoint, not the `-pooler` host: Hyperdrive pools already. Migrations run separately with `npm run db:migrate` against the same database.
+
+`.github/workflows/deploy.yaml` does all of this on every green `main`, and takes its credentials from Infisical over GitHub OIDC — there are no long-lived secrets in the repository.
+
+Nothing in the app is Cloudflare-specific beyond the adapter and those two bindings: without a Hyperdrive binding the server falls back to `DATABASE_URL`, so any Node host with a Postgres database will also serve it.
+
+## License
+
+[MIT](LICENSE)

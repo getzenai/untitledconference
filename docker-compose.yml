@@ -16,7 +16,7 @@
 services:
   dev-db:
     image: postgres:18
-    container_name: postgres-vibe-starter-dev
+    container_name: postgres-untitledconference-dev
     restart: always
     ports:
       - 5432:5432
@@ -34,7 +34,7 @@ services:
 
   test-db:
     image: postgres:18
-    container_name: postgres-vibe-starter-test
+    container_name: postgres-untitledconference-test
     restart: always
     ports:
       - 5433:5432

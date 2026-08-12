@@ -1,48 +1,51 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
+`CLAUDE.md` in the repository root is the single source for conventions, and each area has its
+own `CLAUDE.md` next to the code (`src/lib/server/`, `src/lib/server/db/`,
+`src/lib/components/`, `src/routes/api/v1/`, `cypress/`). Read the closest one to what you are
+editing. This file is the short version for agents that do not load those automatically.
 
-- `src/routes` holds SvelteKit pages, API endpoints, and layouts; follow the RESTful pattern (`/resource`, `/resource/new`, `/resource/[id]`) so URLs map predictably to features.
-- Shared logic lives in `src/lib` (`components`, `hooks`, `server`, `validation`, `test` utilities) with i18n layers under `paraglide/`.
-- Database artifacts sit in `drizzle/` with `drizzle.config.ts`; run schema changes through the provided scripts so Docker-managed instances stay in sync.
-- Cypress assets live in `cypress/` (`e2e/`, `support/pages/`, `support/actions/`); VitePress docs are under `docs/`, and static assets under `static/`.
+## Structure
 
-## Build, Test, and Development Commands
+- `src/routes` — SvelteKit pages and endpoints, RESTful (`/resource`, `/resource/new`,
+  `/resource/[id]`).
+- `src/lib/conference` — domain logic with no database; `src/lib/server/conference` — the same
+  domain where it touches Postgres.
+- `src/lib/components` — shared components; shadcn-svelte primitives in `components/ui`.
+- `drizzle/` — generated migrations; `cypress/` — E2E specs and page objects; `scripts/` — dev,
+  database and deployment scripts.
 
-- `npm run dev` starts the app on http://localhost:5173 (fetches secrets from Infisical Cloud; for local Docker DB mode, set DATABASE_URL in .env first).
-- `npm run build` + `npm run preview` validate production output; `npm run check` performs `svelte-check` plus sync.
-- Quality gates: `npm run lint` (ESLint + Prettier check) and `npm run format` (Prettier write).
-- Database utilities: `npm run db:push`, `npm run db:migrate`, `npm run db:studio`. All commands fetch credentials from Infisical automatically.
+## Commands
 
-## Coding Style & Naming Conventions
+```bash
+npm run dev              # dev server on :5173
+npm run check            # svelte-check and types
+npm run lint             # Prettier check and ESLint
+npm run test:unit        # no database needed
+npm run test:integration # needs the test database on :5433
+npm run test:e2e         # Cypress
+npm run db:push          # push schema in development
+```
 
-- Prettier/ESLint outputs are the single source of truth; keep two-space indent, trailing commas, and generated semicolons.
-- Svelte components use PascalCase filenames, utilities use kebab-case (`auth-client.ts`), exports stay camelCase.
-- Mirror nearby patterns, avoid gratuitous comments, and co-locate tests as `*.unit.test.ts` or `*.integration.test.ts` beside the source when practical.
+## Style
 
-## Testing Guidelines
+- Prettier and ESLint decide formatting; do not hand-format.
+- Svelte components are PascalCase, everything else kebab-case, exports camelCase.
+- Match the file you are editing. Do not add comments that restate the code.
+- Tests are co-located and must be named `*.unit.test.ts` or `*.integration.test.ts` — any other
+  name is silently not run.
 
-- Vitest suites: `npm run test:unit`, `npm run test:integration` (requires `TEST_DATABASE_URL`), `npm run test` for the full stack.
-- Cypress: `npm run test:e2e`, or target one spec with `npm run test:e2e:spec -- cypress/e2e/critical-paths/login-workflow.cy.ts`; failure screenshots land in `cypress/screenshots/`.
-- Keep page objects in `/e2e/pages`, actions in `/e2e/actions`; rely on built-in waits—only use the documented 5s exceptions (`waitForLoadState`, `waitForURL`, `waitForResponse`).
+## Rules with teeth
 
-## Security & Operational Notes
+- Never read environment variables at module scope: `vite build` runs without secrets. Use
+  `serverEnv()` inside a function.
+- Never commit a secret. `.env` is local, Infisical is shared, `wrangler secret put` is
+  production.
+- Every mutation re-checks ownership in its own query; there is no authorization layer that
+  would catch a missed check.
+- Production migrations run only from `main` — `scripts/db/migrate.mjs` refuses otherwise.
 
-- Never log or commit secrets; environment variables (`DATABASE_URL`, `TEST_DATABASE_URL`) are pre-wired for localhost (`5432`, `5433`).
-- Reset test data through provided fixtures instead of manual SQL to keep suites deterministic.
+## Pull requests
 
-## Svelte MCP Server
-
-- The official Svelte MCP server (`https://mcp.svelte.dev/mcp`) is wired into `.mcp.json` as
-  `svelte`. It serves Svelte 5 / SvelteKit documentation and a `svelte-autofixer` that lints
-  Svelte code before you hand it over.
-- Use `list-sections` first, then `get-documentation` for the sections that match the task, and
-  run `svelte-autofixer` on any Svelte code you write until it reports nothing.
-- The full tool-by-tool instructions live in `CLAUDE.md` under "Svelte MCP Server" — that is the
-  single source, kept there because it is the file agents load automatically.
-
-## Commit & Pull Request Guidelines
-
-- Follow the imperative style seen in history (`Fix test errors`, `Update and condense docs`) and keep subjects ≤72 chars.
-- PRs should outline changes, list local verification commands, link issues (`Closes #123`), and attach UI evidence when visuals change.
-- Flag schema adjustments so reviewers can run the matching `db:*` command suite before merging.
+Imperative subject, ≤72 characters. Describe what changed and what you ran to verify it, link
+the issue (`Closes #123`), and attach evidence for anything user-visible.

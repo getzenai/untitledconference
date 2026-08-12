@@ -1,1 +1,0 @@
-- Use non-interactive commands with flags like `--yes` to avoid manual prompts
