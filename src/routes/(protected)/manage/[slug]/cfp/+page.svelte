@@ -131,6 +131,22 @@
 		{ value: 'closed', label: 'Closed' }
 	];
 
+	/**
+	 * Same windows the public form uses (`callState` in cfp-submission): a published
+	 * form is not "live" when opensAt is still ahead or closesAt has passed. Match
+	 * that here so the banner never claims Live while speakers see closed/not yet open.
+	 */
+	const publicCallWindow = $derived.by(() => {
+		const form = data.form;
+		if (!form || form.status !== 'published') return null;
+		const now = new Date();
+		const opensAt = form.opensAt ? new Date(form.opensAt) : null;
+		const closesAt = form.closesAt ? new Date(form.closesAt) : null;
+		if (opensAt && opensAt > now) return 'not_yet_open' as const;
+		if (closesAt && closesAt <= now) return 'closed' as const;
+		return 'open' as const;
+	});
+
 	const YES_NO_OPTIONS = [
 		{ value: '', label: '—' },
 		{ value: 'true', label: 'Yes' },
@@ -190,6 +206,115 @@
 			</form>
 		</EmptyState>
 	{:else}
+		<!-- Publish is a one-click act, not a buried Status select. Fabian's review
+		     hit "I published the conference and still see no CFP" — the form stayed
+		     draft until someone found Status → Published → Save settings. -->
+		{#if data.form.status === 'draft'}
+			<section
+				class="border-status-warn/40 bg-status-warn-bg mb-4 max-w-3xl rounded-lg border p-4"
+				data-testid="cfp-publish-banner"
+				role="status"
+			>
+				<h2 class="text-sm font-semibold">This call is still a draft</h2>
+				<p class="text-muted-foreground mt-1 text-sm">
+					Speakers cannot submit until you publish it
+					{#if data.conference.status !== 'published'}
+						— and the conference itself must be published in
+						<a
+							class="underline underline-offset-4"
+							href={`/manage/${data.conference.slug}/settings`}>Settings</a
+						>
+						for the public site to appear
+					{/if}.
+				</p>
+				<form method="POST" action="?/publishForm" use:enhance={submitting} class="mt-3">
+					<Button type="submit" size="sm" disabled={busy} data-testid="cfp-publish">
+						Publish call for papers
+					</Button>
+				</form>
+			</section>
+		{:else if data.form.status === 'published'}
+			<section
+				class="border-status-good/40 bg-status-good-bg mb-4 max-w-3xl rounded-lg border p-4"
+				data-testid="cfp-live-banner"
+				role="status"
+			>
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h2 class="text-sm font-semibold">Call for papers is published</h2>
+						<p class="text-muted-foreground mt-1 text-sm">
+							{#if data.conference.status !== 'published'}
+								The form is ready, but the conference is still a draft — publish it in
+								<a
+									class="underline underline-offset-4"
+									href={`/manage/${data.conference.slug}/settings`}>Settings</a
+								>
+								so speakers can reach the public site.
+							{:else if publicCallWindow === 'not_yet_open'}
+								Published, but not open yet (opens date is in the future) —
+								<a
+									class="underline underline-offset-4"
+									href={`/c/${data.conference.slug}/cfp`}
+									target="_blank"
+									rel="noopener">public form</a
+								>
+								shows “not opened yet”.
+							{:else if publicCallWindow === 'closed'}
+								Published, but past the closes date —
+								<a
+									class="underline underline-offset-4"
+									href={`/c/${data.conference.slug}/cfp`}
+									target="_blank"
+									rel="noopener">public form</a
+								>
+								shows closed to new submissions.
+							{:else}
+								Live on the public site —
+								<a
+									class="underline underline-offset-4"
+									href={`/c/${data.conference.slug}/cfp`}
+									target="_blank"
+									rel="noopener">open the public form</a
+								>.
+							{/if}
+						</p>
+					</div>
+					<form method="POST" action="?/closeForm" use:enhance={submitting}>
+						<Button
+							type="submit"
+							variant="outline"
+							size="sm"
+							disabled={busy}
+							data-testid="cfp-close"
+						>
+							Close call
+						</Button>
+					</form>
+				</div>
+			</section>
+		{:else if data.form.status === 'closed'}
+			<section
+				class="border-border bg-muted/40 mb-4 max-w-3xl rounded-lg border p-4"
+				data-testid="cfp-closed-banner"
+				role="status"
+			>
+				<div class="flex flex-wrap items-start justify-between gap-3">
+					<div>
+						<h2 class="text-sm font-semibold">Call for papers is closed</h2>
+						<p class="text-muted-foreground mt-1 text-sm">
+							No new submissions. Re-open by setting Status to Published below and saving, or
+							publish again.
+						</p>
+					</div>
+					<form method="POST" action="?/publishForm" use:enhance={submitting}>
+						<Button type="submit" size="sm" disabled={busy} data-testid="cfp-publish">
+							Re-open call
+						</Button>
+					</form>
+				</div>
+			</section>
+		{/if}
+
 		<div class="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
 			<div class="space-y-4">
 				<section class="border-border bg-card rounded-lg border p-4">

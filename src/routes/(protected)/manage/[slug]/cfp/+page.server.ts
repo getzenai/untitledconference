@@ -120,6 +120,49 @@ export const actions: Actions = {
 		};
 	},
 
+	publishForm: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const view = await cfpFormView(conference.id);
+		if (!view.form) {
+			return fail(404, { success: false, message: 'No call for papers yet.' });
+		}
+		const form = await updateCfpForm(conference.id, {
+			title: view.form.title,
+			description: view.form.description ?? '',
+			opensAt: view.form.opensAt,
+			closesAt: view.form.closesAt,
+			status: 'published'
+		});
+		if (!form) return fail(404, { success: false, message: 'No call for papers yet.' });
+		return {
+			success: true,
+			message:
+				conference.status === 'published'
+					? 'Call for papers is live. Speakers can open it from the public conference page.'
+					: 'Call for papers is published. Publish the conference in Settings so the public site (and the form) go live.'
+		};
+	},
+
+	closeForm: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const view = await cfpFormView(conference.id);
+		if (!view.form) {
+			return fail(404, { success: false, message: 'No call for papers yet.' });
+		}
+		const form = await updateCfpForm(conference.id, {
+			title: view.form.title,
+			description: view.form.description ?? '',
+			opensAt: view.form.opensAt,
+			closesAt: view.form.closesAt,
+			status: 'closed'
+		});
+		if (!form) return fail(404, { success: false, message: 'No call for papers yet.' });
+		return {
+			success: true,
+			message: 'Call for papers closed. Existing submissions stay; no new ones come in.'
+		};
+	},
+
 	updateForm: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const form = await request.formData();
