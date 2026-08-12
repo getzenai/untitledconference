@@ -278,7 +278,7 @@
 			<EmptyState
 				title="Nothing here yet"
 				description="When you organize, speak, or review, your events and open work show up on this page."
-				action={{ href: '/settings', label: 'Account settings' }}
+				action={{ href: '/settings/account', label: 'Account settings' }}
 			/>
 		{/if}
 	{/if}

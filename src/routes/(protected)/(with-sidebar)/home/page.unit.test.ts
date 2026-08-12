@@ -3,6 +3,7 @@
  * want to go?" plus a second Logout) and three static role cards. These pins
  * hold the product hub: events, open work, sourcing jump — and refuse leftovers.
  */
+import type { HomeDashboard } from '$lib/server/conference/home';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
@@ -13,7 +14,7 @@ const layoutData = {
 	analytics: { apiKey: undefined, host: undefined }
 };
 
-const emptyHub = {
+const emptyHub: HomeDashboard = {
 	events: [],
 	canCreateEvent: true,
 	canSourcing: false,
@@ -87,12 +88,13 @@ describe('home hub', () => {
 		const html = body(null, {
 			...emptyHub,
 			canCreateEvent: false,
+			// emptyHub arrays are never[]; pin shapes the same way events do above
 			openReviews: [
 				{
 					submissionId: 42,
 					title: 'Shipping faster with agents',
 					conference: { slug: 'devflow', name: 'DevFlow Summit' }
-				}
+				} as never
 			],
 			openSubmissions: [
 				{
@@ -103,7 +105,7 @@ describe('home hub', () => {
 					decidedAt: null,
 					isPrimary: true,
 					conference: { slug: 'devflow', name: 'DevFlow Summit' }
-				}
+				} as never
 			],
 			openTasks: [],
 			reviewConferences: []
