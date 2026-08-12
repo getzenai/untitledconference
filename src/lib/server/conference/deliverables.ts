@@ -11,15 +11,22 @@
  * `max(version) + 1`, the newest is the latest, and every earlier one stays
  * reachable. An overwrite would destroy the thing the criterion asks to see.
  */
+import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceSpeakerTable,
+	conferenceTable,
+	roomTable,
+	speakerProfileTable
+} from '$lib/server/db/conference/conference-schema';
 import {
 	deliverableTable,
 	fileCommentTable,
 	taskTable
 } from '$lib/server/db/conference/content-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
 
 /** One task of this user's, with the conference it belongs to. Null if not theirs. */
@@ -30,18 +37,38 @@ export async function ownTask(userId: string, taskId: number) {
 			conferenceId: taskTable.conferenceId,
 			conferenceSlug: conferenceTable.slug,
 			conferenceName: conferenceTable.name,
+			conferenceVenue: conferenceTable.venue,
 			speakerProfileId: taskTable.speakerProfileId,
 			title: taskTable.title,
 			instructions: taskTable.instructions,
 			kind: taskTable.kind,
 			status: taskTable.status,
 			dueOn: taskTable.dueOn,
-			submissionTitle: submissionTable.title
+			submissionTitle: submissionTable.title,
+			participationStatus: conferenceSpeakerTable.status,
+			sessionStartsAt: placementTable.startsAt,
+			sessionEndsAt: placementTable.endsAt,
+			sessionRoom: roomTable.name
 		})
 		.from(taskTable)
 		.innerJoin(conferenceTable, eq(conferenceTable.id, taskTable.conferenceId))
 		.innerJoin(speakerProfileTable, eq(speakerProfileTable.id, taskTable.speakerProfileId))
 		.leftJoin(submissionTable, eq(submissionTable.id, taskTable.submissionId))
+		.leftJoin(
+			conferenceSpeakerTable,
+			and(
+				eq(conferenceSpeakerTable.conferenceId, taskTable.conferenceId),
+				eq(conferenceSpeakerTable.speakerProfileId, taskTable.speakerProfileId)
+			)
+		)
+		.leftJoin(
+			placementTable,
+			and(
+				eq(placementTable.submissionId, taskTable.submissionId),
+				eq(placementTable.status, 'confirmed')
+			)
+		)
+		.leftJoin(roomTable, eq(roomTable.id, placementTable.roomId))
 		.where(and(eq(taskTable.id, taskId), eq(speakerProfileTable.userId, userId)))
 		.limit(1);
 
@@ -234,7 +261,7 @@ export async function setActionTaskDone(
 	done: boolean
 ): Promise<boolean> {
 	const task = await ownTask(userId, taskId);
-	if (!task || task.kind !== 'action') return false;
+	if (!task || task.kind !== 'action' || isParticipationTaskTitle(task.title)) return false;
 
 	await db
 		.update(taskTable)
@@ -242,4 +269,78 @@ export async function setActionTaskDone(
 		.where(eq(taskTable.id, taskId));
 
 	return true;
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+async function ownedParticipationTask(tx: Tx, userId: string, taskId: number) {
+	const [owned] = await tx
+		.select({
+			conferenceId: taskTable.conferenceId,
+			speakerProfileId: taskTable.speakerProfileId,
+			title: taskTable.title,
+			kind: taskTable.kind
+		})
+		.from(taskTable)
+		.innerJoin(speakerProfileTable, eq(speakerProfileTable.id, taskTable.speakerProfileId))
+		.where(and(eq(taskTable.id, taskId), eq(speakerProfileTable.userId, userId)))
+		.limit(1);
+
+	return owned?.kind === 'action' && isParticipationTaskTitle(owned.title) ? owned : null;
+}
+
+async function completeParticipationTasks(tx: Tx, conferenceId: number, speakerProfileId: number) {
+	const siblingActions = await tx
+		.select({ id: taskTable.id, title: taskTable.title })
+		.from(taskTable)
+		.where(
+			and(
+				eq(taskTable.conferenceId, conferenceId),
+				eq(taskTable.speakerProfileId, speakerProfileId),
+				eq(taskTable.kind, 'action')
+			)
+		);
+	const ids = siblingActions
+		.filter((task) => isParticipationTaskTitle(task.title))
+		.map((task) => task.id);
+
+	await tx
+		.update(taskTable)
+		.set({ status: 'done', completedAt: new Date() })
+		.where(inArray(taskTable.id, ids));
+}
+
+/**
+ * Records a speaker's event-wide participation decision and closes every copy
+ * of that event-wide task in one transaction.
+ *
+ * A task is scoped to a talk, but participation status is intentionally stored
+ * on conference_speaker. A speaker with two accepted talks therefore sees two
+ * generated tasks that represent one answer; leaving the sibling open would
+ * contradict the roster state we just wrote.
+ */
+export async function respondToParticipationTask(
+	userId: string,
+	taskId: number,
+	decision: 'confirmed' | 'declined'
+): Promise<boolean> {
+	return db.transaction(async (tx) => {
+		const owned = await ownedParticipationTask(tx, userId, taskId);
+		if (!owned) return false;
+
+		const [membership] = await tx
+			.update(conferenceSpeakerTable)
+			.set({ status: decision })
+			.where(
+				and(
+					eq(conferenceSpeakerTable.conferenceId, owned.conferenceId),
+					eq(conferenceSpeakerTable.speakerProfileId, owned.speakerProfileId)
+				)
+			)
+			.returning({ id: conferenceSpeakerTable.id });
+		if (!membership) return false;
+
+		await completeParticipationTasks(tx, owned.conferenceId, owned.speakerProfileId);
+		return true;
+	});
 }

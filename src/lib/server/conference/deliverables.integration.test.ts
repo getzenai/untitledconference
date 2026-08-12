@@ -14,9 +14,13 @@ import { MAX_UPLOAD_BYTES, rejectUpload } from '$lib/conference/upload-limits';
 import { objectKey, safeFilename } from '$lib/server/conference/deliverable-storage';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceSpeakerTable,
+	conferenceTable,
+	speakerProfileTable
+} from '$lib/server/db/conference/conference-schema';
 import { deliverableTable, taskTable } from '$lib/server/db/conference/content-schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
 	addFileComment,
@@ -24,6 +28,7 @@ import {
 	ownDeliverable,
 	ownTask,
 	recordDeliverable,
+	respondToParticipationTask,
 	setActionTaskDone,
 	taskFiles
 } from './deliverables';
@@ -35,6 +40,9 @@ const strangerUserId = `stranger-${suffix}`;
 
 let fileTaskId = 0;
 let actionTaskId = 0;
+let participationTaskId = 0;
+let siblingParticipationTaskId = 0;
+let ownSpeakerProfileId = 0;
 /** A task belonging to somebody else entirely. */
 let otherPersonsTaskId = 0;
 
@@ -86,6 +94,11 @@ beforeAll(async () => {
 			sortName: 'Else, Someone'
 		})
 		.returning();
+	await db.insert(conferenceSpeakerTable).values({
+		conferenceId: conference.id,
+		speakerProfileId: mine.id,
+		status: 'invited'
+	});
 
 	const [fileTask] = await db
 		.insert(taskTable)
@@ -101,9 +114,26 @@ beforeAll(async () => {
 		.values({
 			conferenceId: conference.id,
 			speakerProfileId: mine.id,
-			title: 'Confirm participation',
+			title: 'Acknowledge the speaker guide',
 			kind: 'action'
 		})
+		.returning();
+	const [participationTask, siblingParticipationTask] = await db
+		.insert(taskTable)
+		.values([
+			{
+				conferenceId: conference.id,
+				speakerProfileId: mine.id,
+				title: 'Confirm participation',
+				kind: 'action'
+			},
+			{
+				conferenceId: conference.id,
+				speakerProfileId: mine.id,
+				title: '  CONFIRM   participation ',
+				kind: 'action'
+			}
+		])
 		.returning();
 	const [otherTask] = await db
 		.insert(taskTable)
@@ -119,6 +149,9 @@ beforeAll(async () => {
 
 	fileTaskId = fileTask.id;
 	actionTaskId = actionTask.id;
+	participationTaskId = participationTask.id;
+	siblingParticipationTaskId = siblingParticipationTask.id;
+	ownSpeakerProfileId = mine.id;
 	otherPersonsTaskId = otherTask.id;
 });
 
@@ -269,6 +302,33 @@ describe('action tasks', () => {
 		// Otherwise the status would claim something the empty deliverable list
 		// flatly contradicts.
 		expect(await setActionTaskDone(speakerUserId, fileTaskId, true)).toBe(false);
+	});
+
+	it('records one event-wide participation decision and closes its sibling tasks', async () => {
+		expect(await respondToParticipationTask(strangerUserId, participationTaskId, 'confirmed')).toBe(
+			false
+		);
+
+		expect(await respondToParticipationTask(speakerUserId, participationTaskId, 'declined')).toBe(
+			true
+		);
+
+		const [membership] = await db
+			.select({ status: conferenceSpeakerTable.status })
+			.from(conferenceSpeakerTable)
+			.where(eq(conferenceSpeakerTable.speakerProfileId, ownSpeakerProfileId));
+		expect(membership.status).toBe('declined');
+
+		const tasks = await db
+			.select({ id: taskTable.id, status: taskTable.status, completedAt: taskTable.completedAt })
+			.from(taskTable)
+			.where(inArray(taskTable.id, [participationTaskId, siblingParticipationTaskId]));
+		expect(tasks).toHaveLength(2);
+		expect(tasks.every((task) => task.status === 'done' && task.completedAt !== null)).toBe(true);
+	});
+
+	it('does not let the generic toggle bypass a participation answer', async () => {
+		expect(await setActionTaskDone(speakerUserId, participationTaskId, false)).toBe(false);
 	});
 
 	it('refuses a file handed in against an action task', async () => {
