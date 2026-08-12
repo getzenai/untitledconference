@@ -241,10 +241,51 @@ async function writeBreaks(conferenceId, ids) {
 	}
 }
 
+/**
+ * When each proposal was started.
+ *
+ * `created_at` was never set, so every row defaulted to `now()` and the
+ * dashboard's "Submissions over time" drew thirty-four proposals on one day: a
+ * flat axis with a single spike, under a caption promising a trend.
+ *
+ * The window is the chart's, not the call's. `TIMELINE_DAYS` in `dashboard.ts`
+ * plots the last 30 days ending today, so dates spread across the fictional
+ * 2026-06..2027-02 call would leave the chart emptier than the bug did — every
+ * proposal would fall off the left edge. Verified in a browser before believing
+ * otherwise: spreading over the call produced an axis reading "14 Jul – 12 Aug"
+ * with one point on it.
+ *
+ * So proposals land in the 28 days before the seed runs, shaped the way a call
+ * actually fills: a trickle, then most of the pile in the last few days. The
+ * easing is deterministic — the same run produces the same shape — and only the
+ * anchor moves with the clock, which is what keeps the chart populated whenever
+ * the demo is seeded.
+ */
+const CFP_CLOSES_MS = Date.parse('2027-02-15T23:59:00Z');
+const TIMELINE_WINDOW_DAYS = 28;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function startedAt(index, total, now) {
+	const share = total <= 1 ? 1 : index / (total - 1);
+	// 1 - (1 - share)^2: a rising ramp rather than a cliff. A cubic curve put ten
+	// of thirty-four on the final day, which reads as "the deadline is today" —
+	// and this call closes in February 2027, so nothing in the fiction explains a
+	// last-day rush.
+	const eased = 1 - Math.pow(1 - share, 2);
+	const span = TIMELINE_WINDOW_DAYS * DAY_MS;
+	// An hour spread as well, so several proposals on one day are not all at
+	// midnight — the chart counts per day, the submission list shows the time.
+	const hourOffset = ((index * 7) % 11) * 60 * 60 * 1000;
+	const started = now - span + eased * (span - 12 * 60 * 60 * 1000) + hourOffset;
+	// Never in the future, and never after the call it was submitted under closed.
+	return new Date(Math.min(started, now - 30 * 60 * 1000, CFP_CLOSES_MS));
+}
+
 async function seedSubmissions(conferenceId, ids, speakerIds, call, goldTierId) {
 	const submissionIds = {};
 
-	for (const s of SUBMISSIONS) {
+	for (const [index, s] of SUBMISSIONS.entries()) {
+		const startedOn = startedAt(index, SUBMISSIONS.length, Date.now());
 		const [row] = await sql`INSERT INTO submission ${sql({
 			conference_id: conferenceId,
 			cfp_form_id: call.cfpFormId,
@@ -256,7 +297,12 @@ async function seedSubmissions(conferenceId, ids, speakerIds, call, goldTierId) 
 			sponsor_tier_id: s.key === 'buildtimes' ? goldTierId : null,
 			status: s.status,
 			content_approval: s.approval,
-			submitted_at: s.status === 'draft' ? null : at('2027-02-01T12:00:00Z'),
+			created_at: startedOn,
+			// A proposal is sent shortly after it is started, not a fortnight before
+			// it: a `submitted_at` earlier than `created_at` is a row no real call
+			// could produce, and both columns are shown on the same screen.
+			submitted_at:
+				s.status === 'draft' ? null : new Date(startedOn.getTime() + 2 * 60 * 60 * 1000),
 			decided_at: DECIDED.includes(s.status) ? at('2027-03-01T12:00:00Z') : null
 		})} RETURNING id`;
 		submissionIds[s.key] = row.id;
