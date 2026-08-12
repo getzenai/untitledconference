@@ -9,6 +9,7 @@
 	import MessageSquareTextIcon from '@lucide/svelte/icons/message-square-text';
 	import RouteIcon from '@lucide/svelte/icons/route';
 	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
+	import Goose from '$lib/components/goose.svelte';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -43,7 +44,7 @@
 				href="/"
 				class="focus-visible:ring-ring flex items-center gap-2 rounded-md font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:outline-none"
 			>
-				<img src="/mascot/goose.svg" alt="" class="h-9 w-8 object-contain" />
+				<Goose silent class="h-9 w-8" />
 				<span>untitledconference</span>
 			</a>
 
@@ -137,7 +138,7 @@
 						<div class="border-border flex items-center justify-between border-b px-4 py-3">
 							<div class="flex items-center gap-2 text-xs font-medium">
 								<div class="bg-act flex size-6 items-center justify-center rounded-md">
-									<img src="/mascot/goose.svg" alt="" class="h-5 w-4 object-contain" />
+									<Goose class="h-5 w-4" />
 								</div>
 								DevFlow 2027
 							</div>
@@ -221,8 +222,7 @@
 							</div>
 						</div>
 					</div>
-					<img
-						src="/mascot/goose.svg"
+					<Goose
 						alt="The untitledconference goose"
 						class="absolute -right-4 -bottom-14 h-28 w-auto rotate-6 drop-shadow-lg sm:-right-10 sm:h-36"
 					/>
@@ -486,10 +486,9 @@
 						>
 					</div>
 				</div>
-				<img
-					src="/mascot/goose.svg"
-					alt=""
-					class="text-background/10 pointer-events-none absolute -right-10 -bottom-20 h-72 w-auto opacity-20 invert sm:right-6 sm:h-80 dark:invert-0"
+				<Goose
+					silent
+					class="pointer-events-none absolute -right-10 -bottom-20 h-72 w-auto opacity-20 sm:right-6 sm:h-80"
 				/>
 			</div>
 		</section>
@@ -499,9 +498,14 @@
 		<div
 			class="mx-auto flex max-w-7xl flex-col gap-7 px-5 py-10 sm:flex-row sm:items-center sm:justify-between sm:px-8"
 		>
-			<a href="/" class="flex items-center gap-2 text-sm font-semibold"
-				><img src="/mascot/goose.svg" alt="" class="h-8 w-7" /> untitledconference</a
-			>
+			<div class="flex items-center gap-2 text-sm font-semibold">
+				<Goose class="h-8 w-7" />
+				<a
+					href="/"
+					class="focus-visible:ring-ring rounded-md focus-visible:ring-[3px] focus-visible:outline-none"
+					>untitledconference</a
+				>
+			</div>
 			<div class="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
 				<span>Open source. Run it yourself.</span><a
 					class="hover:text-foreground inline-flex items-center gap-1.5"
