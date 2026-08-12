@@ -38,7 +38,13 @@ const baseData = {
 	impersonating: null,
 	analytics: { apiKey: undefined, host: undefined },
 	contact,
-	availableEvents: [{ id: 2, name: 'Other Conf', slug: 'other', organizationId: 'org-1' }]
+	availableEvents: [{ id: 2, name: 'Other Conf', slug: 'other', organizationId: 'org-1' }],
+	duplicates: [] as Array<{
+		id: number;
+		name: string;
+		email: string | null;
+		company: string | null;
+	}>
 };
 
 describe('contact detail page', () => {
@@ -57,5 +63,28 @@ describe('contact detail page', () => {
 		expect(body).toContain('Shipping faster');
 		expect(body).toContain('data-testid="contact-push"');
 		expect(body).toContain('data-testid="contact-push-submit"');
+	});
+
+	it('surfaces same-name duplicates with a merge action (CRM-06)', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					...baseData,
+					duplicates: [
+						{
+							id: 99,
+							name: 'Priya Raman',
+							email: 'priya.raman.alt@sbek-test.example.com',
+							company: 'Acme'
+						}
+					]
+				} as never,
+				form: null
+			}
+		});
+		expect(body).toContain('data-testid="contact-duplicates"');
+		expect(body).toContain('data-testid="contact-merge-submit"');
+		expect(body).toContain('priya.raman.alt@sbek-test.example.com');
+		expect(body).toContain('/contacts/99');
 	});
 });

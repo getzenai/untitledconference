@@ -1,7 +1,8 @@
 /**
- * Contact detail — identity, persistent notes, tags, cross-event history (CRM-03/04)
- * and push-to-event handoff (CRM-10).
+ * Contact detail — identity, persistent notes, tags, cross-event history (CRM-03/04),
+ * push-to-event handoff (CRM-10), and near-duplicate merge (CRM-06).
  */
+import { findNameDuplicates, mergeContacts } from '$lib/server/conference/contact-merge';
 import {
 	getContact,
 	pushableConferences,
@@ -9,7 +10,7 @@ import {
 	updateContact
 } from '$lib/server/conference/contacts';
 import { isSpeakerStatus, type SpeakerStatus } from '$lib/server/conference/speakers';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 function text(form: FormData, key: string): string {
@@ -28,16 +29,20 @@ function profileId(params: { id: string }): number {
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const id = profileId(params);
-	const contact = await getContact(locals.user!.id, id);
+	const userId = locals.user!.id;
+	const contact = await getContact(userId, id);
 	if (!contact) throw error(404, 'Contact not found');
 
-	const conferences = await pushableConferences(locals.user!.id);
+	const [conferences, duplicates] = await Promise.all([
+		pushableConferences(userId),
+		findNameDuplicates(userId, id)
+	]);
 	const alreadyOn = new Set(contact.events.map((e) => e.conferenceId));
 	const availableEvents = conferences.filter(
 		(c) => c.organizationId === contact.organizationId && !alreadyOn.has(c.id)
 	);
 
-	return { contact, availableEvents };
+	return { contact, availableEvents, duplicates };
 };
 
 export const actions: Actions = {
@@ -88,5 +93,21 @@ export const actions: Actions = {
 		}
 
 		return { message: 'Added to the event speaker roster.' };
+	},
+
+	merge: async ({ locals, params, request }) => {
+		const primaryId = profileId(params);
+		const form = await request.formData();
+		const secondaryId = Number(form.get('secondaryId'));
+
+		const result = await mergeContacts(locals.user!.id, primaryId, secondaryId);
+		if (!result.ok) {
+			if (result.reason === 'invalid') return fail(400, { error: result.message });
+			if (result.reason === 'forbidden') return fail(403, { error: 'Not allowed.' });
+			return fail(404, { error: 'Could not merge — one of the contacts was not found.' });
+		}
+
+		// Land on the surviving primary with a confirmation.
+		throw redirect(303, `/contacts/${result.primaryId}?merged=1`);
 	}
 };

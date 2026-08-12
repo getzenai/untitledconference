@@ -236,6 +236,60 @@
 		{/if}
 	</section>
 
+	<!-- Near-duplicates (CRM-06): same name, different email/profile. -->
+	{#if data.duplicates.length > 0}
+		<section
+			class="border-border bg-card max-w-3xl rounded-lg border p-4"
+			data-testid="contact-duplicates"
+		>
+			<h2 class="text-sm font-semibold">Possible duplicates</h2>
+			<p class="text-muted-foreground mt-0.5 text-xs">
+				Same name, different record. Merge keeps <strong>this</strong> contact as primary and deletes
+				the other. Cannot be undone.
+			</p>
+			<ul class="mt-3 space-y-3" data-testid="contact-duplicates-list">
+				{#each data.duplicates as dup (dup.id)}
+					<li
+						class="border-border flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-sm"
+						data-testid="contact-duplicate-row"
+					>
+						<div class="min-w-0">
+							<a href="/contacts/{dup.id}" class="font-medium underline-offset-2 hover:underline">
+								{dup.name}
+							</a>
+							<p class="text-muted-foreground truncate text-xs">
+								{dup.email ?? 'no email'}
+								{#if dup.company}
+									· {dup.company}{/if}
+							</p>
+						</div>
+						<form method="POST" action="?/merge" use:enhance={submitting}>
+							<input type="hidden" name="secondaryId" value={dup.id} />
+							<Button
+								type="submit"
+								size="sm"
+								variant="secondary"
+								disabled={busy}
+								data-testid="contact-merge-submit"
+								onclick={(e: MouseEvent) => {
+									if (
+										!confirm(
+											`Merge “${dup.name}” (${dup.email ?? 'no email'}) into this contact? The other record will be deleted.`
+										)
+									) {
+										e.preventDefault();
+									}
+								}}
+							>
+								Merge into this
+							</Button>
+						</form>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
 	<!-- Cross-event history (CRM-03) -->
 	<section class="max-w-3xl space-y-4" data-testid="contact-history">
 		<div>

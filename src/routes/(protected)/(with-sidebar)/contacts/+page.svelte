@@ -46,6 +46,7 @@
 	const maxCompanyCount = $derived(
 		overview.topCompanies.reduce((m: number, c: { count: number }) => Math.max(m, c.count), 1)
 	);
+	const duplicateIdSet = $derived(new Set(data.duplicateIds ?? []));
 </script>
 
 <svelte:head>
@@ -375,6 +376,15 @@
 									>
 										{contact.name}
 									</a>
+									{#if duplicateIdSet.has(contact.id)}
+										<span
+											class="border-status-warn text-status-warn ml-1.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase"
+											data-testid="contact-duplicate-badge"
+											title="Another contact shares this name"
+										>
+											Duplicate
+										</span>
+									{/if}
 								</td>
 								<td class="text-muted-foreground px-3 py-2">{contact.company ?? '—'}</td>
 								<td class="text-muted-foreground px-3 py-2">{contact.jobTitle ?? '—'}</td>
