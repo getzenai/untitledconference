@@ -365,7 +365,9 @@
 				<p class="text-muted-foreground mt-0.5 text-xs">
 					Change the format or track to watch conditional fields appear and disappear.
 					{#if hiddenCount > 0}
-						<span class="text-status-warn">{hiddenCount} field(s) hidden right now.</span>
+						<span class="text-status-warn">
+							{hiddenCount === 1 ? '1 field is' : `${hiddenCount} fields are`} hidden right now.
+						</span>
 					{/if}
 				</p>
 
