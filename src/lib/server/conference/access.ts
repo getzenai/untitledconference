@@ -118,5 +118,7 @@ export async function organizedConferences(userId: string): Promise<Conference[]
 	const seen = new Map<number, Conference>();
 	for (const c of [...byOrg, ...byConference]) seen.set(c.id, c);
 
-	return [...seen.values()].sort((a, b) => (a.startsOn ?? '').localeCompare(b.startsOn ?? ''));
+	// Newest first on the home list — organizers just created one and expect it
+	// at the top, not buried under older events sorted by start date.
+	return [...seen.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }

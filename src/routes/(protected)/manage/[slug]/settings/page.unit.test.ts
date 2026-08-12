@@ -288,7 +288,10 @@ describe('task templates on settings', () => {
 		);
 
 		expect(body).toContain('action="?/handOutTemplate"');
-		expect(body).toContain('Give to 3 accepted speakers');
+		expect(body).toContain('Give to 3 accepted speakers still missing it');
+		expect(body).toContain(
+			'title="Assign this task to accepted speakers who do not have it yet. New acceptances already get templates automatically."'
+		);
 	});
 
 	it('says speaker, singular, when exactly one is missing it', () => {
@@ -307,7 +310,7 @@ describe('task templates on settings', () => {
 			{ 7: 1 }
 		);
 
-		expect(body).toContain('Give to 1 accepted speaker<');
+		expect(body).toContain('Give to 1 accepted speaker still missing it');
 	});
 
 	it('does not offer it when every accepted speaker already has the task', () => {

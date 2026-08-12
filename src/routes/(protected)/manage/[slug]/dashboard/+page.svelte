@@ -273,13 +273,13 @@
 			{/if}
 		</div>
 		<!--
-			Capped rather than full-bleed. The plot keeps its 640x180 box and scales
-			with its container, so on a wide screen an uncapped chart grows to four
-			hundred pixels tall and takes over a page whose subject is the queues
-			underneath it. Thirty days need width, not height.
+			Full width of the card. The plot is a fixed viewBox scaled by the
+			container (`h-auto w-full`); a max-width left half the card empty on
+			wide screens. Height follows the aspect ratio of the SVG, not a second
+			cap that would leave vertical dead space under the heading.
 		-->
 		<div class="border-border border-t p-4">
-			<SubmissionsChart days={d.submissionsOverTime} class="max-w-3xl" />
+			<SubmissionsChart days={d.submissionsOverTime} />
 		</div>
 	</section>
 

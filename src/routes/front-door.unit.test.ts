@@ -98,11 +98,11 @@ describe('the front page a visitor sees', () => {
 	it('leads with what the tool does and how to start', () => {
 		const body = renderFrontPage([{ slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027' }]);
 
-		expect(body).toContain('Run the whole event.');
+		expect(body).toContain('Run the whole conference.');
 		expect(body).toContain('For speakers');
 		expect(body).toContain('For reviewers');
 		expect(body).toContain('For organizers');
-		expect(body).toContain('Create your event');
+		expect(body).toContain('Create your conference');
 		// The mascot is inlined (not an <img src>) so it can take the site's
 		// colors — check for the goose's own path data instead of a file path.
 		expect(body).toContain('M50 4C60 4 66 11 66 21');
@@ -118,8 +118,8 @@ describe('the front page a visitor sees', () => {
 		expect(body).toContain('href="/c/devflow-conf-2027"');
 		expect(body).toContain('DevFlow Conf 2027');
 		// Below, not above: this is the EMB start point, not the point of the page.
-		expect(body).toContain('Run the whole event.');
-		expect(body.indexOf('Run the whole event.')).toBeLessThan(
+		expect(body).toContain('Run the whole conference.');
+		expect(body.indexOf('Run the whole conference.')).toBeLessThan(
 			body.indexOf('href="/c/devflow-conf-2027"')
 		);
 	});
@@ -127,7 +127,7 @@ describe('the front page a visitor sees', () => {
 	it('keeps the pitch when nothing is published yet', () => {
 		const body = renderFrontPage([]);
 
-		expect(body).toContain('Run the whole event.');
+		expect(body).toContain('Run the whole conference.');
 		expect(body).toContain('Nothing published yet.');
 	});
 });
