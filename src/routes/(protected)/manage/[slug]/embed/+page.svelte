@@ -14,13 +14,20 @@
 	 * half of these conferences are administered.
 	 */
 	import CopyButton from '$lib/components/ui/copy-button.svelte';
-	import { EMBEDDABLE_SURFACES, embedSnippet, embedUrl, surfaceUrl } from '$lib/conference/embed';
+	import {
+		AGENDA_FEED_PATH,
+		EMBEDDABLE_SURFACES,
+		embedSnippet,
+		embedUrl,
+		surfaceUrl
+	} from '$lib/conference/embed';
 
 	let { data } = $props();
 
 	const slug = $derived(data.conference.slug);
 	const published = $derived(data.conference.status === 'published');
 	const siteUrl = $derived(surfaceUrl(data.origin, slug, ''));
+	const feedUrl = $derived(surfaceUrl(data.origin, slug, AGENDA_FEED_PATH));
 </script>
 
 <svelte:head>
@@ -115,4 +122,37 @@
 			</section>
 		{/each}
 	</div>
+
+	<!--
+		Below the five, not among them: everything above goes on a page, this one
+		goes in a calendar. Sharing the heading would suggest a sixth iframe.
+	-->
+	<h2 class="mt-6 text-sm font-semibold">Add to calendar</h2>
+	<p class="text-muted-foreground mt-0.5 text-xs">
+		The same agenda, as a calendar subscription. A visitor who opens this link gets every scheduled
+		talk in the calendar they already use, room included — and the entries update on their own when
+		you move something.
+	</p>
+
+	<section class="border-border bg-card mt-3 rounded-lg border p-4">
+		<div class="flex items-baseline justify-between gap-3">
+			<h3 class="text-sm font-semibold">Agenda feed</h3>
+			<a
+				href="/c/{slug}{AGENDA_FEED_PATH}"
+				class="text-muted-foreground hover:text-foreground shrink-0 text-xs underline underline-offset-4"
+			>
+				Download
+			</a>
+		</div>
+		<p class="text-muted-foreground mt-0.5 text-xs">
+			iCalendar (.ics) — the same sessions the public agenda shows, and nothing more.
+		</p>
+
+		<div class="mt-3 flex items-center gap-2">
+			<code class="border-border min-w-0 flex-1 truncate rounded-md border px-2 py-1.5 text-xs"
+				>{feedUrl}</code
+			>
+			<CopyButton value={feedUrl} size="sm" title="Copy the agenda feed address" />
+		</div>
+	</section>
 </div>
