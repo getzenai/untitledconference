@@ -67,9 +67,13 @@ describe('speaker task detail', () => {
 		);
 
 		expect(confirmed).toContain('You are confirmed for this event.');
-		expect(confirmed).toContain('Participation confirmed');
+		expect(confirmed).not.toContain('Participation confirmed');
+		expect(confirmed).not.toContain('Yes, I’ll be there');
+		expect(confirmed).toContain('I can’t take part');
 		expect(declined).toContain('You told the organizers you cannot take part.');
-		expect(declined).toContain('Participation declined');
+		expect(declined).not.toContain('Participation declined');
+		expect(declined).not.toContain('I can’t take part');
+		expect(declined).toContain('Yes, I’ll be there');
 	});
 
 	it('does not present the organizer’s initial roster assumption as the speaker’s answer', () => {

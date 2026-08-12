@@ -164,20 +164,18 @@
 			{/if}
 
 			<div class="mt-4 flex flex-wrap gap-3">
-				<form method="POST" action="?/participation" use:enhance={submitting}>
-					<input type="hidden" name="decision" value="confirmed" />
-					<Button type="submit" disabled={busy}>
-						{participationDecision === 'confirmed'
-							? 'Participation confirmed'
-							: 'Yes, I’ll be there'}
-					</Button>
-				</form>
-				<form method="POST" action="?/participation" use:enhance={submitting}>
-					<input type="hidden" name="decision" value="declined" />
-					<Button type="submit" variant="outline" disabled={busy}>
-						{participationDecision === 'declined' ? 'Participation declined' : 'I can’t take part'}
-					</Button>
-				</form>
+				{#if participationDecision !== 'confirmed'}
+					<form method="POST" action="?/participation" use:enhance={submitting}>
+						<input type="hidden" name="decision" value="confirmed" />
+						<Button type="submit" disabled={busy}>Yes, I’ll be there</Button>
+					</form>
+				{/if}
+				{#if participationDecision !== 'declined'}
+					<form method="POST" action="?/participation" use:enhance={submitting}>
+						<input type="hidden" name="decision" value="declined" />
+						<Button type="submit" variant="outline" disabled={busy}>I can’t take part</Button>
+					</form>
+				{/if}
 			</div>
 
 			{#if form?.participationError}
