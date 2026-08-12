@@ -8,6 +8,7 @@
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { contactFiltersHref } from '$lib/conference/contact-filters';
 
 	let { data, form } = $props();
 
@@ -84,8 +85,24 @@
 			>.
 		</p>
 	{:else}
-		{#if form?.scope === 'import'}
-			<!-- import answers in its section -->
+		{#if form?.scope === 'import' || form?.scope === 'segment'}
+			{#if form?.error}
+				<p
+					class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
+					role="alert"
+					data-testid="contacts-segment-error"
+				>
+					{form.error}
+				</p>
+			{:else if form?.message && form.scope === 'segment'}
+				<p
+					class="border-status-good text-status-good max-w-2xl rounded-md border px-3 py-2 text-sm"
+					role="status"
+					data-testid="contacts-segment-message"
+				>
+					{form.message}
+				</p>
+			{/if}
 		{:else if form?.error}
 			<p
 				class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
@@ -249,6 +266,83 @@
 				</Button>
 			{/if}
 		</form>
+
+		<!-- Saved segments (CRM-09): dynamic filters re-run against the live directory. -->
+		<section class="space-y-3" data-testid="contacts-segments">
+			<div class="flex flex-wrap items-end justify-between gap-3">
+				<div>
+					<h2 class="text-sm font-semibold tracking-tight">Saved segments</h2>
+					<p class="text-muted-foreground text-xs">
+						Named filter sets that reopen with matching contacts (auto-updating).
+					</p>
+				</div>
+			</div>
+
+			{#if filtered}
+				<form
+					method="POST"
+					action="?/saveSegment"
+					use:enhance={submitting}
+					class="border-border bg-card flex flex-wrap items-end gap-2 rounded-lg border p-3"
+					data-testid="contacts-save-segment"
+				>
+					<input type="hidden" name="organizationId" value={data.organizationId ?? ''} />
+					<input type="hidden" name="q" value={data.filters.q ?? ''} />
+					<input type="hidden" name="company" value={data.filters.company ?? ''} />
+					<input type="hidden" name="jobTitle" value={data.filters.jobTitle ?? ''} />
+					<input type="hidden" name="tag" value={data.filters.tag ?? ''} />
+					<div class="min-w-[12rem] flex-1">
+						<label class="text-muted-foreground mb-1 block text-xs font-medium" for="segment-name">
+							Save current filters as
+						</label>
+						<Input
+							id="segment-name"
+							name="name"
+							placeholder="AI Experts"
+							required
+							data-testid="contacts-segment-name"
+						/>
+					</div>
+					<Button type="submit" size="sm" disabled={busy} data-testid="contacts-segment-save">
+						Save segment
+					</Button>
+				</form>
+			{/if}
+
+			{#if data.segments.length === 0}
+				<p class="text-muted-foreground text-sm" data-testid="contacts-segments-empty">
+					No saved segments yet. Apply a filter above, then save it with a name.
+				</p>
+			{:else}
+				<ul class="flex flex-wrap gap-2" data-testid="contacts-segments-list">
+					{#each data.segments as segment (segment.id)}
+						<li
+							class="border-border bg-card flex items-center gap-1 rounded-full border pr-1 pl-3 text-sm"
+						>
+							<a
+								href={contactFiltersHref(segment.filters)}
+								class="font-medium hover:underline"
+								data-testid="contacts-segment-link"
+								data-segment={segment.name}
+							>
+								{segment.name}
+							</a>
+							<form method="POST" action="?/deleteSegment" use:enhance={submitting}>
+								<input type="hidden" name="segmentId" value={segment.id} />
+								<button
+									type="submit"
+									class="text-muted-foreground hover:text-foreground rounded-full px-2 py-1 text-xs"
+									aria-label="Delete segment {segment.name}"
+									data-testid="contacts-segment-delete"
+								>
+									×
+								</button>
+							</form>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</section>
 
 		<!-- Directory table (CRM-01) -->
 		<div class="border-border overflow-x-auto rounded-lg border" data-testid="contacts-table">

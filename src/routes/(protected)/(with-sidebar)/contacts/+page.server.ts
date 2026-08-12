@@ -1,10 +1,11 @@
 /**
- * Org-wide speaker directory (CRM-01 / CRM-02 / CRM-05) plus CRM overview (CRM-12).
+ * Org-wide speaker directory (CRM-01 / CRM-02 / CRM-05), overview (CRM-12),
+ * and saved segments (CRM-09).
  *
  * Outside any single event: every contact in organizations the user owns or
  * administers. Filters live in the URL so a search is shareable and survives reload.
  * The overview KPIs/widgets sit above the table so the eval finds dashboard evidence
- * on the same org-level surface.
+ * on the same org-level surface. Segments re-apply saved filters (dynamic).
  */
 import { readSpeakerCsv } from '$lib/conference/speaker-csv';
 import {
@@ -17,6 +18,7 @@ import {
 	type ContactFilters,
 	type CrmOverview
 } from '$lib/server/conference/contacts';
+import { createSegment, deleteSegment, listSegments } from '$lib/server/conference/segments';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -68,7 +70,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			filterOptions: { companies: [], jobTitles: [], tags: [] },
 			organizationId: null as string | null,
 			canManage: false,
-			overview: emptyOverview
+			overview: emptyOverview,
+			segments: []
 		};
 	}
 
@@ -79,10 +82,11 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			: orgIds[0];
 
 	const filters = parseFilters(url);
-	const [contacts, filterOptions, overview] = await Promise.all([
+	const [contacts, filterOptions, overview, segments] = await Promise.all([
 		listContacts(userId, filters),
 		contactFilterOptions(userId),
-		getCrmOverview(userId)
+		getCrmOverview(userId),
+		listSegments(userId)
 	]);
 
 	return {
@@ -91,7 +95,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		filterOptions,
 		organizationId,
 		canManage: true,
-		overview
+		overview,
+		segments
 	};
 };
 
@@ -141,6 +146,48 @@ export const actions: Actions = {
 		if (!result.ok) return fail(400, { scope: 'import', error: result.problem });
 
 		return { scope: 'import', message: contactsImportedMessage(result.added, result.skipped) };
+	},
+
+	saveSegment: async ({ locals, request }) => {
+		const userId = locals.user!.id;
+		const orgIds = await organizerOrganizationIds(userId);
+		if (orgIds.length === 0) {
+			return fail(403, { scope: 'segment', error: 'You need an organization to manage.' });
+		}
+
+		const form = await request.formData();
+		const organizationId = resolveOrganizationId(form, locals.organizationId, orgIds);
+		const name = text(form, 'name');
+		const filters: ContactFilters = {
+			q: optionalText(form, 'q') ?? undefined,
+			company: optionalText(form, 'company') ?? undefined,
+			jobTitle: optionalText(form, 'jobTitle') ?? undefined,
+			tag: optionalText(form, 'tag') ?? undefined
+		};
+
+		const result = await createSegment(userId, organizationId, name, filters);
+		if (!result.ok) {
+			if (result.reason === 'invalid')
+				return fail(400, { scope: 'segment', error: result.message });
+			if (result.reason === 'forbidden')
+				return fail(403, { scope: 'segment', error: 'Not allowed.' });
+			return fail(400, { scope: 'segment', error: 'Could not save the segment.' });
+		}
+
+		return { scope: 'segment', message: `Saved segment “${name.trim()}”.` };
+	},
+
+	deleteSegment: async ({ locals, request }) => {
+		const userId = locals.user!.id;
+		const form = await request.formData();
+		const segmentId = Number(form.get('segmentId'));
+		const result = await deleteSegment(userId, segmentId);
+		if (!result.ok) {
+			if (result.reason === 'forbidden')
+				return fail(403, { scope: 'segment', error: 'Not allowed.' });
+			return fail(404, { scope: 'segment', error: 'Segment not found.' });
+		}
+		return { scope: 'segment', message: 'Segment removed.' };
 	}
 };
 
