@@ -56,6 +56,18 @@ export const EMBEDDABLE_SURFACES: readonly EmbeddableSurface[] = [
 ];
 
 /**
+ * The agenda as a calendar subscription (EMB-11).
+ *
+ * Deliberately not a member of `EMBEDDABLE_SURFACES`, even though it hangs off
+ * the same `/c/<slug>` root and the share page lists it alongside them. That list
+ * has two other readers who would both be wrong about this one: the public tab
+ * bar would render a tab that downloads a file instead of showing a page, and
+ * `isEmbeddableSurface` would invite other sites to put a calendar feed in an
+ * iframe. It is a feed, not a surface.
+ */
+export const AGENDA_FEED_PATH = '/agenda.ics';
+
+/**
  * Marks a request as coming from inside an embed, so the layout can drop the
  * site chrome. Presentation only: it is not a permission, and nothing may be
  * decided by it that an attacker must not decide for themselves by typing it
