@@ -30,6 +30,18 @@
 	/** A stored timestamp back into the `YYYY-MM-DD` the date picker takes. */
 	const isoDay = (value: Date | string) => new Date(value).toISOString().slice(0, 10);
 
+	/**
+	 * The example shown in an empty Instructions box.
+	 *
+	 * A file example under a task the speaker only has to tick is worse than no
+	 * example: a greyed placeholder is easy to read as stored text, and this one
+	 * described an upload the task does not accept.
+	 */
+	const instructionsHint = (kind: string) =>
+		kind === 'file_request'
+			? '16:9, PDF, no larger than 20 MB'
+			: 'Anything the speaker needs to know';
+
 	const submitting = () => {
 		busy = true;
 		return async ({ update }: { update: () => Promise<void> }) => {
@@ -551,11 +563,15 @@
 							</div>
 							<label class="block text-xs">
 								<span class="text-muted-foreground">Instructions (optional)</span>
+								<!-- The hint follows the kind. A "Do something" task showed the file
+								     example — "Confirm participation … 16:9, PDF, no larger than 20 MB"
+								     reads as stored text rather than as a greyed suggestion, and it
+								     describes an upload the task does not accept. -->
 								<Input
 									name="instructions"
 									value={template.instructions ?? ''}
 									class="mt-1 h-8 text-sm"
-									placeholder="16:9, PDF, no larger than 20 MB"
+									placeholder={instructionsHint(template.kind)}
 								/>
 							</label>
 						</form>
