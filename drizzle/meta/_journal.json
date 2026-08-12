@@ -92,6 +92,13 @@
 			"when": 1786483888214,
 			"tag": "0012_cfp_hidden_fixed_fields",
 			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1786535528835,
+			"tag": "0013_speaker_profile_tags",
+			"breakpoints": true
 		}
 	]
 }

@@ -3,6 +3,7 @@
 	import ClipboardCheckIcon from '@lucide/svelte/icons/clipboard-check';
 	import GithubIcon from '@lucide/svelte/icons/github';
 	import MicIcon from '@lucide/svelte/icons/mic';
+	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
 	import { REPO_URL } from '$lib/constants';
 
 	const data = {
@@ -11,6 +12,12 @@
 				title: 'Conferences',
 				url: '/manage',
 				icon: CalendarIcon
+			},
+			{
+				// CRM-01: org-wide speaker directory, outside any single event.
+				title: 'Contacts',
+				url: '/contacts',
+				icon: UsersRoundIcon
 			},
 			{
 				// The same person is often all three. `/portal` and `/review` existed

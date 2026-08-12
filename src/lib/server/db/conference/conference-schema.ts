@@ -173,6 +173,11 @@ export const speakerProfileTable = pgTable('speaker_profile', {
 	links: text('links'),
 	/** CRM-03: persistent internal notes, never shown publicly. */
 	notes: text('notes'),
+	/**
+	 * CRM-04: organizer-defined tags as a JSON string array, e.g. `["keynote","vip"]`.
+	 * Text rather than jsonb so the same read/write path as `links` stays one style.
+	 */
+	tags: text('tags'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 	updatedAt: timestamp('updated_at', { withTimezone: true })
 		.notNull()
