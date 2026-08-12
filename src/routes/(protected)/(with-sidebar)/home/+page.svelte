@@ -32,11 +32,11 @@
 	const hasAnyWork = $derived(
 		Boolean(
 			hub &&
-				(hub.events.length > 0 ||
-					hub.openSubmissions.length > 0 ||
-					hub.openTasks.length > 0 ||
-					hub.openReviews.length > 0 ||
-					hub.reviewConferences.length > 0)
+			(hub.events.length > 0 ||
+				hub.openSubmissions.length > 0 ||
+				hub.openTasks.length > 0 ||
+				hub.openReviews.length > 0 ||
+				hub.reviewConferences.length > 0)
 		)
 	);
 </script>
