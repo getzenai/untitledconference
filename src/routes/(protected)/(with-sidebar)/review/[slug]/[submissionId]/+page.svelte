@@ -20,6 +20,7 @@
 	let { data, form } = $props();
 
 	const s = $derived(data.submission);
+	const withdrawn = $derived(s.status === 'withdrawn');
 	let busy = $state(false);
 
 	const submitting = () => {
@@ -150,10 +151,22 @@
 		<div class="flex items-center justify-between">
 			<h2 class="text-sm font-semibold">My review</h2>
 			<StatusBadge
-				status={s.own.status}
-				label={s.own.status === 'submitted' ? 'Submitted' : 'Draft'}
+				status={withdrawn ? 'withdrawn' : s.own.status}
+				label={withdrawn ? 'Withdrawn' : s.own.status === 'submitted' ? 'Submitted' : 'Draft'}
 			/>
 		</div>
+
+		{#if withdrawn}
+			<!-- The answers stay readable — a review already filed is still a record of
+			     what this reviewer thought — but nothing here asks for more work, and
+			     `saveReview` refuses a withdrawn talk regardless of what this page draws. -->
+			<p
+				class="border-status-bad text-status-bad rounded-md border px-3 py-2 text-sm"
+				role="status"
+			>
+				The speaker withdrew this talk, so it no longer needs a review.
+			</p>
+		{/if}
 
 		{#if form?.message}
 			<p
@@ -218,10 +231,17 @@
 		</label>
 
 		<div class="flex flex-wrap gap-2">
-			<Button type="submit" name="intent" value="submit" size="sm" disabled={busy}>
+			<Button type="submit" name="intent" value="submit" size="sm" disabled={busy || withdrawn}>
 				Submit review
 			</Button>
-			<Button type="submit" name="intent" value="draft" variant="outline" size="sm" disabled={busy}>
+			<Button
+				type="submit"
+				name="intent"
+				value="draft"
+				variant="outline"
+				size="sm"
+				disabled={busy || withdrawn}
+			>
 				Save progress
 			</Button>
 			{#if s.own.status === 'assigned'}

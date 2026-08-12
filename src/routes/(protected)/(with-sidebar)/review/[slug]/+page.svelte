@@ -19,7 +19,10 @@
 	let { data } = $props();
 
 	const base = $derived(`/review/${data.conference.slug}`);
-	const done = $derived(data.queue.filter((row) => row.ownReviewSubmitted).length);
+	// Withdrawn talks are out of the denominator: they ask nothing of this reviewer,
+	// and counting them would make a finished queue read as unfinished forever.
+	const outstanding = $derived(data.queue.filter((row) => !row.withdrawn));
+	const done = $derived(outstanding.filter((row) => row.ownReviewSubmitted).length);
 	const blind = $derived(data.conference.reviewVisibility === 'blind_until_reviewed');
 	const current = $derived(QUEUE_SORTS.find((s) => s.value === data.sort) ?? QUEUE_SORTS[0]);
 
@@ -47,7 +50,7 @@
 	<div>
 		<h1 class="text-lg font-semibold tracking-tight">My review queue</h1>
 		<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
-			{done} of {data.queue.length} reviewed
+			{done} of {outstanding.length} reviewed
 			{#if blind}
 				· other reviews stay hidden until you file your own
 			{/if}
@@ -151,8 +154,12 @@
 						</td>
 						<td class="py-2 pr-4">
 							<StatusBadge
-								status={row.ownReviewSubmitted ? 'submitted' : 'assigned'}
-								label={row.ownReviewSubmitted ? 'Reviewed' : 'To do'}
+								status={row.withdrawn
+									? 'withdrawn'
+									: row.ownReviewSubmitted
+										? 'submitted'
+										: 'assigned'}
+								label={row.withdrawn ? 'Withdrawn' : row.ownReviewSubmitted ? 'Reviewed' : 'To do'}
 							/>
 						</td>
 					</tr>

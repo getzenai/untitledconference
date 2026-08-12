@@ -18,7 +18,7 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-function page(status: 'assigned' | 'submitted') {
+function page(status: 'assigned' | 'submitted', submissionStatus = 'in_review') {
 	return render(Page, {
 		props: {
 			data: {
@@ -28,6 +28,7 @@ function page(status: 'assigned' | 'submitted') {
 				conference,
 				submission: {
 					id: 7,
+					status: submissionStatus,
 					title: 'A review worth doing',
 					abstract: 'Details.',
 					keyTakeaway: null,
@@ -60,5 +61,27 @@ describe('reviewer recusal', () => {
 
 	it('does not offer recusal after submission', () => {
 		expect(page('submitted')).not.toContain('Recuse myself');
+	});
+});
+
+/**
+ * The other half of RV-P1-01: reaching the form directly. Hiding the buttons is
+ * not the guard — `saveReview` refuses a withdrawn talk on the server — but a page
+ * that still invites the work is the reason someone does it.
+ */
+describe('the form on a withdrawn talk', () => {
+	it('says why it is closed and disables both writes', () => {
+		const body = page('assigned', 'withdrawn');
+
+		expect(body).toContain('The speaker withdrew this talk, so it no longer needs a review.');
+		expect(body).toContain('Withdrawn');
+		// Both write paths, not just the prominent one.
+		expect(body.match(/disabled/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+	});
+
+	it('leaves the form open on a talk that is still live', () => {
+		const body = page('assigned', 'in_review');
+
+		expect(body).not.toContain('no longer needs a review');
 	});
 });
