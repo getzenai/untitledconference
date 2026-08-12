@@ -56,7 +56,6 @@
 		initial={data.draft}
 		{form}
 		signedIn={true}
-		signInHref="/login"
 		submitLabel={isDraft ? 'Submit proposal' : 'Save changes'}
 		allowDraft={isDraft}
 	/>
