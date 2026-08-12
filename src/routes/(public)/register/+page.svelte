@@ -83,7 +83,7 @@
 						// off — which is how production runs. The first screen after
 						// registering was a dead end asking for a mail nobody had sent.
 						if (signUpData.token) {
-							await goto('/home');
+							await goto('/home', { invalidateAll: true });
 						} else {
 							await goto('/verify-email');
 						}

@@ -86,7 +86,7 @@
 						// param so it survives the redirect without showing up in the URL.
 						markGooseWelcome(sessionStorage);
 
-						await goto(returnTo);
+						await goto(returnTo, { invalidateAll: true });
 					} else {
 						errors.set({ _errors: ['Login failed. Please try again.'] });
 					}
