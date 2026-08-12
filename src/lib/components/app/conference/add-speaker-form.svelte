@@ -94,6 +94,9 @@
 			{form.error}
 		</p>
 	{:else if form?.scope === 'add' && form?.message}
+		<!-- Dead by design: add successes return without a scope and close this
+			 dialog, so the page banner shows them. Keeping the branch guards
+			 against a future success+scope vanishing silently in a closed dialog. -->
 		<p
 			class="border-status-good text-status-good rounded-md border px-3 py-2 text-sm sm:col-span-2"
 			role="status"
