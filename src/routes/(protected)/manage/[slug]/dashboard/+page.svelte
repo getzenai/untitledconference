@@ -370,7 +370,15 @@
 		{/if}
 	</section>
 
-	<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+	<!--
+		Two columns, never four. These four cards list talk titles, and a title is the
+		only thing on them worth reading; at four columns a card is ~250 px wide, of
+		which the status on the right takes a third, so every line ended after about
+		twenty characters ("Five minutes on f…"). Two columns roughly triples the room
+		for the title and the block is at the bottom of the page, where the extra height
+		costs nothing. The stat strip above stays at four — it holds numbers, not prose.
+	-->
+	<div class="grid gap-4 md:grid-cols-2">
 		{#snippet decisionsBody()}
 			{#if d.decisions.items.length === 0}
 				{@render nothing('Every submission has an answer.')}
@@ -378,7 +386,11 @@
 				<ul class="space-y-2 text-sm">
 					{#each d.decisions.items as item (item.id)}
 						<li class="flex items-baseline justify-between gap-2">
-							<a class="min-w-0 truncate hover:underline" href="{base}/submissions/{item.id}">
+							<a
+								class="line-clamp-2 min-w-0 hover:underline"
+								href="{base}/submissions/{item.id}"
+								title={item.title}
+							>
 								{item.title}
 							</a>
 							<span class="text-muted-foreground shrink-0 text-xs tabular-nums">
@@ -415,7 +427,11 @@
 				<ul class="space-y-2 text-sm">
 					{#each d.scheduling.items as item (item.id)}
 						<li class="flex items-baseline justify-between gap-2">
-							<a class="min-w-0 truncate hover:underline" href="{base}/submissions/{item.id}">
+							<a
+								class="line-clamp-2 min-w-0 hover:underline"
+								href="{base}/submissions/{item.id}"
+								title={item.title}
+							>
 								{item.title}
 							</a>
 							<StatusBadge
@@ -450,7 +466,7 @@
 				<ul class="space-y-2 text-sm">
 					{#each d.tasks.items as item (item.id)}
 						<li class="flex items-baseline justify-between gap-2">
-							<span class="min-w-0 truncate">
+							<span class="line-clamp-2 min-w-0" title="{item.title} · {item.speaker}">
 								{item.title}
 								<span class="text-muted-foreground">· {item.speaker}</span>
 							</span>
@@ -480,7 +496,7 @@
 					{#each d.mail.items as item (item.id)}
 						<li class="flex items-baseline justify-between gap-2">
 							<span class="min-w-0">
-								<span class="block truncate" title={item.subject}>
+								<span class="line-clamp-2" title={item.subject}>
 									{item.subject}
 									<span class="text-muted-foreground">· {item.toEmail}</span>
 								</span>
