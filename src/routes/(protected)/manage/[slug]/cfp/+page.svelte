@@ -131,6 +131,22 @@
 		{ value: 'closed', label: 'Closed' }
 	];
 
+	/**
+	 * Same windows the public form uses (`callState` in cfp-submission): a published
+	 * form is not "live" when opensAt is still ahead or closesAt has passed. Match
+	 * that here so the banner never claims Live while speakers see closed/not yet open.
+	 */
+	const publicCallWindow = $derived.by(() => {
+		const form = data.form;
+		if (!form || form.status !== 'published') return null;
+		const now = new Date();
+		const opensAt = form.opensAt ? new Date(form.opensAt) : null;
+		const closesAt = form.closesAt ? new Date(form.closesAt) : null;
+		if (opensAt && opensAt > now) return 'not_yet_open' as const;
+		if (closesAt && closesAt <= now) return 'closed' as const;
+		return 'open' as const;
+	});
+
 	const YES_NO_OPTIONS = [
 		{ value: '', label: '—' },
 		{ value: 'true', label: 'Yes' },
@@ -227,7 +243,32 @@
 					<div>
 						<h2 class="text-sm font-semibold">Call for papers is published</h2>
 						<p class="text-muted-foreground mt-1 text-sm">
-							{#if data.conference.status === 'published'}
+							{#if data.conference.status !== 'published'}
+								The form is ready, but the conference is still a draft — publish it in
+								<a
+									class="underline underline-offset-4"
+									href={`/manage/${data.conference.slug}/settings`}>Settings</a
+								>
+								so speakers can reach the public site.
+							{:else if publicCallWindow === 'not_yet_open'}
+								Published, but not open yet (opens date is in the future) —
+								<a
+									class="underline underline-offset-4"
+									href={`/c/${data.conference.slug}/cfp`}
+									target="_blank"
+									rel="noopener">public form</a
+								>
+								shows “not opened yet”.
+							{:else if publicCallWindow === 'closed'}
+								Published, but past the closes date —
+								<a
+									class="underline underline-offset-4"
+									href={`/c/${data.conference.slug}/cfp`}
+									target="_blank"
+									rel="noopener">public form</a
+								>
+								shows closed to new submissions.
+							{:else}
 								Live on the public site —
 								<a
 									class="underline underline-offset-4"
@@ -235,13 +276,6 @@
 									target="_blank"
 									rel="noopener">open the public form</a
 								>.
-							{:else}
-								The form is ready, but the conference is still a draft — publish it in
-								<a
-									class="underline underline-offset-4"
-									href={`/manage/${data.conference.slug}/settings`}>Settings</a
-								>
-								so speakers can reach the public site.
 							{/if}
 						</p>
 					</div>

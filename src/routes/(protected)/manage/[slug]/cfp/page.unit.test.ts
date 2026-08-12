@@ -293,8 +293,61 @@ describe('publishing the call for papers', () => {
 			}
 		}).body;
 		expect(html).toContain('data-testid="cfp-live-banner"');
+		expect(html).toContain('Live on the public site');
 		expect(html).toContain('/c/test-conf/cfp');
 		expect(html).toContain('action="?/closeForm"');
 		expect(html).not.toContain('data-testid="cfp-publish-banner"');
+	});
+
+	it('does not claim Live when opensAt is still in the future', () => {
+		const html = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					form: {
+						...cfpForm,
+						status: 'published' as const,
+						opensAt: new Date('2099-01-01T00:00:00Z'),
+						closesAt: null
+					},
+					fields: [],
+					tracks: [{ id: 1, name: 'Platform' }],
+					formats: [{ id: 1, name: 'Talk' }]
+				},
+				form: null
+			}
+		}).body;
+		expect(html).toContain('data-testid="cfp-live-banner"');
+		expect(html).toContain('not open yet');
+		expect(html).not.toContain('Live on the public site');
+	});
+
+	it('does not claim Live when closesAt has passed', () => {
+		const html = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					form: {
+						...cfpForm,
+						status: 'published' as const,
+						opensAt: null,
+						closesAt: new Date('2020-01-01T00:00:00Z')
+					},
+					fields: [],
+					tracks: [{ id: 1, name: 'Platform' }],
+					formats: [{ id: 1, name: 'Talk' }]
+				},
+				form: null
+			}
+		}).body;
+		expect(html).toContain('data-testid="cfp-live-banner"');
+		expect(html).toContain('past the closes date');
+		expect(html).not.toContain('Live on the public site');
 	});
 });
