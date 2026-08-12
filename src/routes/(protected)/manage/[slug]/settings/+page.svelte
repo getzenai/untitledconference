@@ -146,24 +146,35 @@
 	 * field — what it does not do is give it back, and being dropped out of the
 	 * form after every add is what turns "add five rooms" into five journeys across
 	 * the page. The same click that saves you leaves you ready for the next line.
+	 *
+	 * A successful add also opens the section's list. The page lands with long
+	 * lists collapsed (LIST_PREVIEW), which is right for "I came to change one
+	 * name". It is wrong for the moment you just typed six rooms and pressed
+	 * Enter: the sixth would sit behind "Show all" and look like it never saved.
+	 * Expanding only on success keeps the quiet entry for everyone else.
 	 */
-	const addingLines = ({ formElement }: { formElement: HTMLFormElement }) => {
-		busy = true;
-		return async ({
-			result,
-			update
-		}: {
-			result: { type: string };
-			update: () => Promise<void>;
-		}) => {
-			try {
-				await update();
-				if (result.type === 'success') formElement.querySelector('textarea')?.focus();
-			} finally {
-				busy = false;
-			}
+	const addingLines =
+		(expand: () => void) =>
+		({ formElement }: { formElement: HTMLFormElement }) => {
+			busy = true;
+			return async ({
+				result,
+				update
+			}: {
+				result: { type: string };
+				update: () => Promise<void>;
+			}) => {
+				try {
+					await update();
+					if (result.type === 'success') {
+						expand();
+						formElement.querySelector('textarea')?.focus();
+					}
+				} finally {
+					busy = false;
+				}
+			};
 		};
-	};
 
 	/**
 	 * Examples in the field itself, so the shape of a batch is visible before the
@@ -505,7 +516,14 @@
 				})}
 			{/if}
 
-			<form method="POST" action="?/addRoom" use:enhance={addingLines} class="mt-3 space-y-2">
+			<form
+				method="POST"
+				action="?/addRoom"
+				use:enhance={addingLines(() => {
+					roomsExpanded = true;
+				})}
+				class="mt-3 space-y-2"
+			>
 				<label class="block text-xs">
 					<span class="text-muted-foreground">New rooms — one per line</span>
 					<Textarea
@@ -551,7 +569,14 @@
 				})}
 			{/if}
 
-			<form method="POST" action="?/addTrack" use:enhance={addingLines} class="mt-3 space-y-2">
+			<form
+				method="POST"
+				action="?/addTrack"
+				use:enhance={addingLines(() => {
+					tracksExpanded = true;
+				})}
+				class="mt-3 space-y-2"
+			>
 				<label class="block text-xs">
 					<span class="text-muted-foreground">New tracks — one per line</span>
 					<Textarea
@@ -634,7 +659,14 @@
 				})}
 			{/if}
 
-			<form method="POST" action="?/addFormat" use:enhance={addingLines} class="mt-3 space-y-2">
+			<form
+				method="POST"
+				action="?/addFormat"
+				use:enhance={addingLines(() => {
+					formatsExpanded = true;
+				})}
+				class="mt-3 space-y-2"
+			>
 				<label class="block text-xs">
 					<span class="text-muted-foreground">New formats — one per line, length optional</span>
 					<Textarea
