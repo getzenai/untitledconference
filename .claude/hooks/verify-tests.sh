@@ -52,29 +52,6 @@ if pg_isready -h localhost -p 5433 -q 2>/dev/null; then
   fi
 fi
 
-# --- Opportunistic: screen spec visual verification if dev server running ---
-if curl -sf --max-time 1 http://localhost:5173 > /dev/null 2>&1; then
-  TODAY=$(date +%Y-%m-%d)
-  SPEC_DIR="$ROOT/docs/user-journey-verification"
-
-  MODIFIED_SPECS=$(git diff --name-only HEAD -- "$SPEC_DIR/screen-"*.md 2>/dev/null || true)
-  STAGED_SPECS=$(git diff --cached --name-only -- "$SPEC_DIR/screen-"*.md 2>/dev/null || true)
-  ALL_SPECS=$(printf '%s\n%s' "$MODIFIED_SPECS" "$STAGED_SPECS" | sort -u | grep -v '^$' || true)
-
-  if [ -n "$ALL_SPECS" ]; then
-    MISSING_VERIFICATION=""
-    for spec_path in $ALL_SPECS; do
-      SPEC_FILE="$ROOT/$spec_path"
-      if [ -f "$SPEC_FILE" ] && ! grep -q "### Run: $TODAY" "$SPEC_FILE"; then
-        MISSING_VERIFICATION="$MISSING_VERIFICATION $(basename "$spec_path")"
-      fi
-    done
-    if [ -n "$MISSING_VERIFICATION" ]; then
-      FAILURES="${FAILURES}Screen specs updated but observed behavior not verified for:${MISSING_VERIFICATION}. Run /verify_screen or docs/agent-workflows/verify-user-journey-visual.md. "
-    fi
-  fi
-fi
-
 if [ -n "$FAILURES" ]; then
   echo "${FAILURES}Fix these issues before finishing." >&2
   exit 2

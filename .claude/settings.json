@@ -86,11 +86,6 @@
 						"type": "command",
 						"command": ".claude/hooks/protect-files.sh",
 						"timeout": 5
-					},
-					{
-						"type": "command",
-						"command": ".claude/hooks/enforce-spec-first.sh",
-						"timeout": 5
 					}
 				]
 			}
@@ -128,16 +123,6 @@
 					{
 						"type": "command",
 						"command": "jq -r '.tool_input.file_path' | { read file_path; if echo \"$file_path\" | grep -qE '\\.(ts|js|svelte)$'; then npx eslint \"$file_path\" 1>&2 || exit 2; fi; }"
-					}
-				]
-			},
-			{
-				"matcher": "Bash",
-				"hooks": [
-					{
-						"type": "command",
-						"command": ".claude/hooks/check-doc-validation.sh",
-						"timeout": 10
 					}
 				]
 			}

@@ -16,7 +16,6 @@ import { z } from 'zod';
 import {
 	boolWithDefault,
 	lowerEnumWithDefault,
-	optionalLowerEnum,
 	optionalStr,
 	requiredStr,
 	strWithDefault
@@ -64,19 +63,6 @@ export const serverEnvSchema = z
 		/** GitHub OAuth client secret. */
 		GITHUB_CLIENT_SECRET: optionalStr(),
 
-		// --- AI provider --------------------------------------------------------
-		/**
-		 * "azure" or "mock". When unset, the factory auto-detects: Azure OpenAI if
-		 * all three Azure variables are present, otherwise the mock provider.
-		 */
-		AI_PROVIDER: optionalLowerEnum(['azure', 'mock'] as const),
-		/** Azure OpenAI API key. Required when AI_PROVIDER="azure". */
-		AZURE_OPENAI_API_KEY: optionalStr(),
-		/** Azure resource name. Required when AI_PROVIDER="azure". */
-		AZURE_RESOURCE_NAME: optionalStr(),
-		/** Azure OpenAI deployment name. Required when AI_PROVIDER="azure". */
-		AZURE_OPENAI_DEPLOYMENT_NAME: optionalStr(),
-
 		// --- Email (SendGrid) ---------------------------------------------------
 		/** When true, send real emails via SendGrid instead of logging to console. */
 		SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG: boolWithDefault(false),
@@ -112,21 +98,6 @@ export const serverEnvSchema = z
 	})
 	// Conditional requirements that mirror the throw-sites in the codebase.
 	.superRefine((env, ctx) => {
-		if (env.AI_PROVIDER === 'azure') {
-			for (const key of [
-				'AZURE_OPENAI_API_KEY',
-				'AZURE_RESOURCE_NAME',
-				'AZURE_OPENAI_DEPLOYMENT_NAME'
-			] as const) {
-				if (!env[key]) {
-					ctx.addIssue({
-						code: 'custom',
-						path: [key],
-						message: `${key} is required when AI_PROVIDER="azure".`
-					});
-				}
-			}
-		}
 		if (env.SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG) {
 			for (const key of ['SENDGRID_API_KEY', 'SENDGRID_FROM'] as const) {
 				if (!env[key]) {

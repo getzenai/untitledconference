@@ -35,13 +35,11 @@ import * as contentSchema from './conference/content-schema';
 import * as emailSchema from './conference/email-schema';
 import * as programSchema from './conference/program-schema';
 import * as reviewSchema from './conference/review-schema';
-import * as exampleSchema from './examples/crud-example-schema';
 
 const logger = createLogger('Database');
 
 const schema = {
 	...authSchema,
-	...exampleSchema,
 	...conferenceSchema,
 	...cfpSchema,
 	...reviewSchema,

@@ -16,8 +16,7 @@ export default ts.config(
 	...svelte.configs['flat/prettier'],
 	{
 		ignores: [
-			'src/lib/components/ui/**/*', // Ignore shadcn UI components
-			'./docs/.vitepress/' // Ignore VitePress configuration
+			'src/lib/components/ui/**/*' // Ignore shadcn UI components
 		]
 	},
 	{

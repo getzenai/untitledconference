@@ -1,8 +1,6 @@
 test-results
 node_modules
 
-.roo/mcp.json
-
 # Output
 .output
 .vercel
@@ -10,8 +8,6 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
-/docs/.vitepress/cache
-/docs/.vitepress/dist
 
 # OS
 .DS_Store
@@ -21,7 +17,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
-!.devcontainer/.env.devcontainer
 
 # Vite
 vite.config.js.timestamp-*

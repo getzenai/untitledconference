@@ -8,7 +8,7 @@ import { registerProfileTools } from './tools/profile';
  * gets before choosing a tool.
  */
 export const SERVER_INSTRUCTIONS =
-	'Example MCP server for the SvelteKit vibe starter. ' +
+	'MCP server for untitledconference. ' +
 	'Tools act as the authenticated user: get_my_profile returns that user, and ' +
 	'list_my_organizations returns the organizations they belong to. ' +
 	'Identity comes from the OAuth access token, so no tool takes a user or organization argument.';

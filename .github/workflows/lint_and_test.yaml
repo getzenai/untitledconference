@@ -6,16 +6,12 @@ on:
       - 'main'
     paths-ignore:
       # Documentation
-      - 'docs/**'
       - '*.md'
       - 'LICENSE'
       # Development environment
-      - '.devcontainer/**'
       - '.vscode/**'
       - '.idea/**'
       - '.claude/**'
-      - '.dagger/**'
-      - '.roo/**'
       # Git files
       - '.gitignore'
       - '.gitattributes'
@@ -26,16 +22,12 @@ on:
       - 'main'
     paths-ignore:
       # Documentation
-      - 'docs/**'
       - '*.md'
       - 'LICENSE'
       # Development environment
-      - '.devcontainer/**'
       - '.vscode/**'
       - '.idea/**'
       - '.claude/**'
-      - '.dagger/**'
-      - '.roo/**'
       # Git files
       - '.gitignore'
       - '.gitattributes'

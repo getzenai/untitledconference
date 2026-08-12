@@ -32,30 +32,37 @@ if [ -f "$PROJECT_DIR/.env" ]; then
     set -u
 fi
 
-# Check infisical CLI is installed
+# Infisical is how this project's own developers get their secrets, not a
+# requirement of the app. A clone that keeps everything in .env is a first-class
+# way to run this: without the CLI (or without a login) we say so and carry on,
+# and the REQUIRED_VARS check below is what actually decides whether the
+# environment is complete.
+INFISICAL_OUTPUT=""
 if ! command -v infisical &>/dev/null; then
-    echo -e "${RED}Infisical CLI not installed.${RESET}"
-    echo -e "${DIM}Install: brew install infisical/get-cli/infisical${RESET}"
-    echo -e "${DIM}  or:    npm install -g @infisical/cli${RESET}"
-    exit 1
+    echo -e "${YELLOW}Infisical CLI not installed — using .env and the shell environment only.${RESET}"
+    echo -e "${DIM}Install it to pull shared secrets: brew install infisical/get-cli/infisical${RESET}"
+    echo ""
 fi
 
 # Detect mode based on whether DATABASE_URL is already set (from .env)
 if [ -n "${DATABASE_URL:-}" ]; then
-    echo -e "${BOLD}=== Local Docker Mode ===${RESET}"
-    echo -e "${DIM}DATABASE_URL from .env — fetching remaining secrets from Infisical${RESET}"
-else
+    echo -e "${BOLD}=== Local DB Mode ===${RESET}"
+    echo -e "${DIM}DATABASE_URL from .env or the shell${RESET}"
+elif command -v infisical &>/dev/null; then
     echo -e "${BOLD}=== Cloud DB Mode ===${RESET}"
     echo -e "${DIM}All secrets from Infisical${RESET}"
 fi
 echo ""
 
 # Fetch secrets from Infisical (dotenv format: KEY=VALUE per line)
-INFISICAL_OUTPUT=$(infisical export --format=dotenv 2>/dev/null) || {
-    echo -e "${RED}Failed to fetch secrets from Infisical.${RESET}"
-    echo -e "${DIM}Run 'infisical login' first, then ensure .infisical.json has the correct workspaceId.${RESET}"
-    exit 1
-}
+if command -v infisical &>/dev/null; then
+    INFISICAL_OUTPUT=$(infisical export --format=dotenv 2>/dev/null) || {
+        echo -e "${YELLOW}Could not fetch secrets from Infisical — using .env and the shell environment only.${RESET}"
+        echo -e "${DIM}For the shared project secrets: 'infisical login', and check the workspaceId in .infisical.json.${RESET}"
+        echo ""
+        INFISICAL_OUTPUT=""
+    }
+fi
 
 # Required env vars — fail if not set after all sources checked
 REQUIRED_VARS="DATABASE_URL BETTER_AUTH_SECRET"
@@ -92,8 +99,8 @@ done <<< "$INFISICAL_OUTPUT"
 for var in $REQUIRED_VARS; do
     if [ -z "${!var:-}" ]; then
         echo -e "  ${RED}✗${RESET} $var — MISSING (required)"
-        echo -e "${RED}Error: Required secret '$var' not found in Infisical and not set in environment${RESET}"
-        echo -e "${DIM}Add '$var' to your Infisical project, or set it in .env for local Docker mode.${RESET}"
+        echo -e "${RED}Error: Required secret '$var' is not set${RESET}"
+        echo -e "${DIM}Set it in .env (see .env.example), or add it to your Infisical project.${RESET}"
         exit 1
     fi
 done
@@ -123,16 +130,7 @@ else
     export SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG="${SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG:-false}"
 fi
 
-if [ -n "${AZURE_OPENAI_API_KEY:-}" ] && [ -n "${AZURE_RESOURCE_NAME:-}" ] && [ -n "${AZURE_OPENAI_DEPLOYMENT_NAME:-}" ]; then
-    export AI_PROVIDER="${AI_PROVIDER:-azure}"
-else
-    export AI_PROVIDER="${AI_PROVIDER:-mock}"
-    if [ -n "${AZURE_OPENAI_API_KEY:-}" ]; then
-        echo -e "  ${YELLOW}⚠${RESET} Azure OpenAI API key found but missing AZURE_RESOURCE_NAME or AZURE_OPENAI_DEPLOYMENT_NAME — using mock provider"
-    fi
-fi
-
-echo -e "${DIM}Config: BETTER_AUTH_URL=$BETTER_AUTH_URL | LOG_LEVEL=$LOG_LEVEL | AI_PROVIDER=$AI_PROVIDER${RESET}"
+echo -e "${DIM}Config: BETTER_AUTH_URL=$BETTER_AUTH_URL | LOG_LEVEL=$LOG_LEVEL${RESET}"
 echo ""
 
 # Run the command (default: npm run dev:vite)
