@@ -2,7 +2,7 @@
 	"$schema": "https://unpkg.com/knip@5/schema.json",
 	"entry": ["src/**/*.ts", "src/**/*.svelte"],
 	"project": ["src/**/*.ts", "src/**/*.svelte"],
-	"ignore": ["src/lib/paraglide/**", "src/lib/components/ui/**", "src/app.d.ts", "docs/**"],
+	"ignore": ["src/lib/paraglide/**", "src/lib/components/ui/**", "src/app.d.ts"],
 	"ignoreDependencies": [
 		"@ai-sdk/svelte",
 		"@inlang/plugin-m-function-matcher",
@@ -16,6 +16,5 @@
 		"tw-animate-css"
 	],
 	"drizzle": false,
-	"vitepress": false,
 	"cypress": false
 }

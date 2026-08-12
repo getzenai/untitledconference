@@ -79,7 +79,7 @@ function getHandler(): Handler {
 			// over the caller's identity. No session state, so this stays correct
 			// behind a load balancer and across restarts.
 			const server = new McpServer(
-				{ name: 'sveltekit-vibe-starter', version: '1.0.0' },
+				{ name: 'untitledconference', version: '1.0.0' },
 				{ instructions: SERVER_INSTRUCTIONS }
 			);
 			registerAllTools(server, ctx);
