@@ -52,7 +52,8 @@ const baseData = {
 		name: string;
 		filters: { q?: string; company?: string; jobTitle?: string; tag?: string };
 		createdAt: Date;
-	}>
+	}>,
+	duplicateIds: [] as number[]
 };
 
 describe('contacts directory page', () => {
