@@ -22,6 +22,7 @@ const conference = {
 
 /** Anything the content-editor tests need to vary, kept out of the positional list. */
 type Extras = {
+	placements?: { id: number; status: string; recordingUrl: string | null }[];
 	contentEdit?: { editedAt: Date; editorName: string | null } | null;
 	form?: ActionData;
 	keyTakeaway?: string | null;
@@ -29,7 +30,7 @@ type Extras = {
 };
 
 function renderPage(
-	status: 'accepted' | 'submitted',
+	status: 'accepted' | 'submitted' | 'rejected',
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
@@ -63,7 +64,7 @@ function renderPage(
 					answers: [],
 					reviews: [],
 					score: null,
-					placements: []
+					placements: extras.placements ?? []
 				},
 				notificationStatus,
 				assignmentRounds:
@@ -278,4 +279,15 @@ describe('the organizer talk editor', () => {
 
 		expect(body).toContain('an organizer');
 	});
+
+	it('warns when a declined talk still has a placement (#9)', () => {
+		const body = renderPage('rejected', null, null, null, 'none', null, {
+			placements: [{ id: 7, status: 'confirmed', recordingUrl: null }]
+		});
+
+		expect(body).toContain('data-testid="rejected-placement-badge"');
+		expect(body).toContain('Declined but still on the programme');
+		expect(body).toContain('/manage/test-conf/agenda');
+	});
+
 });
