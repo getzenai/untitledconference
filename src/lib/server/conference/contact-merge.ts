@@ -337,6 +337,7 @@ export async function mergeContacts(
 				company: mergeText(primary.company, secondary.company),
 				bio: mergeText(primary.bio, secondary.bio),
 				headshotUrl: mergeText(primary.headshotUrl, secondary.headshotUrl),
+				links: mergeText(primary.links, secondary.links),
 				notes: mergeNotes(primary.notes, secondary.notes),
 				tags: mergeTags(primary.tags, secondary.tags)
 			})
