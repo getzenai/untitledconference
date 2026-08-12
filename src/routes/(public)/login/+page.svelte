@@ -15,6 +15,12 @@
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { loginSchema } from './schema';
 
+	// The server action's answer (#221). It only ever renders for a submit that
+	// happened before hydration — once superForm is live it cancels the native
+	// submit and this stays null — but that submit is a real sign-in now, so its
+	// failure needs somewhere to be read.
+	let { form: actionResult }: { form?: { message?: string } | null } = $props();
+
 	// Pre-fill from query params for quick dev login (?email=...&pw=...)
 	// Password pre-fill only in dev mode to avoid leaking credentials via URL
 	const prefillEmail = page.url.searchParams.get('email') ?? '';
@@ -158,9 +164,12 @@
 			</Form.Control>
 		</Form.Field>
 
-		{#if $errors._errors}
+		{#if $errors._errors || actionResult?.message}
 			<div role="alert" class="text-destructive text-sm">
-				{#each $errors._errors as error}
+				{#if actionResult?.message}
+					<p>{actionResult.message}</p>
+				{/if}
+				{#each $errors._errors ?? [] as error}
 					<p>{error}</p>
 				{/each}
 			</div>
