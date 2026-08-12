@@ -131,7 +131,7 @@ export const actions: Actions = {
 		if (conference.status === next) {
 			return {
 				message: wantsPublished ? 'Already published.' : 'Already a draft.',
-				section: null
+				section: 'visibility'
 			};
 		}
 
@@ -144,7 +144,7 @@ export const actions: Actions = {
 			message: wantsPublished
 				? `Published. /c/${conference.slug} is live and the call for papers can take submissions.`
 				: 'Back to draft. The public site and the public submission form answer 404 again.',
-			section: null
+			section: 'visibility'
 		};
 	},
 
@@ -161,7 +161,7 @@ export const actions: Actions = {
 		const endsOn = optional(form, 'endsOn');
 
 		const badField = invalidRangeField(startsOn, endsOn);
-		if (badField) return fail(400, { error: DATE_ERRORS[badField], section: null });
+		if (badField) return fail(400, { error: DATE_ERRORS[badField], section: 'dates' });
 
 		// One transaction: the range and the days it implies are one fact, and a
 		// stored range whose days never followed is exactly the bug being fixed.
@@ -176,7 +176,7 @@ export const actions: Actions = {
 
 		return {
 			message: daysChangedMessage(sync.added.length, sync.removed.length, sync.keptInUse),
-			section: null
+			section: 'dates'
 		};
 	},
 
