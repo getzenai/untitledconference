@@ -267,7 +267,8 @@ describe('explicit decision notifications', () => {
 		const emails = await db
 			.select({ template: emailLogTable.template })
 			.from(emailLogTable)
-			.where(eq(emailLogTable.relatedId, submission.id));
+			.where(eq(emailLogTable.relatedId, submission.id))
+			.orderBy(emailLogTable.template);
 		expect(emails.map((email) => email.template)).toEqual([
 			'decision_accepted',
 			'decision_rejected'
