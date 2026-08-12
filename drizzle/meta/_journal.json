@@ -99,6 +99,13 @@
 			"when": 1786535528835,
 			"tag": "0013_speaker_profile_tags",
 			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "7",
+			"when": 1786537522004,
+			"tag": "0014_crm_pipeline",
+			"breakpoints": true
 		}
 	]
 }

@@ -62,6 +62,16 @@
 				{/if}
 			</p>
 		</div>
+		{#if data.canManage}
+			<Button
+				href="/contacts/pipeline"
+				size="sm"
+				variant="secondary"
+				data-testid="contacts-pipeline-link"
+			>
+				Sourcing pipeline
+			</Button>
+		{/if}
 	</div>
 
 	{#if !data.canManage}

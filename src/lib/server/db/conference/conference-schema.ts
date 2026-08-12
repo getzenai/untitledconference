@@ -212,6 +212,54 @@ export const conferenceSpeakerTable = pgTable(
 );
 
 /**
+ * CRM-07: org-wide speaker sourcing pipeline (kanban), above any single event.
+ *
+ * Stages are free text constrained in application code so we can rename labels
+ * without a migration. One card per contact per org.
+ */
+export const crmPipelineCardTable = pgTable(
+	'crm_pipeline_card',
+	{
+		id: serial('id').primaryKey(),
+		organizationId: text('organization_id')
+			.notNull()
+			.references(() => organization.id, { onDelete: 'cascade' }),
+		speakerProfileId: integer('speaker_profile_id')
+			.notNull()
+			.references(() => speakerProfileTable.id, { onDelete: 'cascade' }),
+		/** researching | identified | contacted | interested | confirmed | declined */
+		stage: text('stage').notNull().default('identified'),
+		/** Card-scoped notes (CRM-08), separate from the profile's CRM-03 notes. */
+		notes: text('notes'),
+		score: integer('score'),
+		rationale: text('rationale'),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [
+		uniqueIndex('crm_pipeline_card_org_profile_unique').on(t.organizationId, t.speakerProfileId)
+	]
+);
+
+/**
+ * CRM-08: timestamped stage transitions for a pipeline card.
+ * `fromStage` is null on enrollment (first stage assignment).
+ */
+export const crmPipelineStageHistoryTable = pgTable('crm_pipeline_stage_history', {
+	id: serial('id').primaryKey(),
+	cardId: integer('card_id')
+		.notNull()
+		.references(() => crmPipelineCardTable.id, { onDelete: 'cascade' }),
+	fromStage: text('from_stage'),
+	toStage: text('to_stage').notNull(),
+	changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+	changedByUserId: text('changed_by_user_id').references(() => user.id, { onDelete: 'set null' })
+});
+
+/**
  * Scoped role assignment. `membership` says who MAY READ; `review` (review-schema.ts)
  * says who SHOULD DO WHAT. Two different questions, two different tables.
  *
@@ -273,6 +321,10 @@ export type SpeakerProfile = typeof speakerProfileTable.$inferSelect;
 export type NewSpeakerProfile = typeof speakerProfileTable.$inferInsert;
 export type ConferenceSpeaker = typeof conferenceSpeakerTable.$inferSelect;
 export type NewConferenceSpeaker = typeof conferenceSpeakerTable.$inferInsert;
+export type CrmPipelineCard = typeof crmPipelineCardTable.$inferSelect;
+export type NewCrmPipelineCard = typeof crmPipelineCardTable.$inferInsert;
+export type CrmPipelineStageHistory = typeof crmPipelineStageHistoryTable.$inferSelect;
+export type NewCrmPipelineStageHistory = typeof crmPipelineStageHistoryTable.$inferInsert;
 export type Membership = typeof membershipTable.$inferSelect;
 export type NewMembership = typeof membershipTable.$inferInsert;
 export type MembershipTrack = typeof membershipTrackTable.$inferSelect;
