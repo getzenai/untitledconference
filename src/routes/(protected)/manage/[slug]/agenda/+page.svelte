@@ -105,7 +105,9 @@
 
 	const unscheduled = $derived(board.tray.length);
 	const autoPlaceHint = $derived(
-		`Places the ${unscheduled} waiting ${unscheduled === 1 ? 'talk' : 'talks'} into free slots. Nothing already on the grid moves.`
+		unscheduled === 1
+			? 'Places the waiting talk into free slots. Nothing already on the grid moves.'
+			: `Places the ${unscheduled} waiting talks into free slots. Nothing already on the grid moves.`
 	);
 	const everythingPublished = $derived(
 		board.placed.length > 0 && board.placed.every((p) => p.status === 'confirmed')

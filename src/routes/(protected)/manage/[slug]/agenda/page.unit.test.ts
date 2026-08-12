@@ -393,7 +393,7 @@ describe('auto-place hint (#231)', () => {
 	it('uses the singular when one talk is waiting', () => {
 		const body = renderWith(1, 1, { tray: [trayTalk(1)] });
 
-		expect(body).toContain('Places the 1 waiting talk into free slots.');
+		expect(body).toContain('Places the waiting talk into free slots.');
 	});
 
 	it('stays quiet when the button has nothing to do', () => {
