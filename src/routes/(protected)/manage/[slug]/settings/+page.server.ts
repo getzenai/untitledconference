@@ -37,14 +37,17 @@ import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 	const [config, templates, pending] = await Promise.all([
 		conferenceConfig(conference.id),
 		taskTemplates(conference.id),
 		pendingHandouts(conference.id)
 	]);
-	return { config, templates, pending };
+	// `?setup=1` is the soft landing from "New conference": rooms, tracks and
+	// formats first, then the call for papers. Not a forced wizard — a pointer.
+	const setup = url.searchParams.get('setup') === '1';
+	return { config, templates, pending, setup };
 };
 
 function text(form: FormData, key: string): string {
