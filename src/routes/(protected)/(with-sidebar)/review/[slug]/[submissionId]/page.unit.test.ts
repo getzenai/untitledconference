@@ -18,7 +18,23 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-function page(status: 'assigned' | 'submitted', submissionStatus = 'in_review') {
+type Peer = {
+	id: number;
+	reviewer: string;
+	roundName: string;
+	submitted: boolean;
+	comment: string | null;
+	submittedAt: Date | null;
+	scores: { criterion: string; value: number | null; valueText: string | null }[];
+	score: number | null;
+};
+
+function page(
+	status: 'assigned' | 'submitted',
+	opts: { submissionStatus?: string; peers?: Peer[] } = {}
+) {
+	const submissionStatus = opts.submissionStatus ?? 'in_review';
+	const peers = opts.peers ?? [];
 	return render(Page, {
 		props: {
 			data: {
@@ -39,7 +55,7 @@ function page(status: 'assigned' | 'submitted', submissionStatus = 'in_review') 
 					anonymized: false,
 					own: { reviewId: 42, status, comment: null },
 					criteria: [],
-					peers: [],
+					peers,
 					peersPending: 0,
 					peersWithheld: false
 				}
@@ -86,7 +102,7 @@ describe('reviewer recusal', () => {
  */
 describe('the form on a withdrawn talk', () => {
 	it('says why it is closed and disables both writes', () => {
-		const body = page('assigned', 'withdrawn');
+		const body = page('assigned', { submissionStatus: 'withdrawn' });
 
 		expect(body).toContain('The speaker withdrew this talk, so it no longer needs a review.');
 		expect(body).toContain('Withdrawn');
@@ -95,8 +111,54 @@ describe('the form on a withdrawn talk', () => {
 	});
 
 	it('leaves the form open on a talk that is still live', () => {
-		const body = page('assigned', 'in_review');
+		const body = page('assigned', { submissionStatus: 'in_review' });
 
 		expect(body).not.toContain('no longer needs a review');
+	});
+});
+
+describe('peer review display', () => {
+	it('renders every peer under Reviewer N with a round name and Comment label', () => {
+		const body = page('submitted', {
+			peers: [
+				{
+					id: 1,
+					reviewer: 'Reviewer 1',
+					roundName: 'Round 1 — Screening',
+					submitted: true,
+					comment: 'Solid but familiar.',
+					submittedAt: new Date('2027-02-20T00:00:00Z'),
+					scores: [
+						{ criterion: 'Programme fit', value: 3, valueText: null },
+						{ criterion: 'Committee notes', value: null, valueText: 'Tighten abstract.' }
+					],
+					score: 3
+				},
+				{
+					id: 2,
+					reviewer: 'Reviewer 2',
+					roundName: 'Round 2 — Final',
+					submitted: true,
+					comment: null,
+					submittedAt: new Date('2027-02-21T00:00:00Z'),
+					scores: [{ criterion: 'Relevance', value: 5, valueText: null }],
+					score: 5
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="peer-review"');
+		expect(body).toContain('Reviewer 1');
+		expect(body).toContain('Reviewer 2');
+		expect(body).toContain('Round 1 — Screening');
+		expect(body).toContain('Round 2 — Final');
+		expect(body).toContain('Programme fit');
+		expect(body).toContain('Relevance');
+		// Shared comment heading for peer free-text (and own form)
+		expect(body).toContain('Comment');
+		expect(body).toContain('Solid but familiar.');
+		// No real-name leak fixtures
+		expect(body).not.toContain('Inés');
+		expect(body).not.toContain('Delgado');
 	});
 });

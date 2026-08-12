@@ -16,7 +16,7 @@
  * Deciding and telling people are separate acts, and a status that mails on its own
  * takes that choice away from the organizer.
  */
-import { anonymousReviewerLabelsBySubmission } from '$lib/conference/anonymous-reviewers';
+import { peerDisplayLabels } from '$lib/conference/anonymous-reviewers';
 import {
 	canSeePeerReviews,
 	sortQueue,
@@ -176,6 +176,7 @@ async function reviewsOn(conferenceId: number, submissionIds: number[]) {
 			reviewerUserId: reviewTable.reviewerUserId,
 			reviewerName: user.name,
 			anonymized: reviewRoundTable.anonymized,
+			roundName: reviewRoundTable.name,
 			status: reviewTable.status,
 			comment: reviewTable.comment,
 			submittedAt: reviewTable.submittedAt,
@@ -213,6 +214,8 @@ type ReviewRow = Awaited<ReturnType<typeof reviewsOn>>[number];
 export type PeerReview = {
 	id: number;
 	reviewer: string;
+	/** Which scorecard this answer set belongs to — explains multi-round schema mix. */
+	roundName: string;
 	submitted: boolean;
 	comment: string | null;
 	submittedAt: Date | null;
@@ -229,10 +232,10 @@ function groupReviews(
 		PeerReview & { submissionId: number; userId: string; raw: ReviewScores }
 	>();
 
-	// From the rows, not the grouped map: the label is decided by the round, and
-	// carrying `anonymized` through the map only to strip it again would put a
-	// field on `PeerReview` that callers must remember not to read.
-	const labels = anonymousReviewerLabelsBySubmission(rows);
+	// Peer-to-peer always uses Reviewer N (RV-P1-02). Mixing open-round real names
+	// with anonymised labels on one talk looks broken and leaks identity next to
+	// deliberately hidden peers. Organizers still see real names on their path.
+	const labels = peerDisplayLabels(rows);
 
 	for (const r of rows) {
 		let review = byId.get(r.id);
@@ -241,9 +244,8 @@ function groupReviews(
 				id: r.id,
 				submissionId: r.submissionId,
 				userId: r.reviewerUserId,
-				// ABS-07: an anonymised round labels the row instead of dropping it — who
-				// has answered is not the same secret as who they are.
-				reviewer: labels.get(r.id) ?? r.reviewerName ?? 'Reviewer',
+				reviewer: labels.get(r.id) ?? 'Reviewer',
+				roundName: r.roundName,
 				submitted: r.status === 'submitted',
 				comment: r.comment,
 				submittedAt: r.submittedAt,
