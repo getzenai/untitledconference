@@ -15,7 +15,12 @@
 </script>
 
 <Sidebar.Provider>
-	<AppSidebar user={page.data.user} variant="inset" data-testid="app-sidebar" />
+	<AppSidebar
+		user={page.data.user}
+		navAccess={page.data.navAccess}
+		variant="inset"
+		data-testid="app-sidebar"
+	/>
 	<Sidebar.Inset>
 		<header class="flex h-16 shrink-0 items-center gap-2">
 			<div class="flex items-center gap-2 px-4">

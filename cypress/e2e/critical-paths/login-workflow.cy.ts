@@ -9,6 +9,13 @@ import { LoginPage } from '../../support/pages/login.page';
  * Logs in through the real form (no cached session) and confirms the session
  * unlocks a protected page.
  */
+function assertSharedShell() {
+	cy.get('[data-testid="app-sidebar"]').should('be.visible');
+	cy.get('[data-testid="sidebar-home-link"]')
+		.should('have.attr', 'href', '/home')
+		.and('contain.text', 'untitledconference');
+}
+
 describe('Critical Login Workflow', () => {
 	const loginPage = new LoginPage();
 	const homePage = new HomePage();
@@ -44,14 +51,18 @@ describe('Critical Login Workflow', () => {
 			loginPage.loginAndWaitForRedirect(user.email, user.password, '/home');
 			homePage.shouldBeLoggedIn();
 
-			for (const path of ['/manage', '/portal', '/review']) {
+			// This user owns an organization and reviews nothing, so the sidebar
+			// offers Conferences and Speaking but not Reviewing (#239). `/review`
+			// is still part of the shell, so it is reached by URL rather than by a
+			// link that is correctly absent — the claim here is that the chrome
+			// survives the navigation, not that everything is linked.
+			for (const path of ['/manage', '/portal']) {
 				cy.get(`[data-testid="app-sidebar"] a[href="${path}"]`).click();
 				cy.url().should('include', path);
-				cy.get('[data-testid="app-sidebar"]').should('be.visible');
-				cy.get('[data-testid="sidebar-home-link"]')
-					.should('have.attr', 'href', '/home')
-					.and('contain.text', 'untitledconference');
+				assertSharedShell();
 			}
+			cy.visit('/review');
+			assertSharedShell();
 			cy.get('[data-testid="sidebar-home-link"]').click();
 			cy.url().should('include', '/home');
 

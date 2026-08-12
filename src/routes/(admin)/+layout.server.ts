@@ -1,3 +1,4 @@
+import { navAccess } from '$lib/server/conference/nav-access';
 import { createLogger } from '$lib/server/logger';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
@@ -23,6 +24,10 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 
 	return {
 		user,
-		isAdmin: true
+		isAdmin: true,
+		// The admin chrome renders the same AppSidebar, so it owes it the same data
+		// (#239). A platform admin is not automatically an organizer: the flags are
+		// their own relations, and `NavAdmin` is what carries the admin links.
+		navAccess: await navAccess(user.id)
 	};
 };
