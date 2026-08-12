@@ -38,15 +38,19 @@
 			minute: '2-digit'
 		});
 
-	const dueLabel = $derived(
-		task.dueOn
-			? new Date(task.dueOn).toLocaleDateString('en-GB', {
-					weekday: 'long',
-					day: 'numeric',
-					month: 'long'
-				})
-			: null
-	);
+	// Same rule as the portal list: the year shows up only when it is not this one,
+	// so a deadline in the next CFP year cannot be misread as one this month.
+	const dueLabel = $derived.by(() => {
+		if (!task.dueOn) return null;
+		const date = new Date(task.dueOn);
+		const options: Intl.DateTimeFormatOptions = {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long'
+		};
+		if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
+		return date.toLocaleDateString('en-GB', options);
+	});
 	const overdue = $derived(Boolean(task.dueOn && new Date(task.dueOn) < new Date()));
 
 	const sizeLabel = (bytes: number | null) =>
@@ -77,8 +81,9 @@
 
 	{#if dueLabel}
 		<p class="mt-3 text-sm {overdue ? 'text-status-bad font-medium' : 'text-muted-foreground'}">
-			Due {dueLabel}{#if overdue}
-				— overdue{/if}
+			<!-- One expression rather than an {#if} block: Svelte trims the whitespace that
+			     starts a block, and the line read "11 August— overdue" without it. -->
+			Due {dueLabel}{overdue ? ' — overdue' : ''}
 		</p>
 	{/if}
 
