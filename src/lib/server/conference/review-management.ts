@@ -382,6 +382,94 @@ export async function setReviewAssignment(
 	);
 }
 
+/**
+ * The rounds and reviewers an organizer can pick for bulk assignment on the
+ * submissions table (ABS-06).
+ *
+ * Unlike `reviewAssignmentMatrix`, this is not submission-scoped: speakers and
+ * track allow-lists still block the write via `setReviewAssignment` / bulk assign,
+ * but the picker has to list the committee before a row is chosen. Per-submission
+ * matrix eligibility stays on the detail page.
+ */
+export async function conferenceAssignmentTargets(conferenceId: number): Promise<
+	{
+		id: number;
+		name: string;
+		reviewers: { userId: string; name: string; email: string }[];
+	}[]
+> {
+	const rounds = await conferenceRounds(conferenceId);
+	if (rounds.length === 0) return [];
+	const memberships = await conferenceReviewerMemberships(
+		conferenceId,
+		rounds.map((round) => round.id)
+	);
+
+	return rounds.map((round) => {
+		const reviewers = new Map<string, { userId: string; name: string; email: string }>();
+		for (const membership of memberships) {
+			if (!belongsToRound(membership, round.id)) continue;
+			reviewers.set(membership.userId, {
+				userId: membership.userId,
+				name: membership.name ?? membership.email,
+				email: membership.email
+			});
+		}
+		return {
+			id: round.id,
+			name: round.name,
+			reviewers: [...reviewers.values()].sort((a, b) => a.name.localeCompare(b.name))
+		};
+	});
+}
+
+export type BulkAssignResult = {
+	/** Fresh assignment rows written in this call. */
+	created: number;
+	/** Already assigned (or already submitted) — left alone. */
+	already: number;
+	/** Reviewer not eligible for that submission (speaker, track, wrong conference). */
+	skipped: number;
+};
+
+/**
+ * Assign one reviewer to many submissions in a single transaction (ABS-06).
+ *
+ * Existing assignments are counted as `already` and not rewritten. Ineligible
+ * pairs are counted as `skipped` rather than failing the whole batch — the
+ * organizer still gets the ones that could land.
+ */
+export async function assignReviewerToSubmissions(
+	conferenceId: number,
+	submissionIds: number[],
+	roundId: number,
+	reviewerUserId: string
+): Promise<BulkAssignResult> {
+	const ids = [...new Set(submissionIds.filter((id) => Number.isInteger(id) && id > 0))];
+	if (ids.length === 0) return { created: 0, already: 0, skipped: 0 };
+
+	return db.transaction(async (tx) => {
+		let created = 0;
+		let already = 0;
+		let skipped = 0;
+
+		for (const submissionId of ids) {
+			const result = await updateAssignment(tx, {
+				conferenceId,
+				submissionId,
+				roundId,
+				reviewerUserId,
+				assigned: true
+			});
+			if (result === 'assigned') created += 1;
+			else if (result === 'unchanged') already += 1;
+			else skipped += 1;
+		}
+
+		return { created, already, skipped };
+	});
+}
+
 export type ReviewerProgress = {
 	userId: string;
 	name: string;

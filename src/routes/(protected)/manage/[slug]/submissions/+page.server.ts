@@ -9,6 +9,10 @@ import {
 	submissionFacets,
 	submissionTotals
 } from '$lib/server/conference/organizer-submissions';
+import {
+	assignReviewerToSubmissions,
+	conferenceAssignmentTargets
+} from '$lib/server/conference/review-management';
 import { parseSort } from '$lib/server/conference/submission-sort';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -37,10 +41,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// show the table.
 	const sort = parseSort(url.searchParams.get('sort'));
 
-	const [page, facets, counts] = await Promise.all([
+	const [page, facets, counts, assignmentTargets] = await Promise.all([
 		listSubmissions(conference.id, filters, parsePage(url), sort),
 		submissionFacets(conference.id),
-		submissionTotals(conference.id)
+		submissionTotals(conference.id),
+		conferenceAssignmentTargets(conference.id)
 	]);
 	const notificationStatuses = await decisionNotificationStatuses(conference.id, page.rows);
 
@@ -56,7 +61,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		filters,
 		sort,
 		counts,
-		notificationStatuses
+		notificationStatuses,
+		assignmentTargets
 	};
 };
 
@@ -87,5 +93,40 @@ export const actions: Actions = {
 		}
 
 		return { notificationResult: await notifySubmissionDecisions(conference, ids) };
+	},
+
+	/**
+	 * Bulk reviewer assignment on the selection (ABS-06).
+	 *
+	 * Same selection as decide/notify; round + reviewer come from the bulk bar.
+	 * Existing rows stay put; ineligible pairs are skipped with a count rather than
+	 * aborting the batch.
+	 */
+	assign: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const ids = selectedIds(form);
+		const roundId = Number(form.get('roundId'));
+		const reviewerUserId = form.get('reviewerUserId');
+
+		if (ids.length === 0) {
+			return fail(400, { message: 'Select at least one submission first.' });
+		}
+		if (
+			!Number.isInteger(roundId) ||
+			roundId <= 0 ||
+			typeof reviewerUserId !== 'string' ||
+			reviewerUserId === ''
+		) {
+			return fail(400, { message: 'Choose a review round and a reviewer.' });
+		}
+
+		const assignResult = await assignReviewerToSubmissions(
+			conference.id,
+			ids,
+			roundId,
+			reviewerUserId
+		);
+		return { assignResult };
 	}
 };

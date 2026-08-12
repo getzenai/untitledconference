@@ -14,12 +14,14 @@
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
 	import {
+		describeBulkAssign,
 		describeDecision,
 		describeNotification,
 		notificationTone
 	} from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import SubmissionFilters from '$lib/components/app/conference/submission-filters.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -33,6 +35,28 @@
 
 	const selected = new SvelteSet<number>();
 	let busy = $state(false);
+	/** Round for bulk assignment; empty until the organizer picks one. */
+	let assignRoundId = $state('');
+	let assignReviewerId = $state('');
+
+	const assignRoundOptions = $derived(
+		data.assignmentTargets.map((round) => ({ value: String(round.id), label: round.name }))
+	);
+	const assignReviewerOptions = $derived(
+		(
+			data.assignmentTargets.find((round) => String(round.id) === assignRoundId)?.reviewers ?? []
+		).map((reviewer) => ({
+			value: reviewer.userId,
+			label: `${reviewer.name} (${reviewer.email})`
+		}))
+	);
+	const canBulkAssign = $derived(
+		selected.size > 0 &&
+			assignRoundId !== '' &&
+			assignReviewerId !== '' &&
+			!busy &&
+			data.assignmentTargets.length > 0
+	);
 
 	// A selection that survives a filter change would decide rows the organizer can
 	// no longer see — so anything that scrolled out of view drops out of the selection.
@@ -271,6 +295,14 @@
 		>
 			{describeNotification(form.notificationResult)}
 		</p>
+	{:else if form?.assignResult}
+		<p
+			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
+			role="status"
+			data-testid="bulk-assign-message"
+		>
+			{describeBulkAssign(form.assignResult)}
+		</p>
 	{:else if form?.result}
 		<p
 			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
@@ -339,7 +371,7 @@
 						the speaker tasks nobody has touched yet.
 					</p>
 				{/if}
-				<div class="flex gap-2">
+				<div class="flex flex-wrap items-center gap-2">
 					<Button
 						type="submit"
 						name="decision"
@@ -378,6 +410,63 @@
 					>
 						Notify decisions
 					</Button>
+					{#if data.assignmentTargets.length > 0}
+						<!--
+							Third bulk action (ABS-06): same selection as decide/notify, one
+							reviewer onto every marked row. Round first, then the committee
+							for that round — assignment still validates per submission
+							(speaker / track), so the picker can be conference-wide.
+						-->
+						<span class="bg-border mx-1 hidden h-5 w-px sm:block" aria-hidden="true"></span>
+						<div class="flex flex-wrap items-center gap-2" data-testid="bulk-assign">
+							<AppSelect
+								name="roundId"
+								size="sm"
+								class="w-40"
+								placeholder="Round"
+								aria-label="Review round for bulk assignment"
+								testId="bulk-assign-round"
+								value={assignRoundId}
+								options={assignRoundOptions}
+								onValueChange={(value) => {
+									assignRoundId = value;
+									// A reviewer from the previous round must not post under
+									// the new one just because their id string still sits in state.
+									assignReviewerId = '';
+								}}
+							/>
+							<!--
+								Remount when the round changes so the previous picker's
+								internal state cannot post a reviewer from the wrong round.
+							-->
+							{#key assignRoundId}
+								<AppSelect
+									name="reviewerUserId"
+									size="sm"
+									class="w-56"
+									placeholder="Reviewer"
+									aria-label="Reviewer to assign to selected submissions"
+									testId="bulk-assign-reviewer"
+									value={assignReviewerId}
+									options={assignReviewerOptions}
+									disabled={assignRoundId === '' || assignReviewerOptions.length === 0}
+									onValueChange={(value) => {
+										assignReviewerId = value;
+									}}
+								/>
+							{/key}
+							<Button
+								type="submit"
+								formaction="?/assign"
+								variant="secondary"
+								size="sm"
+								disabled={!canBulkAssign}
+								data-testid="bulk-assign-submit"
+							>
+								Assign reviewer
+							</Button>
+						</div>
+					{/if}
 				</div>
 			</div>
 
