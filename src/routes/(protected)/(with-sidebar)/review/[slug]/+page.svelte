@@ -15,7 +15,6 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
-	import { page } from '$app/state';
 
 	let { data } = $props();
 
@@ -188,7 +187,3 @@
 		</table>
 	</ScrollTable>
 {/if}
-
-<p class="text-muted-foreground mt-3 text-xs">
-	Permalink for this view: <code>{page.url.pathname}?sort={data.sort}</code>
-</p>
