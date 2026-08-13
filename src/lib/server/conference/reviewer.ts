@@ -512,7 +512,13 @@ export async function reviewerSubmission(
 		criteriaWithOwnAnswers(own.roundId, own.reviewId),
 		own.anonymized ? Promise.resolve([]) : speakersOn(submissionId),
 		reviewsOn(conference.id, [submissionId]),
-		answersOn(submissionId)
+		// Custom answers are the organizer's extra questions — "Kurzbio", "Why you?" —
+		// and they name the speaker as reliably as the speakers list. The same
+		// `own.anonymized` branch that skips speakers must skip them too. Dropping
+		// every answer is honest: a field-type heuristic would still leak a name
+		// typed into a select or a boolean's label, and a reviewer in a blind round
+		// is not meant to score the person.
+		own.anonymized ? Promise.resolve([]) : answersOn(submissionId)
 	]);
 
 	const visible = canSeePeerReviews(

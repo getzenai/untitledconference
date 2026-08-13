@@ -436,10 +436,37 @@ describe('one submission', () => {
 			position: 0
 		});
 
+		const [form] = await db
+			.insert(cfpFormTable)
+			.values({ conferenceId: conference.id, title: 'Proposals', status: 'published' })
+			.returning();
+		const [bio] = await db
+			.insert(formFieldTable)
+			.values({
+				cfpFormId: form.id,
+				label: 'Kurzbio',
+				kind: 'short_text',
+				position: 0
+			})
+			.returning();
+		await db.insert(submissionAnswerTable).values({
+			submissionId: alsoMine,
+			formFieldId: bio.id,
+			value: 'Priya Raman builds compilers in Berlin.'
+		});
+
 		const named = await reviewerSubmission(await conferenceNow(), ME, alsoMine);
 		expect(named?.speakers).toEqual(['Priya Raman']);
+		expect(named?.answers).toEqual([
+			{
+				label: 'Kurzbio',
+				kind: 'short_text',
+				value: 'Priya Raman builds compilers in Berlin.'
+			}
+		]);
 
-		// Move my review into the anonymised round: the name must not reach the page.
+		// Move my review into the anonymised round: the name must not reach the page,
+		// and neither may the free-text answer that carries it.
 		await db
 			.update(reviewTable)
 			.set({ reviewRoundId: anonRoundId })
@@ -448,6 +475,8 @@ describe('one submission', () => {
 		const hidden = await reviewerSubmission(await conferenceNow(), ME, alsoMine);
 		expect(hidden?.anonymized).toBe(true);
 		expect(hidden?.speakers).toEqual([]);
+		expect(hidden?.answers).toEqual([]);
+		expect(JSON.stringify(hidden)).not.toContain('Priya Raman');
 	});
 });
 
