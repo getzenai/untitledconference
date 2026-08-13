@@ -847,7 +847,7 @@ export type OpenCallSummary = {
 	formTitle: string;
 	opensAt: string | null;
 	closesAt: string | null;
-	formats: { id: number; name: string }[];
+	formats: { id: number; name: string; minutes: number | null }[];
 	tracks: { id: number; name: string }[];
 };
 
@@ -874,7 +874,11 @@ export async function listOpenCalls(now = new Date()): Promise<OpenCallSummary[]
 			formTitle: call.form.title,
 			opensAt: call.form.opensAt?.toISOString() ?? null,
 			closesAt: call.form.closesAt?.toISOString() ?? null,
-			formats: call.formats.map(({ id, name }) => ({ id, name })),
+			// `minutes` travels with the format because this list is the speaker's
+			// only view of the call: the length is what makes "Deep Dive" mean
+			// something, and it is what the accepted talk occupies in the agenda.
+			// Without it the choice of `sessionFormatId` is a guess (#339).
+			formats: call.formats.map(({ id, name, minutes }) => ({ id, name, minutes })),
 			tracks: call.tracks.map(({ id, name }) => ({ id, name }))
 		});
 	}

@@ -17,6 +17,7 @@ import { addScorecardCriterion } from '$lib/server/conference/scorecard-criteria
 import { mySubmissions } from '$lib/server/conference/speaker-portal';
 import { myProfiles } from '$lib/server/conference/speaker-profile';
 import { db } from '$lib/server/db';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, eq } from 'drizzle-orm';
@@ -261,6 +262,106 @@ describe('speaker and reviewer tools', () => {
 			expect(refused.isError).toBe(true);
 			expect(refused.text).toContain('yours');
 		});
+	});
+
+	it('carries the format length into the speaker\u2019s view of the call', async () => {
+		await call(organizer, 'create_session_format', {
+			conferenceSlug: seeded.conferenceSlug,
+			name: 'Deep Dive',
+			minutes: 75
+		});
+
+		const listed = await call(casey, 'list_open_cfps');
+		const mine = (listed.data!.calls as { slug: string; formats: unknown[] }[]).find(
+			(row) => row.slug === seeded.conferenceSlug
+		)!;
+		expect(mine.formats).toEqual(
+			expect.arrayContaining([expect.objectContaining({ name: 'Deep Dive', minutes: 75 })])
+		);
+
+		// Against the loader the organizer screen reads, not just against itself:
+		// the point of #339 is that these two disagreed.
+		const open = await openCall(seeded.conferenceSlug);
+		expect(open!.formats.find((format) => format.name === 'Deep Dive')?.minutes).toBe(75);
+	});
+
+	it('names its successor in what it returns, not only in its description', async () => {
+		const created = await call(casey, 'submit_proposal', {
+			conferenceSlug: seeded.conferenceSlug,
+			title: 'A draft that says what comes next'
+		});
+		expect(created.data).toMatchObject({ status: 'draft', next: 'finalize_proposal' });
+	});
+
+	it('reports the status the row has, not the one the save intended', async () => {
+		const created = await call(casey, 'submit_proposal', {
+			conferenceSlug: seeded.conferenceSlug,
+			title: 'Already picked up by a reviewer',
+			abstract: 'Complete enough to hand in.'
+		});
+		const submissionId = created.data!.submissionId as number;
+		await call(casey, 'finalize_proposal', { submissionId });
+
+		// Set by hand because nothing in the product writes `in_review` yet — the
+		// status is in the enum, `submissionValues` preserves it, and the loaders
+		// read it, but no path sets it. The contradiction #331 describes is
+		// reachable the moment one does, so the guard belongs here now.
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, submissionId));
+
+		const again = await call(casey, 'finalize_proposal', { submissionId });
+		expect(again.isError).toBe(false);
+		expect(again.data).toMatchObject({ status: 'in_review' });
+
+		// And the portal agrees — the hand-in did not push it back to `submitted`.
+		const mine = await mySubmissions(casey.userId);
+		expect(mine.find((row) => row.id === submissionId)?.status).toBe('in_review');
+	});
+
+	it('creates a first speaker profile from the conference, before any proposal exists', async () => {
+		// Finley has only ever reviewed, so this is the fresh-account branch #334
+		// describes without needing a new account.
+		expect(await myProfiles(finley.userId)).toHaveLength(0);
+
+		const refused = await call(finley, 'update_my_speaker_profile', { bio: 'No profile yet.' });
+		expect(refused.isError).toBe(true);
+		// The message has to name the way out, or an agent stops here.
+		expect(refused.text).toContain('conferenceSlug');
+
+		const created = await call(finley, 'update_my_speaker_profile', {
+			conferenceSlug: seeded.conferenceSlug,
+			jobTitle: 'Staff Engineer',
+			bio: 'Wrote the bio before the talk.'
+		});
+		expect(created.isError).toBe(false);
+
+		const [profile] = await myProfiles(finley.userId);
+		expect(profile).toMatchObject({
+			organizationId: seeded.orgId,
+			jobTitle: 'Staff Engineer',
+			bio: 'Wrote the bio before the talk.'
+		});
+
+		// A second call with the same slug edits that profile rather than forking it.
+		await call(finley, 'update_my_speaker_profile', {
+			conferenceSlug: seeded.conferenceSlug,
+			company: 'Harness Ltd'
+		});
+		const after = await myProfiles(finley.userId);
+		expect(after).toHaveLength(1);
+		expect(after[0].id).toBe(profile.id);
+		expect(after[0].company).toBe('Harness Ltd');
+	});
+
+	it('refuses a slug that is not a published conference', async () => {
+		const refused = await call(casey, 'update_my_speaker_profile', {
+			conferenceSlug: `${seeded.conferenceSlug}-nope`,
+			bio: 'Nowhere to put this.'
+		});
+		expect(refused.isError).toBe(true);
+		expect(refused.text).toContain('list_open_cfps');
 	});
 
 	it('updates the speaker profile through the same functions the portal uses', async () => {

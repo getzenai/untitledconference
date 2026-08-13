@@ -16,11 +16,12 @@
  */
 import { serializeSpeakerLinks, type SpeakerLink } from '$lib/conference/speaker-links';
 import { db } from '$lib/server/db';
-import { organization } from '$lib/server/db/auth-schema';
+import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { guessSortName } from './cfp-submission';
 import { claimProfilesForAccount } from './speaker-portal';
 
 export type OwnProfile = {
@@ -70,6 +71,65 @@ export async function myProfiles(userId: string): Promise<OwnProfile[]> {
 		.innerJoin(organization, eq(organization.id, speakerProfileTable.organizationId))
 		.where(eq(speakerProfileTable.userId, userId))
 		.orderBy(asc(organization.name));
+}
+
+/**
+ * The profile this account speaks under at one conference, created if it has none.
+ *
+ * A speaker profile is per organization by design — it is the cross-event speaker
+ * directory — so there is no such thing as "my profile" in the abstract, and none
+ * can be conjured without naming an organizer. That is why the profile has only
+ * ever come into being as a side effect of a proposal: the proposal is what said
+ * which organization was meant.
+ *
+ * Naming the conference says the same thing without the proposal, which is what
+ * an agent asked to "fill in my speaker profile, then submit to the open calls"
+ * needs (#334). Only a published conference resolves — an unpublished one is not
+ * offered by the public site either, and a slug that does not resolve must not
+ * become a way to enumerate them.
+ *
+ * The claim runs first, so an unclaimed profile someone else created for this
+ * address is adopted rather than forked — the same order `myProfiles` uses, and
+ * the reason no second `unclaimedProfileForEmail` check is needed here.
+ */
+export async function ensureProfileForConference(
+	userId: string,
+	conferenceSlug: string
+): Promise<OwnProfile | null> {
+	const [conference] = await db
+		.select({ organizationId: conferenceTable.organizationId })
+		.from(conferenceTable)
+		.where(and(eq(conferenceTable.slug, conferenceSlug), eq(conferenceTable.status, 'published')))
+		.limit(1);
+	if (!conference) return null;
+
+	const profiles = await myProfiles(userId);
+	const mine = profiles.find((row) => row.organizationId === conference.organizationId);
+	if (mine) return mine;
+
+	// `name` and `sortName` are NOT NULL, so a first profile needs something even
+	// before the speaker has typed anything. The account is the honest fallback,
+	// the same one `upsertOwnProfile` falls back to on a first save.
+	const [account] = await db
+		.select({ name: user.name, email: user.email })
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+	const fallbackName = account?.name?.trim() || account?.email || 'Unnamed speaker';
+
+	const [created] = await db
+		.insert(speakerProfileTable)
+		.values({
+			organizationId: conference.organizationId,
+			userId,
+			name: fallbackName,
+			sortName: guessSortName(fallbackName),
+			email: account?.email ?? null
+		})
+		.returning({ id: speakerProfileTable.id });
+	if (!created) return null;
+
+	return (await myProfiles(userId)).find((row) => row.id === created.id) ?? null;
 }
 
 export type ProfileEdit = {
