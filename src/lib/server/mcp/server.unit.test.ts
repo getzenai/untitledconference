@@ -78,16 +78,24 @@ describe('the MCP tool registry', () => {
 		}
 	});
 
-	it('does not advertise a missing tool in the README MCP paragraph either', () => {
+	// The tool list lives in docs/MCP.md rather than the README, and prose does
+	// not compile: nothing but this test stands between the documented list and
+	// the registry. It holds both directions, because both ways of drifting hurt
+	// a reader — a tool named there that does not exist sends them at nothing, and
+	// one missing from there is a capability they never learn they have.
+	it('documents exactly the tools the registry has', () => {
 		const names = new Set(allTools(ctx).map((tool) => tool.name));
-		const readme = readFileSync(
-			resolve(dirname(fileURLToPath(import.meta.url)), '../../../../README.md'),
+		const doc = readFileSync(
+			resolve(dirname(fileURLToPath(import.meta.url)), '../../../../docs/MCP.md'),
 			'utf8'
 		);
-		const paragraph = readme.match(/\*\*An MCP server\*\*[^\n]+/)?.[0];
-		expect(paragraph).toBeTruthy();
-		for (const name of paragraph!.match(TOOL_SHAPED) ?? []) {
-			expect(names.has(name), name).toBe(true);
+
+		const mentioned = new Set(doc.match(TOOL_SHAPED) ?? []);
+		for (const name of mentioned) {
+			expect(names.has(name), `documented but not registered: ${name}`).toBe(true);
+		}
+		for (const name of names) {
+			expect(mentioned.has(name), `registered but not documented: ${name}`).toBe(true);
 		}
 	});
 });
