@@ -27,7 +27,10 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { tick } from 'svelte';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { Button } from '$lib/components/ui/button';
+	import { Checkbox } from '$lib/components/ui/checkbox';
+	import * as Popover from '$lib/components/ui/popover';
 	import {
 		Tooltip,
 		TooltipContent,
@@ -98,10 +101,28 @@
 	 * so nothing becomes unreachable by hiding it.
 	 */
 	const ROOM_FILTER_FROM = 6;
-	let roomFilter = $state('all');
+	/**
+	 * Which rooms are columns, as a view filter. Nothing picked means keep every
+	 * room — that is what "All N rooms" on the trigger says — and picking any
+	 * subset narrows the grid to just those. Reassigning the array, never
+	 * mutating it, keeps the derived honest.
+	 */
+	let selectedRooms = $state<number[]>([]);
 	const visibleRooms = $derived(
-		roomFilter === 'all' ? board.rooms : board.rooms.filter((r) => String(r.id) === roomFilter)
+		selectedRooms.length === 0
+			? board.rooms
+			: board.rooms.filter((r) => selectedRooms.includes(r.id))
 	);
+	const filterLabel = $derived(
+		selectedRooms.length === 0
+			? `All ${board.rooms.length} rooms`
+			: `${selectedRooms.length} of ${board.rooms.length} rooms`
+	);
+	const toggleRoom = (id: number) => {
+		selectedRooms = selectedRooms.includes(id)
+			? selectedRooms.filter((r) => r !== id)
+			: [...selectedRooms, id];
+	};
 
 	const unscheduled = $derived(board.tray.length);
 	const autoPlaceHint = $derived(
@@ -468,19 +489,47 @@
 				{/if}
 
 				{#if board.rooms.length >= ROOM_FILTER_FROM}
-					<label class="mb-4 flex items-center gap-2 text-sm">
-						<span class="text-muted-foreground">Show</span>
-						<select
-							bind:value={roomFilter}
-							data-testid="agenda-room-filter"
-							class="border-input bg-background rounded-md border px-2 py-1 text-sm"
-						>
-							<option value="all">All {board.rooms.length} rooms</option>
-							{#each board.rooms as room (room.id)}
-								<option value={String(room.id)}>{room.name}</option>
-							{/each}
-						</select>
-					</label>
+					<Popover.Root>
+						<Popover.Trigger>
+							{#snippet child({ props })}
+								<Button
+									{...props}
+									variant="outline"
+									size="sm"
+									class="mb-4 gap-2 font-normal"
+									data-testid="agenda-room-filter"
+								>
+									<span class="text-muted-foreground">Show</span>
+									{filterLabel}
+									<ChevronDownIcon class="size-4 opacity-60" />
+								</Button>
+							{/snippet}
+						</Popover.Trigger>
+						<Popover.Content class="w-64 p-2" align="start">
+							<div class="max-h-72 overflow-auto">
+								<label
+									class="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+								>
+									<Checkbox
+										checked={selectedRooms.length === 0}
+										onCheckedChange={() => (selectedRooms = [])}
+									/>
+									All {board.rooms.length} rooms
+								</label>
+								{#each board.rooms as room (room.id)}
+									<label
+										class="hover:bg-accent flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm"
+									>
+										<Checkbox
+											checked={selectedRooms.includes(room.id)}
+											onCheckedChange={() => toggleRoom(room.id)}
+										/>
+										{room.name}
+									</label>
+								{/each}
+							</div>
+						</Popover.Content>
+					</Popover.Root>
 				{/if}
 
 				<!--
