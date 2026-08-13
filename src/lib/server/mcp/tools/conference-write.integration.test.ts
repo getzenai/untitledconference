@@ -3,6 +3,7 @@
  * and against the loaders a jury would actually hit — not against the column
  * a tool might have written.
  */
+import { archiveConference } from '$lib/server/conference/archive-conference';
 import { openCall } from '$lib/server/conference/cfp-submission';
 import { deleteConference } from '$lib/server/conference/delete-conference';
 import {
@@ -79,6 +80,8 @@ describe('organizer write tools', () => {
 				'close_cfp',
 				'publish_conference',
 				'unpublish_conference',
+				'archive_conference',
+				'restore_conference',
 				'delete_conference',
 				'invite_reviewer',
 				'assign_reviews'
@@ -230,10 +233,12 @@ describe('organizer write tools', () => {
 });
 
 /**
- * #324. The leftovers of a test run have to be removable, and the removal has to
- * be hard to do by accident and impossible to do to someone's live event.
+ * #324, as Fabian scoped it: removal is a soft delete with safeguards graded by
+ * what the step actually costs. Measured against the loaders a visitor hits, not
+ * against the column the tool wrote — a conference that is "archived" in the
+ * database and still on the front door is not archived.
  */
-describe('delete_conference', () => {
+describe('archive, restore and erase', () => {
 	/** A fresh draft with a room and a submission under it, plus its id. */
 	async function draftWithContents(slug: string) {
 		const created = await call(organizer, 'create_conference', {
@@ -260,9 +265,133 @@ describe('delete_conference', () => {
 		return conference.id;
 	}
 
-	it('deletes a draft and everything the schema hangs off it', async () => {
-		const slug = `${suffix}-delete-me`;
+	async function statusOf(slug: string) {
+		const [row] = await db
+			.select({ status: conferenceTable.status, before: conferenceTable.statusBeforeArchive })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		return row;
+	}
+
+	async function slugsOnFrontDoor() {
+		return (await listPublishedConferences()).map((row) => row.slug);
+	}
+
+	it('archives a draft without ceremony, and keeps everything under it', async () => {
+		const slug = `${suffix}-archive-draft`;
 		const conferenceId = await draftWithContents(slug);
+
+		const { isError, data } = await call(organizer, 'archive_conference', {
+			conferenceSlug: slug
+		});
+
+		expect(isError).toBe(false);
+		expect(data).toMatchObject({ slug, status: 'archived', wentDark: false });
+		expect(await statusOf(slug)).toEqual({ status: 'archived', before: 'draft' });
+
+		// The point of a soft delete: the rows are still there to come back to.
+		expect(
+			await db.select().from(roomTable).where(eq(roomTable.conferenceId, conferenceId))
+		).toHaveLength(1);
+		expect(
+			await db.select().from(submissionTable).where(eq(submissionTable.conferenceId, conferenceId))
+		).toHaveLength(1);
+	});
+
+	/**
+	 * The whole reason `archived` is a `status` value rather than a flag beside
+	 * one: every public reader already asks for `published`, so this holds without
+	 * any of them being touched. If someone later moves archiving to its own
+	 * column, this test is what tells them what they broke.
+	 */
+	it('takes a published conference off every public surface, and asks before it does', async () => {
+		const slug = `${suffix}-archive-live`;
+		await draftWithContents(slug);
+		await call(organizer, 'publish_conference', { conferenceSlug: slug });
+		expect(await slugsOnFrontDoor()).toContain(slug);
+
+		const unconfirmed = await call(organizer, 'archive_conference', { conferenceSlug: slug });
+		expect(unconfirmed.isError).toBe(true);
+		expect(unconfirmed.text).toContain('confirmSlug');
+		expect(await slugsOnFrontDoor()).toContain(slug);
+
+		const mistyped = await call(organizer, 'archive_conference', {
+			conferenceSlug: slug,
+			confirmSlug: `${slug}-oops`
+		});
+		expect(mistyped.isError).toBe(true);
+		expect(mistyped.text).toContain('does not match');
+		expect(await slugsOnFrontDoor()).toContain(slug);
+
+		const archived = await call(organizer, 'archive_conference', {
+			conferenceSlug: slug,
+			confirmSlug: slug
+		});
+		expect(archived.isError).toBe(false);
+		expect(archived.data).toMatchObject({ status: 'archived', wentDark: true });
+
+		expect(await loadPublicConference(slug)).toBeNull();
+		expect(await slugsOnFrontDoor()).not.toContain(slug);
+	});
+
+	it('restores a conference to exactly where it was, live or draft', async () => {
+		const live = `${suffix}-restore-live`;
+		await draftWithContents(live);
+		await call(organizer, 'publish_conference', { conferenceSlug: live });
+		await call(organizer, 'archive_conference', { conferenceSlug: live, confirmSlug: live });
+
+		const back = await call(organizer, 'restore_conference', { conferenceSlug: live });
+		expect(back.isError).toBe(false);
+		expect(back.data).toMatchObject({ status: 'published', publicUrl: `/c/${live}` });
+		expect(await slugsOnFrontDoor()).toContain(live);
+		expect(await statusOf(live)).toEqual({ status: 'published', before: null });
+
+		const draft = `${suffix}-restore-draft`;
+		await draftWithContents(draft);
+		await call(organizer, 'archive_conference', { conferenceSlug: draft });
+
+		const backToDraft = await call(organizer, 'restore_conference', { conferenceSlug: draft });
+		expect(backToDraft.data).toMatchObject({ status: 'draft', publicUrl: null });
+		expect(await slugsOnFrontDoor()).not.toContain(draft);
+	});
+
+	it('keeps an archived conference in the organizer’s own list, so it can be found again', async () => {
+		const slug = `${suffix}-still-listed`;
+		await draftWithContents(slug);
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
+
+		const listed = await call(organizer, 'list_my_conferences');
+		expect(listed.data!.conferences).toEqual(
+			expect.arrayContaining([expect.objectContaining({ slug, status: 'archived' })])
+		);
+	});
+
+	/**
+	 * Publishing must not be a second way out of the archive. It would skip the
+	 * step that clears `statusBeforeArchive`, leaving a live conference that a
+	 * later restore would try to restore.
+	 */
+	it('refuses to publish or unpublish an archived conference', async () => {
+		const slug = `${suffix}-no-side-door`;
+		await draftWithContents(slug);
+		await call(organizer, 'publish_conference', { conferenceSlug: slug });
+		await call(organizer, 'archive_conference', { conferenceSlug: slug, confirmSlug: slug });
+
+		const published = await call(organizer, 'publish_conference', { conferenceSlug: slug });
+		expect(published.isError).toBe(true);
+		expect(published.text).toContain('restore_conference');
+
+		const unpublished = await call(organizer, 'unpublish_conference', { conferenceSlug: slug });
+		expect(unpublished.isError).toBe(true);
+
+		expect(await statusOf(slug)).toEqual({ status: 'archived', before: 'published' });
+		expect(await slugsOnFrontDoor()).not.toContain(slug);
+	});
+
+	it('erases an archived draft and everything the schema hangs off it', async () => {
+		const slug = `${suffix}-erase-me`;
+		const conferenceId = await draftWithContents(slug);
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
 
 		const { isError, data } = await call(organizer, 'delete_conference', {
 			conferenceSlug: slug,
@@ -273,7 +402,6 @@ describe('delete_conference', () => {
 		expect(data).toMatchObject({ slug, deleted: true });
 		expect(data!.removed).toMatchObject({ rooms: 1, submissions: 1, speakers: 0 });
 
-		// Gone from the picker an organizer reads, and gone from the cascade below it.
 		const listed = await call(organizer, 'list_my_conferences');
 		expect((listed.data!.conferences as { slug: string }[]).map((row) => row.slug)).not.toContain(
 			slug
@@ -289,9 +417,48 @@ describe('delete_conference', () => {
 		).toHaveLength(0);
 	});
 
-	it('refuses a confirmSlug that does not match, and deletes nothing', async () => {
+	/**
+	 * The safeguard that matters most: nothing gets from "in use" to "gone" in one
+	 * call. The refusal has to name the step that comes first, or the caller has
+	 * been stopped without being told how to proceed — the exact dead end #320 is
+	 * about, one door further along.
+	 */
+	it('refuses to erase a conference that has not been archived first', async () => {
+		const slug = `${suffix}-not-archived`;
+		await draftWithContents(slug);
+
+		const result = await call(organizer, 'delete_conference', {
+			conferenceSlug: slug,
+			confirmSlug: slug
+		});
+
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain('archive_conference');
+		expect(
+			await db.select().from(conferenceTable).where(eq(conferenceTable.slug, slug))
+		).toHaveLength(1);
+	});
+
+	it('refuses to erase a conference that was published before it was archived', async () => {
+		const slug = `${suffix}-was-public`;
+		await draftWithContents(slug);
+		await call(organizer, 'publish_conference', { conferenceSlug: slug });
+		await call(organizer, 'archive_conference', { conferenceSlug: slug, confirmSlug: slug });
+
+		const result = await call(organizer, 'delete_conference', {
+			conferenceSlug: slug,
+			confirmSlug: slug
+		});
+
+		expect(result.isError).toBe(true);
+		expect(result.text).toContain('public address');
+		expect(await statusOf(slug)).toEqual({ status: 'archived', before: 'published' });
+	});
+
+	it('refuses a confirmSlug that does not match, and erases nothing', async () => {
 		const slug = `${suffix}-mistyped`;
 		await draftWithContents(slug);
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
 
 		const result = await call(organizer, 'delete_conference', {
 			conferenceSlug: slug,
@@ -300,23 +467,6 @@ describe('delete_conference', () => {
 
 		expect(result.isError).toBe(true);
 		expect(result.text).toContain('does not match');
-		expect(
-			await db.select().from(conferenceTable).where(eq(conferenceTable.slug, slug))
-		).toHaveLength(1);
-	});
-
-	it('refuses a published conference — unpublishing first is the organizer’s decision, not a step it takes', async () => {
-		const slug = `${suffix}-published`;
-		await draftWithContents(slug);
-		await call(organizer, 'publish_conference', { conferenceSlug: slug });
-
-		const result = await call(organizer, 'delete_conference', {
-			conferenceSlug: slug,
-			confirmSlug: slug
-		});
-
-		expect(result.isError).toBe(true);
-		expect(result.text).toContain('only a draft can be deleted');
 		expect(
 			await db.select().from(conferenceTable).where(eq(conferenceTable.slug, slug))
 		).toHaveLength(1);
@@ -341,40 +491,64 @@ describe('delete_conference', () => {
 		});
 		expect(renamed.isError).toBe(false);
 
-		const result = await call(scopedOrganizer, 'delete_conference', {
+		const archived = await call(scopedOrganizer, 'archive_conference', { conferenceSlug: slug });
+		expect(archived.isError).toBe(true);
+		expect(archived.text).toContain('owner or admin seat');
+		expect(await statusOf(slug)).toMatchObject({ status: 'draft' });
+
+		// And no further down the chain either: archive by someone who may, erase by
+		// someone who may not.
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
+		const erased = await call(scopedOrganizer, 'delete_conference', {
 			conferenceSlug: slug,
 			confirmSlug: slug
 		});
+		expect(erased.isError).toBe(true);
+		expect(erased.text).toContain('owner or admin seat');
 
-		expect(result.isError).toBe(true);
-		expect(result.text).toContain('owner or admin seat');
-		expect(
-			await db.select().from(conferenceTable).where(eq(conferenceTable.slug, slug))
-		).toHaveLength(1);
+		const restored = await call(scopedOrganizer, 'restore_conference', { conferenceSlug: slug });
+		expect(restored.isError).toBe(true);
+		expect(await statusOf(slug)).toMatchObject({ status: 'archived' });
 	});
 
 	/**
-	 * The draft check runs twice — once on the row that was read, once as a
-	 * predicate on the delete itself. Only the second one survives a publish that
-	 * lands in between, and the only way to measure it is to hand the function a
-	 * row that is already out of date, which is exactly what a race produces.
+	 * Both the archive and the erase re-state their condition as a predicate on the
+	 * write instead of trusting the row they were handed. Only the predicate
+	 * survives a change that lands in between, and the only way to measure it is to
+	 * pass a row that is already out of date — which is exactly what a race produces.
 	 */
-	it('refuses a row that says draft when the conference has since been published', async () => {
+	it('lets the write, not the stale row, decide when a restore lands in between', async () => {
 		const slug = `${suffix}-raced`;
 		const conferenceId = await draftWithContents(slug);
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
+
 		const [stale] = await db
 			.select()
 			.from(conferenceTable)
 			.where(eq(conferenceTable.id, conferenceId));
-		expect(stale.status).toBe('draft');
+		expect(stale.status).toBe('archived');
 
-		await call(organizer, 'publish_conference', { conferenceSlug: slug });
+		await call(organizer, 'restore_conference', { conferenceSlug: slug });
 
-		const result = await deleteConference(stale, seeded.organizerId);
-
-		expect(result).toEqual({ ok: false, reason: 'not_draft' });
+		expect(await deleteConference(stale, seeded.organizerId)).toEqual({
+			ok: false,
+			reason: 'not_archived'
+		});
 		expect(
 			await db.select().from(conferenceTable).where(eq(conferenceTable.id, conferenceId))
 		).toHaveLength(1);
+
+		// The mirror case: a second archive against the same stale row must not
+		// overwrite `statusBeforeArchive` with `archived` and strand the restore.
+		const [beforeSecond] = await db
+			.select()
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, conferenceId));
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
+		expect(await archiveConference(beforeSecond, seeded.organizerId)).toEqual({
+			ok: false,
+			reason: 'already_archived'
+		});
+		expect(await statusOf(slug)).toEqual({ status: 'archived', before: 'draft' });
 	});
 });

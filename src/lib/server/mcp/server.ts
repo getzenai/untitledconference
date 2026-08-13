@@ -23,8 +23,11 @@ export const SERVER_INSTRUCTIONS =
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
 	'open_cfp then publish_conference so speakers can submit, invite_reviewer then assign_reviews, ' +
 	'decide_submissions, then unpublish_conference to return to draft. ' +
-	'delete_conference removes a draft and everything under it for good — ' +
-	'it takes the slug twice and refuses anything that is not a draft. ' +
+	'archive_conference is how a conference is removed: it disappears from every ' +
+	'public surface, everything under it is kept, and restore_conference undoes it. ' +
+	'Archiving a published conference takes its public page down, so that case asks ' +
+	'for the slug twice. delete_conference erases an archived conference for good and ' +
+	'only one that was never published. ' +
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
 	'and get_agenda for the scheduled programme. ' +

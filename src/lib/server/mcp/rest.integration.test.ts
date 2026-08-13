@@ -149,15 +149,37 @@ describe('REST adapter', () => {
 	 * #324. DELETE is a method the adapter did not have before, so this measures
 	 * the whole path — the verb reaches a route, the body carries the second slug,
 	 * and the tool's own refusal comes back as a status rather than a throw.
+	 *
+	 * DELETE is deliberately the archive, the reversible step: it is what a REST
+	 * caller means by deleting a conference, and the one that cannot cost anything.
+	 * Erasing is a POST to `/erase`, because it is not the same operation.
 	 */
-	it('deletes a draft over DELETE, and refuses the same call without the confirmation', async () => {
+	it('archives over DELETE, restores, then erases — and refuses to erase what is not archived', async () => {
 		const slug = `${suffix}-rest-delete`;
 		const created = await dispatchRest('POST', '/conferences', organizer, {
 			body: { name: 'Delete me over REST', slug, startsOn: '2027-12-01', endsOn: '2027-12-01' }
 		});
 		expect(created.status).toBe(200);
 
-		const unconfirmed = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {
+		const tooSoon = await dispatchRest('POST', `/conferences/${slug}/erase`, organizer, {
+			body: { confirmSlug: slug }
+		});
+		expect(tooSoon.status).toBe(400);
+		expect(String(tooSoon.body.error)).toContain('archive_conference');
+
+		const archived = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {});
+		expect(archived.status).toBe(200);
+		expect(archived.body).toMatchObject({ slug, status: 'archived' });
+
+		// Still the organizer's to find, and still restorable, which is the whole
+		// difference between this and what DELETE used to do.
+		const restored = await dispatchRest('POST', `/conferences/${slug}/restore`, organizer, {});
+		expect(restored.status).toBe(200);
+		expect(restored.body).toMatchObject({ slug, status: 'draft' });
+
+		await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {});
+
+		const unconfirmed = await dispatchRest('POST', `/conferences/${slug}/erase`, organizer, {
 			body: { confirmSlug: `${slug}-oops` }
 		});
 		expect(unconfirmed.status).toBe(400);
@@ -167,7 +189,7 @@ describe('REST adapter', () => {
 			expect.arrayContaining([expect.objectContaining({ slug })])
 		);
 
-		const deleted = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {
+		const deleted = await dispatchRest('POST', `/conferences/${slug}/erase`, organizer, {
 			body: { confirmSlug: slug }
 		});
 		expect(deleted.status).toBe(200);

@@ -20,6 +20,17 @@ import {
 } from 'drizzle-orm/pg-core';
 import { organization, user } from '../auth-schema';
 
+/**
+ * The lifecycle of a conference — and, in `archived`, this product's delete.
+ *
+ * `archived` was declared here from the start and nothing ever reached it: no
+ * writer set it, no reader filtered on it, only the status badge knew a colour
+ * for it. It is wired up now because every public read already asks for
+ * `status = 'published'`, which means an archived conference disappears from the
+ * front door, the agenda, the speaker pages and the call for papers without a
+ * single one of those queries changing. `statusBeforeArchive` remembers where it
+ * came from so the step can be undone.
+ */
 export const conferenceStatus = pgEnum('conference_status', ['draft', 'published', 'archived']);
 
 /**
@@ -77,6 +88,18 @@ export const conferenceTable = pgTable(
 		/** Free text shown above the public submission form (CFP-03). */
 		cfpIntro: text('cfp_intro'),
 		status: conferenceStatus('status').notNull().default('draft'),
+		/**
+		 * What `status` was before it became `archived`, and null whenever it is not.
+		 *
+		 * Archiving is this product's delete, and a delete you can undo has to
+		 * remember what it undid: without this column, restoring a conference that
+		 * was live would have to guess between putting the public page back up and
+		 * silently demoting it to a draft. It also tells the permanent delete apart
+		 * from the reversible one — only a conference that was never published can
+		 * be purged, and after archiving, `status` alone can no longer say whether
+		 * it was.
+		 */
+		statusBeforeArchive: conferenceStatus('status_before_archive'),
 		/** ABS-07's setting, per conference — see `reviewVisibility`. */
 		reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -15,6 +15,7 @@ const conference = {
 	startsOn: null,
 	endsOn: null,
 	cfpIntro: null,
+	statusBeforeArchive: null,
 	reviewVisibility: 'open',
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')

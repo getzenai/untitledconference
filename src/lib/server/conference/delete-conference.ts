@@ -1,24 +1,32 @@
 /**
- * Removing a conference.
+ * Removing a conference for good.
  *
- * The counterpart to `create-conference.ts`, and it borrows that file's rule
- * about who may do it: a scoped `organizer` membership is granted *on* an
- * existing conference, so it cannot be the right to destroy that conference any
- * more than it is the right to make a new one. Only Better Auth's org-wide
- * `owner` and `admin` seats can — the seats that own the data, not the seats
- * invited to work on it.
+ * The last of the four steps in `archive-conference.ts`, and the only one with no
+ * undo. Everything that makes a conference *go away* is that file's job; this one
+ * exists solely to reclaim a row that is already gone from everyone's view.
  *
- * Drafts only. A published conference has a public address people have followed
- * and, usually, speakers who handed something in; taking it out from under them
- * is not an operation this offers.
+ * Three conditions, and each is doing different work:
+ *
+ *  - an org-wide `owner` or `admin` seat, the same rule as creating one. A scoped
+ *    `organizer` membership is granted on an existing conference, so it cannot be
+ *    the right to destroy it.
+ *  - **already archived.** This is the real safeguard. Nothing can go from "in use"
+ *    to "gone" in one call: the caller has to first put the conference in a state a
+ *    human can see and reverse, and only then ask for the irreversible step. A
+ *    waiting period would enforce the same pause with a clock; two deliberate acts
+ *    enforce it with the caller's own hands.
+ *  - **never published.** `statusBeforeArchive` remembers that. A conference that
+ *    once had a public address has been linked to, and may have collected
+ *    submissions from people who trusted the address; it can be archived, and that
+ *    is as far as this goes.
  *
  * What goes with it is what the schema already says goes with it — every table
- * under `conference.id` cascades. What stays is `speaker_profile`: that record
- * is org-wide on purpose (CRM-01, the cross-event directory), so a person who
- * spoke once does not vanish because one event did.
+ * under `conference.id` cascades. What stays is `speaker_profile`: that record is
+ * org-wide on purpose (CRM-01, the cross-event directory), so a person who spoke
+ * once does not vanish because one event did.
  */
+import { hasOrgWideSeat } from '$lib/server/conference/archive-conference';
 import { db } from '$lib/server/db';
-import { member } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceSpeakerTable,
@@ -26,10 +34,7 @@ import {
 	roomTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
-import { and, count, eq, inArray } from 'drizzle-orm';
-
-/** Better Auth's org-wide roles that may delete a conference. Mirrors `create-conference.ts`. */
-const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
+import { and, count, eq } from 'drizzle-orm';
 
 /**
  * What the conference took with it.
@@ -46,24 +51,7 @@ export type DeletedWith = {
 
 export type DeleteConferenceResult =
 	| { ok: true; removed: DeletedWith }
-	| { ok: false; reason: 'not_org_wide' | 'not_draft' };
-
-/** Whether this user holds an org-wide seat on the conference's organization. */
-async function hasOrgWideSeat(userId: string, organizationId: string): Promise<boolean> {
-	const [seat] = await db
-		.select({ id: member.id })
-		.from(member)
-		.where(
-			and(
-				eq(member.userId, userId),
-				eq(member.organizationId, organizationId),
-				inArray(member.role, ORG_WIDE_ORGANIZER_ROLES)
-			)
-		)
-		.limit(1);
-
-	return seat !== undefined;
-}
+	| { ok: false; reason: 'not_org_wide' | 'not_archived' | 'was_published' };
 
 export async function deleteConference(
 	conference: Conference,
@@ -72,17 +60,20 @@ export async function deleteConference(
 	if (!(await hasOrgWideSeat(userId, conference.organizationId))) {
 		return { ok: false, reason: 'not_org_wide' };
 	}
-	if (conference.status !== 'draft') {
-		return { ok: false, reason: 'not_draft' };
+	if (conference.status !== 'archived') {
+		return { ok: false, reason: 'not_archived' };
+	}
+	if (conference.statusBeforeArchive === 'published') {
+		return { ok: false, reason: 'was_published' };
 	}
 
 	// Counted inside the transaction that deletes, so the numbers reported are the
 	// rows that actually went rather than a snapshot from before someone else's write.
 	//
-	// `status = 'draft'` is repeated in the delete itself, not trusted from the row
-	// read above: between that read and this write someone can publish, and a
-	// conference with a public address is the one thing this must never remove. If
-	// the predicate finds nothing, the publish won the race and nothing goes.
+	// `status = 'archived'` is repeated in the delete itself, not trusted from the row
+	// read above: between that read and this write someone can restore the conference,
+	// and restoring is exactly the act of saying "not this one". If the predicate finds
+	// nothing, the restore won the race and nothing goes.
 	return await db.transaction(async (tx) => {
 		const [rooms] = await tx
 			.select({ n: count() })
@@ -99,10 +90,10 @@ export async function deleteConference(
 
 		const gone = await tx
 			.delete(conferenceTable)
-			.where(and(eq(conferenceTable.id, conference.id), eq(conferenceTable.status, 'draft')))
+			.where(and(eq(conferenceTable.id, conference.id), eq(conferenceTable.status, 'archived')))
 			.returning({ id: conferenceTable.id });
 
-		if (gone.length === 0) return { ok: false, reason: 'not_draft' };
+		if (gone.length === 0) return { ok: false, reason: 'not_archived' };
 
 		return {
 			ok: true,

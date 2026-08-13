@@ -120,6 +120,13 @@
 			"when": 1786572185038,
 			"tag": "0016_drop_starter_tables",
 			"breakpoints": true
+		},
+		{
+			"idx": 17,
+			"version": "7",
+			"when": 1786635816782,
+			"tag": "0017_conference_archive",
+			"breakpoints": true
 		}
 	]
 }

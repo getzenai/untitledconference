@@ -1,0 +1,1 @@
+ALTER TABLE "conference" ADD COLUMN "status_before_archive" "conference_status";

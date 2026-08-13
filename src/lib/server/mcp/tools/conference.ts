@@ -54,7 +54,9 @@ function listMyConferences(ctx: McpContext): AnyMcpToolDefinition {
 		name: 'list_my_conferences',
 		description:
 			'List the conferences the authenticated user organizes, newest first. ' +
-			'Start here: the slugs returned are what every other conference tool takes.',
+			'Start here: the slugs returned are what every other conference tool takes. ' +
+			'Archived conferences are listed too, with status "archived" — they are hidden ' +
+			'from the public, not from their organizers, and restore_conference brings one back.',
 		inputSchema: {},
 		handler: async () => {
 			const rows = await organizedConferences(ctx.userId);
