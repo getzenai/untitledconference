@@ -285,12 +285,28 @@ describe('speaker and reviewer tools', () => {
 		expect(open!.formats.find((format) => format.name === 'Deep Dive')?.minutes).toBe(75);
 	});
 
-	it('names its successor in what it returns, not only in its description', async () => {
+	it('names its successor in what it returns, and the chain walks from that name', async () => {
 		const created = await call(casey, 'submit_proposal', {
 			conferenceSlug: seeded.conferenceSlug,
-			title: 'A draft that says what comes next'
+			title: 'A draft that says what comes next',
+			abstract: 'Complete enough to hand in.'
 		});
-		expect(created.data).toMatchObject({ status: 'draft', next: 'finalize_proposal' });
+		expect(created.isError).toBe(false);
+		expect(created.data).toMatchObject({ status: 'draft' });
+		const next = created.data!.next;
+		expect(typeof next).toBe('string');
+		expect(next).toBeTruthy();
+
+		// The name comes off the payload. Hardcoding finalize_proposal here would
+		// pass even if next pointed at the wrong tool — the call would never run.
+		const handed = await call(casey, next as string, {
+			submissionId: created.data!.submissionId
+		});
+		expect(handed.isError).toBe(false);
+		expect(handed.data).toMatchObject({
+			submissionId: created.data!.submissionId,
+			status: 'submitted'
+		});
 	});
 
 	it('reports the status the row has, not the one the save intended', async () => {
