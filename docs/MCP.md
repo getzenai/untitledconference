@@ -42,6 +42,7 @@ you could not do by hand in the browser.
 Start with `list_my_conferences` — every other conference tool takes a slug it
 returns.
 
+<<<<<<< HEAD
 | Tool                                          | What it does                                                                                           |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | `list_my_conferences`                         | The conferences you organize, newest first                                                             |
@@ -62,6 +63,28 @@ returns.
 | `get_agenda_tray`                             | Accepted talks not yet on the grid, plus the days and rooms open to them                               |
 | `place_talk` / `move_talk` / `unplace_talk`   | Put a talk on the grid, move it, take it back to the tray                                              |
 | `swap_talks`                                  | Exchange two slots — both move or neither does                                                         |
+=======
+| Tool                                             | What it does                                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `list_my_conferences`                            | The conferences you organize, newest first                                                             |
+| `create_conference`                              | A new conference, always as a draft                                                                    |
+| `update_conference`                              | Name, venue, dates                                                                                     |
+| `publish_conference` / `unpublish_conference`    | Put the public page live, or take it back to draft                                                     |
+| `open_cfp` / `close_cfp`                         | Open the call, or stop new submissions without touching the ones already in                            |
+| `list_submissions`                               | The proposals, optionally filtered by status                                                           |
+| `get_submission`                                 | One proposal in full, with the reviews written for it (reviewer names are not returned)                |
+| `invite_reviewer`                                | Invite someone into the review round                                                                   |
+| `create_review_round` / `list_review_rounds`     | Add a review round, or list the ones already there. A fresh conference has none                        |
+| `assign_reviews`                                 | Hand proposals to reviewers — needs a round from `create_review_round` first                           |
+| `create_session_format` / `list_session_formats` | Session shapes (Talk, Keynote, …) and their length. A fresh conference has none                        |
+| `create_track` / `list_tracks`                   | Tracks a proposal can pick. A fresh conference has none                                                |
+| `decide_submissions`                             | Accept, reject or waitlist — accepting also confirms the speakers and puts the talk in the agenda tray |
+| `get_agenda`                                     | The scheduled programme, in start order                                                                |
+| `list_rooms` / `create_room`                     | The rooms of the grid                                                                                  |
+| `get_agenda_tray`                                | Accepted talks not yet on the grid, plus the days and rooms open to them                               |
+| `place_talk` / `move_talk` / `unplace_talk`      | Put a talk on the grid, move it, take it back to the tray                                              |
+| `swap_talks`                                     | Exchange two slots — both move or neither does                                                         |
+>>>>>>> origin/main
 
 The agenda tools refuse a collision rather than creating one, and say which talk
 is in the way: a room double-booked, or a speaker due in two rooms at once. The
@@ -75,6 +98,7 @@ there is no grid to look at, so the refusal is the flag.
 | `list_open_cfps`            | Calls currently accepting proposals  |
 | `submit_proposal`           | Create a proposal, as a draft        |
 | `update_proposal`           | Edit it while the call is open       |
+| `finalize_proposal`         | Hand it in — draft becomes submitted |
 | `withdraw_proposal`         | Take it back                         |
 | `list_my_proposals`         | Your proposals and where each stands |
 | `update_my_speaker_profile` | Bio, photo, links                    |

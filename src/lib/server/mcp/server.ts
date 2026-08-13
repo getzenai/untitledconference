@@ -21,7 +21,9 @@ export const SERVER_INSTRUCTIONS =
 	'Identity comes from the OAuth access token, so no tool takes a user or organization argument. ' +
 	'Organizers start with list_my_conferences — every other organizer tool takes a slug it returns. ' +
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
-	'open_cfp then publish_conference so speakers can submit, invite_reviewer then assign_reviews, ' +
+	'open_cfp then publish_conference so speakers can submit, ' +
+	'create_session_format and create_track so proposals have a length and a track, ' +
+	'create_review_round then invite_reviewer then assign_reviews, ' +
 	'decide_submissions, then unpublish_conference to return to draft. ' +
 	'archive_conference is how a conference is removed: it disappears from every ' +
 	'public surface, everything under it is kept, and restore_conference undoes it. ' +
@@ -30,12 +32,14 @@ export const SERVER_INSTRUCTIONS =
 	'only one that was never published. ' +
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
+	'list_review_rounds, list_session_formats, list_tracks, ' +
 	'and get_agenda for the scheduled programme. ' +
 	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
 	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
 	'unplace_talk back to the tray. A collision is refused with the other talk named. ' +
 	'close_cfp stops new submissions without touching existing ones. ' +
-	'Speakers start with list_open_cfps, then submit_proposal (a draft), update_proposal or withdraw_proposal, ' +
+	'Speakers start with list_open_cfps, then submit_proposal (a draft), update_proposal to fill it in, ' +
+	'and finalize_proposal to hand it in — a draft nobody finalizes is never submitted. Or withdraw_proposal, ' +
 	'list_my_proposals for status, and update_my_speaker_profile for bio, photo and links. ' +
 	'Reviewers start with list_my_review_assignments, then get_review_assignment for the rubric, then submit_review. ' +
 	'A reviewer cannot read a submission they were not assigned. ' +

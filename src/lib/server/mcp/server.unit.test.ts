@@ -38,7 +38,13 @@ describe('the MCP tool registry', () => {
 				'publish_conference',
 				'unpublish_conference',
 				'invite_reviewer',
-				'assign_reviews'
+				'assign_reviews',
+				'create_review_round',
+				'list_review_rounds',
+				'create_session_format',
+				'list_session_formats',
+				'create_track',
+				'list_tracks'
 			])
 		);
 	});

@@ -284,10 +284,54 @@ describe('decideSubmissions — scoping', () => {
 		expect(result).toEqual({
 			decided: 0,
 			unchanged: 0,
+			skippedDrafts: 0,
 			sessionsCreated: 0,
 			tasksCreated: 0,
 			sessionsRemoved: 0,
 			tasksRemoved: 0
 		});
+	});
+});
+
+describe('decideSubmissions — drafts', () => {
+	/**
+	 * A draft is the speaker's private, unfinished form. Accepting one produced a row
+	 * the UI cannot make — `accepted` with `submittedAt: null` — and put a talk nobody
+	 * handed in into the agenda tray with its speakers confirmed (#321).
+	 */
+	it('leaves a never-submitted draft alone and says so', async () => {
+		const [draft] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Half a thought', status: 'draft' })
+			.returning();
+		await db
+			.insert(submissionSpeakerTable)
+			.values({ submissionId: draft.id, speakerProfileId, isPrimary: true, position: 0 });
+
+		const result = await decideSubmissions(conference, [draft.id], 'accepted');
+
+		expect(result).toMatchObject({ decided: 0, unchanged: 0, skippedDrafts: 1 });
+
+		const [after] = await db.select().from(submissionTable).where(eq(submissionTable.id, draft.id));
+		expect(after.status).toBe('draft');
+		expect(after.decidedAt).toBeNull();
+
+		// The consequence that made this visible downstream: no slot, so nothing to place.
+		const placements = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, draft.id));
+		expect(placements).toHaveLength(0);
+	});
+
+	it('still decides the submitted rows selected alongside a draft', async () => {
+		const [draft] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Half a thought', status: 'draft' })
+			.returning();
+
+		const result = await decideSubmissions(conference, [submissionId, draft.id], 'accepted');
+
+		expect(result).toMatchObject({ decided: 1, skippedDrafts: 1, sessionsCreated: 1 });
 	});
 });

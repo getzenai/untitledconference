@@ -3,12 +3,14 @@
  * calls — never a column. Definitions live in an exported list so the MCP
  * adapter (and later REST) is a loop, not a second implementation.
  */
+import { MAX_MINUTES, MAX_NAME } from '$lib/conference/structure-lines';
 import { archiveConference, restoreConference } from '$lib/server/conference/archive-conference';
 import { closeCfpForm, createCfpForm, publishCfpForm } from '$lib/server/conference/cfp-form';
+import { addFormat, addTrack, conferenceConfig } from '$lib/server/conference/config';
 import { createConference } from '$lib/server/conference/create-conference';
 import { deleteConference } from '$lib/server/conference/delete-conference';
 import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
-import { reviewRounds } from '$lib/server/conference/review-rounds';
+import { addReviewRound, reviewRounds } from '$lib/server/conference/review-rounds';
 import { addReviewer } from '$lib/server/conference/reviewer-roster';
 import { updateConference } from '$lib/server/conference/update-conference';
 import { setConferenceVisibility } from '$lib/server/conference/visibility';
@@ -483,7 +485,9 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 			'Assign one reviewer to one or more submissions of a conference you organize. ' +
 			'Same function as the submissions-table bulk assign: existing assignments stay, ' +
 			'recusals stay recused, ineligible pairs are counted as skipped. Identify the ' +
-			"reviewer by the email you invited. Omit roundId to use the conference's first round.",
+			'reviewer by the email you invited. A conference needs a review round first — ' +
+			'call create_review_round if list_review_rounds is empty. ' +
+			"Omit roundId to use the conference's first round.",
 		inputSchema: {
 			conferenceSlug: slugField,
 			submissionIds: z
@@ -516,7 +520,7 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 			if (!round) {
 				throw new McpToolError(
 					roundId === undefined
-						? `No review round on "${conferenceSlug}" yet. Create one on the Review rounds screen, then retry.`
+						? `No review round on "${conferenceSlug}" yet. Call create_review_round, then retry.`
 						: `No review round ${roundId} on "${conferenceSlug}".`
 				);
 			}
@@ -539,6 +543,220 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+function listReviewRoundsTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'list_review_rounds',
+		description:
+			'List the review rounds of a conference you organize, in order. ' +
+			'A fresh conference has none — call create_review_round before assign_reviews. ' +
+			'Use the ids with assign_reviews.',
+		inputSchema: { conferenceSlug: slugField },
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const rounds = await reviewRounds(conference.id);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				count: rounds.length,
+				rounds: rounds.map((round) => ({
+					id: round.id,
+					name: round.name,
+					anonymized: round.anonymized,
+					opensAt: round.opensAt?.toISOString() ?? null,
+					closesAt: round.closesAt?.toISOString() ?? null,
+					window: round.window.state,
+					assignments: round.assignments,
+					completed: round.completed
+				}))
+			};
+		}
+	};
+}
+
+function createReviewRoundTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'create_review_round',
+		description:
+			'Add a review round to a conference you organize. Same function as the ' +
+			'Review rounds screen (`addReviewRound`). Creates the conference evaluation ' +
+			'plan on the first round. Does not assign anyone — call invite_reviewer, then ' +
+			'assign_reviews with the id this returns. Omit the dates for a round that ' +
+			'stays open until you close it.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			name: z.string().min(1).max(MAX_NAME).describe('Round name, e.g. Screening.'),
+			opensAt: isoInstant.optional(),
+			closesAt: isoInstant.optional(),
+			anonymized: z
+				.boolean()
+				.optional()
+				.describe('Hide author names from reviewers. Default false.')
+		},
+		handler: async ({ conferenceSlug, name, opensAt, closesAt, anonymized }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const result = await addReviewRound(conference.id, {
+				name,
+				anonymized: anonymized ?? false,
+				opensAt: parseInstant(opensAt, 'opensAt') ?? null,
+				closesAt: parseInstant(closesAt, 'closesAt') ?? null
+			});
+			if (!result.ok) {
+				throw new McpToolError(result.message);
+			}
+			const rounds = await reviewRounds(conference.id);
+			const round = rounds.find((row) => row.id === result.id);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				created: true,
+				round: {
+					id: result.id,
+					name: round?.name ?? name.trim(),
+					anonymized: round?.anonymized ?? anonymized ?? false,
+					opensAt: round?.opensAt?.toISOString() ?? null,
+					closesAt: round?.closesAt?.toISOString() ?? null,
+					window: round?.window.state ?? 'open'
+				}
+			};
+		}
+	};
+}
+
+function listSessionFormatsTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'list_session_formats',
+		description:
+			'List the session formats of a conference you organize (Talk, Keynote, …). ' +
+			'`minutes` is the default length place_talk uses. A fresh conference has none — ' +
+			'call create_session_format so submit_proposal can take a sessionFormatId.',
+		inputSchema: { conferenceSlug: slugField },
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const { formats } = await conferenceConfig(conference.id);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				count: formats.length,
+				formats: formats.map((format) => ({
+					id: format.id,
+					name: format.name,
+					minutes: format.minutes,
+					position: format.position
+				}))
+			};
+		}
+	};
+}
+
+function createSessionFormatTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'create_session_format',
+		description:
+			'Add one session format to a conference you organize. Same function as ' +
+			'Settings → Formats (`addFormat`). `minutes` becomes the default length of ' +
+			'an accepted talk of this format. A duplicate name is refused.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			name: z.string().min(1).max(MAX_NAME).describe('Format name, e.g. Talk.'),
+			minutes: z
+				.number()
+				.int()
+				.min(1)
+				.max(MAX_MINUTES)
+				.optional()
+				.describe('Length in minutes (1–1440). Omit if the format has no fixed length.')
+		},
+		handler: async ({ conferenceSlug, name, minutes }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const trimmed = name.trim();
+			if (!trimmed) {
+				throw new McpToolError('Give the format a name.');
+			}
+			const before = await conferenceConfig(conference.id);
+			const existing = before.formats.find(
+				(format) => format.name.toLowerCase() === trimmed.toLowerCase()
+			);
+			if (existing) {
+				throw new McpToolError(`A format named "${existing.name}" already exists.`);
+			}
+			const id = await addFormat(conference.id, trimmed, minutes ?? null);
+			if (id === null) {
+				throw new McpToolError('Could not create the format. Check the name and minutes.');
+			}
+			const after = await conferenceConfig(conference.id);
+			const format = after.formats.find((row) => row.id === id);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				created: true,
+				format: {
+					id,
+					name: format?.name ?? trimmed,
+					minutes: format?.minutes ?? minutes ?? null,
+					position: format?.position ?? null
+				}
+			};
+		}
+	};
+}
+
+function listTracksTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'list_tracks',
+		description:
+			'List the tracks of a conference you organize, in order. A fresh conference ' +
+			'has none — call create_track so submit_proposal can take a trackId.',
+		inputSchema: { conferenceSlug: slugField },
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const { tracks } = await conferenceConfig(conference.id);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				count: tracks.length,
+				tracks: tracks.map((track) => ({
+					id: track.id,
+					name: track.name,
+					position: track.position
+				}))
+			};
+		}
+	};
+}
+
+function createTrackTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'create_track',
+		description:
+			'Add one track to a conference you organize. Same function as Settings → ' +
+			'Tracks (`addTrack`). A duplicate name is refused.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			name: z.string().min(1).max(MAX_NAME).describe('Track name, e.g. Platform.')
+		},
+		handler: async ({ conferenceSlug, name }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const trimmed = name.trim();
+			if (!trimmed) {
+				throw new McpToolError('Give the track a name.');
+			}
+			const before = await conferenceConfig(conference.id);
+			const existing = before.tracks.find(
+				(track) => track.name.toLowerCase() === trimmed.toLowerCase()
+			);
+			if (existing) {
+				throw new McpToolError(`A track named "${existing.name}" already exists.`);
+			}
+			const id = await addTrack(conference.id, trimmed);
+			if (id === null) {
+				throw new McpToolError('Could not create the track.');
+			}
+			const after = await conferenceConfig(conference.id);
+			const track = after.tracks.find((row) => row.id === id);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				created: true,
+				track: { id, name: track?.name ?? trimmed, position: track?.position ?? null }
+			};
+		}
+	};
+}
+
 export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 	return [
 		createConferenceTool(ctx),
@@ -551,6 +769,12 @@ export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		restoreConferenceTool(ctx),
 		deleteConferenceTool(ctx),
 		inviteReviewerTool(ctx),
-		assignReviewsTool(ctx)
+		listReviewRoundsTool(ctx),
+		createReviewRoundTool(ctx),
+		assignReviewsTool(ctx),
+		listSessionFormatsTool(ctx),
+		createSessionFormatTool(ctx),
+		listTracksTool(ctx),
+		createTrackTool(ctx)
 	];
 }

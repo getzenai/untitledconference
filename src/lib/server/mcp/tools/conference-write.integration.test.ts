@@ -84,7 +84,13 @@ describe('organizer write tools', () => {
 				'restore_conference',
 				'delete_conference',
 				'invite_reviewer',
-				'assign_reviews'
+				'assign_reviews',
+				'create_review_round',
+				'list_review_rounds',
+				'create_session_format',
+				'list_session_formats',
+				'create_track',
+				'list_tracks'
 			])
 		);
 	});
@@ -229,6 +235,111 @@ describe('organizer write tools', () => {
 			.orderBy(asc(reviewTable.id));
 		expect(reviews).toHaveLength(1);
 		expect(reviews[0].reviewerUserId).toBe(ellis.id);
+	});
+
+	it('creates a review round through addReviewRound — assign_reviews then finds it', async () => {
+		const slug = `mcp-write-round-${suffix}`;
+		const created = await call(organizer, 'create_conference', {
+			name: 'Round Tools Conf',
+			slug,
+			startsOn: '2027-12-01',
+			endsOn: '2027-12-02',
+			venue: null
+		});
+		expect(created.isError).toBe(false);
+
+		const empty = await call(organizer, 'list_review_rounds', { conferenceSlug: slug });
+		expect(empty.data).toMatchObject({ count: 0, rounds: [] });
+
+		const ellis = seeded.people.find((person) => person.role === 'reviewer')!;
+		await call(organizer, 'invite_reviewer', { conferenceSlug: slug, email: ellis.email });
+
+		const missing = await call(organizer, 'assign_reviews', {
+			conferenceSlug: slug,
+			submissionIds: [1],
+			reviewerEmail: ellis.email
+		});
+		expect(missing.isError).toBe(true);
+		expect(missing.text).toContain('create_review_round');
+
+		const round = await call(organizer, 'create_review_round', {
+			conferenceSlug: slug,
+			name: 'Screening',
+			anonymized: false
+		});
+		expect(round.isError).toBe(false);
+		expect(round.data).toMatchObject({
+			created: true,
+			round: { name: 'Screening', anonymized: false, window: 'open' }
+		});
+		expect(round.data!.round).toEqual(expect.objectContaining({ id: expect.any(Number) }));
+
+		const listed = await call(organizer, 'list_review_rounds', { conferenceSlug: slug });
+		expect(listed.data!.count).toBe(1);
+		expect(listed.data!.rounds).toEqual([
+			expect.objectContaining({
+				id: (round.data!.round as { id: number }).id,
+				name: 'Screening',
+				window: 'open'
+			})
+		]);
+	});
+
+	it('creates a format and a track the public call then lists', async () => {
+		const slug = `mcp-write-shape-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Shape Tools Conf',
+			slug,
+			startsOn: '2027-12-03',
+			endsOn: '2027-12-04',
+			venue: null
+		});
+
+		const noFormats = await call(organizer, 'list_session_formats', { conferenceSlug: slug });
+		const noTracks = await call(organizer, 'list_tracks', { conferenceSlug: slug });
+		expect(noFormats.data).toMatchObject({ count: 0, formats: [] });
+		expect(noTracks.data).toMatchObject({ count: 0, tracks: [] });
+
+		const format = await call(organizer, 'create_session_format', {
+			conferenceSlug: slug,
+			name: 'Talk',
+			minutes: 30
+		});
+		const track = await call(organizer, 'create_track', {
+			conferenceSlug: slug,
+			name: 'Platform'
+		});
+		expect(format.isError).toBe(false);
+		expect(track.isError).toBe(false);
+		expect(format.data).toMatchObject({
+			created: true,
+			format: { name: 'Talk', minutes: 30 }
+		});
+		expect(track.data).toMatchObject({ created: true, track: { name: 'Platform' } });
+
+		const formats = await call(organizer, 'list_session_formats', { conferenceSlug: slug });
+		const tracks = await call(organizer, 'list_tracks', { conferenceSlug: slug });
+		expect(formats.data!.formats).toEqual([
+			expect.objectContaining({
+				id: (format.data!.format as { id: number }).id,
+				name: 'Talk',
+				minutes: 30
+			})
+		]);
+		expect(tracks.data!.tracks).toEqual([
+			expect.objectContaining({
+				id: (track.data!.track as { id: number }).id,
+				name: 'Platform'
+			})
+		]);
+
+		const twice = await call(organizer, 'create_session_format', {
+			conferenceSlug: slug,
+			name: 'talk',
+			minutes: 45
+		});
+		expect(twice.isError).toBe(true);
+		expect(twice.text).toContain('already exists');
 	});
 });
 
