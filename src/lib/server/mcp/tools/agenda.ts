@@ -8,7 +8,9 @@
 import {
 	addRoom,
 	agendaBoard,
+	createBlock,
 	placeSession,
+	removeBlock,
 	swapPlacements,
 	unplaceSession,
 	type AgendaBoard,
@@ -150,6 +152,19 @@ function collisionMessage(ours: BoardSession, clash: Conflict, board: AgendaBoar
 		.filter(Boolean)
 		.join(' ');
 
+	if (clash.kind === 'break') {
+		// The break is the other half of the pair whichever way round the query
+		// found them, and naming it is the whole message: "you are scheduling
+		// through lunch" is not something a room name would convey.
+		const blocking = board.placed.find((row) => row.placementId === otherId);
+		const when = formatClock(blocking?.startMinutes ?? null);
+		return (
+			`Cannot place "${ours.title}" — "${blocking?.title ?? 'a break'}" covers every room` +
+			(when ? ` at ${when}` : '') +
+			'.'
+		);
+	}
+
 	if (clash.kind === 'speaker') {
 		const speaker = ours.speakers.find((name) => other?.speakers.includes(name)) ?? 'A speaker';
 		return (
@@ -159,6 +174,30 @@ function collisionMessage(ours: BoardSession, clash: Conflict, board: AgendaBoar
 		);
 	}
 	return `Cannot place "${ours.title}" — "${title}" is already ` + (where || 'in that room') + '.';
+}
+
+/**
+ * The refusal for a break laid over a talk, rather than a talk laid over a break.
+ * Its own wording because the roles are reversed: what the organizer needs named
+ * is the talk that is in the way, and "Cannot place" would be about the wrong one
+ * of the two.
+ */
+function blockCollisionMessage(
+	title: string,
+	clash: Conflict,
+	board: AgendaBoard,
+	ourId: number
+): string {
+	const otherId = clash.placementIds.find((id) => id !== ourId) ?? clash.placementIds[0];
+	const other = board.placed.find((row) => row.placementId === otherId);
+	const room = other ? (board.rooms.find((row) => row.id === other.roomId)?.name ?? null) : null;
+	const time = formatClock(other?.startMinutes ?? null);
+	const where = [room ? `in ${room}` : null, time ? `at ${time}` : null].filter(Boolean).join(' ');
+	return (
+		`Cannot put "${title}" there — "${other?.title ?? `session ${otherId}`}" is already ` +
+		(where || 'in that slot') +
+		'. Move the talk first, or use unplace_talk.'
+	);
 }
 
 function placeInputSchema() {
@@ -404,6 +443,118 @@ function unplaceTalk(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+function createBreak(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'create_break',
+		description:
+			'Put a break or a reserved block on the grid — lunch, coffee, registration, ' +
+			'a room held for a sponsor. Omit roomId and it covers every room, which is ' +
+			'what a lunch break usually is; give one and it occupies that room alone. ' +
+			'Unlike a talk, it carries its own length: minutes is required, because a ' +
+			'break has no session format to take one from. Once it is there the ' +
+			'collision rules treat it like any other occupant — place_talk refuses a ' +
+			'talk that would run through it. There is no screen for this; the agenda ' +
+			'builder can only move talks.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			day: z.string().optional().describe('Conference day as YYYY-MM-DD. Prefer this over dayId.'),
+			dayId: z.number().int().optional().describe('Day id from get_agenda_tray.'),
+			roomId: z
+				.number()
+				.int()
+				.optional()
+				.describe('Room id from list_rooms. Omit for a break across every room.'),
+			start: z.string().optional().describe('Start time as HH:MM (conference clock, e.g. 12:30).'),
+			startMinutes: z.number().int().optional().describe('Start as minutes from midnight.'),
+			minutes: z.number().int().describe('How long it lasts, in minutes.'),
+			title: z.string().min(1).describe('What it is called, e.g. Lunch.'),
+			kind: z
+				.enum(['break', 'reservation'])
+				.optional()
+				.describe(
+					'break (the default) is time nobody is speaking; reservation is a slot held for ' +
+						'something not in the programme yet, e.g. a sponsor.'
+				)
+		},
+		handler: async (args) => {
+			const conference = await organizerConference(args.conferenceSlug, ctx);
+			const board = await agendaBoard(conference.id);
+			const dayId = resolveDay(board, args.day, args.dayId);
+			const startMinutes = parseStart(args.start, args.startMinutes);
+
+			if (args.roomId !== undefined && !board.rooms.some((room) => room.id === args.roomId)) {
+				throw new McpToolError(`No room ${args.roomId} on this conference. Call list_rooms.`);
+			}
+
+			const result = await createBlock(conference.id, {
+				dayId,
+				roomId: args.roomId ?? null,
+				startMinutes,
+				minutes: args.minutes,
+				title: args.title,
+				// `block` is the schema's word for it, `break` is the organizer's. The
+				// tool speaks the organizer's; the translation belongs here and not in
+				// their head.
+				kind: args.kind === 'reservation' ? 'reservation' : 'block'
+			});
+			if (!result.ok) {
+				throw new McpToolError(result.reason);
+			}
+
+			// The same refusal place_talk gives, from the other side. A break laid over
+			// a talk is the identical mistake as a talk laid over a break — only the
+			// order of the two writes differs, and an agent that could do it one way
+			// round would have found the hole in the guard immediately.
+			const after = await agendaBoard(conference.id);
+			const clash = colliding(after, [result.placementId]);
+			if (clash) {
+				await removeBlock(conference.id, result.placementId);
+				throw new McpToolError(
+					blockCollisionMessage(args.title.trim(), clash, after, result.placementId)
+				);
+			}
+
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				created: true,
+				slot: slotView(findSession(after, result.placementId), after)
+			};
+		}
+	};
+}
+
+function removeBreak(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'remove_break',
+		description:
+			'Delete a break or reserved block from the grid, by the placementId get_agenda ' +
+			'reports for it. A talk is refused — use unplace_talk, which returns it to the ' +
+			'tray instead of erasing the placement.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			placementId: z.number().int().describe('Placement id of the break, from get_agenda.')
+		},
+		handler: async ({ conferenceSlug, placementId }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const before = await agendaBoard(conference.id);
+			const existing = findSession(before, placementId);
+			if (existing.kind === 'session') {
+				throw new McpToolError(
+					`Placement ${placementId} is the talk "${existing.title}", not a break. ` +
+						'Use unplace_talk to take it off the grid.'
+				);
+			}
+			if (!(await removeBlock(conference.id, placementId))) {
+				throw new McpToolError(`No break ${placementId} on this conference. Call get_agenda.`);
+			}
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				removed: { placementId, title: existing.title, kind: existing.kind }
+			};
+		}
+	};
+}
+
 export function agendaTools(ctx: McpContext): AnyMcpToolDefinition[] {
 	return [
 		listRooms(ctx),
@@ -412,6 +563,8 @@ export function agendaTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		placeTalk(ctx),
 		moveTalk(ctx),
 		swapTalks(ctx),
-		unplaceTalk(ctx)
+		unplaceTalk(ctx),
+		createBreak(ctx),
+		removeBreak(ctx)
 	];
 }

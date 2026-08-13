@@ -171,6 +171,11 @@ async function speakersBySubmission(ids: number[]): Promise<Map<number, string[]
 	return byId;
 }
 
+function blockMinutes(row: PlacementRow): number | null {
+	if (row.kind === 'session' || !row.startsAt || !row.endsAt) return null;
+	return slotMinutes(row.endsAt) - slotMinutes(row.startsAt);
+}
+
 function toSession(row: PlacementRow, speakers: Map<number, string[]>): BoardSession {
 	return {
 		placementId: row.placementId,
@@ -181,7 +186,10 @@ function toSession(row: PlacementRow, speakers: Map<number, string[]>): BoardSes
 		submissionStatus: row.submissionStatus,
 		trackName: row.trackName,
 		formatName: row.formatName,
-		minutes: row.formatMinutes ?? DEFAULT_MINUTES,
+		// A block has no format to take a length from — it has its own two ends, and
+		// they are the truth about how long lunch is. Falling back to DEFAULT_MINUTES
+		// here would report every break as 30 minutes whatever the grid says.
+		minutes: blockMinutes(row) ?? row.formatMinutes ?? DEFAULT_MINUTES,
 		dayId: row.dayId,
 		roomId: row.roomId,
 		startMinutes: row.startsAt ? slotMinutes(row.startsAt) : null,
@@ -253,7 +261,7 @@ export async function agendaBoard(conferenceId: number): Promise<AgendaBoard> {
 }
 
 export type Conflict = {
-	kind: 'room' | 'speaker';
+	kind: 'room' | 'speaker' | 'break';
 	placementIds: [number, number];
 	detail: string;
 };
@@ -311,12 +319,50 @@ async function speakerConflicts(conferenceId: number): Promise<Conflict[]> {
 	}));
 }
 
+/**
+ * A session scheduled through a break that spans every room.
+ *
+ * `roomConflicts` cannot see this one: it joins on equal `room_id` and skips null
+ * rooms entirely, deliberately — reporting lunch against each of four rooms buries
+ * the clashes that matter. But the pair an organizer needs to know about is not
+ * "lunch versus room 3", it is "this talk is scheduled during lunch", and there is
+ * exactly one of those per talk however many rooms exist. So it is its own query
+ * rather than a loosened join.
+ *
+ * A break confined to one room needs nothing here — that is an ordinary room clash
+ * and `roomConflicts` already reports it.
+ */
+async function breakConflicts(conferenceId: number): Promise<Conflict[]> {
+	const rows = await db.execute<{ a: number; b: number; title: string; at: string }>(sql`
+		SELECT blk.id AS a, s.id AS b, COALESCE(blk.title, 'A break') AS title,
+			to_char(blk.starts_at AT TIME ZONE 'UTC', 'HH24:MI') AS at
+		FROM placement blk
+		JOIN placement s
+			ON s.conference_day_id = blk.conference_day_id
+			AND s.id <> blk.id
+			AND s.room_id IS NOT NULL
+			AND blk.starts_at < s.ends_at
+			AND s.starts_at < blk.ends_at
+		WHERE blk.conference_id = ${conferenceId}
+			AND s.conference_id = ${conferenceId}
+			AND blk.kind <> 'session'
+			AND blk.room_id IS NULL
+			AND blk.starts_at IS NOT NULL`);
+
+	return rows.map((r) => ({
+		kind: 'break' as const,
+		placementIds: [r.a, r.b] as [number, number],
+		detail: `${r.title} at ${r.at} covers every room`
+	}));
+}
+
 export async function conflicts(conferenceId: number): Promise<Conflict[]> {
-	const [rooms, speakers] = await Promise.all([
+	const [rooms, speakers, breaks] = await Promise.all([
 		roomConflicts(conferenceId),
-		speakerConflicts(conferenceId)
+		speakerConflicts(conferenceId),
+		breakConflicts(conferenceId)
 	]);
-	return [...rooms, ...speakers];
+	return [...rooms, ...speakers, ...breaks];
 }
 
 /** One placement of this conference's, or null. Scoping lives in the query. */
@@ -588,6 +634,120 @@ export async function setAgendaPublished(
 		.returning({ id: placementTable.id });
 
 	return rows.length;
+}
+
+export type BlockInput = {
+	dayId: number;
+	/** Null means every room — which is what a lunch break usually is. */
+	roomId: number | null;
+	startMinutes: number;
+	minutes: number;
+	title: string;
+	kind: 'block' | 'reservation';
+};
+
+export type BlockResult =
+	| { ok: true; placementId: number; endMinutes: number }
+	| { ok: false; reason: string };
+
+/**
+ * Puts a break or a reservation on the grid.
+ *
+ * An insert, not an update — the opposite of `placeSession`, and for the reason
+ * stated at the top of this file: a talk arrives with a placement row because
+ * deciding created one, while nothing anywhere creates a break. Until this
+ * existed, `kind = 'block'` was a state only a seed script could reach, which is
+ * why an agenda built through the tools was a talk floating in an empty day.
+ *
+ * The length is given rather than derived. A session takes its length from its
+ * format, and that is what stops a 30-minute talk being booked into a 15-minute
+ * hole; a break has no format, so the caller says how long lunch is.
+ *
+ * Created `confirmed`, unlike a session. The tentative state exists so one talk
+ * can sit in several candidate slots while the unique index still means something
+ * — a break has no such need, and an organizer typing "Lunch 12:30" has decided.
+ * It also keeps room-wide breaks out of a trap: `setAgendaPublished` only confirms
+ * rows that have a room, so a lunch created tentative could never be published.
+ *
+ * The day is read `FOR KEY SHARE` in the write's own transaction for the same
+ * reason `placeSession` does it (#93).
+ */
+export async function createBlock(conferenceId: number, input: BlockInput): Promise<BlockResult> {
+	const title = input.title.trim();
+	if (!title) return { ok: false, reason: 'Give the break a title' };
+	if (input.minutes <= 0) return { ok: false, reason: 'A break needs a length in minutes' };
+
+	const endMinutes = input.startMinutes + input.minutes;
+	if (input.startMinutes < DAY_STARTS_AT || input.startMinutes >= DAY_ENDS_AT) {
+		return { ok: false, reason: 'That start time is outside the conference day' };
+	}
+	if (endMinutes > DAY_ENDS_AT) {
+		return { ok: false, reason: 'That break runs past the end of the conference day' };
+	}
+
+	return db.transaction(async (tx) => {
+		const [day] = await tx
+			.select({ date: conferenceDayTable.date })
+			.from(conferenceDayTable)
+			.where(
+				and(
+					eq(conferenceDayTable.id, input.dayId),
+					eq(conferenceDayTable.conferenceId, conferenceId)
+				)
+			)
+			.limit(1)
+			.for('key share');
+		if (!day) return { ok: false, reason: 'No such day' };
+
+		if (input.roomId !== null) {
+			const [room] = await tx
+				.select({ id: roomTable.id })
+				.from(roomTable)
+				.where(and(eq(roomTable.id, input.roomId), eq(roomTable.conferenceId, conferenceId)))
+				.limit(1);
+			if (!room) return { ok: false, reason: 'No such room' };
+		}
+
+		const [created] = await tx
+			.insert(placementTable)
+			.values({
+				conferenceId,
+				kind: input.kind,
+				status: 'confirmed' as const,
+				title,
+				conferenceDayId: input.dayId,
+				roomId: input.roomId,
+				startsAt: slotInstant(day.date, input.startMinutes),
+				endsAt: slotInstant(day.date, endMinutes)
+			})
+			.returning({ id: placementTable.id });
+
+		return { ok: true, placementId: created.id, endMinutes };
+	});
+}
+
+/**
+ * Removes a break or a reservation.
+ *
+ * A real delete, where taking a talk off the grid is an update: the break's row
+ * *is* the break, and there is no tray for it to fall back into. A session
+ * placement is refused rather than deleted for the same reason — deleting one
+ * would take an accepted talk off the grid with no way back short of
+ * `backfillTray`, which is a repair, not a feature.
+ */
+export async function removeBlock(conferenceId: number, placementId: number): Promise<boolean> {
+	const deleted = await db
+		.delete(placementTable)
+		.where(
+			and(
+				eq(placementTable.id, placementId),
+				eq(placementTable.conferenceId, conferenceId),
+				ne(placementTable.kind, 'session')
+			)
+		)
+		.returning({ id: placementTable.id });
+
+	return deleted.length > 0;
 }
 
 /** One session's own status, so a single talk can be held back or released. */
