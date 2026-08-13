@@ -538,7 +538,18 @@ async function writeAnswers(
 	if (rows.length > 0) await tx.insert(submissionAnswerTable).values(rows);
 }
 
-/** The submitter first, then co-presenters in the order they were entered. */
+/**
+ * The primary speaker first, then co-presenters in the order they were entered.
+ *
+ * **Who holds the talk is settled when it is created, never by a later save.**
+ * The list rebuilt here arrives without the primary in it — the portal's draft
+ * builder drops that row on purpose — so taking the primary from whoever is
+ * saving would install them and delete the person who proposed it. That is
+ * reachable rather than theoretical (#330): a co-presenter who signs up under
+ * the address they were entered with is attached to their profile on the next
+ * portal read, and their first save would have carried the talk away from the
+ * submitter, out of their portal, and off the receipt.
+ */
 async function writeSpeakers(
 	tx: Tx,
 	submissionId: number,
@@ -546,19 +557,37 @@ async function writeSpeakers(
 	ownProfileId: number,
 	coSpeakers: CoSpeakerInput[]
 ) {
+	// Nothing to preserve on an insert, and there the caller *is* the submitter.
+	const [held] = await tx
+		.select({ speakerProfileId: submissionSpeakerTable.speakerProfileId })
+		.from(submissionSpeakerTable)
+		.where(
+			and(
+				eq(submissionSpeakerTable.submissionId, submissionId),
+				eq(submissionSpeakerTable.isPrimary, true)
+			)
+		)
+		.limit(1);
+	const primaryProfileId = held?.speakerProfileId ?? ownProfileId;
+
 	await tx
 		.delete(submissionSpeakerTable)
 		.where(eq(submissionSpeakerTable.submissionId, submissionId));
 
 	await tx
 		.insert(submissionSpeakerTable)
-		.values({ submissionId, speakerProfileId: ownProfileId, isPrimary: true, position: 0 });
+		.values({ submissionId, speakerProfileId: primaryProfileId, isPrimary: true, position: 0 });
 
+	// One row per profile. Two entries resolving to the same person — the primary
+	// listed as their own co-presenter, or the same address typed twice — would
+	// otherwise hit `submission_speaker_unique` and fail the whole save.
+	const placed = new Set([primaryProfileId]);
 	let position = 1;
 	for (const co of coSpeakers) {
 		if (!co.name.trim()) continue;
 		const profileId = await upsertCoSpeaker(tx, organizationId, co);
-		if (profileId === ownProfileId) continue;
+		if (placed.has(profileId)) continue;
+		placed.add(profileId);
 		await tx.insert(submissionSpeakerTable).values({
 			submissionId,
 			speakerProfileId: profileId,
@@ -656,7 +685,11 @@ async function refuseSave(
 		// id, and `persist` would rewrite `conferenceId` and `cfpFormId` — moving a
 		// proposal between tenants. No UI does that; the exported API allows it, and
 		// the API is what the tests legitimise.
-		const owned = await ownedSubmission(userId, options.submissionId);
+		// 'speaker' and not 'primary': being put on someone's talk is being on it,
+		// and a co-presenter fixing a sentence is the point of the field. What that
+		// used to cost is gone — `writeSpeakers` no longer lets a save decide who
+		// the primary is, so an edit can no longer end with the submitter deleted.
+		const owned = await ownedSubmission(userId, options.submissionId, 'speaker');
 		const editable =
 			owned &&
 			(owned.status === 'draft' || owned.status === 'submitted' || owned.status === 'in_review') &&
@@ -818,8 +851,23 @@ export async function saveSubmission(
 	return { ok: true, submissionId, status: options.submit ? 'submitted' : 'draft' };
 }
 
-/** One submission, only if the signed-in user is a speaker on it. */
-export async function ownedSubmission(userId: string, submissionId: number) {
+/**
+ * One submission, only if the signed-in user speaks on it — in the stated role.
+ *
+ * `'speaker'` is the shared right: a co-presenter is a real speaker on the talk
+ * (ABS-11) and may work on it. `'primary'` is the submitter's alone, and the
+ * caller has to say which it needs, because the two are one word apart and the
+ * difference only shows up in whether someone else's proposal survives.
+ *
+ * Expressed in the `where` rather than read off the row and checked afterwards:
+ * a person can hold two profiles in the same organization, so a row selected
+ * without the condition is not the row the condition would have chosen.
+ */
+export async function ownedSubmission(
+	userId: string,
+	submissionId: number,
+	as: 'speaker' | 'primary'
+) {
 	const [row] = await db
 		.select({
 			id: submissionTable.id,
@@ -832,7 +880,13 @@ export async function ownedSubmission(userId: string, submissionId: number) {
 			speakerProfileTable,
 			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
 		)
-		.where(and(eq(submissionTable.id, submissionId), eq(speakerProfileTable.userId, userId)))
+		.where(
+			and(
+				eq(submissionTable.id, submissionId),
+				eq(speakerProfileTable.userId, userId),
+				...(as === 'primary' ? [eq(submissionSpeakerTable.isPrimary, true)] : [])
+			)
+		)
 		.limit(1);
 
 	return row ?? null;
@@ -886,18 +940,22 @@ const WITHDRAWABLE = ['draft', 'submitted', 'in_review'] as const;
 export type WithdrawResult = { ok: true } | { ok: false; reason: 'not_found' | 'decided' };
 
 /**
- * The speaker takes their own proposal back.
+ * The submitter takes their own proposal back.
  *
- * Same ownership as the portal (`ownedSubmission`) and the same statuses that
- * are still editable: a decision has already been read, and those words stay.
- * The update restates the status in its `where`, so a decision landing between
- * the check and the write cannot be overwritten.
+ * The primary speaker's alone, unlike editing: a co-presenter shares the talk,
+ * not the decision to stop offering it, and there is no un-withdraw. Refused as
+ * `not_found`, the same answer a stranger gets, because "you are on this talk
+ * but not enough" is not a distinction worth publishing.
+ *
+ * The statuses are the ones still editable: a decision has already been read,
+ * and those words stay. The update restates the status in its `where`, so a
+ * decision landing between the check and the write cannot be overwritten.
  */
 export async function withdrawSubmission(
 	userId: string,
 	submissionId: number
 ): Promise<WithdrawResult> {
-	const owned = await ownedSubmission(userId, submissionId);
+	const owned = await ownedSubmission(userId, submissionId, 'primary');
 	if (!owned) return { ok: false, reason: 'not_found' };
 	if (!WITHDRAWABLE.includes(owned.status as (typeof WITHDRAWABLE)[number])) {
 		return { ok: false, reason: 'decided' };
