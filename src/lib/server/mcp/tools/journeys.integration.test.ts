@@ -320,6 +320,40 @@ describe('speaker and reviewer tools', () => {
 		expect(mine.find((row) => row.id === submissionId)?.status).toBe('in_review');
 	});
 
+	it('gives a co-presenter the same read-back, and does not hand them the talk', async () => {
+		// The read above asks `ownedSubmission` as `'speaker'`, not `'primary'`, and
+		// this is the case that tells the two apart: a co-presenter may hand a
+		// proposal in, so asking as the primary would answer `null` and drop the
+		// status back onto the derived value the read exists to replace (#331).
+		const drewPerson = seeded.people.find((person) => person.id === seeded.speakerIds[1])!;
+		const created = await call(casey, 'submit_proposal', {
+			conferenceSlug: seeded.conferenceSlug,
+			title: 'Handed in by the other speaker',
+			abstract: 'Complete enough to hand in.',
+			coSpeakers: [{ name: drewPerson.name, email: drewPerson.email }]
+		});
+		const submissionId = created.data!.submissionId as number;
+
+		// Drew's own portal read is what attaches the account to the profile Casey
+		// created for that address — the premise of everything below.
+		expect((await mySubmissions(drew.userId)).some((row) => row.id === submissionId)).toBe(true);
+
+		// Same hand-set status as above, for the same reason.
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, submissionId));
+
+		const handed = await call(drew, 'finalize_proposal', { submissionId });
+		expect(handed.isError).toBe(false);
+		expect(handed.data).toMatchObject({ status: 'in_review' });
+
+		// And the talk is still Casey's: the save no longer decides who holds it
+		// (#330), so this is the whole journey rather than the unit underneath it.
+		const caseys = await mySubmissions(casey.userId);
+		expect(caseys.find((row) => row.id === submissionId)?.isPrimary).toBe(true);
+	});
+
 	it('creates a first speaker profile from the conference, before any proposal exists', async () => {
 		// Finley has only ever reviewed, so this is the fresh-account branch #334
 		// describes without needing a new account.
