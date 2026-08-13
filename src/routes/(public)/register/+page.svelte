@@ -13,6 +13,10 @@
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { registerSchema } from './schema';
 
+	// The server action's answer. It only ever renders for a submit that happened
+	// before hydration — once superForm is live it cancels the native submit.
+	let { form: actionResult }: { form?: { message?: string } | null } = $props();
+
 	// Check for invitation code in URL
 	const invitationCode = $derived(page.url.searchParams.get('invitation'));
 
@@ -165,9 +169,12 @@
 			</div>
 		{/if}
 
-		{#if $errors._errors}
+		{#if $errors._errors || actionResult?.message}
 			<div role="alert" class="text-destructive text-sm">
-				{#each $errors._errors as error}
+				{#if actionResult?.message}
+					<p>{actionResult.message}</p>
+				{/if}
+				{#each $errors._errors ?? [] as error}
 					<p>{error}</p>
 				{/each}
 			</div>
