@@ -288,19 +288,9 @@
 			{/if}
 		</p>
 	{:else}
-		<!--
-			Long rosters (#64): keep the header in view while scrolling a tall table.
-			max-h is viewport-relative so ~100 speakers stay usable without virtualization.
-		-->
-		<div
-			class="border-border max-h-[min(70vh,40rem)] overflow-auto rounded-lg border"
-			data-testid="speakers-table"
-		>
+		<div class="border-border rounded-lg border" data-testid="speakers-table">
 			<table class="w-full min-w-[40rem] text-left text-sm">
-				<thead
-					class="border-border bg-muted sticky top-0 z-10 border-b text-xs"
-					data-testid="speakers-table-head"
-				>
+				<thead class="border-border bg-muted border-b text-xs" data-testid="speakers-table-head">
 					<tr>
 						<th class="px-3 py-2 font-medium">Speaker</th>
 						<th class="px-3 py-2 font-medium">Role</th>
