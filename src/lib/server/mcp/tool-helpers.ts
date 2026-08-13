@@ -86,6 +86,19 @@ function classifyError(toolName: string, error: unknown): { message: string; kin
  * Tools stay plain async functions returning a plain object — this wrapper owns
  * the protocol shape, so a tool never builds a CallToolResult itself.
  */
+/** Protocol-free tool list item. The MCP adapter loops this; REST will too. */
+export type AnyMcpToolDefinition = McpToolDefinition<ZodRawShapeCompat>;
+
+export function registerMcpTools(
+	server: McpServer,
+	ctx: McpContext,
+	tools: readonly AnyMcpToolDefinition[]
+): void {
+	for (const tool of tools) {
+		registerMcpTool(server, ctx, tool);
+	}
+}
+
 export function registerMcpTool<Shape extends ZodRawShapeCompat>(
 	server: McpServer,
 	ctx: McpContext,

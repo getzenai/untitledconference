@@ -4,7 +4,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { McpContext } from '../context';
-import { McpToolError, registerMcpTool } from '../tool-helpers';
+import { McpToolError, registerMcpTools, type AnyMcpToolDefinition } from '../tool-helpers';
 
 /**
  * Example MCP tools. They exist to demonstrate the pattern rather than to be
@@ -16,13 +16,16 @@ import { McpToolError, registerMcpTool } from '../tool-helpers';
  *
  * Replace these with your own domain tools.
  */
-export function registerProfileTools(server: McpServer, ctx: McpContext): void {
-	registerGetMyProfile(server, ctx);
-	registerListMyOrganizations(server, ctx);
+export function profileTools(ctx: McpContext): AnyMcpToolDefinition[] {
+	return [getMyProfile(ctx), listMyOrganizations(ctx)];
 }
 
-function registerGetMyProfile(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+export function registerProfileTools(server: McpServer, ctx: McpContext): void {
+	registerMcpTools(server, ctx, profileTools(ctx));
+}
+
+function getMyProfile(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'get_my_profile',
 		description:
 			'Get the profile of the authenticated user (the owner of the access token), ' +
@@ -54,11 +57,11 @@ function registerGetMyProfile(server: McpServer, ctx: McpContext): void {
 				activeOrganizationId: ctx.organizationId
 			};
 		}
-	});
+	};
 }
 
-function registerListMyOrganizations(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+function listMyOrganizations(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'list_my_organizations',
 		description:
 			'List the organizations the authenticated user is a member of, oldest membership first, ' +
@@ -93,5 +96,5 @@ function registerListMyOrganizations(server: McpServer, ctx: McpContext): void {
 				organizations: rows.map((row) => ({ ...row, joinedAt: row.joinedAt.toISOString() }))
 			};
 		}
-	});
+	};
 }

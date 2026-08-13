@@ -6,10 +6,9 @@
  * because an organizer who states when the event runs has already said which days
  * it has.
  */
-import { invalidRangeField, MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
+import { MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
 import { addedMessage } from '$lib/conference/structure-lines';
 import { requireOrganizer } from '$lib/server/conference/access';
-import { syncConferenceDays } from '$lib/server/conference/conference-days';
 import {
 	addFormats,
 	addRooms,
@@ -31,10 +30,9 @@ import {
 	updateTaskTemplate,
 	type TemplateInput
 } from '$lib/server/conference/task-templates';
-import { db } from '$lib/server/db';
-import { conferenceTable } from '$lib/server/db/conference/conference-schema';
+import { updateConference } from '$lib/server/conference/update-conference';
+import { setConferenceVisibility } from '$lib/server/conference/visibility';
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -126,19 +124,14 @@ export const actions: Actions = {
 	visibility: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const wantsPublished = text(await request.formData(), 'published') === 'true';
-		const next = wantsPublished ? 'published' : 'draft';
+		const result = await setConferenceVisibility(conference, wantsPublished);
 
-		if (conference.status === next) {
+		if (!result.changed) {
 			return {
 				message: wantsPublished ? 'Already published.' : 'Already a draft.',
 				section: 'visibility'
 			};
 		}
-
-		await db
-			.update(conferenceTable)
-			.set({ status: next })
-			.where(eq(conferenceTable.id, conference.id));
 
 		return {
 			message: wantsPublished
@@ -157,25 +150,27 @@ export const actions: Actions = {
 	dates: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const form = await request.formData();
-		const startsOn = optional(form, 'startsOn');
-		const endsOn = optional(form, 'endsOn');
-
-		const badField = invalidRangeField(startsOn, endsOn);
-		if (badField) return fail(400, { error: DATE_ERRORS[badField], section: 'dates' });
-
-		// One transaction: the range and the days it implies are one fact, and a
-		// stored range whose days never followed is exactly the bug being fixed.
-		const sync = await db.transaction(async (tx) => {
-			await tx
-				.update(conferenceTable)
-				.set({ startsOn, endsOn })
-				.where(eq(conferenceTable.id, conference.id));
-
-			return syncConferenceDays(conference.id, startsOn, endsOn, tx);
+		const result = await updateConference(conference.id, {
+			startsOn: optional(form, 'startsOn'),
+			endsOn: optional(form, 'endsOn')
 		});
 
+		if (!result.ok) {
+			if (result.reason === 'invalid' && result.field !== 'name') {
+				return fail(400, { error: DATE_ERRORS[result.field], section: 'dates' });
+			}
+			return fail(400, {
+				error: result.reason === 'invalid' ? result.message : DATE_ERRORS.startsOn,
+				section: 'dates'
+			});
+		}
+
 		return {
-			message: daysChangedMessage(sync.added.length, sync.removed.length, sync.keptInUse),
+			message: daysChangedMessage(
+				result.days.added.length,
+				result.days.removed.length,
+				result.days.keptInUse
+			),
 			section: 'dates'
 		};
 	},

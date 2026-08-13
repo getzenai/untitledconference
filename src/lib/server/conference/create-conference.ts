@@ -28,6 +28,8 @@ export type ConferenceDraft = {
 	slug: string;
 	startsOn: string | null;
 	endsOn: string | null;
+	/** Optional — the new-conference form does not ask; the MCP tool can. */
+	venue?: string | null;
 };
 
 export type CreateConferenceResult =
@@ -107,7 +109,8 @@ export async function createConference(
 					name: draft.name.trim(),
 					slug: draft.slug,
 					startsOn: draft.startsOn,
-					endsOn: draft.endsOn
+					endsOn: draft.endsOn,
+					venue: draft.venue?.trim() || null
 				})
 				.returning();
 

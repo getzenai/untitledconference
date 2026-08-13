@@ -14,7 +14,6 @@
 import { createConference } from '$lib/server/conference/create-conference';
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
-import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 
 export const MCP_HARNESS_EMAIL_DOMAIN = 'mcpharness.example';
@@ -162,16 +161,12 @@ export async function seedMcpHarness(suffix = ''): Promise<SeededHarness> {
 		name: MCP_HARNESS.conferenceName,
 		slug: ids.conferenceSlug,
 		startsOn: MCP_HARNESS.startsOn,
-		endsOn: MCP_HARNESS.endsOn
+		endsOn: MCP_HARNESS.endsOn,
+		venue: MCP_HARNESS.venue
 	});
 	if (!created.ok) {
 		throw new Error(`seedMcpHarness: createConference failed (${created.reason})`);
 	}
-
-	await db
-		.update(conferenceTable)
-		.set({ venue: MCP_HARNESS.venue })
-		.where(eq(conferenceTable.id, created.conference.id));
 
 	return {
 		...ids,
