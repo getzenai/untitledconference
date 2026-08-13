@@ -4,6 +4,7 @@ import { detectAiCrawler } from '$lib/server/bot-detection';
 import { needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
 import { createLogger } from '$lib/server/logger';
 import { captureException } from '$lib/server/posthog';
+import { publicPageCacheHandler } from '$lib/server/public-page-cache';
 import { applySecurityHeaders } from '$lib/server/security-headers';
 import '$lib/server/startup';
 import { type Handle, type HandleServerError } from '@sveltejs/kit';
@@ -339,6 +340,7 @@ export const handleError: HandleServerError = ({ error, status, message, event }
 // API Protection, Paraglide
 export const handle: Handle = sequence(
 	securityHeadersHandler, // Outermost, so every response below carries the headers
+	publicPageCacheHandler, // A hit here skips the database scope and auth entirely
 	databaseScopeHandler, // Before anything that queries — auth does, on every request
 	botDetectionHandler, // Reject crawlers before any auth/session work
 	populateLocalsUserHandler, // Run this first to ensure locals.user is set
