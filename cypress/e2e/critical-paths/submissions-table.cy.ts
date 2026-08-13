@@ -47,9 +47,9 @@ describe('Submissions table', () => {
 					// One track, on 'Zeta talk' only — a track filter that ignores its
 					// parameter returns all three and is caught.
 					tracks: ['Platform'],
-					// One of the three carries a handed-in review, so the still-to-review
-					// filter (#122) has something to leave out. A pile where every row is
-					// alike would let a filter that does nothing pass.
+					// One of the three carries a handed-in review so the reviews sort
+					// has something to order by. Still-to-review keeps that talk: it is
+					// still in the live pipeline (#261).
 					reviewed: ['Alpha talk']
 				}
 			})
@@ -77,11 +77,11 @@ describe('Submissions table', () => {
 	});
 
 	/**
-	 * What is left to review: submitted/in_review with no handed-in review.
+	 * What is left to review: submitted and in_review, reviews or not (#261).
 	 *
 	 * Fixture sessions are `submitted` (not accepted) so they match the live-pipeline
-	 * predicate. Both halves need a pile where some talks are reviewed and some are
-	 * not, which is why the fixture files one review. Only a real navigation can prove
+	 * predicate. The handed-in review is for the sort, not for this filter — a reviewed
+	 * talk is still to review until it is decided. Only a real navigation can prove
 	 * that the checkbox becomes a query parameter, the loader reads it, and the rows
 	 * that come back are the right ones — the unit test can only prove the control is
 	 * on the page.
@@ -107,25 +107,27 @@ describe('Submissions table', () => {
 			cy.waitForHydration();
 		});
 
-		it('filters the pile down to what nobody has reviewed', () => {
-			// Precondition: all three are on screen first, or "two rows" below would
+		it('filters the pile to the live pipeline, including talks already being reviewed', () => {
+			// Precondition: all three are on screen first, or the count below would
 			// pass on a page that simply failed to load the third.
 			cy.get('tbody tr').should('have.length', 3);
 
 			cy.get('[data-testid="filter-needs-review"]').check();
 			cy.url().should('include', 'needsReview=on');
-			cy.get('tbody tr').should('have.length', 2);
-			cy.contains('tbody tr', 'Alpha talk').should('not.exist');
+			// All three are submitted, so all three stay — including Alpha, which
+			// already has a review. The filter is the pipeline, not "zero reviews".
+			cy.get('tbody tr').should('have.length', 3);
+			cy.contains('tbody tr', 'Alpha talk').should('exist');
 
 			// The count in the header is the same question asked a second way, and the
 			// two have to agree — they are separate queries over one expression.
-			cy.get('[data-testid="unreviewed-count"]').should('contain.text', '2 unreviewed');
+			cy.get('[data-testid="unreviewed-count"]').should('contain.text', '3 still to review');
 		});
 
 		it('takes the same filter from the count in the header', () => {
 			cy.get('[data-testid="unreviewed-count"]').click();
 			cy.url().should('include', 'needsReview=on');
-			cy.get('tbody tr').should('have.length', 2);
+			cy.get('tbody tr').should('have.length', 3);
 			cy.get('[data-testid="filter-needs-review"]').should('be.checked');
 		});
 

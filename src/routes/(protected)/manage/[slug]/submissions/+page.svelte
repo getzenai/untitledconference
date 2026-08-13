@@ -235,16 +235,18 @@
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Submissions</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
-				{data.counts.total} total · {data.counts.undecided} awaiting a decision ·
+				{data.counts.total} total ·
 				<!-- The number and the way to act on it are the same thing (#122). Reading
-				     "37 unreviewed" and then having to build the filter by hand is the gap
-				     this issue is about; the count is the shortest route to the pile. -->
+				     "37 still to review" and then having to build the filter by hand is the
+				     gap that issue is about; the count is the shortest route to the pile.
+				     After #261 this is the live pipeline, same set as "awaiting a decision"
+				     used to be — so that second number is gone rather than printed twice. -->
 				<a
 					href="{base}/submissions?needsReview=on"
 					class="hover:text-foreground underline underline-offset-4"
 					data-testid="unreviewed-count"
 				>
-					{data.counts.unreviewed} unreviewed
+					{data.counts.unreviewed} still to review
 				</a>
 				{#if filtered}
 					<!-- The filter's own count, not the page's: "12 shown" under a filter that
