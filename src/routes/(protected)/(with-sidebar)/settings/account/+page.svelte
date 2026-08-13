@@ -91,6 +91,12 @@
 		<p class="text-muted-foreground mt-2 text-sm">
 			Review your profile information and update your password to keep your account secure.
 		</p>
+		<p class="text-muted-foreground mt-1 text-sm">
+			Looking for your public speaker profile — photo, bio, links? <a
+				href="/portal/profile"
+				class="text-foreground underline underline-offset-4">It lives in the speaker portal</a
+			>.
+		</p>
 	</div>
 
 	<Card>

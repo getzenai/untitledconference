@@ -12,5 +12,5 @@ import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	// `(protected)` has already redirected anyone without a session.
-	return { navAccess: await navAccess(locals.user!.id) };
+	return { navAccess: await navAccess(locals.user!.id, locals.user!.email ?? null) };
 };

@@ -28,6 +28,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 		// The admin chrome renders the same AppSidebar, so it owes it the same data
 		// (#239). A platform admin is not automatically an organizer: the flags are
 		// their own relations, and `NavAdmin` is what carries the admin links.
-		navAccess: await navAccess(user.id)
+		navAccess: await navAccess(user.id, user.email ?? null)
 	};
 };

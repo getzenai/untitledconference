@@ -27,8 +27,8 @@
 import type { NavAccess } from '$lib/conference/nav-access';
 import { db } from '$lib/server/db';
 import { member } from '$lib/server/db/auth-schema';
-import { membershipTable } from '$lib/server/db/conference/conference-schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { membershipTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 
 /** Better Auth's org-wide roles that imply organizer rights. Mirrors `access.ts`. */
 const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
@@ -38,28 +38,51 @@ const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
  * layout runs this on every signed-in navigation, so it may not walk a user's
  * memberships.
  */
-export async function navAccess(userId: string): Promise<NavAccess> {
-	const [orgSeat] = await db
-		.select({ id: member.id })
-		.from(member)
-		.where(and(eq(member.userId, userId), inArray(member.role, ORG_WIDE_ORGANIZER_ROLES)))
-		.limit(1);
-
-	const seats = await db
-		.selectDistinct({ role: membershipTable.role })
-		.from(membershipTable)
-		.where(
-			and(
-				eq(membershipTable.userId, userId),
-				inArray(membershipTable.role, ['organizer', 'reviewer'])
+export async function navAccess(userId: string, email: string | null): Promise<NavAccess> {
+	// One `Promise.all`, not three awaits: the driver pipelines concurrent
+	// queries onto the single per-request connection, so this costs one
+	// database roundtrip instead of three — measured on this exact setup
+	// while chasing the public pages' latency.
+	const [[orgSeat], seats, [profile]] = await Promise.all([
+		db
+			.select({ id: member.id })
+			.from(member)
+			.where(and(eq(member.userId, userId), inArray(member.role, ORG_WIDE_ORGANIZER_ROLES)))
+			.limit(1),
+		db
+			.selectDistinct({ role: membershipTable.role })
+			.from(membershipTable)
+			.where(
+				and(
+					eq(membershipTable.userId, userId),
+					inArray(membershipTable.role, ['organizer', 'reviewer'])
+				)
+			),
+		// The email half mirrors `claimProfilesForAccount`: a profile an organizer
+		// created for this address is already this person's, the claim just has not
+		// run yet because they never opened the portal — exactly who the menu entry
+		// is for. An existence check, not the claim itself: writing on every
+		// navigation is not this function's business.
+		db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				email
+					? or(
+							eq(speakerProfileTable.userId, userId),
+							and(isNull(speakerProfileTable.userId), eq(speakerProfileTable.email, email))
+						)
+					: eq(speakerProfileTable.userId, userId)
 			)
-		);
+			.limit(1)
+	]);
 
 	const orgWide = Boolean(orgSeat);
 
 	return {
 		conferences: orgWide || seats.some((s) => s.role === 'organizer'),
 		contacts: orgWide,
-		reviewing: seats.some((s) => s.role === 'reviewer')
+		reviewing: seats.some((s) => s.role === 'reviewer'),
+		speakerProfile: Boolean(profile)
 	};
 }

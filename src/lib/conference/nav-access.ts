@@ -35,6 +35,15 @@ export type NavAccess = {
 	contacts: boolean;
 	/** `/review`. True with a reviewer membership on any conference or round. */
 	reviewing: boolean;
+	/**
+	 * `/portal/profile`, as the "Your speaker profile" entry in the account menu
+	 * (#248) rather than a sidebar destination. True when a speaker profile
+	 * exists for this account — claimed, or still unclaimed but matching the
+	 * account's email, the same match `claimProfilesForAccount` performs when
+	 * the portal is opened. Unlike Speaking this is gated: the page is an empty
+	 * shell for anyone an organizer never named as a speaker.
+	 */
+	speakerProfile: boolean;
 };
 
 /** A destination that is only shown when its flag is set; no flag means always shown. */

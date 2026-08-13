@@ -103,6 +103,6 @@
 		<NavSecondary items={data.navSecondary} class="mt-auto" />
 	</Sidebar.Content>
 	<Sidebar.Footer>
-		<NavUser {user} />
+		<NavUser {user} speakerProfile={navAccess.speakerProfile} />
 	</Sidebar.Footer>
 </Sidebar.Root>
