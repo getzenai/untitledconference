@@ -56,12 +56,6 @@ describe('isCacheablePublicRequest', () => {
 
 describe('publicPageCacheKey', () => {
 	it('embeds the exact locale Paraglide resolves for the request', () => {
-		// Today Paraglide's `url` strategy resolves every SSR request to the base
-		// locale before `preferredLanguage` is consulted, so this is constant —
-		// but the key derives it from the same function the middleware uses, so
-		// if the strategy ever starts honoring Accept-Language on the server,
-		// the cache splits by language on its own instead of serving one
-		// visitor's language to everyone.
 		const url = new URL('https://example.com/c/my-conf/agenda');
 		const german = publicPageCacheKey(
 			url,
@@ -72,6 +66,7 @@ describe('publicPageCacheKey', () => {
 				new Request(url, { headers: { 'accept-language': 'de-DE,de;q=0.9' } })
 			)
 		);
+		expect(new URL(german.url).searchParams.get('__rendered_locale')).toBe('de');
 	});
 
 	it('keeps the original query string in the key', () => {

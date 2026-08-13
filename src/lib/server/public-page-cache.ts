@@ -46,14 +46,10 @@
  * page in ~50 ms instead of ~3 s. The Cache API is per-colo, so the first
  * visitor in each region still pays full price.
  *
- * The locale rides in the cache key. Today that is a constant: Paraglide's
- * `url` strategy resolves every server request to the base locale before
- * `preferredLanguage` is consulted, so SSR always renders English and the
- * client localizes after hydration. The key still derives the locale from the
- * same function the middleware uses, because Cloudflare's Cache API ignores
- * `Vary` — if the strategy ever starts honoring `Accept-Language` on the
- * server, the cache splits by language on its own instead of serving one
- * visitor's language to everyone.
+ * The locale rides in the cache key. Unprefixed routes honor Accept-Language
+ * (#280); `/de/...` stays German. The key derives the locale from the same
+ * function the middleware uses, because Cloudflare's Cache API ignores `Vary`
+ * — two visitors with different languages must not share a cached page.
  */
 
 import { extractLocaleFromRequest } from '$lib/paraglide/runtime';
