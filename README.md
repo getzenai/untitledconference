@@ -20,7 +20,7 @@ Live: **[untitledconference.com](https://untitledconference.com)**
 
 ### Two interfaces most conference tools do not have
 
-**An MCP server** at `/api/v1/mcp`, so an AI agent can work against your data with the same permissions as the person who authorised it. It speaks streamable HTTP and carries a full OAuth 2.1 provider — discovery under `/.well-known`, PKCE, a consent screen, JWKS-verified tokens — which means you connect Claude or any other MCP client by URL and approve it in the browser, with no key to paste anywhere. Tools today: `get_my_profile`, `list_my_organizations`.
+**An MCP server** at `/api/v1/mcp`, so an AI agent can work against your data with the same permissions as the person who authorised it. It speaks streamable HTTP and carries a full OAuth 2.1 provider — discovery under `/.well-known`, PKCE, a consent screen, JWKS-verified tokens — which means you connect Claude or any other MCP client by URL and approve it in the browser, with no key to paste anywhere. Tools today: `list_my_conferences`, `list_submissions`, `get_submission`, `get_agenda`, `decide_submissions`, plus `get_my_profile` and `list_my_organizations`. The conference tools go through the same `requireOrganizer` check the routes do, so an agent reaches exactly what its user reaches.
 
 **A REST API** under `/api/v1`. Which directory an endpoint lives in decides its authentication: `public/` is open (`public/health` is the uptime probe), `protected/` requires a session and is rejected centrally before the handler runs, `test/` answers only where `ENABLE_TEST_ENDPOINTS=true`. Adding an endpoint to the right tier is the whole configuration.
 
