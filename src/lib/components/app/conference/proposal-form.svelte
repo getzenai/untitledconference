@@ -276,7 +276,7 @@
 			{#each shown as field (field.id)}
 				<label class="block text-sm">
 					<span class="text-muted-foreground text-xs">
-						{field.label}{#if field.required}<span class="text-status-bad"> *</span>{/if}
+						{field.label}{#if field.required}<span class="text-status-bad">{' *'}</span>{/if}
 					</span>
 
 					{#if field.kind === 'long_text'}

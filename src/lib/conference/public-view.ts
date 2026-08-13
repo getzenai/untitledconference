@@ -151,6 +151,18 @@ export function buildView(conference: PublicConference): ConferenceView {
 	};
 }
 
+/**
+ * The first day that actually has a session, else the first calendar day.
+ *
+ * The public agenda (and itinerary) used to open on `days[0]`. AES 2025's first
+ * day is empty by construction — the talks start on Thursday — so "Explore a
+ * live conference → See the agenda" landed on the goose empty state.
+ */
+export function firstScheduledDayIndex(view: ConferenceView): number {
+	const i = view.conference.days.findIndex((d) => (view.sessionsByDay.get(d.id) ?? []).length > 0);
+	return i === -1 ? 0 : i;
+}
+
 /** Initials for a speaker with no headshot — EMB-12's graceful degradation. */
 export const initials = (name: string) =>
 	name

@@ -152,4 +152,35 @@ describe('the proposal form', () => {
 		// And the minutes stay in the label the submitter reads.
 		expect(html).toContain('Talk (30 min)');
 	});
+
+	it('keeps a space before the required marker on a custom question', () => {
+		// Svelte trims a text node that opens a block, so `{#if required} *</span>`
+		// used to render as "know?*". An expression keeps the space.
+		const html = render(ProposalForm, {
+			props: {
+				fields: [
+					{
+						id: 9,
+						label: 'What should the audience already know?',
+						kind: 'long_text',
+						required: true,
+						position: 0,
+						options: null,
+						conditionSource: null,
+						conditionFieldId: null,
+						conditionValue: null
+					}
+				],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: true
+			}
+		}).body;
+
+		expect(html).toContain('What should the audience already know?');
+		// The space lives in the span: a text node opening `{#if}` would have been trimmed.
+		expect(html).toMatch(/already know\?<!--[^>]*--><span class="text-status-bad"> \*</);
+	});
 });

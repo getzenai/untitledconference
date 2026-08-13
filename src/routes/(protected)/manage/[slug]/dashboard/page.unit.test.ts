@@ -204,6 +204,41 @@ describe('dashboard metrics', () => {
 		expect(tinted[0]).toContain('/manage/test-conf/content');
 	});
 
+	it('makes each speaker-task row a way into the task', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					dashboard: {
+						...emptyDashboard,
+						tasks: {
+							open: 1,
+							overdue: 1,
+							dueSoon: 0,
+							items: [
+								{
+									id: 42,
+									title: 'Confirm participation',
+									speaker: 'Priya Raman',
+									dueOn: new Date('2027-04-01T00:00:00Z'),
+									overdue: true
+								}
+							]
+						},
+						reviews: { assigned: 0, submitted: 0, outstanding: 0, items: [] }
+					}
+				} as unknown as PageData,
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('href="/manage/test-conf/content/tasks/42"');
+		expect(body).toContain('Confirm participation');
+	});
+
 	it('drops the tint once nothing is overdue', () => {
 		const body = render(Page, {
 			props: {

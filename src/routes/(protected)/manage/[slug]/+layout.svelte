@@ -9,7 +9,6 @@
 	import { page } from '$app/state';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
 	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
-	import { Button } from '$lib/components/ui/button';
 
 	let { data, children } = $props();
 
@@ -195,17 +194,15 @@
 				the organizer could only ask from one screen. One control in the rail
 				answers it from all of them, and there is nothing left to keep in sync.
 			-->
-			<Button
+			<a
 				href="/c/{data.conference.slug}"
 				target="_blank"
 				rel="noopener"
-				variant="outline"
-				size="sm"
-				class="mb-3 w-full"
 				data-testid="view-public-site"
+				class="text-muted-foreground hover:text-foreground block text-xs underline underline-offset-4"
 			>
 				View the public site
-			</Button>
+			</a>
 			<a
 				href="/home"
 				data-testid="manage-home-link"
@@ -214,8 +211,11 @@
 				Back to home
 			</a>
 			<!-- Logout only here: Home is already above as manage-home-link. -->
-			<ShellAccountLinks showHome={false} class="pt-1" />
-			<div class="pt-1"><ModeToggle /></div>
+			<ShellAccountLinks showHome={false} />
+			<div class="flex items-center justify-between">
+				<span class="text-muted-foreground text-xs">Theme</span>
+				<ModeToggle />
+			</div>
 		</div>
 	</aside>
 

@@ -598,10 +598,14 @@
 				<ul class="space-y-2 text-sm">
 					{#each d.tasks.items as item (item.id)}
 						<li class="flex items-baseline justify-between gap-2">
-							<span class="line-clamp-2 min-w-0" title="{item.title} · {item.speaker}">
+							<a
+								class="line-clamp-2 min-w-0 hover:underline"
+								href="{base}/content/tasks/{item.id}"
+								title="{item.title} · {item.speaker}"
+							>
 								{item.title}
 								<span class="text-muted-foreground">· {item.speaker}</span>
-							</span>
+							</a>
 							<span
 								class="shrink-0 text-xs tabular-nums {item.overdue
 									? 'text-status-bad font-medium'

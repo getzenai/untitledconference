@@ -50,7 +50,7 @@
 		{/if}
 
 		<div class="flex items-center gap-1.5 sm:gap-2">
-			<ModeToggle class="hidden sm:inline-flex" />
+			<ModeToggle />
 			{#if actions}
 				{@render actions()}
 			{/if}
