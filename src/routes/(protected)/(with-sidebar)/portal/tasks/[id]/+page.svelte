@@ -10,7 +10,6 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Loader2 } from 'lucide-svelte';
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
 
@@ -38,30 +37,6 @@
 			}
 		};
 	};
-
-	// The actual upload, separate from the other forms so its button can say what
-	// it is doing instead of silently sitting disabled next to the same label.
-	let uploading = $state(false);
-	/** The file picked for this task's upload, shown before the click. */
-	let picked: { name: string; size: number } | null = $state(null);
-
-	const submitUpload = () => {
-		uploading = true;
-		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
-			try {
-				await update();
-			} finally {
-				uploading = false;
-				busy = false;
-			}
-		};
-	};
-
-	const humanSize = (bytes: number) =>
-		bytes >= 1024 * 1024
-			? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-			: `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 	const stamp = (value: Date | string) =>
 		new Date(value).toLocaleString('en-GB', {
@@ -246,7 +221,7 @@
 				method="POST"
 				action="?/upload"
 				enctype="multipart/form-data"
-				use:enhance={submitUpload}
+				use:enhance={submitting}
 				class="mt-3 flex flex-wrap items-center gap-3"
 			>
 				<input
@@ -254,31 +229,13 @@
 					name="file"
 					accept={UPLOAD_ACCEPT}
 					required
-					data-testid="task-file-input"
-					onchange={(e) => {
-						const file = e.currentTarget.files?.[0] ?? null;
-						picked = file ? { name: file.name, size: file.size } : null;
-					}}
 					class="file:border-input file:bg-background text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-1.5 file:text-sm"
 				/>
-				<Button type="submit" disabled={busy || uploading} data-testid="task-upload-button">
-					{#if uploading}
-						<Loader2 class="h-4 w-4 animate-spin" />
-						Uploading…
-					{:else}
-						Upload
-					{/if}
-				</Button>
+				<Button type="submit" disabled={busy}>Upload</Button>
 				<span class="text-muted-foreground text-sm"
 					>PDF, image, slides or document, up to {megabytes} MB.</span
 				>
 			</form>
-			{#if picked}
-				<p class="mt-2 text-sm">
-					<span class="font-medium">{picked.name}</span>
-					<span class="text-muted-foreground"> · {humanSize(picked.size)}</span>
-				</p>
-			{/if}
 
 			{#if form?.uploadError}
 				<p class="text-status-bad mt-2 text-sm">{form.uploadError}</p>

@@ -58,17 +58,6 @@ export default defineConfig({
 				return await import('./src/lib/server/db/auth-schema');
 			}
 
-			// Same lazy-load reason as `loadSchema`: the conference schema pulls in
-			// drizzle table definitions for the whole domain, which this Node config
-			// process has no reason to compose up front. Loaded only for the upload
-			// fixture task that touches them.
-			async function loadConferenceSchema() {
-				return await import('./src/lib/server/db/conference/conference-schema');
-			}
-			async function loadContentSchema() {
-				return await import('./src/lib/server/db/conference/content-schema');
-			}
-
 			on('task', {
 				/**
 				 * Delete every user whose email starts with the E2E prefix. Sessions,
@@ -145,53 +134,6 @@ export default defineConfig({
 						console.error('[Cypress] pushDatabaseSchema failed:', error);
 						return { success: false, error: String(error) };
 					}
-				},
-
-				/**
-				 * The speaker-side upload fixture for #246: a conference, a speaker
-				 * profile owned by the user, and a `file_request` task assigned to
-				 * them — the smallest graph the task page's load can resolve. The
-				 * feature under test is the upload affordance, not task creation, so
-				 * this skips the organizer UI rather than walking it.
-				 */
-				async createSpeakerUploadTask(userId: string) {
-					const { member } = await loadSchema();
-					const { conferenceTable, speakerProfileTable } = await loadConferenceSchema();
-					const { taskTable } = await loadContentSchema();
-
-					const [seat] = await db
-						.select({ organizationId: member.organizationId })
-						.from(member)
-						.where(eq(member.userId, userId))
-						.limit(1);
-					if (!seat) throw new Error(`createSpeakerUploadTask: user ${userId} has no org`);
-
-					const slug = `upload-fixture-${Date.now()}`;
-					const [conf] = await db
-						.insert(conferenceTable)
-						.values({ organizationId: seat.organizationId, name: 'Upload fixture', slug })
-						.returning({ id: conferenceTable.id });
-					const [spk] = await db
-						.insert(speakerProfileTable)
-						.values({
-							organizationId: seat.organizationId,
-							userId,
-							name: 'Fixture Speaker',
-							sortName: 'Speaker'
-						})
-						.returning({ id: speakerProfileTable.id });
-					const [task] = await db
-						.insert(taskTable)
-						.values({
-							conferenceId: conf.id,
-							speakerProfileId: spk.id,
-							title: 'Upload the slide deck',
-							kind: 'file_request',
-							status: 'open'
-						})
-						.returning({ id: taskTable.id });
-
-					return { taskId: task.id, url: `/portal/tasks/${task.id}` };
 				},
 
 				/**
