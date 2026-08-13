@@ -35,7 +35,12 @@ import {
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
-import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	formFieldTable,
+	submissionAnswerTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	membershipTable,
@@ -478,6 +483,11 @@ export type ReviewerSubmission = {
 	/** Assigned peers who have not filed yet — a count, never their answers. */
 	peersPending: number;
 	peersWithheld: boolean;
+	/**
+	 * Custom CFP answers, in form order. Title / abstract / takeaway already sit
+	 * on the page; these are the extra questions the reviewer was scoring without.
+	 */
+	answers: { label: string; kind: string; value: string | null }[];
 };
 
 /**
@@ -498,10 +508,17 @@ export async function reviewerSubmission(
 	const submission = await submissionFor(conference.id, submissionId);
 	if (!submission) return null;
 
-	const [criteria, speakers, everyReview] = await Promise.all([
+	const [criteria, speakers, everyReview, answers] = await Promise.all([
 		criteriaWithOwnAnswers(own.roundId, own.reviewId),
 		own.anonymized ? Promise.resolve([]) : speakersOn(submissionId),
-		reviewsOn(conference.id, [submissionId])
+		reviewsOn(conference.id, [submissionId]),
+		// Custom answers are the organizer's extra questions — "Kurzbio", "Why you?" —
+		// and they name the speaker as reliably as the speakers list. The same
+		// `own.anonymized` branch that skips speakers must skip them too. Dropping
+		// every answer is honest: a field-type heuristic would still leak a name
+		// typed into a select or a boolean's label, and a reviewer in a blind round
+		// is not meant to score the person.
+		own.anonymized ? Promise.resolve([]) : answersOn(submissionId)
 	]);
 
 	const visible = canSeePeerReviews(
@@ -526,8 +543,23 @@ export async function reviewerSubmission(
 		criteria,
 		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
 		peersPending,
-		peersWithheld: !visible && peers.length > 0
+		peersWithheld: !visible && peers.length > 0,
+		answers
 	};
+}
+
+/** The configurable CFP answers, in the order the form asked them. */
+function answersOn(submissionId: number) {
+	return db
+		.select({
+			label: formFieldTable.label,
+			kind: formFieldTable.kind,
+			value: submissionAnswerTable.value
+		})
+		.from(submissionAnswerTable)
+		.innerJoin(formFieldTable, eq(formFieldTable.id, submissionAnswerTable.formFieldId))
+		.where(eq(submissionAnswerTable.submissionId, submissionId))
+		.orderBy(asc(formFieldTable.position), asc(formFieldTable.id));
 }
 
 /**
