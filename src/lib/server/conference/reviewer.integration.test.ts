@@ -237,7 +237,7 @@ describe('the queue', () => {
 				(q) => q.submissionId === mine
 			);
 
-			expect(row?.rounds).toEqual(['Round 1', 'Blind round']);
+			expect(row?.rounds.map((r) => r.name)).toEqual(['Round 1', 'Blind round']);
 		});
 
 		it('stays outstanding while either round is unfiled', async () => {
@@ -688,6 +688,80 @@ describe('the round’s window', () => {
 		expect(await saveReview(now, ME, mine, answers())).toEqual({
 			ok: false,
 			reason: 'round_not_open'
+		});
+	});
+
+	/**
+	 * #294. Two OPEN rounds are a TIE under `byRoundWindowPriority`, and a stable sort
+	 * keeps the query order — so the priority rule can only ever answer the lower
+	 * position. Until the URL could name a round, the second scorecard had no address:
+	 * the queue said "To do" on it and every link led back to the first.
+	 */
+	describe('two rounds that both want work', () => {
+		/** Both rounds open, so the priority comparison is a tie and position decides. */
+		async function bothOpen() {
+			await windowIs(new Date(Date.now() - DAY), new Date(Date.now() + DAY));
+			const second = await secondRoundOn(mine, {
+				opensAt: new Date(Date.now() - DAY),
+				closesAt: new Date(Date.now() + DAY)
+			});
+			return { second, now: await conferenceNow() };
+		}
+
+		it('opens the round the URL names, not the one the tie picks', async () => {
+			const { second, now } = await bothOpen();
+
+			// Without a round in the URL nothing changes: the tie still goes to round 1.
+			expect((await reviewerSubmission(now, ME, mine))?.round.id).toBe(roundId);
+			// With one, the second scorecard is reachable at last.
+			expect((await reviewerSubmission(now, ME, mine, second))?.round.id).toBe(second);
+		});
+
+		it('lists every round I hold it in, in board order, so the page can link them', async () => {
+			const { second, now } = await bothOpen();
+
+			expect((await reviewerSubmission(now, ME, mine))?.rounds.map((r) => r.id)).toEqual([
+				roundId,
+				second
+			]);
+		});
+
+		it('files into the round the POST names', async () => {
+			const { second, now } = await bothOpen();
+
+			// Comment only: the scorecard criteria hang off the round, and round 2 has
+			// none — what is under test is where the row lands, not what it holds.
+			const draft = { answers: {}, comment: 'Second look says yes', submit: true };
+			expect(await saveReview(now, ME, mine, draft, second)).toEqual({ ok: true });
+
+			const filed = await db
+				.select({ round: reviewTable.reviewRoundId, comment: reviewTable.comment })
+				.from(reviewTable)
+				.where(and(eq(reviewTable.submissionId, mine), eq(reviewTable.reviewerUserId, ME)));
+			// The named round has the comment and the other one is untouched: writing
+			// into the wrong round is exactly the failure a shared URL used to cause.
+			expect(filed.find((r) => r.round === second)?.comment).toBe('Second look says yes');
+			expect(filed.find((r) => r.round === roundId)?.comment).toBeNull();
+		});
+
+		it('refuses a round id I hold nothing in — a query string is not a permission', async () => {
+			const { second, now } = await bothOpen();
+			// A real round of this conference that I am simply not assigned in.
+			const [plan] = await db
+				.select()
+				.from(evaluationPlanTable)
+				.where(eq(evaluationPlanTable.conferenceId, conference.id));
+			const [theirs] = await db
+				.insert(reviewRoundTable)
+				.values({ evaluationPlanId: plan.id, name: 'Not mine', position: 3 })
+				.returning();
+
+			expect(await reviewerSubmission(now, ME, mine, theirs.id)).toBeNull();
+			expect(
+				await saveReview(now, ME, mine, { answers: {}, comment: 'Sneaky', submit: true }, theirs.id)
+			).toEqual({ ok: false, reason: 'not_assigned' });
+			// And the round I do hold still works, so the refusal is about the id.
+			expect((await reviewerSubmission(now, ME, mine, second))?.round.id).toBe(second);
 		});
 	});
 

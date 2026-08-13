@@ -47,6 +47,10 @@ function page(
 		peers?: Peer[];
 		criteria?: Criterion[];
 		answers?: { label: string; kind: string; value: string | null }[];
+		/** Every round this reviewer holds the talk in; one is the ordinary case (#294). */
+		rounds?: { id: number; name: string; window: ReturnType<typeof roundWindow> }[];
+		/** Which of them this scorecard is. Defaults to the first. */
+		round?: { id: number; name: string };
 		form?: ActionData;
 		/** The round's window (ABS-01); no dates means a round that is simply open. */
 		window?: ReturnType<typeof roundWindow>;
@@ -55,6 +59,8 @@ function page(
 	const submissionStatus = opts.submissionStatus ?? 'in_review';
 	const peers = opts.peers ?? [];
 	const window = opts.window ?? roundWindow(null, null);
+	const rounds = opts.rounds ?? [{ id: 3, name: 'Round 1', window }];
+	const round = opts.round ?? { id: rounds[0].id, name: rounds[0].name };
 	return render(Page, {
 		props: {
 			data: {
@@ -75,6 +81,8 @@ function page(
 					sessionFormat: null,
 					speakers: [],
 					anonymized: false,
+					round,
+					rounds,
 					window,
 					own: { reviewId: 42, status, comment: null },
 					criteria: opts.criteria ?? [],
@@ -313,5 +321,40 @@ describe('form messages', () => {
 		expect(body).toContain('border-status-good');
 		expect(body).toContain('role="status"');
 		expect(body).not.toContain('border-status-bad');
+	});
+});
+
+/**
+ * #294. The scorecard is per round, and the URL is the only thing that says which
+ * round this one is. Two open rounds tie in the priority rule, so without a link
+ * that names the round the reviewer holding the talk in both can never reach the
+ * second form — and a POST that does not carry the round writes into the first.
+ */
+describe('a talk I hold in two rounds', () => {
+	const open = roundWindow(null, null);
+	const both = [
+		{ id: 3, name: 'Screening', window: open },
+		{ id: 4, name: 'Final', window: open }
+	];
+
+	it('links the other round and marks the one being read', () => {
+		const html = page('assigned', { rounds: both, round: { id: 4, name: 'Final' } });
+
+		expect(html).toContain('href="?round=3"');
+		// The round in the address bar is not a link back to itself.
+		expect(html).not.toContain('href="?round=4"');
+		expect(html).toContain('aria-current="page"');
+	});
+
+	it('posts the round it was drawn for, so the answers land in it', () => {
+		const html = page('assigned', { rounds: both, round: { id: 4, name: 'Final' } });
+
+		// `?/save` resolves against the path: without this field the query string is
+		// gone by the time the action runs.
+		expect(html).toContain('name="roundId" value="4"');
+	});
+
+	it('draws no switcher for a single round — there is nothing to switch to', () => {
+		expect(page('assigned')).not.toContain('?round=');
 	});
 });

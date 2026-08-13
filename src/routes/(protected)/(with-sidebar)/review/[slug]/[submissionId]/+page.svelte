@@ -83,6 +83,32 @@
 				.join(' · ')}
 		</p>
 
+		<!-- Two rounds are two scorecards, and the URL alone decides which one this is.
+		     Without these links the round the priority rule does not pick is
+		     unreachable: both open is a tie, and the tie always goes to the lower
+		     position (#294). -->
+		{#if s.rounds.length > 1}
+			<nav class="mt-3 flex flex-wrap items-center gap-1.5 text-xs" aria-label="Review rounds">
+				<span class="text-muted-foreground">Round:</span>
+				{#each s.rounds as round (round.id)}
+					{#if round.id === s.round.id}
+						<span
+							class="border-border bg-muted rounded-md border px-2 py-0.5 font-medium"
+							aria-current="page">{round.name}</span
+						>
+					{:else}
+						<a
+							href="?round={round.id}"
+							data-testid="round-link-{round.id}"
+							class="border-border hover:bg-muted rounded-md border px-2 py-0.5 underline-offset-4 hover:underline"
+						>
+							{round.name}
+						</a>
+					{/if}
+				{/each}
+			</nav>
+		{/if}
+
 		{#if s.abstract}
 			<p class="mt-4 text-sm whitespace-pre-line">{s.abstract}</p>
 		{/if}
@@ -186,6 +212,9 @@
 		use:enhance={submitting}
 		class="border-border bg-card h-fit space-y-3 rounded-lg border p-4"
 	>
+		<!-- `?/save` resolves against the path, so the `?round=` the reader is on does
+		     not survive the POST. The body carries it instead (#294). -->
+		<input type="hidden" name="roundId" value={s.round.id} />
 		<div class="flex items-center justify-between">
 			<h2 class="text-sm font-semibold">My review</h2>
 			<StatusBadge

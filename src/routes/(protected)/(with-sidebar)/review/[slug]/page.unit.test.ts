@@ -17,7 +17,7 @@ const row = (
 	submissionId: number,
 	title: string,
 	reviewsSubmitted: number,
-	rounds: string[] = ['Round 1'],
+	rounds: { id: number; name: string }[] = [{ id: 1, name: 'Round 1' }],
 	window = roundWindow(null, null)
 ) => ({
 	submissionId,
@@ -119,9 +119,16 @@ describe('the review queue sorts from its column headers', () => {
 
 describe('a submission held in more than one round', () => {
 	it('names the rounds on the row, so one filed review does not look like done', () => {
-		const body = renderQueue([row(1, 'Held twice', 0, ['Round 1', 'Blind round'])]);
+		const body = renderQueue([
+			row(1, 'Held twice', 0, [
+				{ id: 5, name: 'Round 1' },
+				{ id: 6, name: 'Blind round' }
+			])
+		]);
 
-		expect(body).toContain('Round 1 · Blind round');
+		expect(body).toContain('Round 1');
+		expect(body).toContain('Blind round');
+		expect(body).toContain('aria-hidden="true">\u00a0·\u00a0<');
 	});
 
 	it('stays quiet when there is only one round to name', () => {
@@ -183,7 +190,13 @@ describe('the window of the rounds a row sits in', () => {
 
 	it('replaces To do with the window while the review is outstanding', () => {
 		const closed = renderQueue([
-			row(1, 'A talk', 0, ['Round 1'], roundWindow(null, new Date(now.getTime() - day), now))
+			row(
+				1,
+				'A talk',
+				0,
+				[{ id: 1, name: 'Round 1' }],
+				roundWindow(null, new Date(now.getTime() - day), now)
+			)
 		]);
 
 		expect(closed).toContain('Closed');
@@ -194,7 +207,7 @@ describe('the window of the rounds a row sits in', () => {
 				2,
 				'Another talk',
 				0,
-				['Round 1'],
+				[{ id: 1, name: 'Round 1' }],
 				roundWindow(new Date(now.getTime() + 2 * day), null, now)
 			)
 		]);
@@ -206,7 +219,13 @@ describe('the window of the rounds a row sits in', () => {
 	it('keeps a filed review reading as Reviewed after the round closes', () => {
 		const body = renderQueue([
 			{
-				...row(1, 'A talk', 1, ['Round 1'], roundWindow(null, new Date(now.getTime() - day), now)),
+				...row(
+					1,
+					'A talk',
+					1,
+					[{ id: 1, name: 'Round 1' }],
+					roundWindow(null, new Date(now.getTime() - day), now)
+				),
 				ownReviewSubmitted: true
 			}
 		]);
@@ -217,5 +236,34 @@ describe('the window of the rounds a row sits in', () => {
 
 	it('says To do while the round is running', () => {
 		expect(renderQueue([row(1, 'A talk', 0)])).toContain('To do');
+	});
+});
+
+/**
+ * #294. One row per submission, so the row's own link can only lead to one round —
+ * and when two rounds are open, the priority rule behind that link always picks the
+ * earlier one. The round names were already printed here; making each of them the
+ * link is what gives the later scorecard an address.
+ */
+describe('a talk I hold in two rounds', () => {
+	const twoRounds = () =>
+		renderQueue([
+			row(7, 'Held twice', 0, [
+				{ id: 3, name: 'Screening' },
+				{ id: 4, name: 'Final' }
+			])
+		]);
+
+	it('links each round, naming it in the URL', () => {
+		const html = twoRounds();
+
+		expect(html).toContain('href="/review/test-conf/7?round=3"');
+		expect(html).toContain('href="/review/test-conf/7?round=4"');
+	});
+
+	it('leaves a single round as plain text — nothing to choose between', () => {
+		const html = renderQueue([row(7, 'Held once', 0, [{ id: 3, name: 'Screening' }])]);
+
+		expect(html).not.toContain('?round=');
 	});
 });

@@ -294,8 +294,12 @@ export type QueueEntry = {
 	title: string;
 	track: string | null;
 	sessionFormat: string | null;
-	/** Every round this reviewer holds this submission in, in board order. */
-	rounds: string[];
+	/**
+	 * Every round this reviewer holds this submission in, in board order. The id
+	 * rides along because the detail page needs it in the link: one row per
+	 * submission, and two open rounds are two different scorecards (#294).
+	 */
+	rounds: { id: number; name: string }[];
 	/**
 	 * Whether any of those rounds is taking answers (ABS-01), so the queue can say
 	 * "opens in 2 days" or "closed" instead of linking to a form that refuses.
@@ -333,6 +337,7 @@ export async function reviewQueue(
 		.select({
 			submissionId: reviewTable.submissionId,
 			status: reviewTable.status,
+			roundId: reviewRoundTable.id,
 			roundName: reviewRoundTable.name,
 			roundPosition: reviewRoundTable.position,
 			roundOpensAt: reviewRoundTable.opensAt,
@@ -374,6 +379,7 @@ export async function reviewQueue(
 type Assignment = {
 	submissionId: number;
 	status: string;
+	roundId: number;
 	roundName: string;
 	roundPosition: number;
 	roundOpensAt: Date | null;
@@ -418,7 +424,7 @@ function queueRow(
 		title: first.title,
 		track: first.track,
 		sessionFormat: first.sessionFormat,
-		rounds: inBoardOrder.map((row) => row.roundName),
+		rounds: inBoardOrder.map((row) => ({ id: row.roundId, name: row.roundName })),
 		// Built from the same rows in the same order `ownReview` reads them, so the
 		// window this row advertises is the window of the round the link leads to.
 		window: combineRoundWindows(
@@ -456,6 +462,13 @@ export type ReviewerSubmission = {
 	/** Empty when the round is anonymised — the identity never leaves the database. */
 	speakers: string[];
 	anonymized: boolean;
+	/** The round this scorecard belongs to — the page puts it in the link (#294). */
+	round: { id: number; name: string };
+	/**
+	 * Every round this reviewer holds this submission in, in board order, so the page
+	 * can offer the other scorecards. One entry is the normal case and draws nothing.
+	 */
+	rounds: { id: number; name: string; window: RoundWindow }[];
 	/**
 	 * When this round takes answers (ABS-01). The form reads it to say why it is shut;
 	 * `saveReview` re-asks it on the POST, so a stale tab buys nothing.
@@ -500,9 +513,13 @@ export type ReviewerSubmission = {
 export async function reviewerSubmission(
 	conference: Conference,
 	userId: string,
-	submissionId: number
+	submissionId: number,
+	roundId?: number | null
 ): Promise<ReviewerSubmission | null> {
-	const own = await ownReview(conference.id, userId, submissionId);
+	// Read every assignment once: the pick needs the priority order, and the page
+	// needs the whole list to link the sibling rounds (#294).
+	const held = await ownReviewRows(conference.id, userId, submissionId);
+	const own = roundId == null ? held[0] : held.find((row) => row.roundId === roundId);
 	if (!own) return null;
 
 	const submission = await submissionFor(conference.id, submissionId);
@@ -538,6 +555,10 @@ export async function reviewerSubmission(
 		...submission,
 		speakers,
 		anonymized: own.anonymized,
+		round: { id: own.roundId, name: own.roundName },
+		rounds: [...held]
+			.sort((a, b) => a.roundPosition - b.roundPosition || a.roundId - b.roundId)
+			.map((row) => ({ id: row.roundId, name: row.roundName, window: row.window })),
 		window: own.window,
 		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },
 		criteria,
@@ -580,7 +601,7 @@ function answersOn(submissionId: number) {
  * still wants work first — and the query orders by round position and id underneath,
  * so equal states resolve the same way on every request.
  */
-async function ownReview(conferenceId: number, userId: string, submissionId: number) {
+async function ownReviewRows(conferenceId: number, userId: string, submissionId: number) {
 	const rows = await db
 		.select({
 			reviewId: reviewTable.id,
@@ -588,6 +609,8 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 			submittedAt: reviewTable.submittedAt,
 			comment: reviewTable.comment,
 			roundId: reviewRoundTable.id,
+			roundName: reviewRoundTable.name,
+			roundPosition: reviewRoundTable.position,
 			anonymized: reviewRoundTable.anonymized,
 			opensAt: reviewRoundTable.opensAt,
 			closesAt: reviewRoundTable.closesAt
@@ -605,11 +628,31 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 		)
 		.orderBy(asc(reviewRoundTable.position), asc(reviewTable.id));
 
-	const [own] = rows
+	return rows
 		.map((row) => ({ ...row, window: roundWindow(row.opensAt, row.closesAt) }))
 		.sort((a, b) => byRoundWindowPriority(a.window, b.window));
+}
 
-	return own ?? null;
+/**
+ * The one row the page works on: the named round if the URL named one, else the
+ * round with the most work outstanding.
+ *
+ * `roundId` is what closes #294. Two OPEN rounds are a tie under
+ * `byRoundWindowPriority`, so the priority rule can only ever return the lower
+ * position — a reviewer who holds the talk in both could not reach the second
+ * scorecard through a URL that does not say which one it means. Naming a round
+ * this reviewer does not hold answers `null`, the same as not being assigned at
+ * all: an id in a query string is not a permission.
+ */
+async function ownReview(
+	conferenceId: number,
+	userId: string,
+	submissionId: number,
+	roundId?: number | null
+) {
+	const rows = await ownReviewRows(conferenceId, userId, submissionId);
+	if (roundId != null) return rows.find((row) => row.roundId === roundId) ?? null;
+	return rows[0] ?? null;
 }
 
 /** The proposal itself, scoped by conference so an id from the URL cannot travel. */
@@ -746,11 +789,14 @@ export async function saveReview(
 	conference: Conference,
 	userId: string,
 	submissionId: number,
-	draft: ReviewDraft
+	draft: ReviewDraft,
+	roundId?: number | null
 ): Promise<SaveReviewResult> {
 	// The same query the page used to decide whether this reviewer may be here at all:
-	// the assignment is the permission.
-	const own = await ownReview(conference.id, userId, submissionId);
+	// the assignment is the permission. And the same round: the POST names the round
+	// the form was drawn for, or the write lands in the round the priority rule picks
+	// — which for two open rounds is never the second one (#294).
+	const own = await ownReview(conference.id, userId, submissionId, roundId);
 	if (!own) return { ok: false, reason: 'not_assigned' };
 
 	// Checked here rather than only hidden on the page. The queue stops offering a

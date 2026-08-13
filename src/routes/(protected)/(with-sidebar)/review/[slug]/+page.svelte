@@ -138,9 +138,19 @@
 							<!-- Which rounds this talk sits in for me. One row per submission, so
 							     without this a reviewer holding it in two rounds cannot tell that
 							     finishing one leaves the other open. -->
+							<!-- Each round is its own link, because each is its own scorecard.
+							     The bare permalink above opens whichever round still wants work
+							     — and when both do, that is always the earlier one, which left
+							     the later round with no URL at all (#294). -->
 							{#if row.rounds.length > 1}
 								<span class="text-muted-foreground mt-0.5 block text-xs">
-									{row.rounds.join(' · ')}
+									{#each row.rounds as round, i (round.id)}{#if i > 0}<span aria-hidden="true"
+												>&nbsp;·&nbsp;</span
+											>{/if}<a
+											href="{base}/{row.submissionId}?round={round.id}"
+											class="hover:text-foreground underline-offset-4 hover:underline"
+											>{round.name}</a
+										>{/each}
 								</span>
 							{/if}
 						</td>

@@ -12,11 +12,34 @@ const submissionId = (raw: string) => {
 	return Number.isInteger(value) && value > 0 ? value : null;
 };
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+/** The scorecard's answers, keyed by criterion id: `criterion-<id>` in the body. */
+const criterionAnswers = (form: FormData) => {
+	const answers: Record<number, string> = {};
+	for (const [key, value] of form.entries()) {
+		const match = /^criterion-(\d+)$/.exec(key);
+		if (match && typeof value === 'string') answers[Number(match[1])] = value;
+	}
+	return answers;
+};
+
+const roundId = (raw: string | null) => {
+	if (raw === null) return null;
+	const value = Number(raw);
+	return Number.isInteger(value) && value > 0 ? value : null;
+};
+
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireReviewer(locals.user!.id, params.slug);
 	const id = submissionId(params.submissionId);
 
-	const submission = id ? await reviewerSubmission(conference, locals.user!.id, id) : null;
+	// Which round's scorecard, when this reviewer holds the talk in more than one.
+	// Without it the page can only ever open the round the priority rule picks, and
+	// two OPEN rounds tie there — so the second one had no reachable URL (#294).
+	// A malformed value is no round rather than an error: the page then opens the
+	// round it always did.
+	const round = roundId(url.searchParams.get('round'));
+
+	const submission = id ? await reviewerSubmission(conference, locals.user!.id, id, round) : null;
 	// Not assigned to me is a 404, not an empty page — the queue and the detail answer
 	// the same question about who may read what.
 	if (!submission) throw error(404, 'Submission not found');
@@ -52,17 +75,22 @@ export const actions: Actions = {
 		if (!id) return fail(400, { message: 'Unknown submission.' });
 
 		const form = await request.formData();
-		const answers: Record<number, string> = {};
-		for (const [key, value] of form.entries()) {
-			const match = /^criterion-(\d+)$/.exec(key);
-			if (match && typeof value === 'string') answers[Number(match[1])] = value;
-		}
 
-		const saved = await saveReview(conference, locals.user!.id, id, {
-			answers,
-			comment: String(form.get('comment') ?? ''),
-			submit: form.get('intent') === 'submit'
-		});
+		// The round travels in the body, not the query string: the form posts to
+		// `?/save` on the current path, and a hidden field is the one place the value
+		// cannot be dropped on the way. Without it a reviewer editing round 2 would
+		// write their answers into round 1 (#294).
+		const saved = await saveReview(
+			conference,
+			locals.user!.id,
+			id,
+			{
+				answers: criterionAnswers(form),
+				comment: String(form.get('comment') ?? ''),
+				submit: form.get('intent') === 'submit'
+			},
+			roundId(String(form.get('roundId') ?? '') || null)
+		);
 
 		if (!saved.ok) {
 			// Two different failures, two different answers. Calling an empty submit
