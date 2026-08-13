@@ -109,7 +109,36 @@ describe('speaker task detail', () => {
 
 		expect(body).toContain('Add a new version');
 		expect(body).toContain('Your file is already handed in.');
+		expect(body).toContain('Waiting for a look');
 		expect(body).not.toContain('Upload the file here once it is ready.');
+	});
+
+	it('says the organizers asked for a new version after a rejection', () => {
+		const body = draw(
+			task({
+				title: 'Upload slides',
+				kind: 'file_request',
+				status: 'open',
+				instructions: 'Upload the file here once it is ready.'
+			}),
+			[
+				{
+					id: 4,
+					filename: 'slides.pdf',
+					contentType: 'application/pdf',
+					sizeBytes: 2048,
+					version: 1,
+					approvalStatus: 'rejected',
+					uploadedAt: new Date('2027-04-01T12:00:00Z'),
+					comments: []
+				}
+			]
+		);
+
+		expect(body).toContain('The organizers asked for a new version of this file.');
+		expect(body).toContain('Changes requested');
+		expect(body).toContain('addresses what they asked for');
+		expect(body).not.toContain('Your file is already handed in.');
 	});
 
 	it('leaves an organizer-defined action on the ordinary completion path', () => {

@@ -60,4 +60,19 @@ describe('speaker submission detail', () => {
 		// The only portal-root link left is the explicit breadcrumb above the page.
 		expect(body.match(/href="\/portal"/g)).toHaveLength(1);
 	});
+
+	it('names a rejection so the speaker does not have to infer it from a badge', () => {
+		const body = draw({ status: 'rejected' });
+
+		expect(body).toContain('Not accepted.');
+		expect(body).toContain('decided not to include this proposal');
+		expect(body).not.toContain('Your proposal is in.');
+	});
+
+	it('names a waitlist the same way', () => {
+		const body = draw({ status: 'waitlisted' });
+
+		expect(body).toContain('Waitlisted.');
+		expect(body).toContain('reserve list');
+	});
 });

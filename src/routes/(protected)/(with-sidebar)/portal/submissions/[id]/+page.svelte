@@ -120,6 +120,20 @@
 				Anything else the organizers need from you appears under Your tasks in the speaker portal.
 			</p>
 		</div>
+	{:else if s.status === 'rejected'}
+		<div class="border-status-bad/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
+			<p class="font-medium">Not accepted.</p>
+			<p class="text-muted-foreground mt-1">
+				The organizers decided not to include this proposal in the programme.
+			</p>
+		</div>
+	{:else if s.status === 'waitlisted'}
+		<div class="border-status-warn/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
+			<p class="font-medium">Waitlisted.</p>
+			<p class="text-muted-foreground mt-1">
+				This proposal is on the reserve list. You will hear if a place opens up.
+			</p>
+		</div>
 	{/if}
 
 	<dl class="mt-8 grid gap-x-6 gap-y-4 text-sm sm:grid-cols-2">
