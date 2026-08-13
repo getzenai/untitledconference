@@ -21,6 +21,45 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
+describe('setup landing after creating a conference', () => {
+	const renderSetup = (status: 'draft' | 'published' = 'draft') =>
+		render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference: { ...conference, status },
+					config: { rooms: [], tracks: [], formats: [] },
+					templates: [],
+					pending: {},
+					setup: true
+				} as never,
+				form: null
+			}
+		}).body;
+
+	it('names the draft and points at Publish, not the CFP', () => {
+		const body = renderSetup('draft');
+
+		expect(body).toContain('data-testid="settings-setup-hint"');
+		expect(body).toContain('This conference is a draft');
+		expect(body).toContain('href="#visibility"');
+		expect(body).toContain('Publish, in General below');
+		expect(body).toContain('/c/test-conf');
+		expect(body).toContain('404');
+		expect(body).not.toContain('Start with the structure');
+		expect(body).not.toContain('Call for papers');
+	});
+
+	it('does not keep the draft banner after the conference is live', () => {
+		const body = renderSetup('published');
+
+		expect(body).not.toContain('data-testid="settings-setup-hint"');
+		expect(body).not.toContain('This conference is a draft');
+	});
+});
+
 describe('conference settings config surface', () => {
 	it('lists rooms, tracks and formats and does not host review visibility', () => {
 		const { body } = render(Page, {
