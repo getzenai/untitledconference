@@ -45,7 +45,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { publishedFormFor } from './cfp-form';
 import { dispatchConferenceEmails } from './email-dispatcher';
 import { listPublishedConferences } from './public-conference';
-import { emailHeldByAnother, refuseStatedAddress } from './speaker-identity';
+import { emailHeldByAnother, refuseStatedAddress, sameAddress } from './speaker-identity';
 
 /** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
 export type CallState = 'open' | 'not_yet_open' | 'closed';
@@ -446,7 +446,7 @@ async function upsertOwnProfile(
 		: await unclaimedProfileForEmail(tx, organizationId, account?.email ?? null);
 
 	if (
-		stated.email !== account?.email &&
+		!sameAddress(stated.email, account?.email) &&
 		(await emailHeldByAnother(tx, organizationId, stated.email, existing?.id ?? claimable))
 	) {
 		delete stated.email;

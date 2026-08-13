@@ -9,10 +9,16 @@
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { OpenCall, SaveResult } from './cfp-submission';
 
 type Reader = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Two addresses that stand for the same mailbox as far as this guard is concerned. */
+export function sameAddress(a: string | null | undefined, b: string | null | undefined): boolean {
+	if (!a || !b) return false;
+	return a.trim().toLowerCase() === b.trim().toLowerCase();
+}
 
 /**
  * Is this address already somebody else's, inside this organization?
@@ -21,6 +27,14 @@ type Reader = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
  * `upsertCoSpeaker` resolves a co-presenter against, and what
  * `unclaimedProfileForEmail` claims a profile by. That is what makes an address
  * typed into "About you" different from a name typed there.
+ *
+ * Compared case-insensitively, and this is the one place in the module that
+ * deliberately disagrees with the rest of the code. Everything else here matches
+ * addresses with `=`, so `Marcus@…` and `marcus@…` are two profiles — but this
+ * function's whole job is to notice the person a human is describing, and humans
+ * type capitals. Widening can only ever refuse *more*: it cannot match a row that
+ * `=` would have missed and then act on it, because the only thing it does with a
+ * match is say no.
  */
 export async function emailHeldByAnother(
 	tx: Reader,
@@ -36,7 +50,7 @@ export async function emailHeldByAnother(
 		.where(
 			and(
 				eq(speakerProfileTable.organizationId, organizationId),
-				eq(speakerProfileTable.email, email)
+				sql`lower(${speakerProfileTable.email}) = lower(${email})`
 			)
 		)
 		.limit(2);
@@ -70,7 +84,7 @@ export async function refuseStatedAddress(
 		.from(user)
 		.where(eq(user.id, userId))
 		.limit(1);
-	if (stated === account?.email) return null;
+	if (sameAddress(stated, account?.email)) return null;
 
 	const [own] = await db
 		.select({ id: speakerProfileTable.id })

@@ -36,6 +36,7 @@ import {
 	withdrawSubmission,
 	type SubmissionInput
 } from './cfp-submission';
+import { sameAddress } from './speaker-identity';
 import { editableDraft, mySubmissions, submissionForConference } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -1200,6 +1201,31 @@ describe('stating somebody else’s address under "About you" (#229)', () => {
 		expect(mine.every((row) => row.email !== marcusEmail)).toBe(true);
 	});
 
+	it('sees through a capital letter, because that is what a person types', async () => {
+		await marcusOnTheRoster();
+
+		const shouted = { ...asMarcus(), email: marcusEmail.toUpperCase() };
+		const result = await saveSubmission(
+			jordanId,
+			slug,
+			input({ title: 'A talk MARCUS is giving', speaker: shouted }),
+			{ submit: true }
+		);
+
+		if (result.ok || result.reason !== 'invalid') {
+			throw new Error(`expected an invalid-field refusal, got ${JSON.stringify(result)}`);
+		}
+		expect(result.errors.speakerEmail).toMatch(/co-presenter/);
+
+		// And the account that legitimately owns a capitalised address is not locked
+		// out by the same widening — the exception has to match the same way.
+		const mine = await db
+			.select({ email: speakerProfileTable.email })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.userId, jordanId));
+		expect(mine.every((row) => !sameAddress(row.email, marcusEmail))).toBe(true);
+	});
+
 	it('leaves the address where it was, so a co-presenter entry still finds Marcus', async () => {
 		const marcusId = await marcusOnTheRoster();
 
@@ -1261,7 +1287,10 @@ describe('stating somebody else’s address under "About you" (#229)', () => {
 				speaker: {
 					name: 'Jordan Vale',
 					sortName: 'Vale, Jordan',
-					email: `${jordanId}@example.test`,
+					// Stated in a different case than the account holds it. The widening
+					// has to reach the exception too, or the guard locks people out of
+					// their own address instead of protecting somebody else's.
+					email: `${jordanId}@EXAMPLE.test`,
 					jobTitle: null,
 					company: null,
 					bio: null
@@ -1277,7 +1306,7 @@ describe('stating somebody else’s address under "About you" (#229)', () => {
 			.where(eq(speakerProfileTable.userId, jordanId));
 		// Claimed, not forked: one profile, carrying the account's own address.
 		expect(mine).toHaveLength(1);
-		expect(mine[0].email).toBe(`${jordanId}@example.test`);
+		expect(sameAddress(mine[0].email, `${jordanId}@example.test`)).toBe(true);
 	});
 });
 
