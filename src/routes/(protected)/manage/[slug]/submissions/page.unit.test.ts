@@ -112,6 +112,15 @@ describe('organizer submission decisions', () => {
 		expect(body).not.toContain('automatically notif');
 	});
 
+	it('asks before a bulk decision so a missed click cannot decide the pile', () => {
+		const body = renderPage();
+
+		expect(body).toContain('data-confirm-decision');
+		expect(body).toContain('value="accepted"');
+		expect(body).toContain('value="rejected"');
+		expect(body).toContain('value="waitlisted"');
+	});
+
 	/**
 	 * ABS-06: selection already exists for decide/notify; bulk assign rides the
 	 * same checkboxes with a third action. Without a round there is nothing to

@@ -82,6 +82,28 @@
 		else selected.add(id);
 	};
 
+	/**
+	 * Bulk Accept / Decline / Waitlist used to fire on the first click.
+	 * A confirm names the count and the verb so a missed click does not
+	 * decide forty talks. Notify and assign stay one-click: they do not
+	 * change the programme.
+	 */
+	const confirmDecision = (event: SubmitEvent) => {
+		const submitter = event.submitter;
+		if (!(submitter instanceof HTMLButtonElement) || submitter.name !== 'decision') return;
+		const n = selected.size;
+		const verb =
+			submitter.value === 'accepted'
+				? 'Accept'
+				: submitter.value === 'rejected'
+					? 'Decline'
+					: 'Waitlist';
+		const noun = n === 1 ? 'submission' : 'submissions';
+		if (!confirm(`${verb} ${n} ${noun}? Speakers are not emailed.`)) {
+			event.preventDefault();
+		}
+	};
+
 	const filtered = $derived(
 		Boolean(
 			data.filters.q ||
@@ -351,6 +373,8 @@
 		<form
 			method="POST"
 			action="?/decide"
+			data-confirm-decision
+			onsubmit={confirmDecision}
 			use:enhance={() => {
 				busy = true;
 				// `finally`, not a trailing line: a dropped connection would otherwise
