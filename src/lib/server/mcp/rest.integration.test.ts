@@ -145,6 +145,62 @@ describe('REST adapter', () => {
 		expect(result.allow).toContain('GET');
 	});
 
+	/**
+	 * #324. DELETE is a method the adapter did not have before, so this measures
+	 * the whole path — the verb reaches a route, the body carries the second slug,
+	 * and the tool's own refusal comes back as a status rather than a throw.
+	 *
+	 * DELETE is deliberately the archive, the reversible step: it is what a REST
+	 * caller means by deleting a conference, and the one that cannot cost anything.
+	 * Erasing is a POST to `/erase`, because it is not the same operation.
+	 */
+	it('archives over DELETE, restores, then erases — and refuses to erase what is not archived', async () => {
+		const slug = `${suffix}-rest-delete`;
+		const created = await dispatchRest('POST', '/conferences', organizer, {
+			body: { name: 'Delete me over REST', slug, startsOn: '2027-12-01', endsOn: '2027-12-01' }
+		});
+		expect(created.status).toBe(200);
+
+		const tooSoon = await dispatchRest('POST', `/conferences/${slug}/erase`, organizer, {
+			body: { confirmSlug: slug }
+		});
+		expect(tooSoon.status).toBe(400);
+		expect(String(tooSoon.body.error)).toContain('archive_conference');
+
+		const archived = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {});
+		expect(archived.status).toBe(200);
+		expect(archived.body).toMatchObject({ slug, status: 'archived' });
+
+		// Still the organizer's to find, and still restorable, which is the whole
+		// difference between this and what DELETE used to do.
+		const restored = await dispatchRest('POST', `/conferences/${slug}/restore`, organizer, {});
+		expect(restored.status).toBe(200);
+		expect(restored.body).toMatchObject({ slug, status: 'draft' });
+
+		await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {});
+
+		const unconfirmed = await dispatchRest('POST', `/conferences/${slug}/erase`, organizer, {
+			body: { confirmSlug: `${slug}-oops` }
+		});
+		expect(unconfirmed.status).toBe(400);
+
+		const stillThere = await dispatchRest('GET', '/conferences', organizer, {});
+		expect(stillThere.body.conferences).toEqual(
+			expect.arrayContaining([expect.objectContaining({ slug })])
+		);
+
+		const deleted = await dispatchRest('POST', `/conferences/${slug}/erase`, organizer, {
+			body: { confirmSlug: slug }
+		});
+		expect(deleted.status).toBe(200);
+		expect(deleted.body).toMatchObject({ slug, deleted: true });
+
+		const after = await dispatchRest('GET', '/conferences', organizer, {});
+		expect((after.body.conferences as { slug: string }[]).map((row) => row.slug)).not.toContain(
+			slug
+		);
+	});
+
 	it('publishes every registered REST tool in the OpenAPI document', () => {
 		const spec = buildOpenApiDocument('https://example.test') as {
 			openapi: string;

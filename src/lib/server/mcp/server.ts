@@ -25,6 +25,11 @@ export const SERVER_INSTRUCTIONS =
 	'create_session_format and create_track so proposals have a length and a track, ' +
 	'create_review_round then invite_reviewer then assign_reviews, ' +
 	'decide_submissions, then unpublish_conference to return to draft. ' +
+	'archive_conference is how a conference is removed: it disappears from every ' +
+	'public surface, everything under it is kept, and restore_conference undoes it. ' +
+	'Archiving a published conference takes its public page down, so that case asks ' +
+	'for the slug twice. delete_conference erases an archived conference for good and ' +
+	'only one that was never published. ' +
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
 	'list_review_rounds, list_session_formats, list_tracks, ' +

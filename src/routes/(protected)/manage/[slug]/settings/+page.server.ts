@@ -126,6 +126,14 @@ export const actions: Actions = {
 		const wantsPublished = text(await request.formData(), 'published') === 'true';
 		const result = await setConferenceVisibility(conference, wantsPublished);
 
+		if (result.status === 'archived') {
+			return {
+				message:
+					'This conference is archived. Restore it first — publishing is not a way out of the archive.',
+				section: 'visibility'
+			};
+		}
+
 		if (!result.changed) {
 			return {
 				message: wantsPublished ? 'Already published.' : 'Already a draft.',

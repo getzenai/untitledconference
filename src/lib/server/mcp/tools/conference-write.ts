@@ -4,9 +4,11 @@
  * adapter (and later REST) is a loop, not a second implementation.
  */
 import { MAX_MINUTES, MAX_NAME } from '$lib/conference/structure-lines';
+import { archiveConference, restoreConference } from '$lib/server/conference/archive-conference';
 import { closeCfpForm, createCfpForm, publishCfpForm } from '$lib/server/conference/cfp-form';
 import { addFormat, addTrack, conferenceConfig } from '$lib/server/conference/config';
 import { createConference } from '$lib/server/conference/create-conference';
+import { deleteConference } from '$lib/server/conference/delete-conference';
 import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
 import { addReviewRound, reviewRounds } from '$lib/server/conference/review-rounds';
 import { addReviewer } from '$lib/server/conference/reviewer-roster';
@@ -230,6 +232,12 @@ function publishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 		handler: async ({ conferenceSlug }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
 			const result = await setConferenceVisibility(conference, true);
+			if (result.status === 'archived') {
+				throw new McpToolError(
+					`"${conferenceSlug}" is archived. Call restore_conference first — publishing is not ` +
+						'a way out of the archive. Nothing was published.'
+				);
+			}
 			return {
 				slug: conference.slug,
 				status: result.status,
@@ -250,6 +258,12 @@ function unpublishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 		handler: async ({ conferenceSlug }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
 			const result = await setConferenceVisibility(conference, false);
+			if (result.status === 'archived') {
+				throw new McpToolError(
+					`"${conferenceSlug}" is archived, which is further down than draft. Call ` +
+						'restore_conference to bring it back. Nothing changed.'
+				);
+			}
 			return {
 				slug: conference.slug,
 				status: result.status,
@@ -257,6 +271,185 @@ function unpublishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 			};
 		}
 	};
+}
+
+/**
+ * The confirmation slug, checked before anything is resolved.
+ *
+ * A mismatch is the caller contradicting itself, and that is worth stopping on
+ * whatever the slug happens to name.
+ */
+function requireConfirmation(conferenceSlug: string, confirmSlug: string, verb: string): void {
+	if (confirmSlug !== conferenceSlug) {
+		throw new McpToolError(
+			`confirmSlug "${confirmSlug}" does not match conferenceSlug "${conferenceSlug}". ` +
+				`Nothing was ${verb}. Pass the same slug twice to confirm.`
+		);
+	}
+}
+
+const confirmSlugField = z
+	.string()
+	.optional()
+	.describe('The same slug again. Required for a published conference; ignored for a draft.');
+
+function archiveConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'archive_conference',
+		description:
+			'Archive a conference in an organization you own or administer. This is how a ' +
+			'conference is removed: /c/<slug>, the public call for papers, the front-door ' +
+			'directory and the speaker pages all stop showing it, while every room, ' +
+			'submission, review and placement is kept. restore_conference undoes it exactly. ' +
+			'Needs an org-wide owner or admin seat — being an organizer on the event is not ' +
+			'enough. If the conference is currently published, repeat the slug in confirmSlug: ' +
+			'a public address stops being served the moment this returns, though a page already ' +
+			'cached at the edge can still be handed out for up to a minute after.',
+		inputSchema: { conferenceSlug: slugField, confirmSlug: confirmSlugField },
+		handler: async ({ conferenceSlug, confirmSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+
+			// Graded by what the step costs, so the confirmation is asked for only where
+			// it means something. Demanded on every archive, it would become the noise a
+			// caller learns to type without reading — and then it guards nothing on the
+			// one call where it mattered.
+			if (conference.status === 'published') {
+				if (confirmSlug === undefined) {
+					throw new McpToolError(
+						`"${conferenceSlug}" is published, so archiving it takes /c/${conferenceSlug} ` +
+							'offline for everyone holding the link. Pass confirmSlug with the same slug ' +
+							'to confirm. Nothing was archived.'
+					);
+				}
+				requireConfirmation(conferenceSlug, confirmSlug, 'archived');
+			}
+
+			const result = await archiveConference(conference, ctx.userId);
+			if (!result.ok) {
+				throw new McpToolError(
+					result.reason === 'not_org_wide'
+						? `Archiving "${conferenceSlug}" needs an owner or admin seat in its organization. ` +
+								'Organizing this one event is not enough. Nothing was archived.'
+						: `"${conferenceSlug}" is already archived. Nothing changed.`
+				);
+			}
+			return {
+				slug: conference.slug,
+				name: conference.name,
+				status: 'archived',
+				/** True when a live public page was taken down, not merely a draft hidden. */
+				wentDark: result.wasPublic,
+				restoreWith: 'restore_conference'
+			};
+		}
+	};
+}
+
+function restoreConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'restore_conference',
+		description:
+			'Bring an archived conference back, exactly where it was: published if it was ' +
+			'published, a draft if it was a draft. Everything under it was kept, so nothing ' +
+			'has to be rebuilt. Needs an org-wide owner or admin seat.',
+		inputSchema: { conferenceSlug: slugField },
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const result = await restoreConference(conference, ctx.userId);
+			if (!result.ok) {
+				throw new McpToolError(
+					result.reason === 'not_org_wide'
+						? `Restoring "${conferenceSlug}" needs an owner or admin seat in its organization. ` +
+								'Organizing this one event is not enough. Nothing changed.'
+						: `"${conferenceSlug}" is ${conference.status}, not archived. Nothing to restore.`
+				);
+			}
+			return {
+				slug: conference.slug,
+				name: conference.name,
+				status: result.status,
+				publicUrl: result.status === 'published' ? `/c/${conference.slug}` : null
+			};
+		}
+	};
+}
+
+function deleteConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'delete_conference',
+		description:
+			'Erase an archived conference and everything under it — rooms, tracks, days, the ' +
+			'call for papers and its submissions, reviews and agenda. There is no undo. Two ' +
+			'conditions beyond the org-wide owner or admin seat: the conference must already ' +
+			'be archived (call archive_conference first, so the step can be seen and reversed ' +
+			'before it becomes permanent), and it must never have been published — a ' +
+			'conference that once had a public address can be archived but not erased. ' +
+			'Repeat the slug in confirmSlug. Two things are kept on purpose: speaker profiles, ' +
+			'which are org-wide, and files that were uploaded to tasks — the records pointing ' +
+			'at them go, the stored files themselves are not reachable from here.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			confirmSlug: z
+				.string()
+				.min(1)
+				.describe('The same slug again. Must match conferenceSlug exactly.')
+		},
+		handler: async ({ conferenceSlug, confirmSlug }) => {
+			requireConfirmation(conferenceSlug, confirmSlug, 'deleted');
+
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const result = await deleteConference(conference, ctx.userId);
+			if (!result.ok) {
+				throw new McpToolError(deleteRefusal(conferenceSlug, conference.status, result.reason));
+			}
+			return {
+				slug: conference.slug,
+				name: conference.name,
+				deleted: true,
+				removed: result.removed
+			};
+		}
+	};
+}
+
+/**
+ * Why the erase refused, in the caller's terms.
+ *
+ * `not_archived` arrives in two different situations and they need different
+ * sentences: a conference that was never archived needs to be told about
+ * `archive_conference`, while one that was archived a moment ago and is not any
+ * more lost a race with a restore — and telling that caller to archive again
+ * would be telling it to undo somebody's deliberate act.
+ */
+function deleteRefusal(
+	slug: string,
+	statusWhenRead: string,
+	reason: 'not_org_wide' | 'not_archived' | 'was_published'
+): string {
+	if (reason === 'not_org_wide') {
+		return (
+			`Deleting "${slug}" needs an owner or admin seat in its organization. ` +
+			'Organizing this one event is not enough. Nothing was deleted.'
+		);
+	}
+	if (reason === 'was_published') {
+		return (
+			`"${slug}" was published before it was archived, and a conference that once had a ` +
+			'public address is not erased. It stays archived, which already hides it everywhere. ' +
+			'Nothing was deleted.'
+		);
+	}
+	if (statusWhenRead === 'archived') {
+		return (
+			`"${slug}" was restored while this call was in flight, and only an archived ` +
+			'conference can be deleted. Nothing was deleted.'
+		);
+	}
+	return (
+		`"${slug}" is ${statusWhenRead}, not archived. Call archive_conference first — ` +
+		'archiving is the step that can be undone, and deleting is the one that cannot. ' +
+		'Nothing was deleted.'
+	);
 }
 
 function inviteReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
@@ -572,6 +765,9 @@ export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		closeCfpTool(ctx),
 		publishConferenceTool(ctx),
 		unpublishConferenceTool(ctx),
+		archiveConferenceTool(ctx),
+		restoreConferenceTool(ctx),
+		deleteConferenceTool(ctx),
 		inviteReviewerTool(ctx),
 		listReviewRoundsTool(ctx),
 		createReviewRoundTool(ctx),

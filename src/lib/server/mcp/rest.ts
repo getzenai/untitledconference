@@ -12,7 +12,7 @@ import { classifyError } from './tool-helpers';
 
 const logger = createLogger('MCP');
 
-export type RestMethod = 'GET' | 'POST' | 'PATCH';
+export type RestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 export type RestRoute = {
 	method: RestMethod;
@@ -28,6 +28,16 @@ export const REST_ROUTES: RestRoute[] = [
 	{ method: 'GET', pattern: '/conferences', tool: 'list_my_conferences' },
 	{ method: 'POST', pattern: '/conferences', tool: 'create_conference' },
 	{ method: 'PATCH', pattern: '/conferences/:conferenceSlug', tool: 'update_conference' },
+	// DELETE is the archive, not the erase: it is what a REST caller means by
+	// "delete this conference", and it is the reversible one. Erasing has no verb
+	// of its own, so it is a POST to a named step — which is honest, because it is
+	// not the same operation twice with a flag.
+	//
+	// The confirmation slug travels in the body — a URL that carries it twice would
+	// be one nobody could type wrong, which is the opposite of what it is for.
+	{ method: 'DELETE', pattern: '/conferences/:conferenceSlug', tool: 'archive_conference' },
+	{ method: 'POST', pattern: '/conferences/:conferenceSlug/restore', tool: 'restore_conference' },
+	{ method: 'POST', pattern: '/conferences/:conferenceSlug/erase', tool: 'delete_conference' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/publish', tool: 'publish_conference' },
 	{
 		method: 'POST',
