@@ -25,9 +25,20 @@
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import SubmissionFilters from '$lib/components/app/conference/submission-filters.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { untrack } from 'svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+
+	type BulkDecision = 'accepted' | 'rejected' | 'waitlisted';
 
 	let { data, form } = $props();
 
@@ -35,6 +46,11 @@
 
 	const selected = new SvelteSet<number>();
 	let busy = $state(false);
+	let decideForm = $state<HTMLFormElement | undefined>(undefined);
+	let pendingDecision = $state<BulkDecision | null>(null);
+	let confirmOpen = $state(false);
+	/** The confirm click re-submits the same button; skip the dialog that time. */
+	let allowDecision = false;
 	/** Round for bulk assignment; empty until the organizer picks one. */
 	let assignRoundId = $state('');
 	let assignReviewerId = $state('');
@@ -80,6 +96,51 @@
 	const toggle = (id: number) => {
 		if (selected.has(id)) selected.delete(id);
 		else selected.add(id);
+	};
+
+	const decisionVerb = (decision: BulkDecision) =>
+		decision === 'accepted' ? 'Accept' : decision === 'rejected' ? 'Decline' : 'Waitlist';
+
+	const pendingVerb = $derived(pendingDecision ? decisionVerb(pendingDecision) : '');
+	const pendingNoun = $derived(selected.size === 1 ? 'submission' : 'submissions');
+
+	/**
+	 * Bulk Accept / Decline / Waitlist used to fire on the first click.
+	 * A confirm names the count and the verb so a missed click does not
+	 * decide forty talks. It lives in the page — not `window.confirm` —
+	 * so a Playwright agent can press the same button a human does.
+	 * Notify and assign stay one-click: they do not change the programme.
+	 */
+	const confirmDecision = (event: SubmitEvent) => {
+		const submitter = event.submitter;
+		if (!(submitter instanceof HTMLButtonElement) || submitter.name !== 'decision') return;
+		if (allowDecision) {
+			allowDecision = false;
+			return;
+		}
+		if (
+			submitter.value !== 'accepted' &&
+			submitter.value !== 'rejected' &&
+			submitter.value !== 'waitlisted'
+		) {
+			return;
+		}
+		event.preventDefault();
+		pendingDecision = submitter.value;
+		confirmOpen = true;
+	};
+
+	const confirmPendingDecision = () => {
+		const decision = pendingDecision;
+		if (!decision || !decideForm) return;
+		const button = decideForm.querySelector<HTMLButtonElement>(
+			`button[name="decision"][value="${decision}"]`
+		);
+		if (!button) return;
+		allowDecision = true;
+		confirmOpen = false;
+		pendingDecision = null;
+		decideForm.requestSubmit(button);
 	};
 
 	const filtered = $derived(
@@ -349,8 +410,13 @@
 		/>
 	{:else}
 		<form
+			bind:this={decideForm}
 			method="POST"
 			action="?/decide"
+			data-testid="bulk-decide"
+			data-confirm-decision
+			data-confirm="dialog"
+			onsubmit={confirmDecision}
 			use:enhance={() => {
 				busy = true;
 				// `finally`, not a trailing line: a dropped connection would otherwise
@@ -648,3 +714,25 @@
 		</form>
 	{/if}
 </div>
+
+<AlertDialog
+	bind:open={confirmOpen}
+	onOpenChange={(open) => {
+		if (!open) pendingDecision = null;
+	}}
+>
+	<AlertDialogContent data-testid="bulk-decide-dialog">
+		<AlertDialogHeader>
+			<AlertDialogTitle>{pendingVerb} {selected.size} {pendingNoun}?</AlertDialogTitle>
+			<AlertDialogDescription>
+				Speakers are not emailed. Notifications are sent separately after the programme is checked.
+			</AlertDialogDescription>
+		</AlertDialogHeader>
+		<AlertDialogFooter>
+			<AlertDialogCancel data-testid="bulk-decide-cancel">Cancel</AlertDialogCancel>
+			<Button data-testid="bulk-decide-confirm" onclick={confirmPendingDecision}>
+				{pendingVerb}
+			</Button>
+		</AlertDialogFooter>
+	</AlertDialogContent>
+</AlertDialog>
