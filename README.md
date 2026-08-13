@@ -57,6 +57,15 @@ DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/dev" \
 
 That writes a conference mid-review: thirty proposals across every status, two review rounds with scores from three reviewers, speaker tasks in every state, and sign-in credentials for an organizer, two speakers and three reviewers (see `DEMO_PASSWORD` in `scripts/db/seed-data.mjs`). It is idempotent — it drops the demo organization first.
 
+For MCP tool work, a second tenant stays off the public site by remaining a draft:
+
+```bash
+DATABASE_URL="postgres://root:mysecretpassword@localhost:5432/dev" \
+  node scripts/db/seed-mcp-harness.mjs
+```
+
+Own organisation, five accounts on `@mcpharness.example`, conference left as draft — `/c/mcp-harness` 404s and it does not appear on `/`. It does not touch DevFlow or the AI Engineer import.
+
 ## Usage
 
 ```bash
