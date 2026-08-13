@@ -1,5 +1,5 @@
 /**
- * Edge caching for the anonymous public conference pages.
+ * In-Worker caching for the anonymous public conference pages.
  *
  * A public conference page renders identically for every visitor without a
  * session, yet each request pays the full price: a fresh database connection
@@ -8,25 +8,31 @@
  * Measured from Europe that is ~3 s to the first byte — for HTML that has not
  * changed since the previous visitor asked for it.
  *
- * Two cache layers act on these responses, and the zone's CDN cache is the
- * one doing the observable work: once `s-maxage` is present, Cloudflare
- * caches the page at the edge and answers before the Worker runs at all
- * (`cf-cache-status: HIT` with an `age` header, measured live). Measured
- * live, too: the CDN serves that copy to every request for the URL,
- * **including ones carrying a session cookie** — request cookies do not
- * bypass Cloudflare's cache on this plan. The cookie check below therefore
- * governs what gets *stored* (only anonymous renders, ever) and the in-Worker
- * layer, but for the CDN layer the safety rests entirely on the allow-list:
- * these four pages render no user state at all. The one known casualty is
- * the root layout's impersonation banner, absent for an impersonating admin
- * viewing a ≤60s-old copy. If a surface on the list ever gains user state,
- * it must come OFF the list — the bypass cannot save it at the edge.
- * The explicit Cache API write below is the second, in-Worker layer for
- * requests the CDN lets through; because this handler runs before the database scope and auth
- * handlers in `hooks.server.ts`, a hit there skips the connection handshake
- * and the session queries entirely. When reading headers off the live site,
- * trust `cf-cache-status` for the edge — `x-public-cache` is whatever the
- * stored copy said at store time, so a CDN hit replays `miss`.
+ * The layer that works is the Cache API write below. This handler runs
+ * before the database scope and auth handlers in `hooks.server.ts`, so a
+ * hit skips the connection handshake and the session queries. The locale
+ * rides in the cache key: Cloudflare's Cache API ignores `Vary`, so two
+ * visitors with different languages must not share a copy. The key derives
+ * the locale from the same function the middleware uses.
+ *
+ * The zone's CDN is kept out on purpose. Measured live on `36ba312` (#357):
+ * Cloudflare's edge cache ignores `Vary` for every header except
+ * `Accept-Encoding`. `s-maxage=60` stored one copy per URL — the language
+ * of whoever came first after the last purge — and served it to everyone
+ * for 60 s *before the Worker ran* (`cf-cache-status: HIT`, German HTML
+ * under `Accept-Language: en-US`). The same HIT rewrote `max-age=60` to
+ * `max-age=14400` (the zone's Browser Cache TTL). Locale cannot enter the
+ * CDN key without an Enterprise custom cache key, so there is no `s-maxage`
+ * and `CDN-Cache-Control: no-store` tells the edge not to store the page.
+ * The ~50 ms is the Cache API; a CDN HIT would skip the only layer that
+ * keys by locale.
+ *
+ * Request cookies do not bypass Cloudflare's cache on this plan, so while
+ * `s-maxage` was present the CDN also served the anonymous copy to signed-in
+ * visitors. The cookie check below still governs what the Cache API stores
+ * and looks up (only anonymous renders). These four pages render no user
+ * state; if a surface on the list ever gains some, it must come OFF the
+ * list.
  *
  * What is deliberately NOT cached:
  *
@@ -40,16 +46,12 @@
  *   never populates — a cached page.
  * - Anything but a 200, and any response that sets a cookie.
  *
- * The TTL is 60 seconds (`s-maxage`, so only shared caches hold it — a
- * browser still revalidates). An organizer who edits their conference sees
- * the change everywhere within a minute; the visitors in between get the
- * page in ~50 ms instead of ~3 s. The Cache API is per-colo, so the first
- * visitor in each region still pays full price.
- *
- * The locale rides in the cache key. Unprefixed routes honor Accept-Language
- * (#280); `/de/...` stays German. The key derives the locale from the same
- * function the middleware uses, because Cloudflare's Cache API ignores `Vary`
- * — two visitors with different languages must not share a cached page.
+ * The Cache API TTL is 60 seconds (`max-age` on the stored response). An
+ * organizer who edits their conference sees the change everywhere within a
+ * minute; the visitors in between get the page in ~50 ms instead of ~3 s.
+ * The Cache API is per-colo, so the first visitor in each region still
+ * pays full price. Unprefixed routes honor Accept-Language (#280); `/de/...`
+ * stays German because the locale is in the URL.
  */
 
 import { extractLocaleFromRequest } from '$lib/paraglide/runtime';
@@ -59,26 +61,30 @@ import type { Handle } from '@sveltejs/kit';
 const logger = createLogger('PublicPageCache');
 
 /**
- * `max-age` is explicit because its absence is not neutral: Cloudflare's
- * Browser Cache TTL default fills the gap with `max-age=14400`, observed live
- * — a visitor's browser would hold the page for four hours while the edge
- * refreshes every minute. Sixty seconds for both keeps the promise this
- * feature was merged under: an organizer's edit is visible everywhere within
- * a minute, browsers included.
+ * `max-age=60` is for browsers and for the Cache API TTL. `s-maxage` is
+ * absent on purpose: measured on `36ba312`, that directive is what made
+ * Cloudflare's edge cache the page and serve the wrong language. The same
+ * HIT rewrote this header to `max-age=14400` (Browser Cache TTL). Without
+ * a CDN copy there is no HIT, so the visitor sees the 60 s we set.
  */
-export const PUBLIC_CACHE_CONTROL = 'public, max-age=60, s-maxage=60';
+export const PUBLIC_CACHE_CONTROL = 'public, max-age=60';
 
 /**
- * The body is no longer language-invariant (#280). The Cache API ignores
- * `Vary`, which is why the locale is also in the key — both are required:
- * the key splits colo copies, this header tells every other cache that
- * honors `s-maxage` not to serve German HTML under this URL to an English
- * visitor.
+ * Tells Cloudflare's CDN not to store the page. `Vary` cannot do this job:
+ * the edge honors it only for `Accept-Encoding`. The Cache API ignores this
+ * header and keeps using `Cache-Control` for its own TTL.
+ */
+export const PUBLIC_CDN_CACHE_CONTROL = 'no-store';
+
+/**
+ * For browsers, which do honor `Vary`. Not a CDN defense — see
+ * `PUBLIC_CDN_CACHE_CONTROL`.
  */
 export const PUBLIC_CACHE_VARY = 'accept-language';
 
 function stampPublicCacheHeaders(response: Response) {
 	response.headers.set('cache-control', PUBLIC_CACHE_CONTROL);
+	response.headers.set('cdn-cache-control', PUBLIC_CDN_CACHE_CONTROL);
 	response.headers.set('vary', PUBLIC_CACHE_VARY);
 }
 
@@ -111,7 +117,8 @@ export function isCacheablePublicRequest(
 /**
  * The cache key is the request URL plus the locale Paraglide will render
  * with, resolved by the same function the middleware uses. The Cache API
- * ignores `Vary`, so the key and the `Vary` header are both required.
+ * ignores `Vary`, so the locale has to live in the key. `Vary` itself is
+ * for browsers; the CDN is kept out with `CDN-Cache-Control: no-store`.
  */
 export function publicPageCacheKey(url: URL, request: Request): Request {
 	const key = new URL(url.href);
@@ -129,9 +136,9 @@ export const publicPageCacheHandler: Handle = async ({ event, resolve }) => {
 
 	const cache = event.platform?.caches?.default;
 	if (!cache) {
-		// `vite dev`, tests, and any non-Worker deployment: no edge cache to
-		// fill, but the header still goes out so a CDN in front of a Node
-		// deployment could honor it — and so the behaviour is observable in dev.
+		// `vite dev`, tests, and any non-Worker deployment: no Cache API to
+		// fill. The headers still go out so the CDN-bypass is observable in
+		// dev and so a Node deployment behind a CDN stays consistent.
 		const response = await resolve(event);
 		if (response.status === 200) stampPublicCacheHeaders(response);
 		return response;
