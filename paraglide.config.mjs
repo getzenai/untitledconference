@@ -7,6 +7,7 @@
  * language link. Route rules keep `url` only when the locale is actually in
  * the path; unprefixed routes fall through to Accept-Language, then `en`.
  */
+/** @type {import('@inlang/paraglide-js').CompilerOptions} */
 export const paraglideCompilerOptions = {
 	project: './project.inlang',
 	outdir: './src/lib/paraglide',
