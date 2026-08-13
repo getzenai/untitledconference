@@ -12,6 +12,7 @@
  * and a longer card is left exactly as it was.
  */
 import type { PublicConference } from '$lib/conference/public-types';
+import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
@@ -39,19 +40,32 @@ const conference = (minutes: number) =>
 				roomId: 'room-1',
 				trackId: 'track-1',
 				formatId: 'format-1',
-				speakerIds: [],
+				speakerIds: ['spk-1'],
 				recordingUrl: null
 			}
 		],
-		speakers: []
+		speakers: [
+			{
+				id: 'spk-1',
+				name: 'Ada Lovelace',
+				sortName: 'Lovelace, Ada',
+				jobTitle: null,
+				company: null,
+				headshotUrl: null,
+				bio: null,
+				links: []
+			}
+		]
 	}) satisfies PublicConference;
+
+const page = (minutes: number) =>
+	render(Page, {
+		props: { data: { conference: conference(minutes), embed: false } as never }
+	}).body;
 
 /** The rendered card, isolated from the rest of the page. */
 const card = (minutes: number) => {
-	const body = render(Page, {
-		props: { data: { conference: conference(minutes), embed: false } as never }
-	}).body;
-	const match = body.match(/<button[^>]*grid-column[^>]*>[\s\S]*?<\/button>/);
+	const match = page(minutes).match(/<button[^>]*grid-column[^>]*>[\s\S]*?<\/button>/);
 	if (!match) throw new Error('no session card rendered');
 	return match[0];
 };
@@ -74,8 +88,21 @@ describe('public agenda short cards', () => {
 		expect(card(30)).not.toContain('Platform and Infra');
 	});
 
-	it('keeps the full title reachable once the card clamps it', () => {
-		expect(card(30)).toContain('title="Four hundred engineers, one repository"');
+	it('keeps the full title, speaker and time in a shadcn tooltip, not title=', () => {
+		const html = page(30);
+		const source = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
+
+		// Portal content is not in SSR. The trigger and the accessible name are;
+		// the markup is what carries speaker and time into the tooltip.
+		expect(html).toContain('data-slot="tooltip-trigger"');
+		expect(html).toContain('Four hundred engineers, one repository');
+		expect(html).toContain('Ada Lovelace');
+		expect(html).toContain('09:00 – 09:30');
+		expect(card(30)).not.toMatch(/\btitle="/);
+		expect(html).toContain('repeat(2, 1.5rem)');
+		expect(source).toContain('TooltipContent');
+		expect(source).toContain('session.timeRange');
+		expect(source).toContain('speakers');
 	});
 
 	it('leaves a 45-minute card at the normal padding, unclamped, with its meta line', () => {

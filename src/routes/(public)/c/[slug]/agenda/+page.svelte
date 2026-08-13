@@ -10,6 +10,12 @@
 		formatTime,
 		type ResolvedSession
 	} from '$lib/conference/public-view';
+	import {
+		Tooltip,
+		TooltipContent,
+		TooltipProvider,
+		TooltipTrigger
+	} from '$lib/components/ui/tooltip';
 
 	let { data } = $props();
 
@@ -208,45 +214,71 @@
 					{/each}
 				{/each}
 
-				{#each daySessions as session (session.id)}
-					{@const col = columnOf(session)}
-					{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
-					{@const compact = rowOf(session.end) - rowOf(session.start) <= COMPACT_ROWS}
-					<!--
-						min-w-0 + overflow-hidden keep long titles inside narrow room
-						columns; title= exposes the full string when the card clips.
-
-						A 30-minute card is two 1.5rem rows, so 47px: p-2 leaves 31px for
-						content while two lines of leading-tight text-sm need 35px, and the
-						second line was cut mid-word with no ellipsis — which reads as broken
-						rather than shortened. Compact cards therefore pad by 4px instead of
-						8, which is the whole deficit, and clamp the title so anything longer
-						still ends in an ellipsis. The meta line is dropped rather than
-						clipped invisibly; the dialog behind the card carries it.
-					-->
-					<button
-						type="button"
-						onclick={() => (selected = session)}
-						class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none {compact
-							? 'p-1'
-							: 'p-2'}"
-						style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(session.start)} / {rowOf(
-							session.end
-						)};"
-						title={session.title}
-					>
-						<span
-							class="w-full min-w-0 text-sm leading-tight font-medium {compact
-								? 'line-clamp-2'
-								: 'block break-words'}">{session.title}</span
-						>
-						{#if meta && !compact}
-							<span class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs">
-								{meta}
-							</span>
-						{/if}
-					</button>
-				{/each}
+				<TooltipProvider>
+					{#each daySessions as session (session.id)}
+						{@const col = columnOf(session)}
+						{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
+						{@const compact = rowOf(session.end) - rowOf(session.start) <= COMPACT_ROWS}
+						{@const speakers = session.speakers.map((s) => s.name).join(', ')}
+						<!--
+							min-w-0 + overflow-hidden keep long titles inside narrow room
+							columns. A 30-minute card is two 1.5rem rows, so 47px: p-2 leaves
+							31px for content while two lines of leading-tight text-sm need 35px,
+							and the second line was cut mid-word with no ellipsis. Compact cards
+							therefore pad by 4px instead of 8, clamp the title, and drop the
+							meta line rather than clip it. The tooltip carries title, speakers
+							and time — shadcn Tooltip, not title= (#269). The axis stays 1.5rem
+							per quarter hour; we do not grow the row to fit the words.
+						-->
+						<Tooltip>
+							<TooltipTrigger>
+								{#snippet child({ props })}
+									{@const tip = props as { onclick?: (e: MouseEvent) => void }}
+									<button
+										{...props}
+										type="button"
+										aria-label="{session.title}{speakers
+											? `, ${speakers}`
+											: ''}. {session.timeRange}{session.room ? ` · ${session.room}` : ''}"
+										onclick={(e) => {
+											tip.onclick?.(e);
+											selected = session;
+										}}
+										class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none {compact
+											? 'p-1'
+											: 'p-2'}"
+										style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(
+											session.start
+										)} / {rowOf(session.end)};"
+									>
+										<span
+											class="w-full min-w-0 text-sm leading-tight font-medium {compact
+												? 'line-clamp-2'
+												: 'block break-words'}">{session.title}</span
+										>
+										{#if meta && !compact}
+											<span
+												class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs"
+											>
+												{meta}
+											</span>
+										{/if}
+									</button>
+								{/snippet}
+							</TooltipTrigger>
+							<TooltipContent side="top" class="max-w-xs">
+								<span class="block font-medium">{session.title}</span>
+								{#if speakers}
+									<span class="mt-0.5 block">{speakers}</span>
+								{/if}
+								<span class="mt-0.5 block tabular-nums">
+									{session.timeRange}{#if session.room}<span class="px-1">·</span
+										>{session.room}{/if}
+								</span>
+							</TooltipContent>
+						</Tooltip>
+					{/each}
+				</TooltipProvider>
 			</div>
 		</div>
 	{/if}
