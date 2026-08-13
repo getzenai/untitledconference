@@ -30,7 +30,8 @@ export const SERVER_INSTRUCTIONS =
 	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
 	'unplace_talk back to the tray. A collision is refused with the other talk named. ' +
 	'close_cfp stops new submissions without touching existing ones. ' +
-	'Speakers start with list_open_cfps, then submit_proposal (a draft), update_proposal or withdraw_proposal, ' +
+	'Speakers start with list_open_cfps, then submit_proposal (a draft), update_proposal to fill it in, ' +
+	'and finalize_proposal to hand it in — a draft nobody finalizes is never submitted. Or withdraw_proposal, ' +
 	'list_my_proposals for status, and update_my_speaker_profile for bio, photo and links. ' +
 	'Reviewers start with list_my_review_assignments, then get_review_assignment for the rubric, then submit_review. ' +
 	'A reviewer cannot read a submission they were not assigned. ' +

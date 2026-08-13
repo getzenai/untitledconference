@@ -3,6 +3,7 @@
  * and against the loaders a jury or a portal would actually hit — not against
  * the column a tool might have written.
  */
+import { asks } from '$lib/conference/fixed-questions';
 import {
 	guessSortName,
 	listOpenCalls,
@@ -17,7 +18,8 @@ import { mySubmissions } from '$lib/server/conference/speaker-portal';
 import { myProfiles } from '$lib/server/conference/speaker-profile';
 import { db } from '$lib/server/db';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
-import { eq } from 'drizzle-orm';
+import { emailLogTable } from '$lib/server/db/conference/email-schema';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { McpContext } from '../context';
 import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '../harness';
@@ -82,6 +84,7 @@ describe('speaker and reviewer tools', () => {
 				'list_open_cfps',
 				'submit_proposal',
 				'update_proposal',
+				'finalize_proposal',
 				'withdraw_proposal',
 				'list_my_proposals',
 				'update_my_speaker_profile',
@@ -172,6 +175,92 @@ describe('speaker and reviewer tools', () => {
 		});
 		expect(refused.isError).toBe(true);
 		expect(refused.text).toContain('not yours');
+	});
+
+	// #320: the dead-end. A proposal could be created and edited but never handed
+	// in, so an agent-driven speaker journey ended with a draft the organizer
+	// could see and nobody had submitted. These use their own draft rather than
+	// the shared one, so they do not depend on where the other cases leave it.
+	describe('handing a draft in', () => {
+		let ownDraftId: number;
+
+		it('refuses a draft that is still missing what the call asks for, and names it', async () => {
+			// The premise, stated rather than assumed: this case only bites while the
+			// call actually asks for an abstract. If that default ever changes, this
+			// line fails instead of the test passing for the wrong reason.
+			const open = await openCall(seeded.conferenceSlug);
+			expect(asks(open!.fixed, 'abstract')).toBe(true);
+
+			const created = await call(casey, 'submit_proposal', {
+				conferenceSlug: seeded.conferenceSlug,
+				title: 'Title only, nothing else yet'
+			});
+			expect(created.data).toMatchObject({ status: 'draft' });
+			ownDraftId = created.data!.submissionId as number;
+
+			const refused = await call(casey, 'finalize_proposal', { submissionId: ownDraftId });
+			expect(refused.isError).toBe(true);
+			// Naming the field is the point: an agent that is only told "invalid"
+			// cannot get itself unstuck.
+			expect(refused.text).toContain('abstract');
+
+			// And it is still a draft — a refused hand-in must not half-commit.
+			const mine = await mySubmissions(casey.userId);
+			expect(mine.find((row) => row.id === ownDraftId)?.status).toBe('draft');
+		});
+
+		it('hands the draft in once it is complete, and the portal shows it submitted', async () => {
+			await call(casey, 'update_proposal', {
+				conferenceSlug: seeded.conferenceSlug,
+				submissionId: ownDraftId,
+				abstract: 'Now it says what the talk is about.'
+			});
+
+			const filed = await call(casey, 'finalize_proposal', { submissionId: ownDraftId });
+			expect(filed.isError).toBe(false);
+			expect(filed.data).toMatchObject({ submissionId: ownDraftId, status: 'submitted' });
+
+			// Read back through the portal loader, not the tool's own return value.
+			const mine = await mySubmissions(casey.userId);
+			const row = mine.find((entry) => entry.id === ownDraftId);
+			expect(row?.status).toBe('submitted');
+			expect(row?.submittedAt).not.toBeNull();
+		});
+
+		it('is idempotent — a second hand-in moves nothing and sends no second receipt', async () => {
+			const receipts = async () =>
+				(
+					await db
+						.select({ id: emailLogTable.id })
+						.from(emailLogTable)
+						.where(
+							and(
+								eq(emailLogTable.relatedType, 'submission'),
+								eq(emailLogTable.relatedId, ownDraftId),
+								eq(emailLogTable.template, 'submission_received')
+							)
+						)
+				).length;
+
+			const before = await mySubmissions(casey.userId);
+			const arrivedAt = before.find((row) => row.id === ownDraftId)?.submittedAt;
+			const receiptsBefore = await receipts();
+			expect(receiptsBefore).toBeGreaterThan(0);
+
+			const again = await call(casey, 'finalize_proposal', { submissionId: ownDraftId });
+			expect(again.isError).toBe(false);
+			expect(again.data).toMatchObject({ status: 'submitted' });
+
+			const after = await mySubmissions(casey.userId);
+			expect(after.find((row) => row.id === ownDraftId)?.submittedAt).toEqual(arrivedAt);
+			expect(await receipts()).toBe(receiptsBefore);
+		});
+
+		it('refuses a proposal that is not the caller’s', async () => {
+			const refused = await call(finley, 'finalize_proposal', { submissionId: ownDraftId });
+			expect(refused.isError).toBe(true);
+			expect(refused.text).toContain('yours');
+		});
 	});
 
 	it('updates the speaker profile through the same functions the portal uses', async () => {
