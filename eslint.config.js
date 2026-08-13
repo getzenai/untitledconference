@@ -74,9 +74,19 @@ export default ts.config(
 		//
 		// Only the size rules are lifted. `complexity` and `max-depth` still apply,
 		// because branching in a seed script is real branching.
+		//
+		// The MCP tool definitions are the same shape: a tool is a name, a paragraph
+		// of prose the model reads, a schema whose every field carries its own
+		// sentence, and a handler that calls one existing function. What makes those
+		// functions long is the writing, and the writing is the feature — an agent
+		// that cannot find a tool does not have it (#320). Splitting a definition to
+		// satisfy a line count would put the description in one place and the schema
+		// it describes in another. The complexity rule still applies here too, and
+		// still fires on the handlers that have earned it.
 		files: [
 			'src/lib/validators/disposable-email-domains.ts',
 			'src/lib/test/**',
+			'src/lib/server/mcp/tools/**',
 			'scripts/db/seed-*.mjs'
 		],
 		rules: {

@@ -42,34 +42,15 @@ you could not do by hand in the browser.
 Start with `list_my_conferences` — every other conference tool takes a slug it
 returns.
 
-<<<<<<< HEAD
-| Tool                                          | What it does                                                                                           |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `list_my_conferences`                         | The conferences you organize, newest first                                                             |
-| `create_conference`                           | A new conference, always as a draft                                                                    |
-| `update_conference`                           | Name, venue, dates                                                                                     |
-| `publish_conference` / `unpublish_conference` | Put the public page live, or take it back to draft                                                     |
-| `archive_conference`                          | Remove a conference from every public surface, keeping everything. Slug twice if it is published       |
-| `restore_conference`                          | Bring an archived conference back exactly where it was                                                 |
-| `delete_conference`                           | Erase an archived, never-published conference for good. Slug twice; owner or admin                     |
-| `open_cfp` / `close_cfp`                      | Open the call, or stop new submissions without touching the ones already in                            |
-| `list_submissions`                            | The proposals, optionally filtered by status                                                           |
-| `get_submission`                              | One proposal in full, with the reviews written for it (reviewer names are not returned)                |
-| `invite_reviewer`                             | Invite someone into the review round                                                                   |
-| `assign_reviews`                              | Hand proposals to reviewers                                                                            |
-| `decide_submissions`                          | Accept, reject or waitlist — accepting also confirms the speakers and puts the talk in the agenda tray |
-| `get_agenda`                                  | The scheduled programme, in start order                                                                |
-| `list_rooms` / `create_room`                  | The rooms of the grid                                                                                  |
-| `get_agenda_tray`                             | Accepted talks not yet on the grid, plus the days and rooms open to them                               |
-| `place_talk` / `move_talk` / `unplace_talk`   | Put a talk on the grid, move it, take it back to the tray                                              |
-| `swap_talks`                                  | Exchange two slots — both move or neither does                                                         |
-=======
 | Tool                                             | What it does                                                                                           |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `list_my_conferences`                            | The conferences you organize, newest first                                                             |
 | `create_conference`                              | A new conference, always as a draft                                                                    |
 | `update_conference`                              | Name, venue, dates                                                                                     |
 | `publish_conference` / `unpublish_conference`    | Put the public page live, or take it back to draft                                                     |
+| `archive_conference`                             | Remove a conference from every public surface, keeping everything. Slug twice if it is published       |
+| `restore_conference`                             | Bring an archived conference back exactly where it was                                                 |
+| `delete_conference`                              | Erase an archived, never-published conference for good. Slug twice; owner or admin                     |
 | `open_cfp` / `close_cfp`                         | Open the call, or stop new submissions without touching the ones already in                            |
 | `list_submissions`                               | The proposals, optionally filtered by status                                                           |
 | `get_submission`                                 | One proposal in full, with the reviews written for it (reviewer names are not returned)                |
@@ -84,7 +65,6 @@ returns.
 | `get_agenda_tray`                                | Accepted talks not yet on the grid, plus the days and rooms open to them                               |
 | `place_talk` / `move_talk` / `unplace_talk`      | Put a talk on the grid, move it, take it back to the tray                                              |
 | `swap_talks`                                     | Exchange two slots — both move or neither does                                                         |
->>>>>>> origin/main
 
 The agenda tools refuse a collision rather than creating one, and say which talk
 is in the way: a room double-booked, or a speaker due in two rooms at once. The
