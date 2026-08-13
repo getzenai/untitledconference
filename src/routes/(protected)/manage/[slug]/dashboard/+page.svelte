@@ -319,10 +319,9 @@
 			{/if}
 		</div>
 		<!--
-			Full width of the card. The plot is a fixed viewBox scaled by the
-			container (`h-auto w-full`); a max-width left half the card empty on
-			wide screens. Height follows the aspect ratio of the SVG, not a second
-			cap that would leave vertical dead space under the heading.
+			Full width of the card. The plot lays out to that width at a fixed
+			height (`h-48`); a viewBox-only scale left the marks looking blown
+			up and the axis type larger than the rest of the page.
 		-->
 		<div class="border-border border-t p-4">
 			<SubmissionsChart days={d.submissionsOverTime} />

@@ -47,16 +47,36 @@ describe('submissions over time', () => {
 	});
 
 	/**
+	 * The plot used to be a 640×180 viewBox with `text-[9px]` on SVG `<text>`.
+	 * Those sizes are user units, so on a wide card the axis type grew with the
+	 * scale and the marks read as a small drawing blown up.
+	 */
+	it('fills the card at the page type scale, not a scaled-up viewBox', () => {
+		const { body } = render(Chart, { props: { days: days([2, 0, 0, 3]) } });
+
+		// Axis ticks and the end dates are HTML at text-xs, same as the caption.
+		expect(body).toMatch(/text-xs[^"]*tabular-nums[^>]*>4</);
+		expect(body).toMatch(/text-xs">1 May</);
+		expect(body).toMatch(/text-xs">4 May</);
+		expect(body).not.toContain('<text');
+		expect(body).not.toContain('text-[9px]');
+
+		// Width is the card; height is a CSS size, not the viewBox aspect.
+		expect(body).toMatch(/<svg[^>]*class="[^"]*\bh-48\b[^"]*\bw-full\b/);
+		expect(body).toContain('preserveAspectRatio="none"');
+	});
+
+	/**
 	 * A scale that ends exactly at the busiest day gives every run a different
 	 * shape and puts the peak flush against the top edge.
 	 */
 	it('rounds the axis to a number a person reads', () => {
 		// Small numbers keep a floor of 4, so a two-submission day is not a wall.
-		expect(render(Chart, { props: { days: days([2]) } }).body).toContain('>4</text>');
+		expect(render(Chart, { props: { days: days([2]) } }).body).toContain('>4</span>');
 		// 7 rounds up to 10, and the half tick stays a clean 5.
 		const busy = render(Chart, { props: { days: days([7]) } }).body;
-		expect(busy).toContain('>10</text>');
-		expect(busy).toContain('>5</text>');
+		expect(busy).toContain('>10</span>');
+		expect(busy).toContain('>5</span>');
 	});
 
 	/**
@@ -68,11 +88,11 @@ describe('submissions over time', () => {
 
 		expect(body).not.toContain('2.5');
 		// One rung of slack: 6, halved cleanly.
-		expect(body).toContain('>6</text>');
-		expect(body).toContain('>3</text>');
+		expect(body).toContain('>6</span>');
+		expect(body).toContain('>3</span>');
 		// And the peak still has room above it, which was the point of rounding up
 		// in the first place.
-		expect(body).not.toContain('>5</text>');
+		expect(body).not.toContain('>5</span>');
 	});
 
 	it('survives a conference where nothing has come in yet', () => {
