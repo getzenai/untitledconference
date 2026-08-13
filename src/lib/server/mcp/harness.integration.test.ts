@@ -16,6 +16,9 @@ import {
 	listPublishedConferences,
 	loadPublicConference
 } from '$lib/server/conference/public-conference';
+import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
+import { addReviewRound } from '$lib/server/conference/review-rounds';
+import { addReviewer } from '$lib/server/conference/reviewer-roster';
 import { db } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
 import { cfpFormTable } from '$lib/server/db/conference/cfp-schema';
@@ -146,5 +149,49 @@ describe('the MCP harness playground', () => {
 				(conference) => conference.slug === seeded.conferenceSlug
 			)
 		).toBe(false);
+	});
+});
+
+/**
+ * #340: the guard in `assign_reviews` is not the thing under test — the write
+ * behind it is. With only the organizer's own proposals in the tenant, every
+ * assignment was refused as a speaker conflict and `submit_review` could never
+ * be reached. These proposals have somebody else's name on them.
+ */
+describe('the seeded proposals', () => {
+	it('let the organizer be assigned a review without a conflict — and still refuse the author', async () => {
+		const round = await addReviewRound(seeded.conferenceId, {
+			name: 'Harness round',
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
+		});
+		expect(round.ok).toBe(true);
+		if (!round.ok) return;
+
+		const organizer = seeded.people.find((person) => person.role === 'organizer')!;
+		expect((await addReviewer(seeded.conferenceId, organizer.email)).ok).toBe(true);
+
+		const submissionId = seeded.submissionIds['casey-observability'];
+		expect(submissionId).toBeGreaterThan(0);
+
+		expect(
+			await assignReviewerToSubmissions(seeded.conferenceId, [submissionId], round.id, organizer.id)
+		).toEqual({ created: 1, already: 0, skipped: 0, recused: 0, skippedItems: [] });
+
+		// The other half of the same measurement: the guard still fires for the
+		// person who wrote it, so a passing assignment above is not the guard
+		// having been switched off.
+		const author = seeded.people.find((person) => person.id.includes('casey'))!;
+		expect((await addReviewer(seeded.conferenceId, author.email)).ok).toBe(true);
+		expect(
+			await assignReviewerToSubmissions(seeded.conferenceId, [submissionId], round.id, author.id)
+		).toEqual({
+			created: 0,
+			already: 0,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId, reason: 'speaker_conflict' }]
+		});
 	});
 });

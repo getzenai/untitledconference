@@ -51,7 +51,8 @@ const {
 	venue: VENUE,
 	startsOn: STARTS_ON,
 	endsOn: ENDS_ON,
-	people: PEOPLE
+	people: PEOPLE,
+	proposals: PROPOSALS
 } = MCP_HARNESS;
 
 const sql = postgres(DATABASE_URL, { max: 1 });
@@ -88,6 +89,45 @@ async function seedPeople() {
 	}
 }
 
+/**
+ * Two proposals nobody driving the harness wrote themselves (#340).
+ *
+ * `assign_reviews` refuses a reviewer who speaks on the submission, so an agent
+ * on one account could never reach the write path behind that guard. One
+ * speaker profile per author, pointed at the author's user row — the guard
+ * joins `speaker_profile.user_id`, and a shared profile would defeat the point.
+ */
+async function seedProposals(conferenceId) {
+	for (const proposal of PROPOSALS) {
+		const author = PEOPLE.find((person) => person.id === proposal.speakerId);
+		if (!author) throw new Error(`no harness person for ${proposal.speakerId}`);
+
+		const [profile] = await sql`INSERT INTO speaker_profile ${sql({
+			organization_id: ORG_ID,
+			user_id: author.id,
+			name: author.name,
+			sort_name: author.name.split(' ').at(-1) ?? author.name,
+			email: author.email
+		})} RETURNING id`;
+
+		const [submission] = await sql`INSERT INTO submission ${sql({
+			conference_id: conferenceId,
+			title: proposal.title,
+			abstract: proposal.abstract,
+			key_takeaway: proposal.keyTakeaway,
+			status: 'submitted',
+			submitted_at: at('2026-08-13T00:00:00Z')
+		})} RETURNING id`;
+
+		await sql`INSERT INTO submission_speaker ${sql({
+			submission_id: submission.id,
+			speaker_profile_id: profile.id,
+			is_primary: true,
+			position: 0
+		})}`;
+	}
+}
+
 async function report(conferenceId) {
 	const [row] = await sql`
 		SELECT id, slug, status
@@ -101,6 +141,14 @@ async function report(conferenceId) {
 	for (const person of PEOPLE) {
 		console.log(`  ${person.email.padEnd(32)} ${person.note}`);
 	}
+
+	const submitted = await sql`
+		SELECT title
+		FROM submission
+		WHERE conference_id = ${conferenceId}
+		ORDER BY id`;
+	console.log(`\n${submitted.length} proposals, written by somebody other than the organizer:`);
+	for (const row of submitted) console.log(`  ${row.title}`);
 }
 
 async function main() {
@@ -149,6 +197,8 @@ async function main() {
 		date: ENDS_ON,
 		position: 1
 	})}`;
+
+	await seedProposals(conference.id);
 
 	await report(conference.id);
 }

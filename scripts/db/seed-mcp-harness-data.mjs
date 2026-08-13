@@ -56,5 +56,34 @@ export const MCP_HARNESS = {
 			role: 'reviewer',
 			note: 'Reviewer'
 		}
+	],
+	/**
+	 * Proposals somebody else wrote (#340).
+	 *
+	 * `assign_reviews` refuses a reviewer who is a speaker on the submission, so
+	 * an agent holding a single account could never assign itself a review of a
+	 * proposal it had just submitted: the guard fired every time and the write
+	 * path behind it stayed unmeasured. These two belong to Casey and Drew, so
+	 * the organizer account can be assigned one without a conflict.
+	 */
+	proposals: [
+		{
+			key: 'casey-observability',
+			speakerId: 'user-mcp-casey',
+			title: 'Observability for agents that call tools',
+			abstract:
+				'What a trace has to record when the caller is a model: the tool it picked, ' +
+				'the arguments it made up, and the answer it got back.',
+			keyTakeaway: 'Log the arguments, not just the tool name.'
+		},
+		{
+			key: 'drew-migrations',
+			speakerId: 'user-mcp-drew',
+			title: 'Migrations nobody has to be awake for',
+			abstract:
+				'Expand, backfill, contract — and the three checks that tell you which of ' +
+				'the three you are actually in.',
+			keyTakeaway: 'A migration you cannot roll forward is a deploy you cannot ship.'
+		}
 	]
 };
