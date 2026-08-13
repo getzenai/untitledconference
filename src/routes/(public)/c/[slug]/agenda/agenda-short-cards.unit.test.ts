@@ -14,8 +14,13 @@
 import type { PublicConference } from '$lib/conference/public-types';
 import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
+
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/state', () => ({
+	page: { url: new URL('https://example.test/c/short-cards/agenda') }
+}));
 
 const conference = (minutes: number) =>
 	({

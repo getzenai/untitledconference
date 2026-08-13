@@ -66,4 +66,11 @@ describe('public tab bar', () => {
 		expect(html).toMatch(/href="\/c\/[^"]+"[^>]*aria-current="page"/);
 		expect(html.match(/aria-current="page"/g)).toHaveLength(1);
 	});
+
+	it('lets the tab bar scroll sideways on a narrow phone instead of wrapping', async () => {
+		const html = await body(`${base}/agenda`);
+
+		expect(html).toContain('overflow-x-auto');
+		expect(html).toContain('whitespace-nowrap');
+	});
 });
