@@ -5,7 +5,8 @@
  * rather than everything the module does.
  */
 import { describe, expect, it } from 'vitest';
-import { daysUntil, formatDayLong, isoDay } from './public-view';
+import type { PublicConference } from './public-types';
+import { buildView, daysUntil, firstScheduledDayIndex, formatDayLong, isoDay } from './public-view';
 
 describe('isoDay', () => {
 	it('keeps the year, which the obvious wrong version does not', () => {
@@ -61,5 +62,54 @@ describe('daysUntil', () => {
 	it('has nothing to count for a call with no deadline or a deadline gone by', () => {
 		expect(daysUntil(null, now)).toBeNull();
 		expect(daysUntil(new Date('2027-02-14T23:59:00Z'), now)).toBeNull();
+	});
+});
+
+describe('firstScheduledDayIndex', () => {
+	const conference = (dayIds: string[], scheduledOn: string | null): PublicConference =>
+		({
+			id: 'conf-1',
+			slug: 'days',
+			name: 'Days Conf',
+			venue: null,
+			startsOn: '2027-06-01',
+			endsOn: '2027-06-03',
+			days: dayIds.map((id, i) => ({
+				id,
+				date: `2027-06-0${i + 1}`,
+				label: `Day ${i + 1}`
+			})),
+			rooms: [{ id: 'room-1', name: 'Main' }],
+			tracks: [],
+			formats: [],
+			sessions:
+				scheduledOn === null
+					? []
+					: [
+							{
+								id: 's1',
+								title: 'A talk',
+								description: '',
+								dayId: scheduledOn,
+								startsAt: '2027-06-02T09:00:00.000Z',
+								endsAt: '2027-06-02T09:30:00.000Z',
+								roomId: 'room-1',
+								trackId: null,
+								formatId: null,
+								speakerIds: [],
+								recordingUrl: null
+							}
+						],
+			speakers: []
+		}) as PublicConference;
+
+	it('opens on the first day that has a session, not the first calendar day', () => {
+		const view = buildView(conference(['d1', 'd2', 'd3'], 'd2'));
+		expect(firstScheduledDayIndex(view)).toBe(1);
+	});
+
+	it('stays on the first day when nothing is scheduled', () => {
+		const view = buildView(conference(['d1', 'd2'], null));
+		expect(firstScheduledDayIndex(view)).toBe(0);
 	});
 });

@@ -6,6 +6,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import {
 		buildView,
+		firstScheduledDayIndex,
 		formatFullStamp,
 		formatTime,
 		type ResolvedSession
@@ -18,12 +19,14 @@
 	} from '$lib/components/ui/tooltip';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { untrack } from 'svelte';
 
 	let { data } = $props();
 
 	const view = $derived(buildView(data.conference));
 
-	let dayIndex = $state(0);
+	// Initial tab only — the visitor can still walk to an empty day.
+	let dayIndex = $state(untrack(() => firstScheduledDayIndex(buildView(data.conference))));
 
 	// The open session is the URL, not a local flag. Opening it in memory left
 	// the browser's Back button with nothing to pop except the previous site.

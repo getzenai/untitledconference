@@ -6,7 +6,8 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { buildIcs, PersonalSchedule } from '$lib/conference/personal-schedule.svelte';
-	import { buildView, formatFullStamp } from '$lib/conference/public-view';
+	import { buildView, firstScheduledDayIndex, formatFullStamp } from '$lib/conference/public-view';
+	import { untrack } from 'svelte';
 
 	let { data } = $props();
 
@@ -15,7 +16,7 @@
 	// pick up that conference's own list rather than keep showing the first one's.
 	const starred = $derived(new PersonalSchedule(data.conference.id));
 
-	let dayIndex = $state(0);
+	let dayIndex = $state(untrack(() => firstScheduledDayIndex(buildView(data.conference))));
 	let mineOnly = $state(false);
 
 	const day = $derived(view.conference.days[dayIndex]);

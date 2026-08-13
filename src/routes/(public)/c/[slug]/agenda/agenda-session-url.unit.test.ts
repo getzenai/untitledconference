@@ -74,7 +74,9 @@ describe('public agenda session URL', () => {
 
 		expect(html).not.toContain('Back to agenda');
 		expect(html).toContain('aria-label="Conference days"');
-		// The talk is on day 2; day 1 is empty. The point is the overlay is closed.
-		expect(html).toContain('Nothing is scheduled on this day yet.');
+		// The talk is on day 2, and the agenda opens on the first day that has
+		// one, so the grid — not the overlay — is what a visitor lands on.
+		expect(html).toContain('Four hundred engineers, one repository');
+		expect(html).toMatch(/aria-selected="true"[^>]*>Day 2</);
 	});
 });
