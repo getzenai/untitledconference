@@ -75,6 +75,7 @@ there is no grid to look at, so the refusal is the flag.
 | `list_open_cfps`            | Calls currently accepting proposals  |
 | `submit_proposal`           | Create a proposal, as a draft        |
 | `update_proposal`           | Edit it while the call is open       |
+| `finalize_proposal`         | Hand it in — draft becomes submitted |
 | `withdraw_proposal`         | Take it back                         |
 | `list_my_proposals`         | Your proposals and where each stands |
 | `update_my_speaker_profile` | Bio, photo, links                    |

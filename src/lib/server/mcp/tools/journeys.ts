@@ -134,9 +134,11 @@ function submitProposal(ctx: McpContext): AnyMcpToolDefinition {
 		name: 'submit_proposal',
 		description:
 			'Create a draft proposal on an open call. Same function as the public CFP ' +
-			'form (`saveSubmission`). You become the speaker. A draft needs a title; ' +
-			'abstract, format, track and co-speakers are optional until you later submit ' +
-			'from the form. Identity comes from the access token.',
+			'form (`saveSubmission`). You become the speaker. A draft needs only a title. ' +
+			'It is NOT handed in yet — call finalize_proposal when it is ready, which is ' +
+			'when the abstract (if this call asks for one) and any required form fields ' +
+			'have to be there. Format, track and co-speakers stay optional throughout. ' +
+			'Identity comes from the access token.',
 		inputSchema: {
 			conferenceSlug: slugField.describe('From list_open_cfps.'),
 			title: z.string().min(1).describe('Talk title.'),
@@ -230,6 +232,81 @@ function updateProposal(ctx: McpContext): AnyMcpToolDefinition {
 			);
 			if (!result.ok) saveFailure(result);
 			return { submissionId: result.submissionId, status: result.status };
+		}
+	};
+}
+
+/**
+ * The submit button, as a tool.
+ *
+ * It is a tool of its own rather than a `submit: true` flag on the two writing
+ * tools, and that is the whole point of the fix: a model reads `tools/list`, so
+ * a transition that lives in a boolean inside an input schema is one it can miss
+ * — which is exactly how an agent-driven speaker journey dead-ended with a
+ * proposal the organizer could see and nobody had handed in.
+ *
+ * The slug is taken from the draft rather than from an argument. `saveSubmission`
+ * resolves the call by slug and would rewrite `conferenceId`/`cfpFormId` on a
+ * mismatch, so accepting one here would be a way to move a proposal between
+ * conferences; reading it from the row makes that unrepresentable instead of
+ * merely checked.
+ */
+function finalizeProposal(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'finalize_proposal',
+		description:
+			'Hand in one of your drafts — the same transition as the submit button on the ' +
+			'CFP form. Nothing you wrote changes; only the status does. What has to be ' +
+			'filled in by now: the title, your name and email, the abstract if this call ' +
+			'asks for one, and every form field the call marks required. Format, track and ' +
+			'co-speakers never become required. Calling it on a proposal that is already in ' +
+			'changes nothing and sends no second confirmation. While the call is open you ' +
+			'can still edit with update_proposal.',
+		inputSchema: {
+			submissionId: z.number().int().describe('From list_my_proposals.')
+		},
+		handler: async ({ submissionId }) => {
+			const existing = await editableDraft(ctx.userId, submissionId);
+			if (!existing) {
+				throw new McpToolError(
+					`No proposal ${submissionId} that is yours to hand in, or a decision has already been made.`
+				);
+			}
+
+			const draft = existing.draft;
+			const result = await saveSubmission(
+				ctx.userId,
+				existing.conferenceSlug,
+				{
+					title: draft.title,
+					abstract: draft.abstract || null,
+					keyTakeaway: draft.keyTakeaway || null,
+					audienceLevel: draft.audienceLevel || null,
+					sessionFormatId: draft.sessionFormatId,
+					trackId: draft.trackId,
+					answers: draft.answers,
+					speaker: {
+						name: draft.speaker.name,
+						sortName: draft.speaker.sortName,
+						email: draft.speaker.email,
+						jobTitle: draft.speaker.jobTitle || null,
+						company: draft.speaker.company || null,
+						bio: draft.speaker.bio || null
+					},
+					coSpeakers: asCoSpeakers(draft.coSpeakers)
+				},
+				{ submit: true, submissionId }
+			);
+			// A rejection here names the fields that are still missing — every
+			// message from `validateForSubmit` and `validateAnswers` carries its own
+			// label — so the agent learns what to fix rather than that it failed.
+			if (!result.ok) saveFailure(result);
+
+			return {
+				submissionId: result.submissionId,
+				status: result.status,
+				conferenceSlug: existing.conferenceSlug
+			};
 		}
 	};
 }
@@ -512,6 +589,7 @@ export function journeyTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		listOpenCfps(),
 		submitProposal(ctx),
 		updateProposal(ctx),
+		finalizeProposal(ctx),
 		withdrawProposal(ctx),
 		listMyProposals(ctx),
 		updateMySpeakerProfile(ctx),
