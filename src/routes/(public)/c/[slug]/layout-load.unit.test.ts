@@ -30,7 +30,7 @@ let load: Load;
 // loader — several microtasks pass before `load` is even called.
 beforeEach(async () => {
 	vi.clearAllMocks();
-	load = (await import('./+layout.server.ts')).load as unknown as Load;
+	load = (await import('./+layout.server')).load as unknown as Load;
 });
 
 /** The loader under test, with the arguments SvelteKit would hand it. */
