@@ -27,6 +27,21 @@ import { taskTable } from '$lib/server/db/conference/content-schema';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 /**
+ * The statement that attaches this account to unclaimed profiles at its address.
+ *
+ * Isolated so a test can count whether it ran. Counting rows the UPDATE returns
+ * would pass for a no-op write, which is the cost this function exists to drop.
+ */
+export const unclaimedProfileClaim = {
+	async write(userId: string, email: string): Promise<void> {
+		await db
+			.update(speakerProfileTable)
+			.set({ userId })
+			.where(and(eq(speakerProfileTable.email, email), isNull(speakerProfileTable.userId)));
+	}
+};
+
+/**
  * Attach this account to every profile that already stands for it.
  *
  * A speaker profile is created with no `userId` whenever someone other than its
@@ -46,6 +61,10 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
  * The address compared is the account's, so the claim is only as strong as the
  * deployment's signup check — see `upsertOwnProfile`, which makes the same trade
  * on the write side.
+ *
+ * The UPDATE is not issued unless a row would change. A `where user_id is null`
+ * that matches nothing still sends the statement — a lock and a round-trip on
+ * every read of a page that only looks. Looking first is the whole fix.
  */
 export async function claimProfilesForAccount(userId: string): Promise<void> {
 	const [account] = await db
@@ -56,10 +75,15 @@ export async function claimProfilesForAccount(userId: string): Promise<void> {
 
 	if (!account?.email) return;
 
-	await db
-		.update(speakerProfileTable)
-		.set({ userId })
-		.where(and(eq(speakerProfileTable.email, account.email), isNull(speakerProfileTable.userId)));
+	const [claimable] = await db
+		.select({ id: speakerProfileTable.id })
+		.from(speakerProfileTable)
+		.where(and(eq(speakerProfileTable.email, account.email), isNull(speakerProfileTable.userId)))
+		.limit(1);
+
+	if (!claimable) return;
+
+	await unclaimedProfileClaim.write(userId, account.email);
 }
 
 /** The profile ids this user speaks under, across every organization. */

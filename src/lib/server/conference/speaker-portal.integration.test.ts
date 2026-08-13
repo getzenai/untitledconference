@@ -25,9 +25,9 @@ import {
 } from '$lib/server/db/conference/conference-schema';
 import { taskTable } from '$lib/server/db/conference/content-schema';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { saveSubmission, type SubmissionInput } from './cfp-submission';
-import { mySubmission, mySubmissions, myTasks } from './speaker-portal';
+import { mySubmission, mySubmissions, myTasks, unclaimedProfileClaim } from './speaker-portal';
 import { addSpeakerToConference } from './speakers';
 
 const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -329,5 +329,74 @@ describe('mySubmissions and myTasks for a co-speaker', () => {
 	it('still shows the submitter their own talk', async () => {
 		const titles = (await mySubmissions(submitter.id)).map((s) => s.title);
 		expect(titles).toContain('The two-person talk');
+	});
+});
+
+/**
+ * #289 — the claim write must not leave the process unless a row would change.
+ *
+ * Counting rows the UPDATE returns would pass for a no-op statement, which is
+ * still a lock and a round-trip. The spy is on the write itself.
+ */
+describe('claimProfilesForAccount write path', () => {
+	let organizationId = '';
+	let conference: Conference;
+	let speaker: { id: string; email: string };
+	let claimedProfileId = 0;
+
+	beforeAll(async () => {
+		({ organizationId, conference } = await makeOrg('claim-write'));
+		speaker = await makeUser('claim-write');
+
+		const added = await addSpeakerToConference(conference, {
+			name: 'Priya Raman',
+			email: speaker.email
+		});
+		if (!added.ok) throw new Error('fixture: addSpeakerToConference failed');
+		claimedProfileId = added.speakerProfileId;
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, organizationId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+	});
+
+	it('claims on the first load and sends no write on the second', async () => {
+		const writes = vi.spyOn(unclaimedProfileClaim, 'write');
+
+		await mySubmissions(speaker.id);
+
+		expect(writes).toHaveBeenCalledTimes(1);
+		expect(writes).toHaveBeenCalledWith(speaker.id, speaker.email);
+
+		const [row] = await db
+			.select({ userId: speakerProfileTable.userId })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.id, claimedProfileId));
+		expect(row.userId).toBe(speaker.id);
+
+		writes.mockClear();
+		await mySubmissions(speaker.id);
+		expect(writes).not.toHaveBeenCalled();
+
+		writes.mockRestore();
+	});
+
+	it('sends no write when the profile is already this account', async () => {
+		const already = await makeUser('claim-already');
+		await db.insert(speakerProfileTable).values({
+			organizationId,
+			userId: already.id,
+			name: 'Priya Raman',
+			sortName: 'Raman, Priya',
+			email: already.email
+		});
+
+		const writes = vi.spyOn(unclaimedProfileClaim, 'write');
+		await mySubmissions(already.id);
+		expect(writes).not.toHaveBeenCalled();
+		writes.mockRestore();
+
+		await db.delete(user).where(eq(user.id, already.id));
 	});
 });
