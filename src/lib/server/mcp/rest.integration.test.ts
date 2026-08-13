@@ -82,6 +82,48 @@ describe('REST adapter', () => {
 				expect.objectContaining({ id: created.body.submissionId, status: 'draft' })
 			])
 		);
+
+		const updated = await dispatchRest(
+			'PATCH',
+			`/me/proposals/${created.body.submissionId}`,
+			casey,
+			{
+				body: { conferenceSlug: seeded.conferenceSlug, title: 'REST draft, edited' }
+			}
+		);
+		expect(updated.status).toBe(200);
+
+		const withdrawn = await dispatchRest(
+			'POST',
+			`/me/proposals/${created.body.submissionId}/withdraw`,
+			casey,
+			{}
+		);
+		expect(withdrawn.status).toBe(200);
+		expect(withdrawn.body.status).toBe('withdrawn');
+	});
+
+	it('creates a room through create_room and lists it on GET /rooms', async () => {
+		const created = await dispatchRest(
+			'POST',
+			`/conferences/${seeded.conferenceSlug}/rooms`,
+			organizer,
+			{
+				body: { name: 'REST Stage' }
+			}
+		);
+		expect(created.status).toBe(200);
+
+		const listed = await dispatchRest(
+			'GET',
+			`/conferences/${seeded.conferenceSlug}/rooms`,
+			organizer,
+			{}
+		);
+		expect(listed.status).toBe(200);
+		expect(listed.body.rooms).toEqual(
+			expect.arrayContaining([expect.objectContaining({ name: 'REST Stage' })])
+		);
 	});
 
 	it('refuses a missing required field with 400, not 500', async () => {
@@ -118,7 +160,11 @@ describe('REST adapter', () => {
 				'create_conference',
 				'decide_submissions',
 				'submit_proposal',
-				'get_agenda'
+				'update_proposal',
+				'withdraw_proposal',
+				'get_agenda',
+				'list_rooms',
+				'place_talk'
 			])
 		);
 	});

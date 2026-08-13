@@ -1,8 +1,34 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const loggerError = vi.fn();
+const loggerWarn = vi.fn();
+vi.mock('$lib/server/logger', () => ({
+	createLogger: () => ({
+		info: vi.fn(),
+		debug: vi.fn(),
+		warn: (...args: unknown[]) => loggerWarn(...args),
+		error: (...args: unknown[]) => loggerError(...args)
+	})
+}));
+
+const { allToolsMock } = vi.hoisted(() => ({ allToolsMock: vi.fn() }));
+vi.mock('./server', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('./server')>();
+	allToolsMock.mockImplementation(actual.allTools);
+	return { ...actual, allTools: allToolsMock };
+});
+
+import { buildOpenApiDocument } from './openapi';
 import { allowedMethods, invokeTool, matchRestRoute, REST_ROUTES } from './rest';
 import { allTools } from './server';
 
 const ctx = { userId: 'user-1', organizationId: 'org-1' };
+
+beforeEach(() => {
+	loggerError.mockClear();
+	loggerWarn.mockClear();
+	allToolsMock.mockClear();
+});
 
 describe('the REST route table', () => {
 	it('names only tools that exist in the registry', () => {
@@ -21,6 +47,22 @@ describe('the REST route table', () => {
 			'decide_submissions'
 		);
 		expect(matchRestRoute('GET', '/conferences/harness/agenda')?.route.tool).toBe('get_agenda');
+		expect(matchRestRoute('GET', '/conferences/harness/rooms')?.route.tool).toBe('list_rooms');
+		expect(matchRestRoute('POST', '/conferences/harness/agenda/placements')?.route.tool).toBe(
+			'place_talk'
+		);
+	});
+
+	it('keeps speaker writes under /me/proposals, not the organizer submission path', () => {
+		expect(matchRestRoute('GET', '/conferences/harness/submissions/12')?.route.tool).toBe(
+			'get_submission'
+		);
+		expect(matchRestRoute('PATCH', '/conferences/harness/submissions/12')).toBeNull();
+		expect(allowedMethods('/conferences/harness/submissions/12')).toEqual(['GET']);
+		expect(matchRestRoute('PATCH', '/me/proposals/12')?.route.tool).toBe('update_proposal');
+		expect(matchRestRoute('POST', '/me/proposals/12/withdraw')?.route.tool).toBe(
+			'withdraw_proposal'
+		);
 	});
 
 	it('answers 405 with Allow when the path exists for another method', () => {
@@ -30,6 +72,16 @@ describe('the REST route table', () => {
 
 	it('does not invent an RPC /tools/<name> path', () => {
 		expect(matchRestRoute('POST', '/tools/list_my_conferences')).toBeNull();
+	});
+
+	it('publishes every route in the OpenAPI document', () => {
+		const spec = buildOpenApiDocument('https://example.test') as {
+			paths: Record<string, Record<string, { operationId?: string }>>;
+		};
+		for (const route of REST_ROUTES) {
+			const path = `/api/v1${route.pattern.replace(/:([A-Za-z]+)/g, '{$1}')}`;
+			expect(spec.paths[path]?.[route.method.toLowerCase()]?.operationId, path).toBe(route.tool);
+		}
 	});
 });
 
@@ -56,5 +108,31 @@ describe('invokeTool', () => {
 		expect(result.ok).toBe(false);
 		if (result.ok) return;
 		expect(result.body.error).not.toContain('expected number');
+	});
+
+	it('logs an unexpected failure at error so a REST 500 is diagnosable', async () => {
+		const thrown = new Error('connection to postgres://user:password@host/db failed');
+		allToolsMock.mockReturnValueOnce([
+			{
+				name: 'boom',
+				description: 'boom',
+				inputSchema: {},
+				handler: async () => {
+					throw thrown;
+				}
+			}
+		]);
+
+		const result = await invokeTool(ctx, 'boom', {});
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.status).toBe(500);
+		expect(result.body.error).toBe('Internal error');
+		expect(loggerError).toHaveBeenCalledWith(
+			'MCP tool call failed unexpectedly',
+			thrown,
+			expect.objectContaining({ tool: 'boom', errorKind: 'unexpected' })
+		);
+		expect(loggerWarn).not.toHaveBeenCalled();
 	});
 });

@@ -4,10 +4,13 @@
  * A route names a tool and how path / query / body become its arguments.
  * The handler is the one in `allTools` — there is no second implementation.
  */
+import { createLogger } from '$lib/server/logger';
 import { z } from 'zod';
 import { McpAuthError, type McpContext } from './context';
 import { allTools } from './server';
-import { McpToolError } from './tool-helpers';
+import { classifyError } from './tool-helpers';
+
+const logger = createLogger('MCP');
 
 export type RestMethod = 'GET' | 'POST' | 'PATCH';
 
@@ -44,21 +47,38 @@ export const REST_ROUTES: RestRoute[] = [
 		tool: 'get_submission'
 	},
 	{
-		method: 'PATCH',
-		pattern: '/conferences/:conferenceSlug/submissions/:submissionId',
-		tool: 'update_proposal'
-	},
-	{
-		method: 'POST',
-		pattern: '/conferences/:conferenceSlug/submissions/:submissionId/withdraw',
-		tool: 'withdraw_proposal'
-	},
-	{
 		method: 'POST',
 		pattern: '/conferences/:conferenceSlug/submissions/decisions',
 		tool: 'decide_submissions'
 	},
+	{ method: 'GET', pattern: '/conferences/:conferenceSlug/rooms', tool: 'list_rooms' },
+	{ method: 'POST', pattern: '/conferences/:conferenceSlug/rooms', tool: 'create_room' },
 	{ method: 'GET', pattern: '/conferences/:conferenceSlug/agenda', tool: 'get_agenda' },
+	{
+		method: 'GET',
+		pattern: '/conferences/:conferenceSlug/agenda/tray',
+		tool: 'get_agenda_tray'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/agenda/placements',
+		tool: 'place_talk'
+	},
+	{
+		method: 'PATCH',
+		pattern: '/conferences/:conferenceSlug/agenda/placements/:placementId',
+		tool: 'move_talk'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/agenda/placements/:placementId/swap',
+		tool: 'swap_talks'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/agenda/placements/:placementId/unplace',
+		tool: 'unplace_talk'
+	},
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/reviewers', tool: 'invite_reviewer' },
 	{
 		method: 'POST',
@@ -80,6 +100,16 @@ export const REST_ROUTES: RestRoute[] = [
 	{ method: 'GET', pattern: '/me', tool: 'get_my_profile' },
 	{ method: 'GET', pattern: '/me/organizations', tool: 'list_my_organizations' },
 	{ method: 'GET', pattern: '/me/proposals', tool: 'list_my_proposals' },
+	{
+		method: 'PATCH',
+		pattern: '/me/proposals/:submissionId',
+		tool: 'update_proposal'
+	},
+	{
+		method: 'POST',
+		pattern: '/me/proposals/:submissionId/withdraw',
+		tool: 'withdraw_proposal'
+	},
 	{ method: 'PATCH', pattern: '/me/speaker-profile', tool: 'update_my_speaker_profile' },
 	{ method: 'GET', pattern: '/me/reviews', tool: 'list_my_review_assignments' }
 ];
@@ -175,21 +205,37 @@ export async function invokeTool(
 		return { ok: false, status: 400, body: { error: `Invalid input: ${issues}` } };
 	}
 
+	const start = performance.now();
 	try {
 		const body = await tool.handler(parsed.data);
 		return { ok: true, status: 200, body };
 	} catch (error) {
-		if (error instanceof McpToolError) {
-			return { ok: false, status: 400, body: { error: error.message } };
+		const { message, kind } = classifyError(name, error);
+		const logContext = {
+			tool: name,
+			userId: ctx.userId,
+			organizationId: ctx.organizationId,
+			durationMs: Math.round(performance.now() - start),
+			success: false,
+			errorKind: kind
+		};
+		if (kind === 'unexpected') {
+			logger.error('MCP tool call failed unexpectedly', error, logContext);
+			return { ok: false, status: 500, body: { error: 'Internal error' } };
 		}
+		logger.warn('MCP tool call returned error', {
+			...logContext,
+			error: message,
+			cause: error instanceof Error ? error.message : String(error)
+		});
 		if (error instanceof McpAuthError) {
 			return {
 				ok: false,
 				status: error.code === 'no_user' ? 401 : 403,
-				body: { error: error.message }
+				body: { error: message }
 			};
 		}
-		return { ok: false, status: 500, body: { error: 'Internal error' } };
+		return { ok: false, status: 400, body: { error: message } };
 	}
 }
 
