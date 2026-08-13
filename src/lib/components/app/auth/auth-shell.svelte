@@ -10,11 +10,12 @@
 	 * something it was about "building amazing applications with our powerful
 	 * SvelteKit starter".
 	 *
-	 * What replaces it is one quiet column: the product's name, the card, and one
-	 * line underneath. The name is a link to the front door, which is also the way
-	 * out for a visitor who only wanted to read a conference's public site — the
-	 * old panel could not carry that link, because it was hidden below `lg`.
+	 * What replaces it is one quiet column: the card, and one line underneath.
+	 * The product name no longer needs to be spelled out here — the landing header
+	 * above carries the goose, the wordmark and the way out for a visitor who only
+	 * wanted to read a conference's public site.
 	 */
+	import LandingHeader from '$lib/components/landing-header.svelte';
 	import {
 		Card,
 		CardContent,
@@ -41,29 +42,27 @@
 	} = $props();
 </script>
 
-<div class="bg-muted flex min-h-screen flex-col items-center justify-center gap-6 px-4 py-12">
-	<a
-		href="/"
-		class="text-foreground hover:text-primary text-lg font-semibold tracking-tight transition-colors"
+<div class="bg-muted flex min-h-screen flex-col">
+	<LandingHeader selfHref="/" />
+	<div
+		class="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-12"
 	>
-		Untitled Conference
-	</a>
+			<Card class="w-full {wide ? 'max-w-md' : 'max-w-sm'} shadow-sm">
+			<CardHeader>
+				<CardTitle class="text-xl">{title}</CardTitle>
+				{#if description}
+					<CardDescription>{description}</CardDescription>
+				{/if}
+			</CardHeader>
+			<CardContent>
+				{@render children()}
+			</CardContent>
+		</Card>
 
-	<Card class="w-full {wide ? 'max-w-md' : 'max-w-sm'} shadow-sm">
-		<CardHeader>
-			<CardTitle class="text-xl">{title}</CardTitle>
-			{#if description}
-				<CardDescription>{description}</CardDescription>
-			{/if}
-		</CardHeader>
-		<CardContent>
-			{@render children()}
-		</CardContent>
-	</Card>
-
-	{#if footer}
-		<div class="text-muted-foreground text-center text-sm">
-			{@render footer()}
-		</div>
-	{/if}
+		{#if footer}
+			<div class="text-muted-foreground text-center text-sm">
+				{@render footer()}
+			</div>
+		{/if}
+	</div>
 </div>
