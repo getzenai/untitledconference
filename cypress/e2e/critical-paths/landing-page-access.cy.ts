@@ -22,6 +22,12 @@ describe('The product page for a signed-in user', () => {
 
 	it('opens the product page from the account menu and stays there', () => {
 		cy.visit('/home');
+		// The menu is a bits-ui dropdown, so it opens from a Svelte handler and not
+		// from markup: a click that lands before hydration hits a button with
+		// nothing attached and is swallowed silently. `cy.logout()` waits here for
+		// the same reason — this test used the same handle without the same wait,
+		// and lost the race on a slower machine.
+		cy.waitForHydration();
 
 		// Same handle the logout journey uses: the footer button of the sidebar
 		// opens the account menu.
