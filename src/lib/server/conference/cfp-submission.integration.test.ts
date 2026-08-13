@@ -36,6 +36,7 @@ import {
 	withdrawSubmission,
 	type SubmissionInput
 } from './cfp-submission';
+import { sameAddress } from './speaker-identity';
 import { editableDraft, mySubmissions, submissionForConference } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -48,6 +49,10 @@ const strangerId = `stranger-${suffix}`;
 /** Named as a co-presenter before they had an account, then signs up (#330). */
 const coSpeakerId = `co-speaker-${suffix}`;
 const coSpeakerEmail = `${coSpeakerId}@example.test`;
+/** Submits a proposal describing somebody else, the way the organizer did on prod (#229). */
+const jordanId = `jordan-${suffix}`;
+/** Marcus, who exists as a profile in this organization and has no account. */
+const marcusEmail = `marcus-${suffix}@example.test`;
 
 let workshopFormatId = 0;
 let talkFormatId = 0;
@@ -68,7 +73,8 @@ beforeAll(async () => {
 	await db.insert(user).values([
 		{ id: submitterId, email: `${submitterId}@example.test`, emailVerified: true, name: 'Sub' },
 		{ id: strangerId, email: `${strangerId}@example.test`, emailVerified: true, name: 'Nosy' },
-		{ id: coSpeakerId, email: coSpeakerEmail, emailVerified: true, name: 'Dana Okonkwo' }
+		{ id: coSpeakerId, email: coSpeakerEmail, emailVerified: true, name: 'Dana Okonkwo' },
+		{ id: jordanId, email: `${jordanId}@example.test`, emailVerified: true, name: 'Jordan Vale' }
 	]);
 
 	const [conference] = await db
@@ -152,6 +158,7 @@ afterAll(async () => {
 	await db.delete(user).where(eq(user.id, submitterId));
 	await db.delete(user).where(eq(user.id, strangerId));
 	await db.delete(user).where(eq(user.id, coSpeakerId));
+	await db.delete(user).where(eq(user.id, jordanId));
 });
 
 function input(overrides: Partial<SubmissionInput> = {}): SubmissionInput {
@@ -845,6 +852,22 @@ describe('the public form points at what you already sent', () => {
 	// in this signpost — that is asserted separately below.
 	const soloId = `solo-${suffix}`;
 
+	/**
+	 * Their own details, not the shared submitter's. The `input()` helper states
+	 * the submitter's address, and stating somebody else's is exactly what #229
+	 * refuses — the fixture was quietly describing the wrong person.
+	 */
+	function ownDetails(id: string, name: string): SubmissionInput['speaker'] {
+		return {
+			name,
+			sortName: guessSortName(name),
+			email: `${id}@example.test`,
+			jobTitle: null,
+			company: null,
+			bio: null
+		};
+	}
+
 	beforeAll(async () => {
 		await db.insert(user).values({
 			id: soloId,
@@ -859,9 +882,12 @@ describe('the public form points at what you already sent', () => {
 	});
 
 	it('finds a submitted proposal, not just an unfinished one', async () => {
-		const saved = await saveSubmission(soloId, slug, input({ title: 'Already sent' }), {
-			submit: true
-		});
+		const saved = await saveSubmission(
+			soloId,
+			slug,
+			input({ title: 'Already sent', speaker: ownDetails(soloId, 'Solo Speaker') }),
+			{ submit: true }
+		);
 		if (!saved.ok) throw new Error('expected a submitted proposal');
 
 		const [conference] = await db
@@ -886,9 +912,12 @@ describe('the public form points at what you already sent', () => {
 			name: 'Reader'
 		});
 		try {
-			const saved = await saveSubmission(readerId, slug, input({ title: 'Being reviewed' }), {
-				submit: true
-			});
+			const saved = await saveSubmission(
+				readerId,
+				slug,
+				input({ title: 'Being reviewed', speaker: ownDetails(readerId, 'Reader Reyes') }),
+				{ submit: true }
+			);
 			if (!saved.ok) throw new Error('expected a submitted proposal');
 
 			await db
@@ -912,9 +941,12 @@ describe('the public form points at what you already sent', () => {
 	});
 
 	it('prefers an unfinished draft when there is both', async () => {
-		const draft = await saveSubmission(soloId, slug, input({ title: 'Still writing' }), {
-			submit: false
-		});
+		const draft = await saveSubmission(
+			soloId,
+			slug,
+			input({ title: 'Still writing', speaker: ownDetails(soloId, 'Solo Speaker') }),
+			{ submit: false }
+		);
 		if (!draft.ok) throw new Error('expected a draft');
 
 		const [conference] = await db
@@ -1091,6 +1123,190 @@ describe('a co-presenter saving a proposal (#330)', () => {
 		// The same call from the submitter, so the refusal above is about which
 		// speaker asked and not about the proposal being unwithdrawable.
 		expect(await withdrawSubmission(submitterId, id)).toEqual({ ok: true });
+	});
+});
+
+/**
+ * The identity overwrite (#229, fault B).
+ *
+ * `speaker_profile.email` is a matching key, not a label: `upsertCoSpeaker`
+ * resolves a co-presenter to whichever profile in the organization holds the
+ * address. So the damage on prod was not only that the organizer's own profile
+ * was renamed — it was that every later co-presenter entry naming that address
+ * would have landed on their account.
+ */
+describe('stating somebody else’s address under "About you" (#229)', () => {
+	/** Marcus, on the roster with no account of his own — the prod shape. */
+	async function marcusOnTheRoster(): Promise<number> {
+		const [existing] = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.email, marcusEmail)
+				)
+			)
+			.limit(1);
+		if (existing) return existing.id;
+
+		const [created] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId,
+				name: 'Marcus Okafor',
+				sortName: 'Okafor, Marcus',
+				email: marcusEmail,
+				jobTitle: 'Staff Developer Advocate',
+				company: 'Cloudreach Labs'
+			})
+			.returning({ id: speakerProfileTable.id });
+		return created.id;
+	}
+
+	function asMarcus(): SubmissionInput['speaker'] {
+		return {
+			name: 'Marcus Okafor',
+			sortName: 'Okafor, Marcus',
+			email: marcusEmail,
+			jobTitle: 'Staff Developer Advocate',
+			company: 'Cloudreach Labs',
+			bio: null
+		};
+	}
+
+	it('refuses, and names the field the submitter was reaching for', async () => {
+		await marcusOnTheRoster();
+
+		const result = await saveSubmission(
+			jordanId,
+			slug,
+			input({ title: 'A talk Marcus is giving', speaker: asMarcus() }),
+			{ submit: true }
+		);
+
+		if (result.ok || result.reason !== 'invalid') {
+			throw new Error(`expected an invalid-field refusal, got ${JSON.stringify(result)}`);
+		}
+		// Named on the field the submitter typed into, and pointing at the thing
+		// they were actually reaching for.
+		expect(result.errors.speakerEmail).toMatch(/co-presenter/);
+
+		// The point of the refusal: Jordan's account is not now Marcus.
+		const mine = await db
+			.select({ name: speakerProfileTable.name, email: speakerProfileTable.email })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.userId, jordanId));
+		expect(mine.every((row) => row.name !== 'Marcus Okafor')).toBe(true);
+		expect(mine.every((row) => row.email !== marcusEmail)).toBe(true);
+	});
+
+	it('sees through a capital letter, because that is what a person types', async () => {
+		await marcusOnTheRoster();
+
+		const shouted = { ...asMarcus(), email: marcusEmail.toUpperCase() };
+		const result = await saveSubmission(
+			jordanId,
+			slug,
+			input({ title: 'A talk MARCUS is giving', speaker: shouted }),
+			{ submit: true }
+		);
+
+		if (result.ok || result.reason !== 'invalid') {
+			throw new Error(`expected an invalid-field refusal, got ${JSON.stringify(result)}`);
+		}
+		expect(result.errors.speakerEmail).toMatch(/co-presenter/);
+
+		// And the account that legitimately owns a capitalised address is not locked
+		// out by the same widening — the exception has to match the same way.
+		const mine = await db
+			.select({ email: speakerProfileTable.email })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.userId, jordanId));
+		expect(mine.every((row) => !sameAddress(row.email, marcusEmail))).toBe(true);
+	});
+
+	it('leaves the address where it was, so a co-presenter entry still finds Marcus', async () => {
+		const marcusId = await marcusOnTheRoster();
+
+		await saveSubmission(jordanId, slug, input({ title: 'Another try', speaker: asMarcus() }), {
+			submit: false
+		});
+
+		// This is the consequence the refusal exists for. If Jordan's profile had
+		// taken the address, `upsertCoSpeaker` would resolve Marcus to Jordan here
+		// and put Jordan on somebody else's proposal.
+		const saved = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Presenting with Marcus',
+				coSpeakers: [{ name: 'Marcus Okafor', email: marcusEmail, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false }
+		);
+		if (!saved.ok) throw new Error('expected a saved draft');
+
+		// Stated first, because it is what makes the next assertion mean anything:
+		// with two profiles carrying the address, `upsertCoSpeaker` takes whichever
+		// its `limit(1)` reaches, and landing on Marcus would prove nothing.
+		const holders = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.email, marcusEmail)
+				)
+			);
+		expect(holders.map((row) => row.id)).toEqual([marcusId]);
+
+		const speakers = await db
+			.select({ profileId: submissionSpeakerTable.speakerProfileId })
+			.from(submissionSpeakerTable)
+			.where(eq(submissionSpeakerTable.submissionId, saved.submissionId));
+
+		expect(speakers.map((row) => row.profileId)).toContain(marcusId);
+	});
+
+	it('still lets a speaker claim the profile an organizer made for them', async () => {
+		// The case the rule must not break: the address is the account's own, and a
+		// profile someone else created under it is exactly what claiming is for.
+		await db.insert(speakerProfileTable).values({
+			organizationId,
+			name: 'Jordan Vale',
+			sortName: 'Vale, Jordan',
+			email: `${jordanId}@example.test`
+		});
+
+		const result = await saveSubmission(
+			jordanId,
+			slug,
+			input({
+				title: 'My own talk',
+				speaker: {
+					name: 'Jordan Vale',
+					sortName: 'Vale, Jordan',
+					// Stated in a different case than the account holds it. The widening
+					// has to reach the exception too, or the guard locks people out of
+					// their own address instead of protecting somebody else's.
+					email: `${jordanId}@EXAMPLE.test`,
+					jobTitle: null,
+					company: null,
+					bio: null
+				}
+			}),
+			{ submit: false }
+		);
+
+		expect(result.ok).toBe(true);
+		const mine = await db
+			.select({ email: speakerProfileTable.email })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.userId, jordanId));
+		// Claimed, not forked: one profile, carrying the account's own address.
+		expect(mine).toHaveLength(1);
+		expect(sameAddress(mine[0].email, `${jordanId}@example.test`)).toBe(true);
 	});
 });
 

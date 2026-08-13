@@ -45,6 +45,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { publishedFormFor } from './cfp-form';
 import { dispatchConferenceEmails } from './email-dispatcher';
 import { listPublishedConferences } from './public-conference';
+import { emailHeldByAnother, refuseStatedAddress, sameAddress } from './speaker-identity';
 
 /** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
 export type CallState = 'open' | 'not_yet_open' | 'closed';
@@ -401,6 +402,14 @@ async function unclaimedProfileForEmail(
  * up does not fork it either. Updated on every save so the organizer sees the job
  * title and company the submitter last stated — EMB-01 and EMB-09 read those
  * columns literally.
+ *
+ * What it will not do is move somebody else's address onto this account (#229).
+ * On prod an organizer submitted a proposal describing another speaker and their
+ * own profile became that person, carrying that person's address — and from then
+ * on every co-presenter entry naming that address would have resolved to this
+ * account, with the reading and editing rights that carry. `refuseSave` says so
+ * on the form; this drops the address inside the write's own transaction, so a
+ * profile created between the two cannot slip past the message.
  */
 async function upsertOwnProfile(
 	tx: Tx,
@@ -412,6 +421,15 @@ async function upsertOwnProfile(
 ): Promise<number> {
 	const stated = statedProfileFields(speaker, submitting, fixed);
 
+	// The account is read up front rather than only on the create path, because
+	// the rule below needs it on every path: your own address is always yours to
+	// state, whoever else in this organization happens to be holding a row with it.
+	const [account] = await tx
+		.select({ name: user.name, email: user.email })
+		.from(user)
+		.where(eq(user.id, userId))
+		.limit(1);
+
 	const [existing] = await tx
 		.select({ id: speakerProfileTable.id })
 		.from(speakerProfileTable)
@@ -422,6 +440,17 @@ async function upsertOwnProfile(
 			)
 		)
 		.limit(1);
+
+	const claimable = existing
+		? null
+		: await unclaimedProfileForEmail(tx, organizationId, account?.email ?? null);
+
+	if (
+		!sameAddress(stated.email, account?.email) &&
+		(await emailHeldByAnother(tx, organizationId, stated.email, existing?.id ?? claimable))
+	) {
+		delete stated.email;
+	}
 
 	if (existing) {
 		if (Object.keys(stated).length > 0) {
@@ -436,14 +465,8 @@ async function upsertOwnProfile(
 	// `name` and `sortName` are NOT NULL, so a first profile needs something even
 	// when the form was left empty. The account is the honest fallback: it is who
 	// this person already told us they are.
-	const [account] = await tx
-		.select({ name: user.name, email: user.email })
-		.from(user)
-		.where(eq(user.id, userId))
-		.limit(1);
 	const fallbackName = account?.name?.trim() || account?.email || 'Unnamed speaker';
 
-	const claimable = await unclaimedProfileForEmail(tx, organizationId, account?.email ?? null);
 	if (claimable !== null) {
 		// Claim it rather than fork it. Identity columns the organizer typed are left
 		// alone — only `userId` and whatever this submission stated are written, the
@@ -696,6 +719,9 @@ async function refuseSave(
 			owned.conferenceId === call.conference.id;
 		if (!editable) return { ok: false, reason: 'forbidden' };
 	}
+
+	const stolen = await refuseStatedAddress(userId, call, input.speaker.email);
+	if (stolen) return stolen;
 
 	return null;
 }
