@@ -122,7 +122,7 @@ Locally, `npm run db:push` is enough. Anything that ships goes through a generat
 The script refuses to report success unless the database is actually current:
 
 - Production runs must come from a clean `origin/main`. A stale branch can carry journal history that is absent from its own diff.
-- Journal timestamps must increase. Drizzle compares each migration against the *highest* applied timestamp, so one rounded `when` in the future silently swallows every successor and still exits 0.
+- Journal timestamps must increase. Drizzle compares each migration against the _highest_ applied timestamp, so one rounded `when` in the future silently swallows every successor and still exits 0.
 - After applying, every committed migration must be recorded as applied. The skip above only happens against a database with history — which is to say, only in production — so CI on an empty database cannot catch it alone.
 
 CI also fails if `drizzle-kit generate` would write anything: a schema change committed without its migration would otherwise deploy an app against a database that lacks its columns. The deploy job dumps the live database first. Drizzle is forward-only; the rollback is `psql < dump.sql`, not a down-migration.
@@ -131,12 +131,12 @@ CI also fails if `drizzle-kit generate` would write anything: a schema change co
 
 SvelteKit route groups draw the line once, so a new page inherits its access by living in the right directory:
 
-| Group | Who gets in |
-| --- | --- |
-| `(public)/` | anyone — login, register, the programme under `/c/<slug>` |
-| `(protected)/` | a signed-in user. The group's `+layout.server.ts` redirects to `/login` if `locals.user` is missing. Pages inside do not re-check. |
-| `(admin)/` | a platform admin. Same pattern, plus `locals.isAdmin`. |
-| `(protected)/manage/[slug]/` | an organizer of that conference. The slug layout calls `requireOrganizer` once for the whole tree. |
+| Group                        | Who gets in                                                                                                                        |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `(public)/`                  | anyone — login, register, the programme under `/c/<slug>`                                                                          |
+| `(protected)/`               | a signed-in user. The group's `+layout.server.ts` redirects to `/login` if `locals.user` is missing. Pages inside do not re-check. |
+| `(admin)/`                   | a platform admin. Same pattern, plus `locals.isAdmin`.                                                                             |
+| `(protected)/manage/[slug]/` | an organizer of that conference. The slug layout calls `requireOrganizer` once for the whole tree.                                 |
 
 A user who may not see the conference gets a 404, not a 403 — a 403 would confirm the slug exists.
 
