@@ -297,10 +297,13 @@ describe('explicit decision notifications', () => {
 		const returnedAcceptance = await notifySubmissionDecisions(conference, [submission.id]);
 		expect(returnedAcceptance).toMatchObject({ notified: 1, alreadyNotified: 0, emailsQueued: 1 });
 
+		// The assertion is about the order the three sends happened in, so ask for that
+		// order: an unordered SELECT may hand the rows back in any sequence.
 		const emails = await db
 			.select({ template: emailLogTable.template })
 			.from(emailLogTable)
-			.where(eq(emailLogTable.relatedId, submission.id));
+			.where(eq(emailLogTable.relatedId, submission.id))
+			.orderBy(emailLogTable.id);
 		expect(emails.map((email) => email.template)).toEqual([
 			'decision_accepted',
 			'decision_rejected',
