@@ -1,5 +1,3 @@
-import { dev } from '$app/environment';
-import { env } from '$env/dynamic/private';
 import { getMcpResource, getServerOrigin } from '$lib/auth';
 import { mcpHandler } from '@better-auth/oauth-provider';
 import { McpAuthError, resolveMcpContext, type McpContext } from './context';
@@ -10,9 +8,12 @@ import { McpAuthError, resolveMcpContext, type McpContext } from './context';
  */
 export function mcpVerifyOptions() {
 	const serverOrigin = getServerOrigin();
-	const jwksUrl = dev
-		? `${serverOrigin}/api/auth/jwks`
-		: `http://127.0.0.1:${env.PORT || '3000'}/api/auth/jwks`;
+	// The public URL, in dev and in production alike. The starter pointed this at
+	// `http://127.0.0.1:$PORT` to save a hop on a Node container; on Workers there
+	// is no loopback listener, the fetch throws, and every verified request — even
+	// a bad token that should be a 401 — comes back as a 500. This is also what
+	// better-auth computes by default from the auth server's baseURL.
+	const jwksUrl = `${serverOrigin}/api/auth/jwks`;
 
 	return {
 		verifyOptions: {
