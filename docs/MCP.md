@@ -61,6 +61,7 @@ returns.
 | `create_session_format` / `list_session_formats` | Session shapes (Talk, Keynote, …) and their length. A fresh conference has none                        |
 | `create_track` / `list_tracks`                   | Tracks a proposal can pick. A fresh conference has none                                                |
 | `decide_submissions`                             | Accept, reject or waitlist — accepting also confirms the speakers and puts the talk in the agenda tray |
+| `notify_speakers`                                | Tell speakers the decision — same path as the Notify button. No email without a decision               |
 | `get_agenda`                                     | The scheduled programme, in start order                                                                |
 | `list_rooms` / `create_room`                     | The rooms of the grid                                                                                  |
 | `get_agenda_tray`                                | Accepted talks not yet on the grid, plus the days and rooms open to them                               |

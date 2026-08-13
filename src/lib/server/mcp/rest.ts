@@ -61,6 +61,11 @@ export const REST_ROUTES: RestRoute[] = [
 		pattern: '/conferences/:conferenceSlug/submissions/decisions',
 		tool: 'decide_submissions'
 	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/submissions/notifications',
+		tool: 'notify_speakers'
+	},
 	{ method: 'GET', pattern: '/conferences/:conferenceSlug/rooms', tool: 'list_rooms' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/rooms', tool: 'create_room' },
 	{ method: 'GET', pattern: '/conferences/:conferenceSlug/agenda', tool: 'get_agenda' },

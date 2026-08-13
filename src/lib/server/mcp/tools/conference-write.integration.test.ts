@@ -96,7 +96,8 @@ describe('organizer write tools', () => {
 				'create_session_format',
 				'list_session_formats',
 				'create_track',
-				'list_tracks'
+				'list_tracks',
+				'notify_speakers'
 			])
 		);
 	});
@@ -751,6 +752,87 @@ describe('review committee', () => {
 			created: 0,
 			skippedCount: 1,
 			skipped: [{ submissionId: submission.id, reason: 'not_in_round' }]
+		});
+	});
+
+	it('notifies a decided proposal through the table path, and a second call is already notified', async () => {
+		const slug = `mcp-write-notify-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Notify Conf',
+			slug,
+			startsOn: '2027-12-14',
+			endsOn: '2027-12-14',
+			venue: null
+		});
+		const [conference] = await db
+			.select({ id: conferenceTable.id, organizationId: conferenceTable.organizationId })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		const casey = seeded.people.find((person) => person.name === 'Casey Okonkwo')!;
+		const [speaker] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: conference.organizationId,
+				userId: casey.id,
+				name: casey.name,
+				sortName: casey.name,
+				email: casey.email
+			})
+			.returning({ id: speakerProfileTable.id });
+		const [accepted, undecided] = await db
+			.insert(submissionTable)
+			.values([
+				{
+					conferenceId: conference.id,
+					title: 'Accepted talk',
+					abstract: 'Has a decision to tell.',
+					status: 'submitted'
+				},
+				{
+					conferenceId: conference.id,
+					title: 'Still waiting',
+					abstract: 'No decision, so no mail.',
+					status: 'submitted'
+				}
+			])
+			.returning({ id: submissionTable.id });
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: accepted.id,
+			speakerProfileId: speaker.id,
+			isPrimary: true,
+			position: 0
+		});
+
+		const decided = await call(organizer, 'decide_submissions', {
+			conferenceSlug: slug,
+			submissionIds: [accepted.id],
+			decision: 'accepted'
+		});
+		expect(decided.data!.decided).toBe(1);
+
+		const first = await call(organizer, 'notify_speakers', {
+			conferenceSlug: slug,
+			submissionIds: [accepted.id, undecided.id]
+		});
+		expect(first.isError).toBe(false);
+		expect(first.data).toMatchObject({
+			requested: 2,
+			notified: 1,
+			alreadyNotified: 0,
+			notDecided: 1,
+			withoutEmail: 0,
+			emailsQueued: 1
+		});
+
+		const second = await call(organizer, 'notify_speakers', {
+			conferenceSlug: slug,
+			submissionIds: [accepted.id]
+		});
+		expect(second.data).toMatchObject({
+			requested: 1,
+			notified: 0,
+			alreadyNotified: 1,
+			emailsQueued: 0
 		});
 	});
 });
