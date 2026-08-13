@@ -6,6 +6,7 @@
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
+import ContentTaskList from './content-task-list.svelte';
 
 const conference = {
 	id: 1,
@@ -22,28 +23,53 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
-const speaker = (id: number) => ({
+const task = (
+	id: number,
+	over: Partial<{
+		title: string;
+		kind: string;
+		status: string;
+		dueOn: Date | null;
+		fileCount: number;
+		latestFilename: string | null;
+		latestApproval: string | null;
+		sessionTitle: string | null;
+	}> = {}
+) => ({
+	id,
+	title: `Slides ${id}`,
+	kind: 'file_request',
+	status: 'open',
+	dueOn: null,
+	fileCount: 0,
+	latestFilename: null,
+	latestApproval: null,
+	sessionTitle: null as string | null,
+	...over
+});
+
+const speaker = (
+	id: number,
+	over: {
+		email?: string | null;
+		hasAccount?: boolean;
+		tasks?: ReturnType<typeof task>[];
+		open?: number;
+		waiting?: number;
+		done?: number;
+	} = {}
+) => ({
 	speakerProfileId: id,
 	name: `Speaker ${id}`,
 	// Nullable, like the column: an organizer-created speaker may have no address,
 	// and CNT-08 has to leave that person out of a bulk send.
 	email: `speaker${id}@example.test` as string | null,
 	hasAccount: true,
-	tasks: [
-		{
-			id: id * 10,
-			title: `Slides ${id}`,
-			kind: 'file_request',
-			status: 'open',
-			dueOn: null,
-			fileCount: 0,
-			latestFilename: null,
-			latestApproval: null
-		}
-	],
+	tasks: [task(id * 10, { title: `Slides ${id}` })],
 	open: 1,
 	waiting: 0,
-	done: 0
+	done: 0,
+	...over
 });
 
 const renderWith = (count: number) =>
@@ -82,7 +108,7 @@ describe('organizer speaker content layout', () => {
 });
 
 describe('organizer speaker content cards', () => {
-	it('starts every card collapsed, with an open/total count on the header', () => {
+	it('starts every card collapsed, with a to-do count on the header', () => {
 		const body = renderWith(2);
 
 		// Collapsed on first render — the task list markup is not in the SSR
@@ -92,13 +118,83 @@ describe('organizer speaker content cards', () => {
 		expect(body).toMatch(/aria-expanded="false"/);
 		expect(body.match(/aria-expanded="false"/g)).toHaveLength(2);
 		// speaker() gives each speaker one open task, zero waiting, zero done.
-		expect(body).toContain('1 open · 1 task');
+		expect(body).toContain('1 of 1 task to do');
+		expect(body).not.toContain('open ·');
+		expect(body).not.toContain('Open tasks');
 	});
 
 	it('is a real, keyboard-reachable toggle button, not a div with an onclick', () => {
 		const body = renderWith(1);
 
 		expect(body).toMatch(/<button[^>]*aria-expanded="false"[^>]*>/);
+	});
+
+	it('states how many of the speaker’s tasks are still to do', () => {
+		const twoTalks = speaker(1, {
+			tasks: [
+				task(11, { title: 'Upload slides', sessionTitle: 'Shipping on Fridays' }),
+				task(12, {
+					title: 'Upload slides',
+					sessionTitle: 'Practical event streaming',
+					status: 'done'
+				})
+			],
+			open: 1,
+			done: 1
+		});
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [twoTalks],
+					totals: { speakers: 1, open: 1, waiting: 0, done: 1, overdue: 0 }
+				},
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('1 of 2 tasks to do');
+		expect(body).not.toContain('open ·');
+		expect(body).not.toContain('Open tasks');
+	});
+
+	it('names the talk on each task so two identical rows stay distinguishable', () => {
+		const body = render(ContentTaskList, {
+			props: {
+				base: '/manage/test-conf',
+				tasks: [
+					task(11, { title: 'Upload slides', sessionTitle: 'Shipping on Fridays' }),
+					task(12, {
+						title: 'Upload slides',
+						sessionTitle: 'Practical event streaming',
+						status: 'done'
+					})
+				]
+			}
+		}).body;
+
+		expect(body.match(/Upload slides/g)).toHaveLength(2);
+		expect(body).toContain('Shipping on Fridays');
+		expect(body).toContain('Practical event streaming');
+		expect(body).toContain('To do');
+		expect(body).not.toContain('>Open<');
+		expect(body).not.toContain('Open tasks');
+	});
+
+	it('does not invent a talk name when the task is event-wide', () => {
+		const body = render(ContentTaskList, {
+			props: {
+				base: '/manage/test-conf',
+				tasks: [task(13, { title: 'Complete bio and profile', sessionTitle: null })]
+			}
+		}).body;
+
+		expect(body).toContain('Complete bio and profile');
+		expect(body).toContain('To do');
+		expect(body).not.toContain('Event-wide');
 	});
 });
 

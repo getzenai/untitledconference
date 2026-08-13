@@ -36,6 +36,8 @@ export type ContentTask = {
 	fileCount: number;
 	latestFilename: string | null;
 	latestApproval: string | null;
+	/** The talk this task belongs to, when it is about one rather than the speaker. */
+	sessionTitle: string | null;
 };
 
 export type ContentSpeaker = {
@@ -64,6 +66,7 @@ function selectTasks(conferenceId: number) {
 			kind: taskTable.kind,
 			status: taskTable.status,
 			dueOn: taskTable.dueOn,
+			sessionTitle: submissionTable.title,
 			speakerProfileId: speakerProfileTable.id,
 			speakerName: speakerProfileTable.name,
 			speakerEmail: speakerProfileTable.email,
@@ -71,6 +74,7 @@ function selectTasks(conferenceId: number) {
 		})
 		.from(taskTable)
 		.innerJoin(speakerProfileTable, eq(speakerProfileTable.id, taskTable.speakerProfileId))
+		.leftJoin(submissionTable, eq(submissionTable.id, taskTable.submissionId))
 		.where(eq(taskTable.conferenceId, conferenceId))
 		.orderBy(asc(speakerProfileTable.sortName), asc(taskTable.id));
 }
@@ -117,7 +121,8 @@ function toTask(t: TaskRow, summary: FileSummary | undefined): ContentTask {
 		dueOn: t.dueOn,
 		fileCount: summary?.count ?? 0,
 		latestFilename: summary?.filename ?? null,
-		latestApproval: summary?.approval ?? null
+		latestApproval: summary?.approval ?? null,
+		sessionTitle: t.sessionTitle
 	};
 }
 
