@@ -316,7 +316,11 @@ function finalizeProposal(ctx: McpContext): AnyMcpToolDefinition {
 			// already picked up is `in_review`, and `submissionValues` correctly
 			// leaves it there — so the derived answer would contradict the database
 			// and `list_my_proposals` (#331).
-			const stored = await ownedSubmission(ctx.userId, submissionId);
+			// 'speaker' and not 'primary': a co-presenter is allowed to hand the
+			// proposal in, and asking as the primary would answer `null` for them —
+			// dropping the status straight back onto the derived value this read
+			// exists to replace (#330).
+			const stored = await ownedSubmission(ctx.userId, submissionId, 'speaker');
 
 			return {
 				submissionId: result.submissionId,
