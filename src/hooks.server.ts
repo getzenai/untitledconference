@@ -67,8 +67,24 @@ const databaseScopeHandler: Handle = ({ event, resolve }) => {
 const BOT_GUARDED_PREFIXES = ['/api/auth', API_V1_PUBLIC_PREFIX];
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+// The OAuth machine endpoints are the exception, and they are one on purpose.
+// "Registration" above means a person signing up; `/api/auth/oauth2/register` is
+// RFC 7591 *client* registration, where an automated client is not the abuse
+// case but the only caller there will ever be. Guarding it rejects exactly the
+// software we published an MCP server for: a client announcing itself as
+// `Claude-User` or `ClaudeBot` was answered with 403 here, so connecting Claude
+// failed at the first step with a message about crawlers.
+//
+// Narrow on purpose — sign-in, sign-up and invitations keep the guard, which is
+// what it was written for.
+const BOT_EXEMPT_PREFIXES = ['/api/auth/oauth2/'];
+const isBotExempt = (pathname: string) =>
+	BOT_EXEMPT_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+
 const botDetectionHandler: Handle = async ({ event, resolve }) => {
-	const isGuarded = BOT_GUARDED_PREFIXES.some((prefix) => event.url.pathname.startsWith(prefix));
+	const isGuarded =
+		BOT_GUARDED_PREFIXES.some((prefix) => event.url.pathname.startsWith(prefix)) &&
+		!isBotExempt(event.url.pathname);
 
 	if (isGuarded && !SAFE_METHODS.has(event.request.method)) {
 		const crawler = detectAiCrawler(event.request.headers.get('user-agent'));
