@@ -299,14 +299,15 @@ describe('the still-to-review filter and the reviews column', () => {
 	});
 
 	/**
-	 * The count in the header IS the way into the filter. Reading "2 unreviewed" and
-	 * then having to build the query by hand is the gap the issue describes.
+	 * The count in the header IS the way into the filter. Reading "2 still to review"
+	 * and then having to build the query by hand is the gap the issue describes.
 	 */
-	it('makes the unreviewed count a link to the filter it counts', () => {
+	it('makes the still-to-review count a link to the filter it counts', () => {
 		const body = renderPage();
 
 		expect(body).toContain('href="/manage/test-conf/submissions?needsReview=on"');
 		expect(body).toContain('data-testid="unreviewed-count"');
+		expect(body).toContain('2 still to review');
 	});
 
 	it('offers the filter as a checkbox and shows it as on when it is', () => {

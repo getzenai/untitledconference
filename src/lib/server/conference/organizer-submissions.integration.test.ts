@@ -469,21 +469,18 @@ describe('the exported file itself', () => {
 });
 
 /**
- * "What is left to review" (#122) — the filter the user interview asked for by
- * name, and the order that goes with it.
+ * "What is left to review" (#122 / #261) — the live pipeline, not "zero reviews".
  *
- * Two things here can only be asked of a database. The first is what counts as
- * reviewed: an assignment nobody has answered is not a review, and a review filed
- * under another conference's plan is not this conference's business. Both are
- * decided by a join, and a join is not something a unit test can be wrong about.
- *
- * The second is the one that would embarrass us in front of an organizer: the
- * number in the page header and the number of rows the filter returns are two
- * different queries, and they have to agree. They are built from one expression
- * now, and this is where that stays true.
+ * Two things here can only be asked of a database. The first is the status
+ * boundary: an in-review talk with a handed-in review still belongs, a decided
+ * talk does not, and a draft never did. The second is the one that would
+ * embarrass us in front of an organizer: the number in the page header and the
+ * number of rows the filter returns are two different queries, and they have
+ * to agree. They are built from one expression now, and this is where that
+ * stays true.
  */
 describe('the still-to-review filter (#122)', () => {
-	/** One reviewed talk, one assigned-but-unanswered, one untouched, one draft. */
+	/** One in-review talk with a review, one assigned-but-unanswered, one untouched, one draft. */
 	async function pile() {
 		await addSubmission(conference, 'Reviewed talk', 1);
 		await addSubmission(conference, 'Assigned talk', 2);
@@ -500,18 +497,29 @@ describe('the still-to-review filter (#122)', () => {
 			depth: null,
 			submitted: false
 		});
+		// The status a talk lands in once someone starts reviewing — and the one
+		// that used to vanish from this filter as soon as a review was handed in.
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(
+				and(
+					eq(submissionTable.conferenceId, conference.id),
+					eq(submissionTable.title, 'Reviewed talk')
+				)
+			);
 	}
 
 	const titlesOf = async (filters = { needsReview: true }) =>
 		(await listSubmissions(conference.id, filters, 1, 'title-asc')).rows.map((r) => r.title);
 
-	it('keeps what nobody has handed a review in on, and drops what somebody has', async () => {
+	it('keeps an in-review talk that already has a handed-in review', async () => {
 		await pile();
 
-		// The assigned-but-unanswered talk is the interesting one: it has a review
-		// row, and it still needs reviewing. Counting rows instead of submissions
-		// would drop it and hide exactly the talk somebody is sitting on.
-		expect(await titlesOf()).toEqual(['Assigned talk', 'Untouched talk']);
+		// The reviewed talk is the interesting one: it is in review and somebody
+		// has handed a verdict in. That is still work outstanding until a decision
+		// is made — dropping it hid the pile Fabian was actually looking at.
+		expect(await titlesOf()).toEqual(['Assigned talk', 'Reviewed talk', 'Untouched talk']);
 	});
 
 	/**
@@ -544,7 +552,7 @@ describe('the still-to-review filter (#122)', () => {
 			);
 
 		const titles = await titlesOf();
-		expect(titles).toEqual(['Assigned talk', 'Untouched talk']);
+		expect(titles).toEqual(['Assigned talk', 'Reviewed talk', 'Untouched talk']);
 		expect(titles).not.toContain('Already accepted');
 		expect(titles).not.toContain('Already withdrawn');
 	});
@@ -564,43 +572,14 @@ describe('the still-to-review filter (#122)', () => {
 	 * queries; one expression feeds both, and this is the assertion that keeps it
 	 * that way. Drift here reads as data loss to the person looking at the screen.
 	 */
-	it('matches the unreviewed count the page header shows', async () => {
+	it('matches the still-to-review count the page header shows', async () => {
 		await pile();
 
 		const totals = await submissionTotals(conference.id);
 		const filtered = await listSubmissions(conference.id, { needsReview: true });
 
 		expect(filtered.matching).toBe(totals.unreviewed);
-		expect(totals.unreviewed).toBe(2);
-	});
-
-	/**
-	 * A review row can name a submission of this conference under a plan belonging
-	 * to another one — nothing in the schema forbids it. The join is what says such
-	 * a review does not count, so it is worth one row of proof rather than trust.
-	 */
-	it('ignores a review filed under another conference plan', async () => {
-		await addSubmission(conference, 'Untouched talk', 1);
-
-		const [foreignPlan] = await db
-			.insert(evaluationPlanTable)
-			.values({ conferenceId: other.id, name: 'Their plan' })
-			.returning();
-		const [foreignRound] = await db
-			.insert(reviewRoundTable)
-			.values({ evaluationPlanId: foreignPlan.id, name: 'Their round', position: 0 })
-			.returning();
-		await db.insert(reviewTable).values({
-			reviewRoundId: foreignRound.id,
-			submissionId: await idFor('Untouched talk'),
-			reviewerUserId: REVIEWERS[0],
-			status: 'submitted',
-			submittedAt: new Date()
-		});
-
-		expect(await titlesOf()).toEqual(['Untouched talk']);
-
-		await db.delete(evaluationPlanTable).where(eq(evaluationPlanTable.id, foreignPlan.id));
+		expect(totals.unreviewed).toBe(3);
 	});
 
 	it('composes with the other filters rather than replacing them', async () => {
@@ -617,6 +596,7 @@ describe('the still-to-review filter (#122)', () => {
 			);
 
 		expect(await titlesOf({ needsReview: true, status: ['in_review'] } as never)).toEqual([
+			'Reviewed talk',
 			'Untouched talk in review'
 		]);
 	});
@@ -626,7 +606,11 @@ describe('the still-to-review filter (#122)', () => {
 		await pile();
 
 		const exported = await exportSubmissions(conference.id, { needsReview: true }, 'title-asc');
-		expect(exported.rows.map((r) => r.title)).toEqual(['Assigned talk', 'Untouched talk']);
+		expect(exported.rows.map((r) => r.title)).toEqual([
+			'Assigned talk',
+			'Reviewed talk',
+			'Untouched talk'
+		]);
 	});
 });
 

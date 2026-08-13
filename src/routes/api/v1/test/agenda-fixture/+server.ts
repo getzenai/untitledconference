@@ -57,9 +57,9 @@ type FixtureRequest = {
 	 *
 	 * Same reason as the days: a review cannot be produced through the UI without
 	 * walking plan → round → scorecard → assignment → submit in every spec that
-	 * wants one reviewed talk. The still-to-review filter is only worth testing
-	 * against a pile where some are and some are not, and this is the cheapest
-	 * honest way to have both.
+	 * wants one reviewed talk. The reviews sort is only worth testing against a
+	 * pile where some are and some are not, and this is the cheapest honest way
+	 * to have both.
 	 */
 	reviewed?: string[];
 	/**
@@ -140,10 +140,10 @@ async function addSession(
 /**
  * One handed-in review per named title, under this conference's own plan (#122).
  *
- * No scores: the still-to-review filter and the reviews order both count reviews
- * with `status = 'submitted'`, and a scorecard would only add rows nothing here
- * reads. The reviewer is the organizer themselves, which no rule forbids — they
- * are not a speaker on any of these.
+ * No scores: the reviews order counts reviews with `status = 'submitted'`, and
+ * a scorecard would only add rows nothing here reads. The reviewer is the
+ * organizer themselves, which no rule forbids — they are not a speaker on any
+ * of these.
  */
 async function addSubmittedReviews(
 	conferenceId: number,

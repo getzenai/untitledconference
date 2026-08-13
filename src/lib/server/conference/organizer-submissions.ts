@@ -35,7 +35,7 @@ import {
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
 import { and, asc, count, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
-import { orderFor, submittedReviewCount, type SubmissionSort } from './submission-sort';
+import { orderFor, type SubmissionSort } from './submission-sort';
 
 export type SubmissionFilters = {
 	q?: string;
@@ -152,36 +152,35 @@ function pushScore(
 }
 
 /**
- * Still to be reviewed: live pipeline only, and not one review handed in yet.
+ * Still to be reviewed: the live pipeline, whether or not a review is already in.
  *
  * The most-asked-for filter on this screen, and the definition is the one already
  * printed in the page header — the same expression feeds both, so the filter and
  * the count above it cannot drift apart. A filter that shows 14 rows under a
  * header saying 12 is a bug report, not a feature.
  *
- * Scope is submitted/in_review only. Fabian's journey review: accepted and
- * withdrawn talks with no reviews still showed under "still to review", which
- * reads as open work when the decision is already made. Those are decisions —
- * use the status checkboxes for them. Drafts stay out for the same reason as
- * always: a draft has not been handed in; putting it on the reviewers' pile
- * would be reading somebody's notebook.
+ * Scope is submitted/in_review only. A talk someone has started reviewing moves
+ * to `in_review` and often already has a handed-in review; it is still, in
+ * plain language, still to review until it is decided (#261). Fabian's journey
+ * review: accepted and withdrawn talks with no reviews still showed under
+ * "still to review", which reads as open work when the decision is already
+ * made. Those are decisions — use the status checkboxes for them. Drafts stay
+ * out for the same reason as always: a draft has not been handed in; putting
+ * it on the reviewers' pile would be reading somebody's notebook.
  *
  * AND with a status checkbox is intentional and can be empty: "accepted" +
  * still-to-review is a guaranteed empty set (accepted is never in the live
  * pipeline). That is okay — the checkboxes still mean what they say.
  */
-function needsReviewWhere(conferenceId: number) {
-	return and(
-		inArray(submissionTable.status, ['submitted', 'in_review']),
-		sql`${submittedReviewCount(conferenceId)} = 0`
-	)!;
+function needsReviewWhere() {
+	return inArray(submissionTable.status, ['submitted', 'in_review']);
 }
 
 /** The SQL predicate behind the filter bar. */
 function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
 	const where = [eq(submissionTable.conferenceId, conferenceId)];
 
-	if (filters.needsReview) where.push(needsReviewWhere(conferenceId));
+	if (filters.needsReview) where.push(needsReviewWhere());
 
 	// Status checkboxes AND with still-to-review. Accepted + still-to-review is
 	// empty by construction (see needsReviewWhere) — not a bug.
@@ -433,12 +432,13 @@ export async function submissionTotals(conferenceId: number) {
 	// The very predicate the "still to review" filter applies (#122), not a second
 	// spelling of it. This number is a link to that filter now, and a header that
 	// promised 12 and then showed 14 rows would be the first thing an organizer
-	// stopped trusting on this screen.
+	// stopped trusting on this screen. After #261 that predicate is the live
+	// pipeline — same set as `undecided` — not "zero reviews handed in".
 	const [row] = await db
 		.select({
 			total: count(),
 			undecided: sql<number>`count(*) filter (where ${undecided})`,
-			unreviewed: sql<number>`count(*) filter (where ${needsReviewWhere(conferenceId)})`
+			unreviewed: sql<number>`count(*) filter (where ${needsReviewWhere()})`
 		})
 		.from(submissionTable)
 		.where(eq(submissionTable.conferenceId, conferenceId));

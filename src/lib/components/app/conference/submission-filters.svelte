@@ -135,10 +135,10 @@
 	<!--
 		The one filter the interview asked for by name (#122): what is left to review.
 
-		A checkbox rather than an eighth status box, because it is not a status — a
-		talk needs reviewing or not regardless of where it sits in the pipeline, and
-		the two compose: "submitted" plus this one is the queue an organizer chases
-		on a Monday morning.
+		The live pipeline — submitted and in review — whether or not a review has
+		already been handed in (#261). A checkbox rather than an eighth status box,
+		because it is not a status, and the two compose: "submitted" plus this one
+		is the queue an organizer chases on a Monday morning.
 	-->
 	<label class="flex cursor-pointer items-center gap-1.5 pb-1.5 text-sm">
 		<input

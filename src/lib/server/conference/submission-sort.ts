@@ -108,10 +108,8 @@ export function scoreExpression(conferenceId: number) {
  * the same submission id cannot appear under another conference's plan, but the
  * join is what says so rather than the caller.
  *
- * One definition, two readers: this expression orders the table, and
- * `organizer-submissions` builds the "still to review" filter and the header's
- * unreviewed count out of the same SQL. A filter that disagreed with the number
- * printed above it would be worse than no filter.
+ * Used to order the table by how many reviews are in. The "still to review"
+ * filter is the live pipeline (submitted / in_review), not this count (#261).
  */
 export function submittedReviewCount(conferenceId: number) {
 	return sql<number>`(
