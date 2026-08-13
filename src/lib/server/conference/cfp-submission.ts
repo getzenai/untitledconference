@@ -44,6 +44,7 @@ import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { publishedFormFor } from './cfp-form';
 import { dispatchConferenceEmails } from './email-dispatcher';
+import { listPublishedConferences } from './public-conference';
 
 /** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
 export type CallState = 'open' | 'not_yet_open' | 'closed';
@@ -835,4 +836,80 @@ export async function ownedSubmission(userId: string, submissionId: number) {
 		.limit(1);
 
 	return row ?? null;
+}
+
+export type OpenCallSummary = {
+	slug: string;
+	name: string;
+	venue: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
+	formTitle: string;
+	opensAt: string | null;
+	closesAt: string | null;
+	formats: { id: number; name: string }[];
+	tracks: { id: number; name: string }[];
+};
+
+/**
+ * Every published conference whose call is currently taking submissions.
+ *
+ * Built from `listPublishedConferences` + `openCall`, the same two loaders the
+ * landing page and `/c/<slug>/submit` already use. A draft, a still-hidden form
+ * or a closed window does not appear — the public site would not offer them
+ * either.
+ */
+export async function listOpenCalls(now = new Date()): Promise<OpenCallSummary[]> {
+	const published = await listPublishedConferences();
+	const open: OpenCallSummary[] = [];
+	for (const conference of published) {
+		const call = await openCall(conference.slug, now);
+		if (!call || call.state !== 'open') continue;
+		open.push({
+			slug: call.conference.slug,
+			name: call.conference.name,
+			venue: call.conference.venue,
+			startsOn: call.conference.startsOn,
+			endsOn: call.conference.endsOn,
+			formTitle: call.form.title,
+			opensAt: call.form.opensAt?.toISOString() ?? null,
+			closesAt: call.form.closesAt?.toISOString() ?? null,
+			formats: call.formats.map(({ id, name }) => ({ id, name })),
+			tracks: call.tracks.map(({ id, name }) => ({ id, name }))
+		});
+	}
+	return open;
+}
+
+const WITHDRAWABLE = ['draft', 'submitted', 'in_review'] as const;
+
+export type WithdrawResult = { ok: true } | { ok: false; reason: 'not_found' | 'decided' };
+
+/**
+ * The speaker takes their own proposal back.
+ *
+ * Same ownership as the portal (`ownedSubmission`) and the same statuses that
+ * are still editable: a decision has already been read, and those words stay.
+ * The update restates the status in its `where`, so a decision landing between
+ * the check and the write cannot be overwritten.
+ */
+export async function withdrawSubmission(
+	userId: string,
+	submissionId: number
+): Promise<WithdrawResult> {
+	const owned = await ownedSubmission(userId, submissionId);
+	if (!owned) return { ok: false, reason: 'not_found' };
+	if (!WITHDRAWABLE.includes(owned.status as (typeof WITHDRAWABLE)[number])) {
+		return { ok: false, reason: 'decided' };
+	}
+
+	const updated = await db
+		.update(submissionTable)
+		.set({ status: 'withdrawn' })
+		.where(
+			and(eq(submissionTable.id, owned.id), inArray(submissionTable.status, [...WITHDRAWABLE]))
+		)
+		.returning({ id: submissionTable.id });
+
+	return updated.length > 0 ? { ok: true } : { ok: false, reason: 'decided' };
 }
