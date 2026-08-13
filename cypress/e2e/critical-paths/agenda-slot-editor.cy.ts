@@ -95,8 +95,12 @@ describe('Agenda slot editor', () => {
 		cy.get('[data-testid="agenda-room-filter"]').should('exist');
 
 		// Narrow the grid to a single room, and prove the narrowing took effect
-		// before asking what the editor offers.
-		cy.get('[data-testid="agenda-room-filter"]').select('Hall 1');
+		// before asking what the editor offers. The filter is a shadcn popover
+		// (multi-select, #265), not a native <select>, so drive it the way a user
+		// would: open it, tick the room's checkbox, dismiss it.
+		cy.get('[data-testid="agenda-room-filter"]').click();
+		cy.get('[data-slot="popover-content"]').contains('Hall 1').click();
+		cy.get('body').type('{esc}');
 		cy.get('[data-testid="agenda-room-card"]').should('have.length', 1);
 
 		cy.get('[data-testid^="agenda-open-slot-"]').first().click();
@@ -111,6 +115,36 @@ describe('Agenda slot editor', () => {
 		cy.get('[data-testid="agenda-slot-editor"] select[name="roomId"]').within(() => {
 			for (const name of names) cy.contains('option', name).should('exist');
 		});
+	});
+
+	it('narrows the grid to several rooms at once via the multi-select', () => {
+		const names = Array.from({ length: ROOM_FILTER_FROM }, (_, i) => `Hall ${i + 1}`);
+
+		addRooms(names);
+
+		// The whole reason Fabian asked for the dropdown (see #265): more than one
+		// room can be shown at once. The native <select> could only ever narrow to
+		// one, so the multi-select is the new capability and it is what this test
+		// is here to pin down.
+		cy.get('[data-testid="agenda-room-filter"]').should('exist');
+
+		for (const name of ['Hall 1', 'Hall 2']) {
+			cy.get('[data-testid="agenda-room-filter"]').click();
+			cy.get('[data-slot="popover-content"]').contains(name).click();
+			cy.get('body').type('{esc}');
+		}
+
+		// The trigger states what is shown, and the grid actually shows it: two
+		// columns, both of the rooms that were picked. The length assertion alone
+		// would pass if two *other* cards happened to be there, so name both.
+		cy.get('[data-testid="agenda-room-filter"]').should('contain.text', '2 of 6 rooms');
+		cy.get('[data-testid="agenda-room-card"]').should('have.length', 2);
+		const shown: string[] = [];
+		cy.get('[data-testid="agenda-room-card"]').each(($card) => {
+			shown.push($card.find('[data-testid="agenda-room-name"]').text().trim());
+		});
+		cy.wrap(shown).should('include', 'Hall 1');
+		cy.wrap(shown).should('include', 'Hall 2');
 	});
 
 	it('reports a clash when two talks overlap in one room', () => {
