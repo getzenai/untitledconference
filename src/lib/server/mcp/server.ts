@@ -38,6 +38,8 @@ export const SERVER_INSTRUCTIONS =
 	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
 	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
 	'unplace_talk back to the tray. A collision is refused with the other talk named. ' +
+	'create_break puts lunch, coffee or a reserved block on the grid — across every room ' +
+	'unless you name one — and remove_break takes it off; a talk placed through a break is refused. ' +
 	'close_cfp stops new submissions without touching existing ones. ' +
 	'Speakers start with list_open_cfps, then submit_proposal (a draft), update_proposal to fill it in, ' +
 	'and finalize_proposal to hand it in — a draft nobody finalizes is never submitted. Or withdraw_proposal, ' +

@@ -66,9 +66,11 @@ returns.
 | `get_agenda_tray`                                | Accepted talks not yet on the grid, plus the days and rooms open to them                               |
 | `place_talk` / `move_talk` / `unplace_talk`      | Put a talk on the grid, move it, take it back to the tray                                              |
 | `swap_talks`                                     | Exchange two slots — both move or neither does                                                         |
+| `create_break` / `remove_break`                  | Lunch, coffee, registration, a room held for a sponsor — across every room unless you name one         |
 
 The agenda tools refuse a collision rather than creating one, and say which talk
-is in the way: a room double-booked, or a speaker due in two rooms at once. The
+is in the way: a room double-booked, a speaker due in two rooms at once, or a
+talk scheduled through a break that covers every room. The
 builder in the browser lets you place a collision and flags it; through a tool
 there is no grid to look at, so the refusal is the flag.
 

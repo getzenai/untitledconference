@@ -98,7 +98,9 @@ describe('agenda tools', () => {
 				'place_talk',
 				'move_talk',
 				'swap_talks',
-				'unplace_talk'
+				'unplace_talk',
+				'create_break',
+				'remove_break'
 			])
 		);
 	});
@@ -313,5 +315,172 @@ describe('agenda tools', () => {
 		const board = await agendaBoard(seeded.conferenceId);
 		expect(board.placed.map((row) => row.title)).toEqual(['Alpha']);
 		expect(board.tray.map((row) => row.title).sort()).toEqual(['Beta', 'Gamma']);
+	});
+
+	describe('breaks and reservations', () => {
+		let lunchId: number;
+
+		it('puts lunch on the grid across every room, with its own length', async () => {
+			const lunch = await call(organizer, 'create_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				day: DAY,
+				start: '12:00',
+				minutes: 60,
+				title: 'Lunch'
+			});
+			expect(lunch.isError).toBe(false);
+			expect(lunch.data!.slot).toMatchObject({
+				title: 'Lunch',
+				kind: 'block',
+				room: null,
+				start: '12:00',
+				end: '13:00',
+				minutes: 60
+			});
+			lunchId = lunch.data!.slot.placementId as number;
+
+			// Read back through the board the screen reads, and through get_agenda,
+			// which is where #338 said breaks were visible but uncreatable.
+			const board = await agendaBoard(seeded.conferenceId);
+			const onBoard = board.placed.find((row) => row.placementId === lunchId);
+			expect(onBoard).toMatchObject({ title: 'Lunch', kind: 'block', roomId: null, minutes: 60 });
+
+			const agenda = await call(organizer, 'get_agenda', {
+				conferenceSlug: seeded.conferenceSlug
+			});
+			expect(agenda.data!.placements).toEqual(
+				expect.arrayContaining([expect.objectContaining({ title: 'Lunch', kind: 'block' })])
+			);
+		});
+
+		it('refuses a talk scheduled through it, and names the break', async () => {
+			const refused = await call(organizer, 'place_talk', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: beta.placementId,
+				day: DAY,
+				roomId: mainStageId,
+				start: '12:30'
+			});
+			expect(refused.isError).toBe(true);
+			expect(refused.text).toContain('Lunch');
+			expect(refused.text).toContain('every room');
+
+			// The refusal rolled the write back: Beta is where it was, in the tray.
+			const board = await agendaBoard(seeded.conferenceId);
+			expect(board.tray.map((row) => row.title).sort()).toEqual(['Beta', 'Gamma']);
+			expect(board.conflicts).toEqual([]);
+		});
+
+		it('leaves the rooms it does not cover alone', async () => {
+			const held = await call(organizer, 'create_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				day: DAY,
+				roomId: workshopId,
+				start: '15:00',
+				minutes: 45,
+				title: 'Sponsor slot',
+				kind: 'reservation'
+			});
+			expect(held.isError).toBe(false);
+			expect(held.data!.slot).toMatchObject({ kind: 'reservation', room: 'Workshop Lab' });
+
+			// Same time, the other room: nothing is in the way.
+			const placed = await call(organizer, 'place_talk', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: beta.placementId,
+				day: DAY,
+				roomId: mainStageId,
+				start: '15:00'
+			});
+			expect(placed.isError).toBe(false);
+
+			// The room it does cover is an ordinary room clash.
+			const refused = await call(organizer, 'place_talk', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: gamma.placementId,
+				day: DAY,
+				roomId: workshopId,
+				start: '15:00'
+			});
+			expect(refused.isError).toBe(true);
+			expect(refused.text).toContain('Sponsor slot');
+
+			await call(organizer, 'unplace_talk', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: beta.placementId
+			});
+			await call(organizer, 'remove_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: held.data!.slot.placementId
+			});
+		});
+
+		it('refuses a break laid over a talk, and leaves nothing behind', async () => {
+			// Alpha sits in Workshop Lab at 11:00 — the swap above put it there. The
+			// guard has to work in this direction too, or an agent that is refused a
+			// talk over lunch just creates the break first and gets the same clash.
+			const refused = await call(organizer, 'create_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				day: DAY,
+				roomId: workshopId,
+				start: '11:00',
+				minutes: 30,
+				title: 'Coffee'
+			});
+			expect(refused.isError).toBe(true);
+			expect(refused.text).toContain('Alpha');
+
+			// The refused break was rolled back, not left sitting on the grid.
+			const board = await agendaBoard(seeded.conferenceId);
+			expect(board.placed.some((row) => row.title === 'Coffee')).toBe(false);
+			expect(board.conflicts).toEqual([]);
+		});
+
+		it('refuses to delete a talk, and points at the tool that does that', async () => {
+			const refused = await call(organizer, 'remove_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: alpha.placementId
+			});
+			expect(refused.isError).toBe(true);
+			expect(refused.text).toContain('unplace_talk');
+
+			// And Alpha is untouched.
+			const board = await agendaBoard(seeded.conferenceId);
+			expect(board.placed.map((row) => row.title)).toContain('Alpha');
+		});
+
+		it('removes the break, and the slot it was blocking opens again', async () => {
+			const removed = await call(organizer, 'remove_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: lunchId
+			});
+			expect(removed.isError).toBe(false);
+			expect(removed.data!.removed).toMatchObject({ title: 'Lunch', kind: 'block' });
+
+			const board = await agendaBoard(seeded.conferenceId);
+			expect(board.placed.some((row) => row.placementId === lunchId)).toBe(false);
+
+			const placed = await call(organizer, 'place_talk', {
+				conferenceSlug: seeded.conferenceSlug,
+				placementId: beta.placementId,
+				day: DAY,
+				roomId: mainStageId,
+				start: '12:30'
+			});
+			expect(placed.isError).toBe(false);
+			expect(placed.data!.slot).toMatchObject({ start: '12:30', room: 'Main Stage' });
+		});
+
+		it('refuses a break that runs past the end of the day', async () => {
+			const refused = await call(organizer, 'create_break', {
+				conferenceSlug: seeded.conferenceSlug,
+				day: DAY,
+				start: '17:30',
+				minutes: 60,
+				title: 'Too late'
+			});
+			expect(refused.isError).toBe(true);
+			expect(refused.text).toContain('past the end');
+		});
 	});
 });
