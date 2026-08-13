@@ -11,6 +11,7 @@ import { z } from 'zod';
 import type { McpContext } from '../context';
 import { organizerConference } from '../organizer';
 import { McpToolError, registerMcpTools, type AnyMcpToolDefinition } from '../tool-helpers';
+import { agendaTools } from './agenda';
 import { conferenceWriteTools } from './conference-write';
 
 /**
@@ -41,7 +42,7 @@ export function conferenceReadTools(ctx: McpContext): AnyMcpToolDefinition[] {
 }
 
 export function conferenceTools(ctx: McpContext): AnyMcpToolDefinition[] {
-	return [...conferenceReadTools(ctx), ...conferenceWriteTools(ctx)];
+	return [...conferenceReadTools(ctx), ...conferenceWriteTools(ctx), ...agendaTools(ctx)];
 }
 
 export function registerConferenceTools(server: McpServer, ctx: McpContext): void {
