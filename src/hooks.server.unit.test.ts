@@ -128,6 +128,60 @@ describe('hooks.server security handlers', () => {
 		expect(resolve).toHaveBeenCalled();
 	});
 
+	// Anthropic's own user agent, because it is the client this exemption exists
+	// for. Measured on production before the exemption: `POST
+	// /api/auth/oauth2/register` with this header answered 403 "Automated clients
+	// are not allowed here", so connecting Claude died at its first step.
+	const CLAUDE_UA = 'Claude-User/1.0';
+
+	it('lets Claude register an OAuth client, which is what MCP needs', async () => {
+		// RFC 7591 client registration has no human caller to protect: the only
+		// thing that ever calls it is software.
+		const response = await handle({
+			event: createEvent('/api/auth/oauth2/register', 'POST', CLAUDE_UA),
+			resolve
+		});
+
+		expect(response.status).toBe(200);
+		expect(resolve).toHaveBeenCalled();
+	});
+
+	it('lets Claude exchange the authorization code for a token', async () => {
+		// The step after registration, and it fails the same way: the client calls
+		// the token endpoint itself, with its own user agent. An exemption covering
+		// only `register` would move the break one stage later instead of fixing it.
+		const response = await handle({
+			event: createEvent('/api/auth/oauth2/token', 'POST', CLAUDE_UA),
+			resolve
+		});
+
+		expect(response.status).toBe(200);
+		expect(resolve).toHaveBeenCalled();
+	});
+
+	it('still rejects Claude signing up, which is what the guard is for', async () => {
+		// The exemption is a prefix, so this pins that it did not widen into the
+		// rest of /api/auth. Same user agent as the two tests above, opposite
+		// answer — that is the boundary, stated in both directions.
+		const response = await handle({
+			event: createEvent('/api/auth/sign-up/email', 'POST', CLAUDE_UA),
+			resolve
+		});
+
+		expect(response.status).toBe(403);
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('still rejects a crawler signing in', async () => {
+		const response = await handle({
+			event: createEvent('/api/auth/sign-in/email', 'POST', GPT_BOT_UA),
+			resolve
+		});
+
+		expect(response.status).toBe(403);
+		expect(resolve).not.toHaveBeenCalled();
+	});
+
 	it('ignores crawler user agents outside the guarded prefixes', async () => {
 		const response = await handle({
 			event: createEvent('/register', 'POST', GPT_BOT_UA),
