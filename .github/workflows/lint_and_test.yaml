@@ -5,8 +5,12 @@ on:
     branches:
       - 'main'
     paths-ignore:
-      # Documentation
-      - '*.md'
+      # Documentation. Not '*.md': `format:check` runs prettier over the whole
+      # tree, so an unformatted README is a red main — and a PR that only edits
+      # one runs no check at all, so nobody can see it coming. #310 merged on
+      # 2026-08-13 with zero CI runs; the next PR carrying code inherited the
+      # failure and looked like the culprit. The fix (#347) merged unchecked too.
+      # A doc PR paying four minutes of CI is the cheaper end of that trade.
       - 'LICENSE'
       # Development environment
       - '.vscode/**'
@@ -21,8 +25,12 @@ on:
     branches:
       - 'main'
     paths-ignore:
-      # Documentation
-      - '*.md'
+      # Documentation. Not '*.md': `format:check` runs prettier over the whole
+      # tree, so an unformatted README is a red main — and a PR that only edits
+      # one runs no check at all, so nobody can see it coming. #310 merged on
+      # 2026-08-13 with zero CI runs; the next PR carrying code inherited the
+      # failure and looked like the culprit. The fix (#347) merged unchecked too.
+      # A doc PR paying four minutes of CI is the cheaper end of that trade.
       - 'LICENSE'
       # Development environment
       - '.vscode/**'
