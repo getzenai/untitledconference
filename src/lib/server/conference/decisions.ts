@@ -33,6 +33,11 @@ export type DecisionResult = {
 	decided: number;
 	/** Rows that already carried this decision, so nothing was written for them. */
 	unchanged: number;
+	/**
+	 * Rows still in `draft` — the speaker never handed them in, so there is nothing
+	 * to decide and they are left untouched. See the filter in `decideSubmissions`.
+	 */
+	skippedDrafts: number;
 	sessionsCreated: number;
 	tasksCreated: number;
 	/** Undone by taking an acceptance back — see `withdrawFromProgramme`. */
@@ -43,6 +48,7 @@ export type DecisionResult = {
 const NOTHING_HAPPENED: DecisionResult = {
 	decided: 0,
 	unchanged: 0,
+	skippedDrafts: 0,
 	sessionsCreated: 0,
 	tasksCreated: 0,
 	sessionsRemoved: 0,
@@ -79,11 +85,21 @@ export async function decideSubmissions(
 				)
 			);
 
+		// A draft was never handed in — it is the speaker's private, unfinished form,
+		// and the organizer screens only ever offer submitted work. Deciding one
+		// produced a state the UI cannot: `status: accepted` with `submittedAt: null`,
+		// the talk sitting in the agenda tray and its speakers confirmed, all without
+		// the speaker ever pressing submit (#321). The screen reached this function
+		// with ids it had listed itself, so only the MCP surface could get here — but
+		// the rule belongs to the decision, not to one caller of it.
+		const decidable = selected.filter((s) => s.status !== 'draft');
+		result.skippedDrafts = selected.length - decidable.length;
+
 		// A row that already carries this decision is left alone entirely. The
 		// separate notification action is idempotent in its own right; a second click
 		// here must not recreate agenda or task work either.
-		const targets = selected.filter((s) => s.status !== decision);
-		result.unchanged = selected.length - targets.length;
+		const targets = decidable.filter((s) => s.status !== decision);
+		result.unchanged = decidable.length - targets.length;
 		if (targets.length === 0) return;
 
 		const ids = targets.map((t) => t.id);

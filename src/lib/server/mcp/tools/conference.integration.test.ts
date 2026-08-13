@@ -11,10 +11,16 @@
  * comment in the organization. Organizer rights are narrower than organization
  * membership, and that gap is what this file pins.
  */
+import { slotInstant } from '$lib/server/conference/agenda';
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { conferenceTable } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceDayTable,
+	conferenceTable,
+	roomTable
+} from '$lib/server/db/conference/conference-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { McpContext } from '../context';
@@ -258,6 +264,101 @@ describe('the conference MCP tools', () => {
 			.where(eq(submissionTable.id, foreign.id))
 			.limit(1);
 		expect(after.status).toBe(foreign.status);
+	});
+
+	/**
+	 * A draft is the speaker's own unfinished form. Deciding one made a row the UI
+	 * cannot produce — `accepted` with `submittedAt: null` — and the talk then sat in
+	 * the agenda tray, placeable, with nobody having handed it in (#321).
+	 */
+	it('leaves a never-submitted draft undecided and names it in the counts', async () => {
+		const [conf] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, ownConference.slug))
+			.limit(1);
+		const [draft] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conf.id, title: 'Never handed in', status: 'draft' })
+			.returning({ id: submissionTable.id });
+
+		const { data } = await call(ownerCtx, 'decide_submissions', {
+			conferenceSlug: ownConference.slug,
+			submissionIds: [draft.id],
+			decision: 'accepted'
+		});
+
+		expect(data!.decided).toBe(0);
+		expect(data!.skippedDrafts).toBe(1);
+		expect(data!.sessionsCreated).toBe(0);
+		// The skipped draft is accounted for by name, not swept into the leftover.
+		expect(data!.notDecided).toBe(0);
+
+		const [after] = await db
+			.select({
+				status: submissionTable.status,
+				submittedAt: submissionTable.submittedAt,
+				decidedAt: submissionTable.decidedAt
+			})
+			.from(submissionTable)
+			.where(eq(submissionTable.id, draft.id))
+			.limit(1);
+		expect(after.status).toBe('draft');
+		expect(after.submittedAt).toBeNull();
+		expect(after.decidedAt).toBeNull();
+
+		// The conference is shared with the tests below, which take the first row of
+		// list_submissions. Leaving the draft behind would move that row under them.
+		await db.delete(submissionTable).where(eq(submissionTable.id, draft.id));
+	});
+
+	/**
+	 * The stored timestamp is the conference's wall clock parked in UTC, so
+	 * `toISOString()` handed out a `Z` it never earned: 14:00 in the room came back
+	 * as 14:00Z, an hour off for any client that parses it honestly (#325).
+	 */
+	it('returns agenda times as the conference clock, with no timezone to misread', async () => {
+		const [conf] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, ownConference.slug))
+			.limit(1);
+		const [day] = await db
+			.insert(conferenceDayTable)
+			.values({ conferenceId: conf.id, date: '2027-06-01' })
+			.returning({ id: conferenceDayTable.id });
+		const [room] = await db
+			.insert(roomTable)
+			.values({ conferenceId: conf.id, name: 'Testhalle' })
+			.returning({ id: roomTable.id });
+		await db.insert(placementTable).values({
+			conferenceId: conf.id,
+			kind: 'block',
+			title: 'Coffee',
+			conferenceDayId: day.id,
+			roomId: room.id,
+			startsAt: slotInstant('2027-06-01', 14 * 60),
+			endsAt: slotInstant('2027-06-01', 14 * 60 + 30)
+		});
+
+		const { text, data } = await call(ownerCtx, 'get_agenda', {
+			conferenceSlug: ownConference.slug
+		});
+
+		const placements = data!.placements as Record<string, unknown>[];
+		const coffee = placements.find((p) => p.title === 'Coffee')!;
+		expect(coffee).toMatchObject({
+			day: '2027-06-01',
+			room: 'Testhalle',
+			start: '14:00',
+			startMinutes: 840,
+			end: '14:30',
+			endMinutes: 870
+		});
+		// The old shape is gone rather than merely accompanied: a client that still
+		// reads `startsAt` would keep being an hour out and never learn why.
+		expect(coffee).not.toHaveProperty('startsAt');
+		expect(text).not.toContain('Z"');
 	});
 
 	it('does not return reviewer identities with a proposal', async () => {

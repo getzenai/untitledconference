@@ -11,6 +11,7 @@ import {
 const result = (over: Partial<DecisionResult> = {}): DecisionResult => ({
 	decided: 0,
 	unchanged: 0,
+	skippedDrafts: 0,
 	sessionsCreated: 0,
 	tasksCreated: 0,
 	sessionsRemoved: 0,
@@ -43,6 +44,12 @@ describe('describeDecision', () => {
 	it('separates the rows it changed from the ones it skipped', () => {
 		expect(describeDecision('accepted', result({ decided: 2, unchanged: 3 }))).toBe(
 			'2 submissions accepted. 3 already accepted, left untouched.'
+		);
+	});
+
+	it('names drafts it left rather than letting the count go quietly short', () => {
+		expect(describeDecision('accepted', result({ decided: 1, skippedDrafts: 2 }))).toBe(
+			'1 submission accepted. 2 drafts not submitted yet, left for the speaker.'
 		);
 	});
 });
