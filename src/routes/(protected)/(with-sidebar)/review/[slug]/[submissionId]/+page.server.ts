@@ -26,6 +26,16 @@ const roundId = (raw: string | null) => {
 	return Number.isInteger(value) && value > 0 ? value : undefined;
 };
 
+/** The scorecard's answers, keyed by criterion id: `criterion-<id>` in the body. */
+const criterionAnswers = (form: FormData) => {
+	const answers: Record<number, string> = {};
+	for (const [key, value] of form.entries()) {
+		const match = /^criterion-(\d+)$/.exec(key);
+		if (match && typeof value === 'string') answers[Number(match[1])] = value;
+	}
+	return answers;
+};
+
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireReviewer(locals.user!.id, params.slug);
 	const id = submissionId(params.submissionId);
@@ -73,11 +83,6 @@ export const actions: Actions = {
 		if (!id) return fail(400, { message: 'Unknown submission.' });
 
 		const form = await request.formData();
-		const answers: Record<number, string> = {};
-		for (const [key, value] of form.entries()) {
-			const match = /^criterion-(\d+)$/.exec(key);
-			if (match && typeof value === 'string') answers[Number(match[1])] = value;
-		}
 
 		// The round the form was drawn for travels with the POST. Reading it from the
 		// query string instead would lose it the moment the browser re-posted without
@@ -89,7 +94,7 @@ export const actions: Actions = {
 			locals.user!.id,
 			id,
 			{
-				answers,
+				answers: criterionAnswers(form),
 				comment: String(form.get('comment') ?? ''),
 				submit: form.get('intent') === 'submit'
 			},
