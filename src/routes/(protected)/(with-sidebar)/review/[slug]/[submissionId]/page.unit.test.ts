@@ -50,6 +50,13 @@ function page(
 		form?: ActionData;
 		/** The round's window (ABS-01); no dates means a round that is simply open. */
 		window?: ReturnType<typeof roundWindow>;
+		/** Every round this reviewer holds the talk in (#294). One unless stated. */
+		heldRounds?: {
+			id: number;
+			name: string;
+			window: ReturnType<typeof roundWindow>;
+			submitted: boolean;
+		}[];
 	} = {}
 ) {
 	const submissionStatus = opts.submissionStatus ?? 'in_review';
@@ -81,7 +88,11 @@ function page(
 					peers,
 					peersPending: 0,
 					peersWithheld: false,
-					answers: opts.answers ?? []
+					answers: opts.answers ?? [],
+					round: { id: 1, name: 'Screening' },
+					heldRounds: opts.heldRounds ?? [
+						{ id: 1, name: 'Screening', window, submitted: status === 'submitted' }
+					]
 				}
 			} as PageData,
 			form: opts.form ?? null
@@ -313,5 +324,42 @@ describe('form messages', () => {
 		expect(body).toContain('border-status-good');
 		expect(body).toContain('role="status"');
 		expect(body).not.toContain('border-status-bad');
+	});
+});
+
+/**
+ * #294: one talk, two open rounds, two different scorecards — and one URL. The
+ * page has to name the round it is showing and offer the other, or the second
+ * round's form cannot be reached from anywhere.
+ */
+describe('a talk held in two rounds', () => {
+	const both = [
+		{ id: 1, name: 'Screening', window: roundWindow(null, null), submitted: false },
+		{ id: 2, name: 'Committee', window: roundWindow(null, null), submitted: false }
+	];
+
+	it('names the round the form writes to, and links the other one', () => {
+		const body = page('assigned', { heldRounds: both });
+
+		expect(body).toContain('My review — Screening');
+		expect(body).toContain('data-testid="round-link-2"');
+		expect(body).toContain('href="?round=2"');
+		expect(body).toContain('aria-current="page"');
+	});
+
+	it('sends the round with the answers, not just in the address bar', () => {
+		const body = page('assigned', { heldRounds: both });
+
+		// A POST to a bare `?/save` would carry no round at all, and the answers
+		// would land in whichever round the priority rule picks — silently.
+		expect(body).toContain('name="roundId"');
+		// `&` is escaped in the attribute; the browser still sends `round=1`.
+		expect(body).toContain('action="?/save&amp;round=1"');
+	});
+
+	it('says nothing about rounds when there is only one', () => {
+		const body = page('assigned');
+
+		expect(body).not.toContain('data-testid="round-link-2"');
 	});
 });

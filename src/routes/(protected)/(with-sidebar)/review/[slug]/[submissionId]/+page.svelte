@@ -83,6 +83,30 @@
 				.join(' · ')}
 		</p>
 
+		<!-- One talk, two rounds, two different scorecards — and one URL. Naming the
+		     other round here is what makes it reachable at all: the queue counts it
+		     as outstanding either way. -->
+		{#if s.heldRounds.length > 1}
+			<nav aria-label="Review rounds" class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+				{#each s.heldRounds as round (round.id)}
+					{@const current = round.id === s.round.id}
+					<a
+						href="?round={round.id}"
+						aria-current={current ? 'page' : undefined}
+						data-testid="round-link-{round.id}"
+						class="rounded-md border px-2 py-1 {current
+							? 'border-foreground font-medium'
+							: 'border-border text-muted-foreground hover:text-foreground'}"
+					>
+						{round.name}
+						<span class="text-muted-foreground">
+							· {round.submitted ? 'filed' : round.window.state === 'open' ? 'to do' : 'shut'}
+						</span>
+					</a>
+				{/each}
+			</nav>
+		{/if}
+
 		{#if s.abstract}
 			<p class="mt-4 text-sm whitespace-pre-line">{s.abstract}</p>
 		{/if}
@@ -180,14 +204,21 @@
 		</section>
 	</article>
 
+	<!-- The round rides in the action as well as the body: after the POST the page
+	     reloads on THIS url, and a bare `?/save` would drop the query and redraw the
+	     other round's scorecard under the answers just filed. -->
 	<form
 		method="POST"
-		action="?/save"
+		action="?/save&round={s.round.id}"
 		use:enhance={submitting}
 		class="border-border bg-card h-fit space-y-3 rounded-lg border p-4"
 	>
+		<!-- The round this form was drawn for (#294). Without it a reviewer who holds
+		     the talk in two open rounds would post the second round's answers into
+		     the first, which is the tie the permalink used to lose. -->
+		<input type="hidden" name="roundId" value={s.round.id} />
 		<div class="flex items-center justify-between">
-			<h2 class="text-sm font-semibold">My review</h2>
+			<h2 class="text-sm font-semibold">My review — {s.round.name}</h2>
 			<StatusBadge
 				status={withdrawn ? 'withdrawn' : s.own.status}
 				label={withdrawn ? 'Withdrawn' : s.own.status === 'submitted' ? 'Submitted' : 'Draft'}

@@ -237,7 +237,54 @@ describe('the queue', () => {
 				(q) => q.submissionId === mine
 			);
 
-			expect(row?.rounds).toEqual(['Round 1', 'Blind round']);
+			expect(row?.rounds.map((round) => round.name)).toEqual(['Round 1', 'Blind round']);
+		});
+
+		/**
+		 * #294. Both rounds open makes `byRoundWindowPriority` a tie, position
+		 * decides, and the permalink could only ever open Round 1 — a reviewer
+		 * holding the talk in both could not reach the anonymised scorecard while
+		 * the queue kept calling it outstanding.
+		 */
+		it('opens the round the caller names, not the first one that ties', async () => {
+			const now = await conferenceNow();
+			const row = (await reviewQueue(now, ME)).find((q) => q.submissionId === mine);
+			const [first, second] = row!.rounds;
+			expect(first.id).not.toBe(second.id);
+
+			const byPriority = await reviewerSubmission(now, ME, mine);
+			expect(byPriority?.round.id).toBe(first.id);
+
+			const named = await reviewerSubmission(now, ME, mine, second.id);
+			expect(named?.round.id).toBe(second.id);
+			expect(named?.anonymized).toBe(true);
+			expect(named?.heldRounds.map((round) => round.id)).toEqual([first.id, second.id]);
+		});
+
+		it('writes the answers into the round they were filed for', async () => {
+			const now = await conferenceNow();
+			const rounds = (await reviewQueue(now, ME)).find((q) => q.submissionId === mine)!.rounds;
+			const second = rounds[1];
+
+			// Comment-only: enough to count as filed, and it needs no criterion from
+			// this round's scorecard.
+			const filed = { answers: {}, comment: 'Filed in the second round', submit: true };
+			expect(await saveReview(now, ME, mine, filed, second.id)).toMatchObject({ ok: true });
+
+			// The named round holds the answer; the first one is still empty. Without
+			// the round the write landed here silently, which is worse than the
+			// unreachable form: the reviewer sees a filed review they never wrote.
+			expect((await reviewerSubmission(now, ME, mine, second.id))?.own.status).toBe('submitted');
+			expect((await reviewerSubmission(now, ME, mine, rounds[0].id))?.own.status).toBe('assigned');
+		});
+
+		it('falls back to the priority rule for a round the reviewer does not hold', async () => {
+			const now = await conferenceNow();
+			const first = (await reviewQueue(now, ME)).find((q) => q.submissionId === mine)!.rounds[0];
+
+			// A stale link is not a permission problem: it opens the round that
+			// still wants work rather than 404ing the talk away.
+			expect((await reviewerSubmission(now, ME, mine, 9_999_999))?.round.id).toBe(first.id);
 		});
 
 		it('stays outstanding while either round is unfiled', async () => {

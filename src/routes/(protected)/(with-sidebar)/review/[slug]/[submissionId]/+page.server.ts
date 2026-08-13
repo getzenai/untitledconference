@@ -12,11 +12,32 @@ const submissionId = (raw: string) => {
 	return Number.isInteger(value) && value > 0 ? value : null;
 };
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+/**
+ * Which round the page is for (#294).
+ *
+ * Two open rounds tie in the priority rule, so the bare permalink always opened
+ * the first one and the second round's form could not be reached. A round that
+ * this reviewer does not hold falls back to the priority rule rather than 404 —
+ * a stale query string is not a permission problem.
+ */
+const roundId = (raw: string | null) => {
+	if (raw === null) return undefined;
+	const value = Number(raw);
+	return Number.isInteger(value) && value > 0 ? value : undefined;
+};
+
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireReviewer(locals.user!.id, params.slug);
 	const id = submissionId(params.submissionId);
 
-	const submission = id ? await reviewerSubmission(conference, locals.user!.id, id) : null;
+	const submission = id
+		? await reviewerSubmission(
+				conference,
+				locals.user!.id,
+				id,
+				roundId(url.searchParams.get('round'))
+			)
+		: null;
 	// Not assigned to me is a 404, not an empty page — the queue and the detail answer
 	// the same question about who may read what.
 	if (!submission) throw error(404, 'Submission not found');
@@ -58,11 +79,22 @@ export const actions: Actions = {
 			if (match && typeof value === 'string') answers[Number(match[1])] = value;
 		}
 
-		const saved = await saveReview(conference, locals.user!.id, id, {
-			answers,
-			comment: String(form.get('comment') ?? ''),
-			submit: form.get('intent') === 'submit'
-		});
+		// The round the form was drawn for travels with the POST. Reading it from the
+		// query string instead would lose it the moment the browser re-posted without
+		// one, and the answers would land in the other round without a word.
+		const round = Number(form.get('roundId'));
+
+		const saved = await saveReview(
+			conference,
+			locals.user!.id,
+			id,
+			{
+				answers,
+				comment: String(form.get('comment') ?? ''),
+				submit: form.get('intent') === 'submit'
+			},
+			Number.isInteger(round) && round > 0 ? round : undefined
+		);
 
 		if (!saved.ok) {
 			// Two different failures, two different answers. Calling an empty submit
