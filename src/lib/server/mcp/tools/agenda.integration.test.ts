@@ -4,6 +4,9 @@
  * columns a tool might have written.
  */
 import { agendaBoard } from '$lib/server/conference/agenda';
+import { db } from '$lib/server/db';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { McpContext } from '../context';
 import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '../harness';
@@ -38,6 +41,21 @@ async function call(ctx: McpContext, name: string, args: Record<string, unknown>
 		text: result.content[0].text,
 		data: result.isError ? null : JSON.parse(result.content[0].text)
 	};
+}
+
+/**
+ * What the speaker does after `submit_proposal`, which despite its name only saves a
+ * draft (`{ submit: false }`). Since #321 `decide_submissions` refuses drafts, so a
+ * test that wants a decision has to hand the work in first.
+ *
+ * Written against the table because MCP has no way to do it yet — that gap is #320.
+ * Replace this with `finalize_proposal` once that tool exists.
+ */
+async function handIn(submissionIds: number[]) {
+	await db
+		.update(submissionTable)
+		.set({ status: 'submitted', submittedAt: new Date() })
+		.where(inArray(submissionTable.id, submissionIds));
 }
 
 type Slot = {
@@ -148,13 +166,16 @@ describe('agenda tools', () => {
 		expect(betaTalk.isError).toBe(false);
 		expect(gammaTalk.isError).toBe(false);
 
+		const submissionIds = [
+			alphaTalk.data!.submissionId,
+			betaTalk.data!.submissionId,
+			gammaTalk.data!.submissionId
+		] as number[];
+		await handIn(submissionIds);
+
 		const decided = await call(organizer, 'decide_submissions', {
 			conferenceSlug: seeded.conferenceSlug,
-			submissionIds: [
-				alphaTalk.data!.submissionId,
-				betaTalk.data!.submissionId,
-				gammaTalk.data!.submissionId
-			],
+			submissionIds,
 			decision: 'accepted'
 		});
 		expect(decided.isError).toBe(false);

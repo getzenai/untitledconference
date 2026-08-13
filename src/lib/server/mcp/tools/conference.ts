@@ -1,4 +1,5 @@
 import { organizedConferences } from '$lib/server/conference/access';
+import { slotMinutes } from '$lib/server/conference/agenda';
 import { decideSubmissions } from '$lib/server/conference/decisions';
 import { db } from '$lib/server/db';
 import { submissionStatus, submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -11,7 +12,7 @@ import { z } from 'zod';
 import type { McpContext } from '../context';
 import { organizerConference } from '../organizer';
 import { McpToolError, registerMcpTools, type AnyMcpToolDefinition } from '../tool-helpers';
-import { agendaTools } from './agenda';
+import { agendaTools, formatClock } from './agenda';
 import { conferenceWriteTools } from './conference-write';
 
 /**
@@ -212,7 +213,9 @@ function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
 		description:
 			'Get the scheduled programme of a conference you organize — every placed session, ' +
 			'break and reservation in start order, with its day and room. Includes tentative ' +
-			'placements, which the public agenda does not show.',
+			'placements, which the public agenda does not show. Times are the conference clock: ' +
+			'a day (YYYY-MM-DD) plus start/end as HH:MM, the same pair place_talk and ' +
+			'get_agenda_tray use. There is no timezone here — 14:00 is 14:00 in the room.',
 		inputSchema: {
 			conferenceSlug: z.string().min(1).describe('Conference slug, from list_my_conferences.')
 		},
@@ -254,8 +257,17 @@ function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
 					submissionId: row.submissionId,
 					day: row.day,
 					room: row.room,
-					startsAt: row.startsAt?.toISOString() ?? null,
-					endsAt: row.endsAt?.toISOString() ?? null
+					// Not an ISO instant. `slotInstant` stores the conference's own wall
+					// clock as if it were UTC, so `toISOString()` here produced a `Z` the
+					// value never earned: 14:00 in Munich came out as 14:00Z, an hour off
+					// for any client honest enough to parse it (#325). Reading the same
+					// clock back out with `slotMinutes` and handing over day + HH:MM
+					// leaves nothing to misread, and matches what place_talk and
+					// get_agenda_tray already return for the same placement.
+					startMinutes: row.startsAt ? slotMinutes(row.startsAt) : null,
+					start: row.startsAt ? formatClock(slotMinutes(row.startsAt)) : null,
+					endMinutes: row.endsAt ? slotMinutes(row.endsAt) : null,
+					end: row.endsAt ? formatClock(slotMinutes(row.endsAt)) : null
 				}))
 			};
 		}
@@ -269,7 +281,9 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 			'Accept, reject or waitlist one or more proposals of a conference you organize. ' +
 			'Accepting also places the talk in the agenda tray, confirms its speakers and creates ' +
 			'their tasks; taking an acceptance back undoes those. Speakers are NOT emailed — ' +
-			'notifying them is a separate organizer action. Deciding the same way twice changes nothing.',
+			'notifying them is a separate organizer action. Deciding the same way twice changes ' +
+			'nothing. Proposals still in draft are skipped and counted under skippedDrafts: they ' +
+			'were never handed in, and only the speaker can do that.',
 		inputSchema: {
 			conferenceSlug: z.string().min(1).describe('Conference slug, from list_my_conferences.'),
 			submissionIds: z
@@ -301,10 +315,11 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 				decision,
 				requested: submissionIds.length,
 				...result,
-				// The two counts rarely match, and the difference is the interesting
-				// part: ids already carrying this decision, and ids that are not in
-				// this conference at all.
-				notDecided: submissionIds.length - result.decided - result.unchanged
+				// What is left once every accounted-for reason is taken out: ids already
+				// carrying this decision (`unchanged`), ids the speaker never handed in
+				// (`skippedDrafts`, from the spread above), and this — ids that are not
+				// in this conference at all.
+				notDecided: submissionIds.length - result.decided - result.unchanged - result.skippedDrafts
 			};
 		}
 	};

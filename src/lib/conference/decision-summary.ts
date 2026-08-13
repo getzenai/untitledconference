@@ -46,6 +46,14 @@ export function describeDecision(decision: string, result: DecisionResult): stri
 		);
 	}
 
+	// The screen only lists handed-in work, so this should never fire here. It is
+	// still said out loud rather than folded into silence: a click that decided
+	// fewer rows than were ticked has to say which ones it left, or the organizer
+	// reads the difference as a lost write.
+	if (result.skippedDrafts > 0) {
+		parts.push(`${plural(result.skippedDrafts, 'draft')} not submitted yet, left for the speaker.`);
+	}
+
 	for (const [key, sentence] of SIDE_EFFECTS) {
 		const count = result[key];
 		if (count > 0) parts.push(sentence(count));

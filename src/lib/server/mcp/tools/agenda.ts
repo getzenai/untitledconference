@@ -27,7 +27,7 @@ const placementField = z
 	.int()
 	.describe('Placement id, from get_agenda_tray or get_agenda.');
 
-function formatClock(minutes: number | null): string | null {
+export function formatClock(minutes: number | null): string | null {
 	if (minutes === null) return null;
 	const hh = String(Math.floor(minutes / 60)).padStart(2, '0');
 	const mm = String(minutes % 60).padStart(2, '0');
