@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	PUBLIC_CACHE_CONTROL,
 	PUBLIC_CACHE_VARY,
+	PUBLIC_CDN_CACHE_CONTROL,
 	isCacheablePublicRequest,
 	publicPageCacheHandler,
 	publicPageCacheKey
@@ -12,6 +13,12 @@ describe('PUBLIC_CACHE_CONTROL', () => {
 	it('does not grant the CDN a shared TTL — Cloudflare ignores Vary except Accept-Encoding', () => {
 		expect(PUBLIC_CACHE_CONTROL).not.toMatch(/s-maxage/i);
 		expect(PUBLIC_CACHE_CONTROL).toMatch(/max-age=60/);
+	});
+
+	it('keeps the edge out with a bypass, because max-age alone does not', () => {
+		// Measured on 031723c: `public, max-age=60` with no CDN-Cache-Control
+		// got `cf-cache-status: HIT` and served German HTML to an en-US visitor.
+		expect(PUBLIC_CDN_CACHE_CONTROL).toBe('no-store');
 	});
 });
 
@@ -125,6 +132,7 @@ describe('publicPageCacheHandler', () => {
 
 		expect(resolve).not.toHaveBeenCalled();
 		expect(response.headers.get('x-public-cache')).toBe('hit');
+		expect(response.headers.get('cdn-cache-control')).toBe(PUBLIC_CDN_CACHE_CONTROL);
 		expect(await response.text()).toBe('<html>cached</html>');
 	});
 
@@ -138,10 +146,16 @@ describe('publicPageCacheHandler', () => {
 		} as never);
 
 		expect(response.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
-		expect(response.headers.get('cdn-cache-control')).toBeNull();
+		expect(response.headers.get('cdn-cache-control')).toBe(PUBLIC_CDN_CACHE_CONTROL);
 		expect(response.headers.get('vary')).toBe(PUBLIC_CACHE_VARY);
 		expect(response.headers.get('x-public-cache')).toBe('miss');
 		expect(cache.put).toHaveBeenCalledOnce();
+
+		// The stored copy must NOT carry the bypass: caches.default reads it
+		// on the write path and would drop the write.
+		const [, storedResponse] = cache.put.mock.calls[0] as [unknown, Response];
+		expect(storedResponse.headers.get('cdn-cache-control')).toBeNull();
+		expect(storedResponse.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
 		// The write is deferred so the visitor's bytes go out first.
 		expect(waitUntil).toHaveBeenCalledOnce();
 	});
@@ -187,7 +201,7 @@ describe('publicPageCacheHandler', () => {
 		const response = await publicPageCacheHandler({ event: makeEvent({}), resolve } as never);
 
 		expect(response.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
-		expect(response.headers.get('cdn-cache-control')).toBeNull();
+		expect(response.headers.get('cdn-cache-control')).toBe(PUBLIC_CDN_CACHE_CONTROL);
 		expect(response.headers.get('vary')).toBe(PUBLIC_CACHE_VARY);
 	});
 
