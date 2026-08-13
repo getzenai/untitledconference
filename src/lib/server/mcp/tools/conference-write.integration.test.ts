@@ -418,6 +418,94 @@ describe('archive, restore and erase', () => {
 	});
 
 	/**
+	 * `membership.scope_id` is polymorphic, so Postgres has no foreign key to follow
+	 * and the cascade cannot reach these rows. They are the table that answers "who
+	 * may read this", so leaving them behind is not merely untidy — and the round
+	 * seats are worse than the conference ones, because the round they name does
+	 * cascade away, taking with it any chance of recognising them later.
+	 */
+	it('takes the seats with it, including the ones scoped to a review round', async () => {
+		const slug = `${suffix}-erase-seats`;
+		const conferenceId = await draftWithContents(slug);
+
+		const round = await addReviewRound(conferenceId, {
+			name: 'Screening',
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
+		});
+		expect(round.ok).toBe(true);
+		if (!round.ok) return;
+
+		await db.insert(membershipTable).values([
+			{
+				userId: organizer.userId,
+				role: 'organizer',
+				scopeType: 'conference',
+				scopeId: conferenceId
+			},
+			{ userId: organizer.userId, role: 'reviewer', scopeType: 'round', scopeId: round.id }
+		]);
+
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
+		const erased = await call(organizer, 'delete_conference', {
+			conferenceSlug: slug,
+			confirmSlug: slug
+		});
+		expect(erased.isError).toBe(false);
+
+		expect(
+			await db
+				.select({ id: membershipTable.id })
+				.from(membershipTable)
+				.where(
+					and(
+						eq(membershipTable.scopeType, 'conference'),
+						eq(membershipTable.scopeId, conferenceId)
+					)
+				)
+		).toHaveLength(0);
+		expect(
+			await db
+				.select({ id: membershipTable.id })
+				.from(membershipTable)
+				.where(and(eq(membershipTable.scopeType, 'round'), eq(membershipTable.scopeId, round.id)))
+		).toHaveLength(0);
+	});
+
+	/**
+	 * The guard has to hold against the row as it is *now*, not as the caller found
+	 * it. Restore, publish and archive again all fit between the read and the write,
+	 * and the conference that comes out the other side has had a public address —
+	 * exactly the one thing this step may not erase. Simulated here by handing
+	 * `deleteConference` the row the caller read while the database has moved on.
+	 */
+	it('refuses a row that was published under it after the caller read it', async () => {
+		const slug = `${suffix}-raced-publish`;
+		const conferenceId = await draftWithContents(slug);
+		await call(organizer, 'archive_conference', { conferenceSlug: slug });
+
+		const [asTheCallerSawIt] = await db
+			.select()
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, conferenceId));
+		expect(asTheCallerSawIt.statusBeforeArchive).toBe('draft');
+
+		// The race, played out: someone restored it, published it and archived it again.
+		await db
+			.update(conferenceTable)
+			.set({ statusBeforeArchive: 'published' })
+			.where(eq(conferenceTable.id, conferenceId));
+
+		const result = await deleteConference(asTheCallerSawIt, organizer.userId);
+
+		expect(result).toEqual({ ok: false, reason: 'was_published' });
+		expect(
+			await db.select().from(conferenceTable).where(eq(conferenceTable.id, conferenceId))
+		).toHaveLength(1);
+	});
+
+	/**
 	 * The safeguard that matters most: nothing gets from "in use" to "gone" in one
 	 * call. The refusal has to name the step that comes first, or the caller has
 	 * been stopped without being told how to proceed — the exact dead end #320 is

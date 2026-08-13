@@ -301,7 +301,8 @@ function archiveConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 			'submission, review and placement is kept. restore_conference undoes it exactly. ' +
 			'Needs an org-wide owner or admin seat — being an organizer on the event is not ' +
 			'enough. If the conference is currently published, repeat the slug in confirmSlug: ' +
-			'a public address goes dark the moment this returns.',
+			'a public address stops being served the moment this returns, though a page already ' +
+			'cached at the edge can still be handed out for up to a minute after.',
 		inputSchema: { conferenceSlug: slugField, confirmSlug: confirmSlugField },
 		handler: async ({ conferenceSlug, confirmSlug }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
@@ -381,7 +382,9 @@ function deleteConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 			'be archived (call archive_conference first, so the step can be seen and reversed ' +
 			'before it becomes permanent), and it must never have been published — a ' +
 			'conference that once had a public address can be archived but not erased. ' +
-			'Repeat the slug in confirmSlug. Speaker profiles are org-wide and stay.',
+			'Repeat the slug in confirmSlug. Two things are kept on purpose: speaker profiles, ' +
+			'which are org-wide, and files that were uploaded to tasks — the records pointing ' +
+			'at them go, the stored files themselves are not reachable from here.',
 		inputSchema: {
 			conferenceSlug: slugField,
 			confirmSlug: z

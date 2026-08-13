@@ -24,6 +24,16 @@
  * under `conference.id` cascades. What stays is `speaker_profile`: that record is
  * org-wide on purpose (CRM-01, the cross-event directory), so a person who spoke
  * once does not vanish because one event did.
+ *
+ * Two things the cascade cannot reach, and this file has to:
+ *
+ *  - `membership.scope_id` is polymorphic, so Postgres has no foreign key to
+ *    cascade along (conference-schema.ts says so and leaves the cleanup to us).
+ *    Left alone, every organizer and reviewer seat on the conference — and on its
+ *    review rounds, which do cascade away — would outlive the row they name.
+ *  - uploaded files. `deliverable.file_url` rows cascade, but the bytes live in
+ *    the R2 bucket and nothing in this request can reach it. They are retained,
+ *    and the tool says so rather than promising an erasure it cannot perform.
  */
 import { hasOrgWideSeat } from '$lib/server/conference/archive-conference';
 import { db } from '$lib/server/db';
@@ -31,10 +41,12 @@ import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceSpeakerTable,
 	conferenceTable,
+	membershipTable,
 	roomTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
-import { and, count, eq } from 'drizzle-orm';
+import { evaluationPlanTable, reviewRoundTable } from '$lib/server/db/conference/review-schema';
+import { and, count, eq, inArray, or } from 'drizzle-orm';
 
 /**
  * What the conference took with it.
@@ -70,11 +82,25 @@ export async function deleteConference(
 	// Counted inside the transaction that deletes, so the numbers reported are the
 	// rows that actually went rather than a snapshot from before someone else's write.
 	//
-	// `status = 'archived'` is repeated in the delete itself, not trusted from the row
-	// read above: between that read and this write someone can restore the conference,
-	// and restoring is exactly the act of saying "not this one". If the predicate finds
-	// nothing, the restore won the race and nothing goes.
+	// Both conditions are asked again here, of a row locked FOR UPDATE, rather than
+	// trusted from the read above. Between that read and this write another caller can
+	// restore the conference, publish it and archive it again — and then the row this
+	// call was allowed to erase is one that has had a public address. Re-reading under
+	// the lock is what makes "never published" a guard rather than a hope: the racing
+	// writer either finishes before the lock is taken, and is seen, or waits behind it.
 	return await db.transaction(async (tx) => {
+		const [fresh] = await tx
+			.select({
+				status: conferenceTable.status,
+				statusBeforeArchive: conferenceTable.statusBeforeArchive
+			})
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, conference.id))
+			.for('update');
+
+		if (!fresh || fresh.status !== 'archived') return { ok: false, reason: 'not_archived' };
+		if (fresh.statusBeforeArchive === 'published') return { ok: false, reason: 'was_published' };
+
 		const [rooms] = await tx
 			.select({ n: count() })
 			.from(roomTable)
@@ -87,6 +113,32 @@ export async function deleteConference(
 			.select({ n: count() })
 			.from(conferenceSpeakerTable)
 			.where(eq(conferenceSpeakerTable.conferenceId, conference.id));
+
+		// Read before the delete, because the rounds themselves cascade away with the
+		// conference and their ids would be unrecoverable a statement later.
+		const rounds = await tx
+			.select({ id: reviewRoundTable.id })
+			.from(reviewRoundTable)
+			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+			.where(eq(evaluationPlanTable.conferenceId, conference.id));
+
+		const roundIds = rounds.map((r) => r.id);
+		await tx
+			.delete(membershipTable)
+			.where(
+				or(
+					and(
+						eq(membershipTable.scopeType, 'conference'),
+						eq(membershipTable.scopeId, conference.id)
+					),
+					roundIds.length > 0
+						? and(
+								eq(membershipTable.scopeType, 'round'),
+								inArray(membershipTable.scopeId, roundIds)
+							)
+						: undefined
+				)
+			);
 
 		const gone = await tx
 			.delete(conferenceTable)
