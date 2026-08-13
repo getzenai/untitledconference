@@ -12,6 +12,14 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner label. Switch to ubuntu-latest when Blacksmith stops picking up jobs.'
+        default: blacksmith-4vcpu-ubuntu-2404
+        type: choice
+        options:
+          - blacksmith-4vcpu-ubuntu-2404
+          - ubuntu-latest
 
 permissions:
   contents: read
@@ -24,7 +32,8 @@ concurrency:
 jobs:
   deploy:
     name: Migrate and deploy
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # `inputs` is null on the workflow_run path, so that keeps Blacksmith.
+    runs-on: ${{ inputs.runner || 'blacksmith-4vcpu-ubuntu-2404' }}
     # A healthy deploy takes ~3 minutes. Without a ceiling, one hung step blocks
     # the deploy-production concurrency queue for the 6-hour GitHub default.
     timeout-minutes: 30
