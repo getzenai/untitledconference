@@ -461,7 +461,7 @@ export async function conferenceAssignmentTargets(conferenceId: number): Promise
 export type AssignSkipReason =
 	| 'not_on_conference'
 	| 'speaker_conflict'
-	| 'not_on_committee'
+	| 'not_in_round'
 	| 'track_restricted';
 
 export type BulkAssignSkip = {
@@ -501,7 +501,10 @@ async function classifySkip(tx: Tx, input: AssignmentInput): Promise<AssignSkipR
 	if (!(await validAssignmentTarget(tx, input))) return 'not_on_conference';
 	if (await isSubmissionSpeaker(tx, input)) return 'speaker_conflict';
 	const memberships = await eligibleMemberships(tx, input);
-	if (memberships.length === 0) return 'not_on_committee';
+	// A seat on another round of this conference still shows up in
+	// `list_reviewers`. Naming that `not_on_committee` sent agents back
+	// through invite_reviewer, which then said they were already on it.
+	if (memberships.length === 0) return 'not_in_round';
 	const submission = await assignmentTrack(tx, input.submissionId);
 	if (!submission) return 'not_on_conference';
 	const restrictions = await restrictionsByMembership(
@@ -512,7 +515,7 @@ async function classifySkip(tx: Tx, input: AssignmentInput): Promise<AssignSkipR
 		const tracks = restrictions.get(membership.id);
 		return !tracks || (submission.trackId !== null && tracks.includes(submission.trackId));
 	});
-	return allowed ? 'not_on_committee' : 'track_restricted';
+	return allowed ? 'not_in_round' : 'track_restricted';
 }
 
 /**

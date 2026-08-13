@@ -239,6 +239,29 @@ describe('organizer reviewer assignments', () => {
 		await db.delete(submissionTable).where(eq(submissionTable.id, secondId));
 	});
 
+	it('names not_in_round when the reviewer sits only on a different round', async () => {
+		const [plan] = await db
+			.select({ id: evaluationPlanTable.id })
+			.from(evaluationPlanTable)
+			.where(eq(evaluationPlanTable.conferenceId, conference.id));
+		const [round2] = await db
+			.insert(reviewRoundTable)
+			.values({ evaluationPlanId: plan.id, name: `Round 2 ${suffix}` })
+			.returning();
+
+		expect(
+			await assignReviewerToSubmissions(conference.id, [submissionId], round2.id, ROUND_REVIEWER)
+		).toEqual({
+			created: 0,
+			already: 0,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId, reason: 'not_in_round' }]
+		});
+
+		await db.delete(reviewRoundTable).where(eq(reviewRoundTable.id, round2.id));
+	});
+
 	it('enforces the committee track allow-list in both the matrix and the write', async () => {
 		const [allowedTrack, blockedTrack] = await db
 			.insert(trackTable)
@@ -267,6 +290,15 @@ describe('organizer reviewer assignments', () => {
 		expect(
 			await setReviewAssignment(conference.id, submissionId, roundId, CONFERENCE_REVIEWER, true)
 		).toBe('invalid');
+		expect(
+			await assignReviewerToSubmissions(conference.id, [submissionId], roundId, CONFERENCE_REVIEWER)
+		).toEqual({
+			created: 0,
+			already: 0,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId, reason: 'track_restricted' }]
+		});
 
 		await db
 			.update(submissionTable)

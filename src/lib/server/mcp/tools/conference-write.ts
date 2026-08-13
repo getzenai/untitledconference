@@ -498,7 +498,9 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 			'Assign one reviewer to one or more submissions of a conference you organize. ' +
 			'Same function as the submissions-table bulk assign: existing assignments stay, ' +
 			'recusals stay recused, ineligible pairs are listed in skipped with a reason ' +
-			'(speaker_conflict, not_on_conference, not_on_committee, track_restricted). ' +
+			'(speaker_conflict, not_on_conference, not_in_round, track_restricted). ' +
+			'not_in_round is a seat on another round of this conference, not a missing ' +
+			'committee seat — list_reviewers still shows them. ' +
 			'Identify the reviewer by an email from list_reviewers. A conference needs a ' +
 			'review round first — call create_review_round if list_review_rounds is empty. ' +
 			"Omit roundId to use the conference's first round.",
@@ -755,6 +757,11 @@ function createReviewRoundTool(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+/** Same collapse `addFormat` applies before it stores the line. */
+function oneLine(name: string): string {
+	return name.replace(/\n/g, ' ').trim().slice(0, MAX_NAME);
+}
+
 /**
  * The name (and minutes) `addFormat` will actually store.
  *
@@ -767,7 +774,7 @@ function parseCreatedFormat(
 	name: string,
 	minutes: number | undefined
 ): { name: string; minutes: number | null } {
-	const line = minutes === undefined ? name : `${name.replace(/\n/g, ' ').trim()}, ${minutes}`;
+	const line = minutes === undefined ? oneLine(name) : `${oneLine(name)}, ${minutes}`;
 	const parsed = parseFormatLines(line);
 	if (!parsed.ok) {
 		throw new McpToolError(parsed.problem);

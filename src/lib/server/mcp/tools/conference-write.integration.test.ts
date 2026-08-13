@@ -12,12 +12,15 @@ import {
 } from '$lib/server/conference/public-conference';
 import { addReviewRound } from '$lib/server/conference/review-rounds';
 import { db } from '$lib/server/db';
+import { invitation } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	membershipTable,
+	membershipTrackTable,
 	roomTable,
-	speakerProfileTable
+	speakerProfileTable,
+	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { reviewTable } from '$lib/server/db/conference/review-schema';
 import { and, asc, eq } from 'drizzle-orm';
@@ -373,6 +376,33 @@ describe('organizer write tools', () => {
 		expect(again.text).toContain('already exists');
 		expect(again.text).not.toContain('Check the name and minutes');
 	});
+
+	it('collapses a newline in the name the same way addFormat does', async () => {
+		const slug = `mcp-write-format-newline-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Format Newline Conf',
+			slug,
+			startsOn: '2027-12-05',
+			endsOn: '2027-12-05',
+			venue: null
+		});
+
+		const created = await call(organizer, 'create_session_format', {
+			conferenceSlug: slug,
+			name: 'Talk\nWorkshop'
+		});
+		expect(created.isError).toBe(false);
+		expect(created.data).toMatchObject({
+			created: true,
+			format: { name: 'Talk Workshop', minutes: null }
+		});
+
+		const listed = await call(organizer, 'list_session_formats', { conferenceSlug: slug });
+		expect(listed.data).toMatchObject({ count: 1 });
+		expect(listed.data!.formats).toEqual([
+			expect.objectContaining({ name: 'Talk Workshop', minutes: null })
+		]);
+	});
 });
 
 /**
@@ -526,6 +556,202 @@ describe('review committee', () => {
 			skipped: [{ submissionId: submission.id, reason: 'speaker_conflict' }]
 		});
 		expect(assigned.data).not.toHaveProperty('skipped', 1);
+	});
+
+	it('counts a recusal that actually exists, not the zero a fresh conference always has', async () => {
+		const slug = `mcp-write-recused-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Recused Conf',
+			slug,
+			startsOn: '2027-12-09',
+			endsOn: '2027-12-09',
+			venue: null
+		});
+		const ellis = seeded.people.find((person) => person.role === 'reviewer')!;
+		await call(organizer, 'invite_reviewer', { conferenceSlug: slug, email: ellis.email });
+		const round = await call(organizer, 'create_review_round', {
+			conferenceSlug: slug,
+			name: 'Screening'
+		});
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: 'Recused talk',
+				abstract: 'So list_reviewers has a recusal to count.',
+				status: 'submitted'
+			})
+			.returning({ id: submissionTable.id });
+		await call(organizer, 'assign_reviews', {
+			conferenceSlug: slug,
+			submissionIds: [submission.id],
+			reviewerEmail: ellis.email,
+			roundId: (round.data!.round as { id: number }).id
+		});
+		await db
+			.update(reviewTable)
+			.set({ status: 'recused' })
+			.where(eq(reviewTable.submissionId, submission.id));
+
+		const listed = await call(organizer, 'list_reviewers', { conferenceSlug: slug });
+		expect(listed.data!.reviewers).toEqual([
+			expect.objectContaining({ email: ellis.email, recused: 1, assigned: 0 })
+		]);
+	});
+
+	it('lists a pending invitation that is actually waiting, not the empty array a stub would return', async () => {
+		const slug = `mcp-write-pending-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Pending Conf',
+			slug,
+			startsOn: '2027-12-10',
+			endsOn: '2027-12-10',
+			venue: null
+		});
+		const [conference] = await db
+			.select({ id: conferenceTable.id, organizationId: conferenceTable.organizationId })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		const expiresAt = new Date('2027-12-20T12:00:00.000Z');
+		await db.insert(invitation).values({
+			id: `inv-pending-${suffix}`,
+			organizationId: conference.organizationId,
+			email: `pending+${suffix}@example.com`,
+			role: 'member',
+			status: 'pending',
+			expiresAt,
+			inviterId: organizer.userId,
+			conferenceId: conference.id
+		});
+
+		const listed = await call(organizer, 'list_reviewers', { conferenceSlug: slug });
+		expect(listed.data!.pending).toEqual([
+			{ email: `pending+${suffix}@example.com`, expiresAt: expiresAt.toISOString() }
+		]);
+	});
+
+	it('names track_restricted when the reviewer is allow-listed to a different track', async () => {
+		const slug = `mcp-write-track-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Track Restrict Conf',
+			slug,
+			startsOn: '2027-12-11',
+			endsOn: '2027-12-11',
+			venue: null
+		});
+		const ellis = seeded.people.find((person) => person.role === 'reviewer')!;
+		await call(organizer, 'invite_reviewer', { conferenceSlug: slug, email: ellis.email });
+		const round = await call(organizer, 'create_review_round', {
+			conferenceSlug: slug,
+			name: 'Screening'
+		});
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		const [allowed, blocked] = await db
+			.insert(trackTable)
+			.values([
+				{ conferenceId: conference.id, name: 'Allowed' },
+				{ conferenceId: conference.id, name: 'Blocked' }
+			])
+			.returning();
+		const [seat] = await db
+			.select({ id: membershipTable.id })
+			.from(membershipTable)
+			.where(
+				and(
+					eq(membershipTable.userId, ellis.id),
+					eq(membershipTable.role, 'reviewer'),
+					eq(membershipTable.scopeType, 'conference'),
+					eq(membershipTable.scopeId, conference.id)
+				)
+			);
+		await db.insert(membershipTrackTable).values({ membershipId: seat.id, trackId: allowed.id });
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: 'Wrong track',
+				abstract: 'Ellis may only review Allowed.',
+				status: 'submitted',
+				trackId: blocked.id
+			})
+			.returning({ id: submissionTable.id });
+
+		const assigned = await call(organizer, 'assign_reviews', {
+			conferenceSlug: slug,
+			submissionIds: [submission.id],
+			reviewerEmail: ellis.email,
+			roundId: (round.data!.round as { id: number }).id
+		});
+		expect(assigned.isError).toBe(false);
+		expect(assigned.data).toMatchObject({
+			created: 0,
+			skippedCount: 1,
+			skipped: [{ submissionId: submission.id, reason: 'track_restricted' }]
+		});
+	});
+
+	it('names not_in_round when the reviewer sits on a different round of the same conference', async () => {
+		const slug = `mcp-write-round-seat-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Round Seat Conf',
+			slug,
+			startsOn: '2027-12-12',
+			endsOn: '2027-12-12',
+			venue: null
+		});
+		const first = await call(organizer, 'create_review_round', {
+			conferenceSlug: slug,
+			name: 'Screening'
+		});
+		const second = await call(organizer, 'create_review_round', {
+			conferenceSlug: slug,
+			name: 'Finals'
+		});
+		const finley = seeded.people.find((person) => person.name === 'Finley Brooks')!;
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		await db.insert(membershipTable).values({
+			userId: finley.id,
+			role: 'reviewer',
+			scopeType: 'round',
+			scopeId: (second.data!.round as { id: number }).id
+		});
+
+		const listed = await call(organizer, 'list_reviewers', { conferenceSlug: slug });
+		expect(listed.data!.reviewers).toEqual([
+			expect.objectContaining({ email: finley.email, role: 'round' })
+		]);
+
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: 'Wrong round',
+				abstract: 'Finley sits on Finals, not Screening.',
+				status: 'submitted'
+			})
+			.returning({ id: submissionTable.id });
+		const assigned = await call(organizer, 'assign_reviews', {
+			conferenceSlug: slug,
+			submissionIds: [submission.id],
+			reviewerEmail: finley.email,
+			roundId: (first.data!.round as { id: number }).id
+		});
+		expect(assigned.isError).toBe(false);
+		expect(assigned.data).toMatchObject({
+			created: 0,
+			skippedCount: 1,
+			skipped: [{ submissionId: submission.id, reason: 'not_in_round' }]
+		});
 	});
 });
 
