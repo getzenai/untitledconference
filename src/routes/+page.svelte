@@ -38,7 +38,7 @@
 	<title>untitledconference — run your conference from call to stage</title>
 	<meta
 		name="description"
-		content="Open-source conference programme management for calls for proposals, collaborative review, speaker operations and published agendas."
+		content="Free, open-source conference programme management: call for proposals, blind-capable review rounds, speaker operations and a published, embeddable agenda — connected in one workspace."
 	/>
 </svelte:head>
 
@@ -91,7 +91,7 @@
 					<Button href="/login" variant="ghost" size="sm" class="hidden sm:inline-flex"
 						>Sign in</Button
 					>
-					<Button href="/register" variant="act" size="sm">Get started</Button>
+					<Button href="/register" variant="act" size="sm">Get started free</Button>
 				{/if}
 			</div>
 		</div>
@@ -114,11 +114,12 @@
 						class="mt-6 text-4xl leading-[1.02] font-semibold tracking-[-0.045em] sm:text-6xl lg:text-7xl"
 					>
 						Run the whole conference.<br />
-						<span class="text-muted-foreground">Lose the handoffs.</span>
+						<span class="text-muted-foreground">Retire the spreadsheets.</span>
 					</h1>
 					<p class="text-muted-foreground mt-6 max-w-xl text-base leading-7 sm:text-lg">
-						One calm workspace for proposals, review rounds, speakers and the schedule. Built so
-						organizers can move from open call to published agenda without a spreadsheet relay.
+						One calm workspace that carries a conference from open call to published agenda —
+						proposals, blind-capable review rounds, speaker logistics and a schedule that flags its
+						own conflicts.
 					</p>
 					<div class="mt-8 flex flex-wrap items-center gap-3">
 						<Button href="/register" variant="act" size="lg">
@@ -138,13 +139,16 @@
 					</div>
 					<ul class="text-muted-foreground mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm">
 						<li class="flex items-center gap-2">
+							<CheckIcon class="text-status-good size-4" /> Free & open source
+						</li>
+						<li class="flex items-center gap-2">
 							<CheckIcon class="text-status-good size-4" /> Self-hostable
 						</li>
 						<li class="flex items-center gap-2">
-							<CheckIcon class="text-status-good size-4" /> No attendee account required
+							<CheckIcon class="text-status-good size-4" /> No attendee accounts
 						</li>
 						<li class="flex items-center gap-2">
-							<CheckIcon class="text-status-good size-4" /> Built for every role
+							<CheckIcon class="text-status-good size-4" /> API + MCP built in
 						</li>
 					</ul>
 				</div>
@@ -483,14 +487,14 @@
 			>
 				<div class="relative z-10 max-w-2xl">
 					<p class="text-background/65 text-xs font-semibold tracking-widest uppercase">
-						Your conference can have one home
+						One home for the whole programme
 					</p>
 					<h2 class="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">
 						Ready when the programme is.
 					</h2>
 					<p class="text-background/70 mt-4 max-w-xl leading-7">
-						Start with the next call. Keep the reviews, people and schedule connected as the
-						conference grows.
+						Start with your next call — free, in the browser, today. The reviews, speakers and
+						schedule stay connected from there.
 					</p>
 					<div class="mt-8 flex flex-wrap gap-3">
 						<Button href="/register" variant="act" size="lg"
