@@ -21,10 +21,13 @@ export const SERVER_INSTRUCTIONS =
 	'Identity comes from the OAuth access token, so no tool takes a user or organization argument. ' +
 	'Organizers start with list_my_conferences — every other organizer tool takes a slug it returns. ' +
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
-	'open_cfp then publish_conference so speakers can submit, invite_reviewer then assign_reviews, ' +
+	'open_cfp then publish_conference so speakers can submit, ' +
+	'create_session_format and create_track so proposals have a length and a track, ' +
+	'create_review_round then invite_reviewer then assign_reviews, ' +
 	'decide_submissions, then unpublish_conference to return to draft. ' +
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
+	'list_review_rounds, list_session_formats, list_tracks, ' +
 	'and get_agenda for the scheduled programme. ' +
 	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
 	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
