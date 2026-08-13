@@ -13,8 +13,8 @@
  */
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
-import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { McpContext } from '../context';
@@ -129,7 +129,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	for (const id of conferenceIds) await db.delete(conferenceTable).where(eq(conferenceTable.id, id));
+	for (const id of conferenceIds)
+		await db.delete(conferenceTable).where(eq(conferenceTable.id, id));
 	for (const id of userIds) await db.delete(user).where(eq(user.id, id));
 	for (const id of orgIds) await db.delete(organization).where(eq(organization.id, id));
 });
@@ -157,11 +158,13 @@ describe('the conference MCP tools', () => {
 		// The whole point: `plainMemberCtx.organizationId` IS the organization that
 		// owns `otherConference`. A tool scoped by organization would answer this.
 		expect(plainMemberCtx.organizationId).toBe(
-			(await db
-				.select({ organizationId: conferenceTable.organizationId })
-				.from(conferenceTable)
-				.where(eq(conferenceTable.slug, otherConference.slug))
-				.limit(1))[0].organizationId
+			(
+				await db
+					.select({ organizationId: conferenceTable.organizationId })
+					.from(conferenceTable)
+					.where(eq(conferenceTable.slug, otherConference.slug))
+					.limit(1)
+			)[0].organizationId
 		);
 
 		const result = await call(plainMemberCtx, 'list_submissions', {
@@ -190,6 +193,71 @@ describe('the conference MCP tools', () => {
 		expect(foreign.text.replace(otherConference.slug, 'X')).toBe(
 			missing.text.replace(`definitely-not-a-conference-${suffix}`, 'X')
 		);
+	});
+
+	it('decides through the real decision path, not a status column', async () => {
+		const list = await call(ownerCtx, 'list_submissions', {
+			conferenceSlug: ownConference.slug,
+			limit: 100
+		});
+		const submissionId = (list.data!.submissions as { id: number }[])[0].id;
+
+		const { data } = await call(ownerCtx, 'decide_submissions', {
+			conferenceSlug: ownConference.slug,
+			submissionIds: [submissionId],
+			decision: 'accepted'
+		});
+
+		expect(data!.decided).toBe(1);
+		// The tell that `decideSubmissions` ran rather than an UPDATE: accepting
+		// also opens the agenda slot. A tool that wrote `status` itself would
+		// report a decision and leave the programme without the talk.
+		expect(data!.sessionsCreated).toBe(1);
+
+		const [row] = await db
+			.select({ status: submissionTable.status, decidedAt: submissionTable.decidedAt })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId))
+			.limit(1);
+		expect(row.status).toBe('accepted');
+		expect(row.decidedAt).not.toBeNull();
+
+		// Deciding the same way twice must not decide again or duplicate the slot.
+		const again = await call(ownerCtx, 'decide_submissions', {
+			conferenceSlug: ownConference.slug,
+			submissionIds: [submissionId],
+			decision: 'accepted'
+		});
+		expect(again.data!.decided).toBe(0);
+		expect(again.data!.unchanged).toBe(1);
+		expect(again.data!.sessionsCreated).toBe(0);
+	});
+
+	it('cannot decide a submission belonging to another conference', async () => {
+		const [foreign] = await db
+			.select({ id: submissionTable.id, status: submissionTable.status })
+			.from(submissionTable)
+			.innerJoin(conferenceTable, eq(conferenceTable.id, submissionTable.conferenceId))
+			.where(eq(conferenceTable.slug, otherConference.slug))
+			.limit(1);
+
+		// Named alongside a conference the caller really does organize — the shape
+		// of the attempt that a per-row scope has to stop.
+		const { data } = await call(ownerCtx, 'decide_submissions', {
+			conferenceSlug: ownConference.slug,
+			submissionIds: [foreign.id],
+			decision: 'rejected'
+		});
+
+		expect(data!.decided).toBe(0);
+		expect(data!.notDecided).toBe(1);
+
+		const [after] = await db
+			.select({ status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, foreign.id))
+			.limit(1);
+		expect(after.status).toBe(foreign.status);
 	});
 
 	it('does not return reviewer identities with a proposal', async () => {

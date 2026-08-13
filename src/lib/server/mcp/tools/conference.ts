@@ -1,7 +1,8 @@
-import { db } from '$lib/server/db';
 import { organizedConferences, requireOrganizer } from '$lib/server/conference/access';
-import { conferenceDayTable, roomTable } from '$lib/server/db/conference/conference-schema';
+import { decideSubmissions } from '$lib/server/conference/decisions';
+import { db } from '$lib/server/db';
 import { submissionStatus, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { conferenceDayTable, roomTable } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { reviewTable } from '$lib/server/db/conference/review-schema';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -32,6 +33,7 @@ export function registerConferenceTools(server: McpServer, ctx: McpContext): voi
 	registerListSubmissions(server, ctx);
 	registerGetSubmission(server, ctx);
 	registerGetAgenda(server, ctx);
+	registerDecideSubmissions(server, ctx);
 }
 
 /**
@@ -169,10 +171,7 @@ function registerGetSubmission(server: McpServer, ctx: McpContext): void {
 				})
 				.from(submissionTable)
 				.where(
-					and(
-						eq(submissionTable.id, submissionId),
-						eq(submissionTable.conferenceId, conference.id)
-					)
+					and(eq(submissionTable.id, submissionId), eq(submissionTable.conferenceId, conference.id))
 				)
 				.limit(1);
 
@@ -266,6 +265,54 @@ function registerGetAgenda(server: McpServer, ctx: McpContext): void {
 					startsAt: row.startsAt?.toISOString() ?? null,
 					endsAt: row.endsAt?.toISOString() ?? null
 				}))
+			};
+		}
+	});
+}
+
+function registerDecideSubmissions(server: McpServer, ctx: McpContext): void {
+	registerMcpTool(server, ctx, {
+		name: 'decide_submissions',
+		description:
+			'Accept, reject or waitlist one or more proposals of a conference you organize. ' +
+			'Accepting also places the talk in the agenda tray, confirms its speakers and creates ' +
+			'their tasks; taking an acceptance back undoes those. Speakers are NOT emailed — ' +
+			'notifying them is a separate organizer action. Deciding the same way twice changes nothing.',
+		inputSchema: {
+			conferenceSlug: z.string().min(1).describe('Conference slug, from list_my_conferences.'),
+			submissionIds: z
+				.array(z.number().int())
+				.min(1)
+				.max(100)
+				.describe('Submission ids to decide, from list_submissions (1-100).'),
+			decision: z
+				.enum(['accepted', 'rejected', 'waitlisted'])
+				.describe('The decision to apply to every listed proposal.')
+		},
+		handler: async ({ conferenceSlug, submissionIds, decision }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+
+			// `decideSubmissions` is the same function the organizer screen calls, and
+			// reusing it is the point rather than convenience: a decision is not a
+			// status column. Accepting also opens an agenda slot, confirms the
+			// speakers onto the conference and generates their tasks — all in one
+			// transaction. A tool that wrote `status` itself would leave a talk
+			// accepted with no session and no tasks, which nothing on screen would
+			// report as missing.
+			//
+			// It scopes its own update to `conference.id`, so an id belonging to
+			// another conference is silently not decided rather than decided wrongly.
+			const result = await decideSubmissions(conference, submissionIds, decision);
+
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				decision,
+				requested: submissionIds.length,
+				...result,
+				// The two counts rarely match, and the difference is the interesting
+				// part: ids already carrying this decision, and ids that are not in
+				// this conference at all.
+				notDecided: submissionIds.length - result.decided - result.unchanged
 			};
 		}
 	});
