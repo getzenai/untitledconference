@@ -89,8 +89,8 @@
 				<ModeToggle class="-mr-2" />
 			</div>
 
-			<nav aria-label="Conference sections" class="mx-auto max-w-6xl px-6">
-				<ul class="-mb-px flex gap-6 text-sm">
+			<nav aria-label="Conference sections" class="mx-auto max-w-6xl overflow-x-auto px-6">
+				<ul class="-mb-px flex gap-6 text-sm whitespace-nowrap">
 					{#each surfaces as surface (surface.path)}
 						{@const current = isCurrent(surface.path)}
 						<li>

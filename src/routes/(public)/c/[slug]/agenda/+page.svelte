@@ -16,13 +16,36 @@
 		TooltipProvider,
 		TooltipTrigger
 	} from '$lib/components/ui/tooltip';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 
 	let { data } = $props();
 
 	const view = $derived(buildView(data.conference));
 
 	let dayIndex = $state(0);
-	let selected = $state<ResolvedSession | null>(null);
+
+	// The open session is the URL, not a local flag. Opening it in memory left
+	// the browser's Back button with nothing to pop except the previous site.
+	const selectedId = $derived(page.url.searchParams.get('session'));
+	const selected = $derived(
+		selectedId ? (view.sessions.find((s) => s.id === selectedId) ?? null) : null
+	);
+
+	function sessionHref(id: string | null) {
+		const next = new URL(page.url);
+		if (id) next.searchParams.set('session', id);
+		else next.searchParams.delete('session');
+		return `${next.pathname}${next.search}${next.hash}`;
+	}
+
+	function openSession(session: ResolvedSession) {
+		void goto(sessionHref(session.id), { keepFocus: true, noScroll: true });
+	}
+
+	function closeSession() {
+		void goto(sessionHref(null), { keepFocus: true, noScroll: true });
+	}
 
 	const day = $derived(view.conference.days[dayIndex]);
 	const daySessions = $derived(view.sessionsByDay.get(day.id) ?? []);
@@ -84,8 +107,16 @@
 
 	const goToDay = (i: number) => {
 		dayIndex = i;
-		selected = null;
+		if (selected) closeSession();
 	};
+
+	// A deep-linked session belongs to a day. Open that day rather than the
+	// grid's default first column, so Back lands on the day the session is on.
+	$effect(() => {
+		if (!selected) return;
+		const i = view.conference.days.findIndex((d) => d.id === selected.dayId);
+		if (i >= 0) dayIndex = i;
+	});
 </script>
 
 <svelte:head>
@@ -95,7 +126,7 @@
 {#if selected}
 	{@const session = selected}
 	<article>
-		<Button variant="ghost" size="sm" class="mb-4 -ml-3" onclick={() => (selected = null)}>
+		<Button variant="ghost" size="sm" class="mb-4 -ml-3" onclick={closeSession}>
 			← Back to agenda
 		</Button>
 
@@ -242,7 +273,7 @@
 											: ''}. {session.timeRange}{session.room ? ` · ${session.room}` : ''}"
 										onclick={(e) => {
 											tip.onclick?.(e);
-											selected = session;
+											openSession(session);
 										}}
 										class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none {compact
 											? 'p-1'
