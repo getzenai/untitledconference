@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	PUBLIC_CACHE_CONTROL,
 	PUBLIC_CACHE_VARY,
-	PUBLIC_CDN_CACHE_CONTROL,
 	isCacheablePublicRequest,
 	publicPageCacheHandler,
 	publicPageCacheKey
@@ -13,7 +12,6 @@ describe('PUBLIC_CACHE_CONTROL', () => {
 	it('does not grant the CDN a shared TTL — Cloudflare ignores Vary except Accept-Encoding', () => {
 		expect(PUBLIC_CACHE_CONTROL).not.toMatch(/s-maxage/i);
 		expect(PUBLIC_CACHE_CONTROL).toMatch(/max-age=60/);
-		expect(PUBLIC_CDN_CACHE_CONTROL).toBe('no-store');
 	});
 });
 
@@ -140,7 +138,7 @@ describe('publicPageCacheHandler', () => {
 		} as never);
 
 		expect(response.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
-		expect(response.headers.get('cdn-cache-control')).toBe(PUBLIC_CDN_CACHE_CONTROL);
+		expect(response.headers.get('cdn-cache-control')).toBeNull();
 		expect(response.headers.get('vary')).toBe(PUBLIC_CACHE_VARY);
 		expect(response.headers.get('x-public-cache')).toBe('miss');
 		expect(cache.put).toHaveBeenCalledOnce();
@@ -189,7 +187,7 @@ describe('publicPageCacheHandler', () => {
 		const response = await publicPageCacheHandler({ event: makeEvent({}), resolve } as never);
 
 		expect(response.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
-		expect(response.headers.get('cdn-cache-control')).toBe(PUBLIC_CDN_CACHE_CONTROL);
+		expect(response.headers.get('cdn-cache-control')).toBeNull();
 		expect(response.headers.get('vary')).toBe(PUBLIC_CACHE_VARY);
 	});
 

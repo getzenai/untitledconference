@@ -22,10 +22,15 @@
  * for 60 s *before the Worker ran* (`cf-cache-status: HIT`, German HTML
  * under `Accept-Language: en-US`). The same HIT rewrote `max-age=60` to
  * `max-age=14400` (the zone's Browser Cache TTL). Locale cannot enter the
- * CDN key without an Enterprise custom cache key, so there is no `s-maxage`
- * and `CDN-Cache-Control: no-store` tells the edge not to store the page.
- * The ~50 ms is the Cache API; a CDN HIT would skip the only layer that
- * keys by locale.
+ * CDN key without an Enterprise custom cache key, so there is no `s-maxage`.
+ * `CDN-Cache-Control: no-store` is not sent: measured on `7d2412d`, that
+ * header is read on the Cache API `put()` path (`caches.default` is
+ * Cloudflare's cache) and six same-colo misses in a row showed it blocked
+ * the only layer that keys by locale. Dropping `s-maxage` is enough — the
+ * zone makes no cache decision on HTML without `cache-control` (Hank's
+ * Nürnberg measurement: `/` with no `cache-control` gets no
+ * `cf-cache-status`; there is no Cache-Everything rule). The ~50 ms is
+ * the Cache API; a CDN HIT would skip the only layer that keys by locale.
  *
  * Request cookies do not bypass Cloudflare's cache on this plan, so while
  * `s-maxage` was present the CDN also served the anonymous copy to signed-in
@@ -70,21 +75,13 @@ const logger = createLogger('PublicPageCache');
 export const PUBLIC_CACHE_CONTROL = 'public, max-age=60';
 
 /**
- * Tells Cloudflare's CDN not to store the page. `Vary` cannot do this job:
- * the edge honors it only for `Accept-Encoding`. The Cache API ignores this
- * header and keeps using `Cache-Control` for its own TTL.
- */
-export const PUBLIC_CDN_CACHE_CONTROL = 'no-store';
-
-/**
- * For browsers, which do honor `Vary`. Not a CDN defense — see
- * `PUBLIC_CDN_CACHE_CONTROL`.
+ * For browsers, which do honor `Vary`. Not a CDN defense — the CDN stays
+ * out because there is no `s-maxage`.
  */
 export const PUBLIC_CACHE_VARY = 'accept-language';
 
 function stampPublicCacheHeaders(response: Response) {
 	response.headers.set('cache-control', PUBLIC_CACHE_CONTROL);
-	response.headers.set('cdn-cache-control', PUBLIC_CDN_CACHE_CONTROL);
 	response.headers.set('vary', PUBLIC_CACHE_VARY);
 }
 
@@ -118,7 +115,8 @@ export function isCacheablePublicRequest(
  * The cache key is the request URL plus the locale Paraglide will render
  * with, resolved by the same function the middleware uses. The Cache API
  * ignores `Vary`, so the locale has to live in the key. `Vary` itself is
- * for browsers; the CDN is kept out with `CDN-Cache-Control: no-store`.
+ * for browsers. There is no `CDN-Cache-Control`: measured on `7d2412d`,
+ * that header is read on `put()` and blocked the Cache API write.
  */
 export function publicPageCacheKey(url: URL, request: Request): Request {
 	const key = new URL(url.href);
