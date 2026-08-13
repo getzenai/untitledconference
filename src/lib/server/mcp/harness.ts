@@ -14,6 +14,8 @@
 import { createConference } from '$lib/server/conference/create-conference';
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 
 export const MCP_HARNESS_EMAIL_DOMAIN = 'mcpharness.example';
@@ -34,6 +36,15 @@ export type HarnessPerson = {
 	name: string;
 	email: string;
 	role: HarnessRole;
+};
+
+/** A submitted proposal, authored by one of the harness speakers. */
+export type HarnessProposal = {
+	key: string;
+	speakerId: string;
+	title: string;
+	abstract: string;
+	keyTakeaway: string;
 };
 
 export const MCP_HARNESS = {
@@ -76,7 +87,36 @@ export const MCP_HARNESS = {
 			email: `finley@${MCP_HARNESS_EMAIL_DOMAIN}`,
 			role: 'reviewer'
 		}
-	] as const satisfies readonly HarnessPerson[]
+	] as const satisfies readonly HarnessPerson[],
+	/**
+	 * Proposals somebody else wrote (#340).
+	 *
+	 * `assign_reviews` refuses a reviewer who is a speaker on the submission, so
+	 * an agent holding a single account could never assign itself a review of a
+	 * proposal it had just submitted: the guard fired every time and the write
+	 * path behind it stayed unmeasured. These two belong to Casey and Drew, so
+	 * the organizer account can be assigned one without a conflict.
+	 */
+	proposals: [
+		{
+			key: 'casey-observability',
+			speakerId: 'user-mcp-casey',
+			title: 'Observability for agents that call tools',
+			abstract:
+				'What a trace has to record when the caller is a model: the tool it picked, ' +
+				'the arguments it made up, and the answer it got back.',
+			keyTakeaway: 'Log the arguments, not just the tool name.'
+		},
+		{
+			key: 'drew-migrations',
+			speakerId: 'user-mcp-drew',
+			title: 'Migrations nobody has to be awake for',
+			abstract:
+				'Expand, backfill, contract — and the three checks that tell you which of ' +
+				'the three you are actually in.',
+			keyTakeaway: 'A migration you cannot roll forward is a deploy you cannot ship.'
+		}
+	] as const satisfies readonly HarnessProposal[]
 };
 
 /** Tenants this playground is forbidden to touch. */
@@ -87,6 +127,7 @@ export type HarnessIds = {
 	orgSlug: string;
 	conferenceSlug: string;
 	people: HarnessPerson[];
+	proposals: HarnessProposal[];
 };
 
 /**
@@ -106,6 +147,12 @@ export function harnessIds(suffix = ''): HarnessIds {
 			...person,
 			id: `${person.id}${tag}`,
 			email: suffix ? person.email.replace('@', `+${suffix}@`) : person.email
+		})),
+		// `speakerId` carries the same tag as the user it points at, or the two
+		// tenants would trade authors.
+		proposals: MCP_HARNESS.proposals.map((proposal) => ({
+			...proposal,
+			speakerId: `${proposal.speakerId}${tag}`
 		}))
 	};
 }
@@ -115,6 +162,8 @@ export type SeededHarness = HarnessIds & {
 	organizerId: string;
 	speakerIds: string[];
 	reviewerIds: string[];
+	/** Seeded proposal ids by `HarnessProposal.key`. */
+	submissionIds: Record<string, number>;
 };
 
 async function insertHarnessPeople(ids: HarnessIds, now: Date): Promise<void> {
@@ -137,6 +186,63 @@ async function insertHarnessPeople(ids: HarnessIds, now: Date): Promise<void> {
 			createdAt: now
 		});
 	}
+}
+
+/**
+ * The proposals Casey and Drew wrote, one speaker profile each.
+ *
+ * A profile per author rather than one shared row: the conflict guard joins
+ * `speaker_profile.user_id`, so a profile pointing at the wrong account would
+ * hide the very thing this seed exists to expose. `cfpFormId` stays null —
+ * the playground has no call for papers yet, and the column allows it.
+ */
+async function insertHarnessProposals(
+	ids: HarnessIds,
+	conferenceId: number,
+	now: Date
+): Promise<Record<string, number>> {
+	const byKey: Record<string, number> = {};
+
+	for (const proposal of ids.proposals) {
+		const author = ids.people.find((person) => person.id === proposal.speakerId);
+		if (!author) {
+			throw new Error(`seedMcpHarness: no harness person for ${proposal.speakerId}`);
+		}
+
+		const [profile] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: ids.orgId,
+				userId: author.id,
+				name: author.name,
+				sortName: author.name.split(' ').at(-1) ?? author.name,
+				email: author.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId,
+				title: proposal.title,
+				abstract: proposal.abstract,
+				keyTakeaway: proposal.keyTakeaway,
+				status: 'submitted',
+				submittedAt: now
+			})
+			.returning({ id: submissionTable.id });
+
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: submission.id,
+			speakerProfileId: profile.id,
+			isPrimary: true,
+			position: 0
+		});
+
+		byKey[proposal.key] = submission.id;
+	}
+
+	return byKey;
 }
 
 /**
@@ -168,6 +274,8 @@ export async function seedMcpHarness(suffix = ''): Promise<SeededHarness> {
 		throw new Error(`seedMcpHarness: createConference failed (${created.reason})`);
 	}
 
+	const submissionIds = await insertHarnessProposals(ids, created.conference.id, now);
+
 	return {
 		...ids,
 		conferenceId: created.conference.id,
@@ -175,7 +283,8 @@ export async function seedMcpHarness(suffix = ''): Promise<SeededHarness> {
 		speakerIds: ids.people.filter((person) => person.role === 'speaker').map((person) => person.id),
 		reviewerIds: ids.people
 			.filter((person) => person.role === 'reviewer')
-			.map((person) => person.id)
+			.map((person) => person.id),
+		submissionIds
 	};
 }
 

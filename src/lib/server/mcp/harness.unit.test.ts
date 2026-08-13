@@ -28,8 +28,20 @@ describe('harnessIds', () => {
 				name: person.name,
 				email: person.email,
 				role: person.role
-			}))
+			})),
+			proposals: MCP_HARNESS.proposals.map((proposal) => ({ ...proposal }))
 		});
+	});
+
+	it('tags a proposal author with the same tag as the account it points at', () => {
+		const ids = harnessIds('abc');
+		for (const proposal of ids.proposals) {
+			expect(ids.people.some((person) => person.id === proposal.speakerId)).toBe(true);
+		}
+		// Nobody may propose their own review target: an author who is also the
+		// organizer would put the conflict guard back in the way.
+		const organizer = ids.people.find((person) => person.role === 'organizer')!;
+		expect(ids.proposals.some((proposal) => proposal.speakerId === organizer.id)).toBe(false);
 	});
 
 	it('tags every identifier so two parallel tenants can share a database', () => {
@@ -71,6 +83,9 @@ describe('the seed script identifiers', () => {
 		);
 		expect(seed.MCP_HARNESS.people.map((person: { role: string }) => person.role)).toEqual(
 			MCP_HARNESS.people.map((person) => person.role)
+		);
+		expect(seed.MCP_HARNESS.proposals).toEqual(
+			MCP_HARNESS.proposals.map((proposal) => ({ ...proposal }))
 		);
 	});
 
