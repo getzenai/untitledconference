@@ -63,7 +63,10 @@ export type McpErrorKind = 'auth' | 'invalid_input' | 'tool_error' | 'unexpected
  *
  * Subclasses must come before their base, or they collapse into `tool_error`.
  */
-function classifyError(toolName: string, error: unknown): { message: string; kind: McpErrorKind } {
+export function classifyError(
+	toolName: string,
+	error: unknown
+): { message: string; kind: McpErrorKind } {
 	if (error instanceof McpAuthError) return { message: error.message, kind: 'auth' };
 	if (error instanceof z.ZodError) {
 		const issues = error.issues

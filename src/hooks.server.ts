@@ -25,6 +25,19 @@ const API_V1_TEST_PREFIX = '/api/v1/test';
 // undiscoverable rather than more secure.
 const API_V1_MCP_PREFIX = '/api/v1/mcp';
 const API_V1_PREFIX = '/api/v1';
+// Resource routes, the OpenAPI spec and the docs page authenticate themselves
+// (bearer for the tools, none for the spec). The cookie guard's bare 401 would
+// strip the WWW-Authenticate header the OAuth client needs.
+const API_V1_BEARER_PREFIXES = [
+	API_V1_MCP_PREFIX,
+	'/api/v1/conferences',
+	'/api/v1/cfps',
+	'/api/v1/me',
+	'/api/v1/openapi.json',
+	'/api/v1/docs'
+];
+const isBearerApi = (pathname: string) =>
+	API_V1_BEARER_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 
 // Outermost handler: security headers apply per-response, so they must also
 // cover the short-circuit responses produced further down (401/403) and every
@@ -251,7 +264,7 @@ const apiProtectionHandler: Handle = async ({ event, resolve }) => {
 	const pathname = event.url.pathname;
 
 	if (pathname.startsWith(API_V1_PREFIX)) {
-		if (pathname.startsWith(API_V1_PUBLIC_PREFIX) || pathname.startsWith(API_V1_MCP_PREFIX)) {
+		if (pathname.startsWith(API_V1_PUBLIC_PREFIX) || isBearerApi(pathname)) {
 			return resolve(event);
 		} else if (pathname.startsWith(API_V1_TEST_PREFIX)) {
 			if (!isTestEnvironment()) {

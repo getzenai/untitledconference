@@ -199,6 +199,22 @@ describe('API Routing - Unauthenticated Access', () => {
 		);
 	});
 
+	it('should not apply the session-cookie guard to REST resource routes or the spec', async () => {
+		for (const path of [
+			'/api/v1/conferences',
+			'/api/v1/me',
+			'/api/v1/openapi.json',
+			'/api/v1/docs'
+		]) {
+			const event = createMockEvent(path, 'GET');
+			(mockAuth.api.getSession as any).mockResolvedValue(null);
+			const response = await handle({ event: event as any, resolve: mockResolve });
+			expect(response.status, path).not.toBe(401);
+			expect(mockResolve, path).toHaveBeenCalled();
+			mockResolve.mockClear();
+		}
+	});
+
 	it('should allow access to test endpoints only in test environment', async () => {
 		// Arrange
 		const event = createMockEvent('/api/v1/test/register', 'POST');
