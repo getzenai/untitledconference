@@ -6,6 +6,7 @@ import { isPublishableUrl, parseSpeakerLinks } from '$lib/conference/speaker-lin
 import {
 	guessSortName,
 	listOpenCalls,
+	ownedSubmission,
 	saveSubmission,
 	withdrawSubmission,
 	type CoSpeakerInput,
@@ -20,6 +21,7 @@ import {
 } from '$lib/server/conference/reviewer';
 import { editableDraft, mySubmissions } from '$lib/server/conference/speaker-portal';
 import {
+	ensureProfileForConference,
 	myProfiles,
 	setOwnHeadshot,
 	updateOwnProfile
@@ -167,10 +169,16 @@ function submitProposal(ctx: McpContext): AnyMcpToolDefinition {
 				{ submit: false }
 			);
 			if (!result.ok) saveFailure(result);
+			// `next` repeats in the payload what the description already says, because
+			// the two are read at different moments: the description is read when the
+			// agent chooses a tool, `next` when it looks at what came back. A caller
+			// that picked this tool for its name alone sees `draft` and would otherwise
+			// have no reason to look further (#335).
 			return {
 				submissionId: result.submissionId,
 				status: result.status,
-				conferenceSlug: args.conferenceSlug
+				conferenceSlug: args.conferenceSlug,
+				next: 'finalize_proposal'
 			};
 		}
 	};
@@ -302,9 +310,17 @@ function finalizeProposal(ctx: McpContext): AnyMcpToolDefinition {
 			// label — so the agent learns what to fix rather than that it failed.
 			if (!result.ok) saveFailure(result);
 
+			// Read the status back off the row instead of trusting `result.status`,
+			// which `saveSubmission` derives from the *intent* (`submit ? 'submitted'
+			// : 'draft'`) and not from what is stored. A proposal a reviewer has
+			// already picked up is `in_review`, and `submissionValues` correctly
+			// leaves it there — so the derived answer would contradict the database
+			// and `list_my_proposals` (#331).
+			const stored = await ownedSubmission(ctx.userId, submissionId);
+
 			return {
 				submissionId: result.submissionId,
-				status: result.status,
+				status: stored?.status ?? result.status,
 				conferenceSlug: existing.conferenceSlug
 			};
 		}
@@ -365,10 +381,22 @@ function updateMySpeakerProfile(ctx: McpContext): AnyMcpToolDefinition {
 		description:
 			'Update your speaker profile — name, bio, job title, company, photo URL and links. ' +
 			'Same functions as the speaker portal (`updateOwnProfile`, `setOwnHeadshot`). ' +
-			'Email cannot be changed here. If you have more than one profile, pass profileId; ' +
-			'otherwise the first is used. Omit a field to leave it as it is.',
+			'A profile belongs to one organizer, not to you globally, so you have one per ' +
+			'organization you have spoken for. With no profile yet, pass conferenceSlug and ' +
+			"one is created for that conference's organizer — you can do this before your " +
+			'first proposal, and submit_proposal will copy it into any further organization. ' +
+			'Email cannot be changed here. With more than one profile, pass profileId or ' +
+			'conferenceSlug; otherwise the first is used. Omit a field to leave it as it is.',
 		inputSchema: {
 			profileId: z.number().int().optional(),
+			conferenceSlug: z
+				.string()
+				.min(1)
+				.optional()
+				.describe(
+					"Slug from list_open_cfps. Picks the profile for that conference's organizer, " +
+						'creating it if you have none there.'
+				),
 			name: z.string().min(1).optional(),
 			sortName: z.string().optional(),
 			jobTitle: z.string().nullable().optional(),
@@ -391,13 +419,29 @@ function updateMySpeakerProfile(ctx: McpContext): AnyMcpToolDefinition {
 		},
 		handler: async (args) => {
 			const profiles = await myProfiles(ctx.userId);
-			const profile =
+			let profile =
 				args.profileId === undefined
 					? profiles[0]
 					: profiles.find((row) => row.id === args.profileId);
+
+			// A slug names the organization, which is the one thing a profile cannot
+			// do without — so it is also what lets one be created before any proposal
+			// exists (#334). It wins over the positional default: a caller who says
+			// which conference they mean should not be edited into a different one.
+			if (args.conferenceSlug !== undefined && args.profileId === undefined) {
+				const forConference = await ensureProfileForConference(ctx.userId, args.conferenceSlug);
+				if (!forConference) {
+					throw new McpToolError(
+						`No published conference at slug "${args.conferenceSlug}". Call list_open_cfps.`
+					);
+				}
+				profile = forConference;
+			}
+
 			if (!profile) {
 				throw new McpToolError(
-					'No speaker profile of yours to update. Submit a proposal first, then retry.'
+					'No speaker profile of yours to update. A profile belongs to one organizer: ' +
+						'pass conferenceSlug (from list_open_cfps) and one is created there.'
 				);
 			}
 			if (

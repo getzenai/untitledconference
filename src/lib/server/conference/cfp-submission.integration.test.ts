@@ -36,7 +36,7 @@ import {
 	withdrawSubmission,
 	type SubmissionInput
 } from './cfp-submission';
-import { editableDraft, submissionForConference } from './speaker-portal';
+import { editableDraft, mySubmissions, submissionForConference } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -45,6 +45,9 @@ const slug = `conf-${suffix}`;
 const otherSlug = `other-${suffix}`;
 const submitterId = `user-${suffix}`;
 const strangerId = `stranger-${suffix}`;
+/** Named as a co-presenter before they had an account, then signs up (#330). */
+const coSpeakerId = `co-speaker-${suffix}`;
+const coSpeakerEmail = `${coSpeakerId}@example.test`;
 
 let workshopFormatId = 0;
 let talkFormatId = 0;
@@ -64,7 +67,8 @@ beforeAll(async () => {
 
 	await db.insert(user).values([
 		{ id: submitterId, email: `${submitterId}@example.test`, emailVerified: true, name: 'Sub' },
-		{ id: strangerId, email: `${strangerId}@example.test`, emailVerified: true, name: 'Nosy' }
+		{ id: strangerId, email: `${strangerId}@example.test`, emailVerified: true, name: 'Nosy' },
+		{ id: coSpeakerId, email: coSpeakerEmail, emailVerified: true, name: 'Dana Okonkwo' }
 	]);
 
 	const [conference] = await db
@@ -147,6 +151,7 @@ afterAll(async () => {
 	await db.delete(organization).where(eq(organization.id, organizationId));
 	await db.delete(user).where(eq(user.id, submitterId));
 	await db.delete(user).where(eq(user.id, strangerId));
+	await db.delete(user).where(eq(user.id, coSpeakerId));
 });
 
 function input(overrides: Partial<SubmissionInput> = {}): SubmissionInput {
@@ -952,6 +957,140 @@ describe('listOpenCalls', () => {
 		}
 
 		expect((await listOpenCalls()).some((row) => row.slug === slug)).toBe(true);
+	});
+});
+
+/**
+ * The takeover (#330).
+ *
+ * The existing ownership tests pin the easy case — a stranger, with no
+ * relationship to the submission at all — and every one of them passed while a
+ * co-presenter could erase the person who proposed the talk. What distinguishes
+ * these is that the caller is genuinely on the submission: the refusal has to
+ * come from *which* speaker they are, not from whether they are one.
+ */
+describe('a co-presenter saving a proposal (#330)', () => {
+	/** Casey proposes and names Dana, who has no account at that point. */
+	async function proposalNamingDana(title: string, submit: boolean): Promise<number> {
+		const saved = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title,
+				coSpeakers: [{ name: 'Dana Okonkwo', email: coSpeakerEmail, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit }
+		);
+		if (!saved.ok) throw new Error('expected a saved proposal');
+		return saved.submissionId;
+	}
+
+	/**
+	 * Signing up under the address Casey entered. `claimProfilesForAccount` runs
+	 * on the portal read, so this is the ordinary first thing Dana does — and the
+	 * step that arms the takeover.
+	 */
+	async function danaSignsUpAndLooks(submissionId: number) {
+		const rows = await mySubmissions(coSpeakerId);
+		const row = rows.find((r) => r.id === submissionId);
+		// Premise, not decoration: if Dana were never linked to the profile, every
+		// assertion below would hold for the wrong reason.
+		expect(row?.isPrimary).toBe(false);
+	}
+
+	/** The round trip the edit form and `update_proposal` both perform. */
+	async function danaSaves(submissionId: number, title: string) {
+		const editable = await editableDraft(coSpeakerId, submissionId);
+		if (!editable) throw new Error('expected the co-presenter to be able to open it');
+		return saveSubmission(
+			coSpeakerId,
+			slug,
+			input({
+				title,
+				speaker: {
+					name: 'Dana Okonkwo',
+					sortName: 'Okonkwo, Dana',
+					email: coSpeakerEmail,
+					jobTitle: null,
+					company: null,
+					bio: null
+				},
+				coSpeakers: editable.draft.coSpeakers.map((co) => ({
+					name: co.name,
+					email: co.email || null,
+					roleLabel: co.roleLabel || null
+				}))
+			}),
+			{ submit: true, submissionId }
+		);
+	}
+
+	async function speakersOn(submissionId: number) {
+		return db
+			.select({
+				userId: speakerProfileTable.userId,
+				isPrimary: submissionSpeakerTable.isPrimary
+			})
+			.from(submissionSpeakerTable)
+			.innerJoin(
+				speakerProfileTable,
+				eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+			)
+			.where(eq(submissionSpeakerTable.submissionId, submissionId));
+	}
+
+	it('leaves the talk with the person who proposed it', async () => {
+		const id = await proposalNamingDana('Ours together', true);
+		await danaSignsUpAndLooks(id);
+
+		expect((await danaSaves(id, 'Ours together, reworded')).ok).toBe(true);
+
+		const speakers = await speakersOn(id);
+		expect(speakers).toHaveLength(2);
+		expect(speakers.find((s) => s.userId === submitterId)?.isPrimary).toBe(true);
+		// Dana stays on the talk: the edit is allowed, only the takeover is not.
+		expect(speakers.find((s) => s.userId === coSpeakerId)?.isPrimary).toBe(false);
+
+		// What the deletion actually cost the submitter, asserted where they would
+		// have noticed it — their own proposal missing from their own portal.
+		expect((await mySubmissions(submitterId)).some((row) => row.id === id)).toBe(true);
+	});
+
+	it('still sends the submitter their confirmation when the co-presenter hands it in', async () => {
+		const id = await proposalNamingDana('Handed in by the other one', false);
+		await danaSignsUpAndLooks(id);
+
+		expect((await danaSaves(id, 'Handed in by the other one')).ok).toBe(true);
+
+		// `queueReceipt` reads the speaker set after the write, so a submitter who
+		// was deleted by that same write is not merely off the talk — they are not
+		// told it went in.
+		const mails = await db
+			.select({ toEmail: emailLogTable.toEmail })
+			.from(emailLogTable)
+			.where(
+				and(eq(emailLogTable.relatedId, id), eq(emailLogTable.template, 'submission_received'))
+			);
+		expect(new Set(mails.map((m) => m.toEmail))).toEqual(
+			new Set([`${submitterId}@example.test`, coSpeakerEmail])
+		);
+	});
+
+	it('cannot withdraw it — sharing a talk is not sharing the decision to pull it', async () => {
+		const id = await proposalNamingDana('Not Dana’s to pull', false);
+		await danaSignsUpAndLooks(id);
+
+		expect(await withdrawSubmission(coSpeakerId, id)).toEqual({ ok: false, reason: 'not_found' });
+
+		const [row] = await db
+			.select({ status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, id));
+		expect(row?.status).toBe('draft');
+
+		// The same call from the submitter, so the refusal above is about which
+		// speaker asked and not about the proposal being unwithdrawable.
+		expect(await withdrawSubmission(submitterId, id)).toEqual({ ok: true });
 	});
 });
 
