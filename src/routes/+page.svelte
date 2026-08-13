@@ -10,7 +10,7 @@
 	import RouteIcon from '@lucide/svelte/icons/route';
 	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
 	import Goose from '$lib/components/goose.svelte';
-	import ModeToggle from '$lib/components/mode-toggle.svelte';
+	import LandingHeader from '$lib/components/landing-header.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { formatDayLong } from '$lib/conference/public-view';
@@ -47,55 +47,43 @@
      the viewport, not on this div). clip clips the decorative bleed without
      creating a scroll container. -->
 <div class="bg-background text-foreground min-h-screen overflow-x-clip">
-	<header class="border-border/70 bg-background/90 sticky top-0 z-50 border-b backdrop-blur-xl">
-		<div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8">
+	<!-- A signed-in reader arrives here through `?home=0` (see +page.server.ts), so
+	     the two buttons that ask them to sign in or sign up would be nonsense. The
+	     page stays exactly the same otherwise: it is the product page, and reading
+	     it is the point of having come. -->
+	<LandingHeader {selfHref}>
+		{#snippet nav()}
 			<a
-				href={selfHref}
-				class="focus-visible:ring-ring flex items-center gap-2 rounded-md font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:outline-none"
+				class="text-muted-foreground hover:text-foreground text-sm transition-colors"
+				href="#product">Product</a
 			>
-				<Goose silent class="h-9 w-8" />
-				<span>untitledconference</span>
-			</a>
-
-			<nav aria-label="Landing page" class="hidden items-center gap-6 md:flex">
-				<a
-					class="text-muted-foreground hover:text-foreground text-sm transition-colors"
-					href="#product">Product</a
+			<a
+				class="text-muted-foreground hover:text-foreground text-sm transition-colors"
+				href="#workflow">Workflow</a
+			>
+			<a
+				class="text-muted-foreground hover:text-foreground text-sm transition-colors"
+				href="#live-events">Live conferences</a
+			>
+			<a
+				class="text-muted-foreground hover:text-foreground text-sm transition-colors"
+				href={REPO_URL}
+				rel="noreferrer">Open source</a
+			>
+		{/snippet}
+		{#snippet actions()}
+			{#if data.user}
+				<Button href="/home" variant="act" size="sm" data-testid="landing-back-to-work">
+					Back to your work
+				</Button>
+			{:else}
+				<Button href="/login" variant="ghost" size="sm" class="hidden sm:inline-flex"
+					>Sign in</Button
 				>
-				<a
-					class="text-muted-foreground hover:text-foreground text-sm transition-colors"
-					href="#workflow">Workflow</a
-				>
-				<a
-					class="text-muted-foreground hover:text-foreground text-sm transition-colors"
-					href="#live-events">Live conferences</a
-				>
-				<a
-					class="text-muted-foreground hover:text-foreground text-sm transition-colors"
-					href={REPO_URL}
-					rel="noreferrer">Open source</a
-				>
-			</nav>
-
-			<div class="flex items-center gap-1.5 sm:gap-2">
-				<ModeToggle class="hidden sm:inline-flex" />
-				<!-- A signed-in reader arrives here through `?home=0` (see +page.server.ts), so
-				     the two buttons that ask them to sign in or sign up would be nonsense. The
-				     page stays exactly the same otherwise: it is the product page, and reading
-				     it is the point of having come. -->
-				{#if data.user}
-					<Button href="/home" variant="act" size="sm" data-testid="landing-back-to-work">
-						Back to your work
-					</Button>
-				{:else}
-					<Button href="/login" variant="ghost" size="sm" class="hidden sm:inline-flex"
-						>Sign in</Button
-					>
-					<Button href="/register" variant="act" size="sm">Get started free</Button>
-				{/if}
-			</div>
-		</div>
-	</header>
+				<Button href="/register" variant="act" size="sm">Get started free</Button>
+			{/if}
+		{/snippet}
+	</LandingHeader>
 
 	<main>
 		<section class="relative">
