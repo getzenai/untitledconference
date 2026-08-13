@@ -1,7 +1,8 @@
 import { auth, firstOrganizationFor } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
-import { needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
+import { db, needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
+import { member } from '$lib/server/db/auth-schema';
 import { createLogger } from '$lib/server/logger';
 import { captureException } from '$lib/server/posthog';
 import { publicPageCacheHandler } from '$lib/server/public-page-cache';
@@ -10,6 +11,7 @@ import '$lib/server/startup';
 import { type Handle, type HandleServerError } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
+import { and, eq } from 'drizzle-orm';
 
 const logger = createLogger('Hooks');
 
@@ -192,22 +194,32 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 			if (activeOrganizationId) {
 				event.locals.organizationId = activeOrganizationId;
 
-				// Get user's role in the active organization
+				// The caller's role in that organization, read as one row.
+				//
+				// This used to go through `auth.api.listMembers`, which costs far more
+				// than it looks: the endpoint resolves the session again on its own,
+				// loads *every* member of the organization and counts them — and all of
+				// it was thrown away by a `find` for the single row we wanted. On a
+				// deployment whose database is a us-west-2 round trip away (~295 ms
+				// measured) that was several of the ~23 auth queries a signed-in page
+				// was spending before it rendered anything.
+				//
+				// Reading the row directly is the same value from the same table, with
+				// no caching and nothing left valid for longer: strictly fewer
+				// questions, identical answer.
 				try {
-					const orgMembers = await auth.api.listMembers({
-						headers: requestHeaders,
-						query: {
-							organizationId: activeOrganizationId
-						}
-					});
+					const [seat] = await db
+						.select({ role: member.role })
+						.from(member)
+						.where(
+							and(
+								eq(member.organizationId, activeOrganizationId),
+								eq(member.userId, session.user.id)
+							)
+						)
+						.limit(1);
 
-					const currentMember = orgMembers?.members?.find((m) => m.userId === session.user.id);
-
-					if (currentMember) {
-						event.locals.organizationRole = currentMember.role;
-					} else {
-						event.locals.organizationRole = null;
-					}
+					event.locals.organizationRole = seat?.role ?? null;
 				} catch (_e) {
 					event.locals.organizationRole = null;
 				}

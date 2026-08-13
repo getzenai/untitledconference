@@ -32,6 +32,30 @@ vi.mock('$lib/auth', () => ({
 	firstOrganizationFor: vi.fn()
 }));
 
+// The organization role is read straight from `member` now (it used to go
+// through `auth.api.listMembers`, which loaded every member to keep one). The
+// assertions below are unchanged — only the source they mock moved.
+const memberSeatRows = vi.hoisted(() => ({
+	value: [] as { role: string }[],
+	throws: null as Error | null
+}));
+vi.mock('$lib/server/db', () => ({
+	db: {
+		select: () => ({
+			from: () => ({
+				where: () => ({
+					limit: async () => {
+						if (memberSeatRows.throws) throw memberSeatRows.throws;
+						return memberSeatRows.value;
+					}
+				})
+			})
+		})
+	},
+	needsRequestScopedDb: () => false,
+	withRequestScopedDb: (run: () => unknown) => run()
+}));
+
 vi.mock('$lib/paraglide/server', () => ({
 	paraglideMiddleware: paraglideMiddlewareMock
 }));
@@ -104,6 +128,9 @@ describe('API Routing - Authenticated Access', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+		// The seat mock is module state, not a vi.fn, so it does not reset itself.
+		memberSeatRows.value = [];
+		memberSeatRows.throws = null;
 	});
 
 	it('should allow access to protected endpoints with valid authentication', async () => {
@@ -114,9 +141,7 @@ describe('API Routing - Authenticated Access', () => {
 			session: { activeOrganizationId: 'org123' }
 		};
 		(mockAuth.api.getSession as any).mockResolvedValue(mockSession);
-		(mockAuth.api.listMembers as any).mockResolvedValue({
-			members: [{ userId: 'user123', role: 'owner' }]
-		});
+		memberSeatRows.value = [{ role: 'owner' }];
 
 		const event = createMockEvent('/api/v1/protected');
 
@@ -172,9 +197,7 @@ describe('API Routing - Authenticated Access', () => {
 		it('adopts the user’s organization and writes it back to the session', async () => {
 			sessionWithoutActiveOrganization();
 			mockFirstOrganizationFor.mockResolvedValue('org-adopted');
-			(mockAuth.api.listMembers as any).mockResolvedValue({
-				members: [{ userId: mockUser.id, role: 'owner' }]
-			});
+			memberSeatRows.value = [{ role: 'owner' }];
 
 			const event = createMockEvent('/api/v1/protected');
 			await handle({ event: event as any, resolve: mockResolve });
@@ -229,7 +252,7 @@ describe('API Routing - Authenticated Access', () => {
 			session: { activeOrganizationId: 'org123' }
 		};
 		(mockAuth.api.getSession as any).mockResolvedValue(mockSession);
-		(mockAuth.api.listMembers as any).mockRejectedValue(new Error('Organization lookup error'));
+		memberSeatRows.throws = new Error('Organization lookup error');
 
 		const event = createMockEvent('/api/v1/protected');
 
@@ -281,12 +304,7 @@ describe('API Routing - Authenticated Access', () => {
 			session: { activeOrganizationId: 'org456' }
 		};
 		(mockAuth.api.getSession as any).mockResolvedValue(mockSession);
-		(mockAuth.api.listMembers as any).mockResolvedValue({
-			members: [
-				{ userId: 'other-user', role: 'owner' },
-				{ userId: 'user123', role: 'member' }
-			]
-		});
+		memberSeatRows.value = [{ role: 'member' }];
 
 		const event = createMockEvent('/api/v1/organizations/data');
 
@@ -306,9 +324,7 @@ describe('API Routing - Authenticated Access', () => {
 			session: { activeOrganizationId: 'org456' }
 		};
 		(mockAuth.api.getSession as any).mockResolvedValue(mockSession);
-		(mockAuth.api.listMembers as any).mockResolvedValue({
-			members: [{ userId: 'other-user', role: 'owner' }]
-		});
+		memberSeatRows.value = [];
 
 		const event = createMockEvent('/api/v1/organizations/data');
 
