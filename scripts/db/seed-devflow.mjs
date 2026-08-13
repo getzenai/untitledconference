@@ -60,6 +60,17 @@ const DECIDED = ['accepted', 'rejected', 'waitlisted'];
 const sql = postgres(DATABASE_URL, { max: 1 });
 
 const at = (iso) => new Date(iso);
+/**
+ * Review-round time is relative to seed time, not the calendar (#242).
+ *
+ * The rounds used to sit on absolute 2027 dates while the seeded reviews sat
+ * inside them — so `roundWindowState` said `not_yet_open`, `saveReview`
+ * refused, and the demo reviewer met a locked form holding reviews that could
+ * never have been filed through it. Relative dates keep the story true
+ * whenever the seed runs: a 2027 conference whose screening round is running
+ * *now* is the normal case, not a contradiction.
+ */
+const daysFromNow = (days) => new Date(Date.now() + days * 86_400_000);
 /** Deterministic pick, so a re-seed produces the same tenant. */
 const pick = (list, n) => list[n % list.length];
 
@@ -332,16 +343,19 @@ async function seedRounds(conferenceId) {
 		await sql`INSERT INTO evaluation_plan ${sql({ conference_id: conferenceId, name: 'DevFlow 2027 review' })} RETURNING id`;
 
 	const rounds = [];
+	// Round 1 is open (the round the demo reviewer lands in); round 2 is
+	// deliberately still `not_yet_open`, because the "Opens in N days" badge is
+	// itself worth demonstrating (#242).
 	for (const [i, r] of [
-		['Round 1 — Screening', false],
-		['Round 2 — Programme committee', true]
+		['Round 1 — Screening', false, daysFromNow(-5), daysFromNow(7)],
+		['Round 2 — Programme committee', true, daysFromNow(4), daysFromNow(14)]
 	].entries()) {
 		const [row] = await sql`INSERT INTO review_round ${sql({
 			evaluation_plan_id: plan.id,
 			name: r[0],
 			anonymized: r[1],
-			opens_at: at('2027-02-16T00:00:00Z'),
-			closes_at: at('2027-02-28T23:59:00Z'),
+			opens_at: r[2],
+			closes_at: r[3],
 			position: i
 		})} RETURNING id`;
 		rounds.push(row.id);
@@ -404,11 +418,15 @@ function planScreening(roundId, submission, submissionId, counter) {
 /** Round 2 only ever sees what got through screening. */
 function planCommittee(roundId, submission, submissionId, counter) {
 	if (!['accepted', 'waitlisted', 'in_review'].includes(submission.status)) return [];
+	// Assigned, never submitted: round 2 has not opened (#242), and a filed
+	// review inside an unopened window is exactly the contradiction this seed
+	// used to create. The decisions stay backed by the round-1 screening
+	// scores; what round 2 demonstrates is assignments waiting on a window.
 	return ['user-ines', 'user-tomas'].map((reviewer, i) => ({
 		round: roundId,
 		submissionId,
 		reviewer,
-		submitted: submission.status !== 'in_review' || i === 0,
+		submitted: false,
 		status: submission.status,
 		n: counter + i
 	}));
@@ -446,14 +464,19 @@ async function seedReviews(rounds, criteria, submissionIds) {
 
 	for (const r of planned) {
 		const { band } = scoreFor(r.status, r.n);
+		// Screening assignments went out just after round 1 opened; the filed
+		// ones were filed inside the open window. Committee assignments are
+		// recent — handed out ahead of a round that opens in a few days, which
+		// is how a real committee prepares.
+		const screening = r.round === rounds[0];
 		const [row] = await sql`INSERT INTO review ${sql({
 			review_round_id: r.round,
 			submission_id: r.submissionId,
 			reviewer_user_id: r.reviewer,
 			status: r.submitted ? 'submitted' : 'assigned',
 			comment: r.submitted ? pick(COMMENTS[band], r.n) : null,
-			assigned_at: at('2027-02-16T09:00:00Z'),
-			submitted_at: r.submitted ? at('2027-02-20T10:00:00Z') : null
+			assigned_at: screening ? daysFromNow(-4) : daysFromNow(-1),
+			submitted_at: r.submitted ? daysFromNow(-2) : null
 		})} RETURNING id`;
 
 		if (r.submitted) scores.push(...scoreRows(row.id, criteria[r.round], r));
@@ -611,6 +634,18 @@ async function report(conferenceId, reviewCounts, fileCount) {
 }
 
 async function main() {
+	// `run-db-script.yaml` passes `--dry-run` by default. This script used to
+	// ignore the flag silently — a "dry run" that reseeds for real is the worst
+	// possible reading of that default, so honor it before touching anything.
+	if (process.argv.includes('--dry-run')) {
+		console.log(
+			`DRY RUN — would delete organization '${ORG_ID}' (everything under it cascades) ` +
+				`and the ${PEOPLE.length} demo users, then reseed the DevFlow demo tenant from scratch. ` +
+				`No other organization is touched. Nothing was changed.`
+		);
+		return;
+	}
+
 	console.log('Seeding DevFlow Conf 2027 …');
 
 	// Idempotency: everything below the demo org cascades away.
