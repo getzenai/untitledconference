@@ -3,7 +3,12 @@
  * calls — never a column. Definitions live in an exported list so the MCP
  * adapter (and later REST) is a loop, not a second implementation.
  */
-import { MAX_MINUTES, MAX_NAME } from '$lib/conference/structure-lines';
+import {
+	MAX_MINUTES,
+	MAX_NAME,
+	parseFormatLines,
+	parseNames
+} from '$lib/conference/structure-lines';
 import { archiveConference, restoreConference } from '$lib/server/conference/archive-conference';
 import { closeCfpForm, createCfpForm, publishCfpForm } from '$lib/server/conference/cfp-form';
 import { addFormat, addTrack, conferenceConfig } from '$lib/server/conference/config';
@@ -11,12 +16,22 @@ import { createConference } from '$lib/server/conference/create-conference';
 import { deleteConference } from '$lib/server/conference/delete-conference';
 import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
 import { addReviewRound, reviewRounds } from '$lib/server/conference/review-rounds';
-import { addReviewer } from '$lib/server/conference/reviewer-roster';
+import {
+	addReviewer,
+	committee,
+	pendingReviewerInvitations,
+	removeReviewer
+} from '$lib/server/conference/reviewer-roster';
 import { updateConference } from '$lib/server/conference/update-conference';
 import { setConferenceVisibility } from '$lib/server/conference/visibility';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
-import { eq } from 'drizzle-orm';
+import {
+	evaluationPlanTable,
+	reviewRoundTable,
+	reviewTable
+} from '$lib/server/db/conference/review-schema';
+import { and, count, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import type { McpContext } from '../context';
 import { organizerConference } from '../organizer';
@@ -27,10 +42,7 @@ const slugField = z
 	.min(1)
 	.describe('Conference slug, from list_my_conferences or create_conference.');
 
-const isoInstant = z
-	.string()
-	.min(1)
-	.describe('ISO-8601 instant (e.g. 2027-10-01T09:00:00.000Z). Omit to leave the current value.');
+const isoInstant = z.string().min(1).describe('ISO-8601 instant (e.g. 2027-10-01T09:00:00.000Z).');
 
 function parseInstant(value: string | undefined, label: string): Date | undefined {
 	if (value === undefined) return undefined;
@@ -458,7 +470,8 @@ function inviteReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
 		description:
 			'Add a reviewer to a conference you organize, by email. The address must ' +
 			'already have an account — same rule as Team & reviewers when the person ' +
-			'is signed up. They can then be passed to assign_reviews.',
+			'is signed up. They can then be passed to assign_reviews. Call list_reviewers ' +
+			'to see who is already on the committee.',
 		inputSchema: {
 			conferenceSlug: slugField,
 			email: z.string().min(1).describe('Reviewer email. They must already have an account.')
@@ -484,9 +497,10 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 		description:
 			'Assign one reviewer to one or more submissions of a conference you organize. ' +
 			'Same function as the submissions-table bulk assign: existing assignments stay, ' +
-			'recusals stay recused, ineligible pairs are counted as skipped. Identify the ' +
-			'reviewer by the email you invited. A conference needs a review round first — ' +
-			'call create_review_round if list_review_rounds is empty. ' +
+			'recusals stay recused, ineligible pairs are listed in skipped with a reason ' +
+			'(speaker_conflict, not_on_conference, not_on_committee, track_restricted). ' +
+			'Identify the reviewer by an email from list_reviewers. A conference needs a ' +
+			'review round first — call create_review_round if list_review_rounds is empty. ' +
 			"Omit roundId to use the conference's first round.",
 		inputSchema: {
 			conferenceSlug: slugField,
@@ -515,6 +529,14 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 				);
 			}
 
+			const members = await committee(conference.id);
+			if (!members.some((member) => member.userId === reviewer.id)) {
+				throw new McpToolError(
+					`${reviewer.email} is not on the committee of "${conferenceSlug}". ` +
+						'Call list_reviewers to see who is, or invite_reviewer to add them.'
+				);
+			}
+
 			const rounds = await reviewRounds(conference.id);
 			const round = roundId === undefined ? rounds[0] : rounds.find((row) => row.id === roundId);
 			if (!round) {
@@ -537,7 +559,120 @@ function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 				round: { id: round.id, name: round.name },
 				reviewer: { email: reviewer.email, name: reviewer.name },
 				requested: submissionIds.length,
-				...assigned
+				created: assigned.created,
+				already: assigned.already,
+				recused: assigned.recused,
+				skippedCount: assigned.skipped,
+				skipped: assigned.skippedItems
+			};
+		}
+	};
+}
+
+async function recusalCounts(
+	conferenceId: number,
+	userIds: string[]
+): Promise<Map<string, number>> {
+	if (userIds.length === 0) return new Map();
+	const rows = await db
+		.select({
+			userId: reviewTable.reviewerUserId,
+			recused: count()
+		})
+		.from(reviewTable)
+		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.where(
+			and(
+				eq(evaluationPlanTable.conferenceId, conferenceId),
+				inArray(reviewTable.reviewerUserId, userIds),
+				eq(reviewTable.status, 'recused')
+			)
+		)
+		.groupBy(reviewTable.reviewerUserId);
+	return new Map(rows.map((row) => [row.userId, Number(row.recused)]));
+}
+
+function listReviewersTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'list_reviewers',
+		description:
+			'List the review committee of a conference you organize — the same people ' +
+			'Team & reviewers shows. Returns email, name, role, assignment counts and ' +
+			'recusals. Use the emails with assign_reviews. A conference with nobody ' +
+			'here cannot be assigned.',
+		inputSchema: { conferenceSlug: slugField },
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const members = await committee(conference.id);
+			const [pending, recused] = await Promise.all([
+				pendingReviewerInvitations(conference.id),
+				recusalCounts(
+					conference.id,
+					members.map((member) => member.userId)
+				)
+			]);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				count: members.length,
+				reviewers: members.map((member) => ({
+					email: member.email,
+					name: member.name,
+					role: member.conferenceManaged ? 'conference' : 'round',
+					rounds: member.rounds,
+					assigned: member.assigned,
+					submitted: member.submitted,
+					outstanding: member.outstanding,
+					recused: recused.get(member.userId) ?? 0,
+					tracks: member.tracks
+				})),
+				pending: pending.map((invite) => ({
+					email: invite.email,
+					expiresAt: invite.expiresAt.toISOString()
+				}))
+			};
+		}
+	};
+}
+
+function removeReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'remove_reviewer',
+		description:
+			'Take a reviewer off the committee of a conference you organize, by email. ' +
+			'Same action as Team & reviewers → Remove. Existing reviews stay; they just ' +
+			'cannot be assigned more. Round-scoped seats are not removed this way — the ' +
+			'screen cannot remove those either.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			email: z.string().min(1).describe('Email of a committee member from list_reviewers.')
+		},
+		handler: async ({ conferenceSlug, email }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const wanted = email.trim().toLowerCase();
+			const member = (await committee(conference.id)).find(
+				(row) => row.email.toLowerCase() === wanted
+			);
+			if (!member) {
+				throw new McpToolError(
+					`Nobody on the committee of "${conferenceSlug}" has the address ${email.trim()}. ` +
+						'Call list_reviewers.'
+				);
+			}
+			if (!member.conferenceManaged) {
+				throw new McpToolError(
+					`${member.name} is a round-scoped reviewer, not a conference seat. ` +
+						'The Team screen cannot remove those either. Nothing changed.'
+				);
+			}
+			const result = await removeReviewer(conference.id, member.membershipId);
+			if (!result.ok) {
+				throw new McpToolError(`Could not remove ${member.email} from the committee.`);
+			}
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				reviewer: { email: member.email, name: member.name },
+				removed: true
 			};
 		}
 	};
@@ -620,6 +755,30 @@ function createReviewRoundTool(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+/**
+ * The name (and minutes) `addFormat` will actually store.
+ *
+ * The writer round-trips the line through `parseFormatLines`, so `Talk, 30`
+ * becomes a format called Talk with 30 minutes. The pre-check has to use the
+ * same name or it looks for a format that will never exist and then reports
+ * the null path as "invalid input".
+ */
+function parseCreatedFormat(
+	name: string,
+	minutes: number | undefined
+): { name: string; minutes: number | null } {
+	const line = minutes === undefined ? name : `${name.replace(/\n/g, ' ').trim()}, ${minutes}`;
+	const parsed = parseFormatLines(line);
+	if (!parsed.ok) {
+		throw new McpToolError(parsed.problem);
+	}
+	const wanted = parsed.formats[0];
+	if (!wanted) {
+		throw new McpToolError('Give the format a name.');
+	}
+	return wanted;
+}
+
 function listSessionFormatsTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_session_formats',
@@ -665,20 +824,25 @@ function createSessionFormatTool(ctx: McpContext): AnyMcpToolDefinition {
 		},
 		handler: async ({ conferenceSlug, name, minutes }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
-			const trimmed = name.trim();
-			if (!trimmed) {
-				throw new McpToolError('Give the format a name.');
-			}
+			const wanted = parseCreatedFormat(name, minutes);
 			const before = await conferenceConfig(conference.id);
 			const existing = before.formats.find(
-				(format) => format.name.toLowerCase() === trimmed.toLowerCase()
+				(format) => format.name.toLowerCase() === wanted.name.toLowerCase()
 			);
 			if (existing) {
 				throw new McpToolError(`A format named "${existing.name}" already exists.`);
 			}
-			const id = await addFormat(conference.id, trimmed, minutes ?? null);
+			const id = await addFormat(conference.id, wanted.name, wanted.minutes);
 			if (id === null) {
-				throw new McpToolError('Could not create the format. Check the name and minutes.');
+				const after = await conferenceConfig(conference.id);
+				const raced = after.formats.find(
+					(format) => format.name.toLowerCase() === wanted.name.toLowerCase()
+				);
+				throw new McpToolError(
+					raced
+						? `A format named "${raced.name}" already exists.`
+						: 'Could not create the format. Check the name and minutes.'
+				);
 			}
 			const after = await conferenceConfig(conference.id);
 			const format = after.formats.find((row) => row.id === id);
@@ -687,8 +851,8 @@ function createSessionFormatTool(ctx: McpContext): AnyMcpToolDefinition {
 				created: true,
 				format: {
 					id,
-					name: format?.name ?? trimmed,
-					minutes: format?.minutes ?? minutes ?? null,
+					name: format?.name ?? wanted.name,
+					minutes: format?.minutes ?? wanted.minutes,
 					position: format?.position ?? null
 				}
 			};
@@ -731,27 +895,33 @@ function createTrackTool(ctx: McpContext): AnyMcpToolDefinition {
 		},
 		handler: async ({ conferenceSlug, name }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
-			const trimmed = name.trim();
-			if (!trimmed) {
+			const [wanted] = parseNames(name);
+			if (!wanted) {
 				throw new McpToolError('Give the track a name.');
 			}
 			const before = await conferenceConfig(conference.id);
 			const existing = before.tracks.find(
-				(track) => track.name.toLowerCase() === trimmed.toLowerCase()
+				(track) => track.name.toLowerCase() === wanted.toLowerCase()
 			);
 			if (existing) {
 				throw new McpToolError(`A track named "${existing.name}" already exists.`);
 			}
-			const id = await addTrack(conference.id, trimmed);
+			const id = await addTrack(conference.id, wanted);
 			if (id === null) {
-				throw new McpToolError('Could not create the track.');
+				const after = await conferenceConfig(conference.id);
+				const raced = after.tracks.find(
+					(track) => track.name.toLowerCase() === wanted.toLowerCase()
+				);
+				throw new McpToolError(
+					raced ? `A track named "${raced.name}" already exists.` : 'Could not create the track.'
+				);
 			}
 			const after = await conferenceConfig(conference.id);
 			const track = after.tracks.find((row) => row.id === id);
 			return {
 				conference: { slug: conference.slug, name: conference.name },
 				created: true,
-				track: { id, name: track?.name ?? trimmed, position: track?.position ?? null }
+				track: { id, name: track?.name ?? wanted, position: track?.position ?? null }
 			};
 		}
 	};
@@ -769,6 +939,8 @@ export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		restoreConferenceTool(ctx),
 		deleteConferenceTool(ctx),
 		inviteReviewerTool(ctx),
+		listReviewersTool(ctx),
+		removeReviewerTool(ctx),
 		listReviewRoundsTool(ctx),
 		createReviewRoundTool(ctx),
 		assignReviewsTool(ctx),

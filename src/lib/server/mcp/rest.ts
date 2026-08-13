@@ -89,7 +89,13 @@ export const REST_ROUTES: RestRoute[] = [
 		pattern: '/conferences/:conferenceSlug/agenda/placements/:placementId/unplace',
 		tool: 'unplace_talk'
 	},
+	{ method: 'GET', pattern: '/conferences/:conferenceSlug/reviewers', tool: 'list_reviewers' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/reviewers', tool: 'invite_reviewer' },
+	{
+		method: 'DELETE',
+		pattern: '/conferences/:conferenceSlug/reviewers',
+		tool: 'remove_reviewer'
+	},
 	{
 		method: 'GET',
 		pattern: '/conferences/:conferenceSlug/review-rounds',

@@ -198,7 +198,13 @@ describe('organizer reviewer assignments', () => {
 		);
 		// secondId created; submissionId already; otherSubmissionId is another
 		// conference → invalid/skipped. Duplicate id is de-duped.
-		expect(result).toEqual({ created: 1, already: 1, skipped: 1, recused: 0 });
+		expect(result).toEqual({
+			created: 1,
+			already: 1,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId: otherSubmissionId, reason: 'not_on_conference' }]
+		});
 
 		const first = await reviewAssignmentMatrix(conference.id, submissionId);
 		const second = await reviewAssignmentMatrix(conference.id, secondId);
@@ -216,7 +222,13 @@ describe('organizer reviewer assignments', () => {
 			roundId,
 			SPEAKER_REVIEWER
 		);
-		expect(speakerResult).toEqual({ created: 0, already: 0, skipped: 1, recused: 0 });
+		expect(speakerResult).toEqual({
+			created: 0,
+			already: 0,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId, reason: 'speaker_conflict' }]
+		});
 
 		const targets = await conferenceAssignmentTargets(conference.id);
 		expect(targets).toHaveLength(1);
@@ -328,7 +340,13 @@ describe('organizer reviewer assignments', () => {
 			roundId,
 			ROUND_REVIEWER
 		);
-		expect(result).toEqual({ created: 1, already: 0, skipped: 0, recused: 1 });
+		expect(result).toEqual({
+			created: 1,
+			already: 0,
+			skipped: 0,
+			recused: 1,
+			skippedItems: []
+		});
 
 		const [stillRecused] = await db
 			.select({ status: reviewTable.status })

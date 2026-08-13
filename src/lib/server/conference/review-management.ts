@@ -458,6 +458,17 @@ export async function conferenceAssignmentTargets(conferenceId: number): Promise
 	});
 }
 
+export type AssignSkipReason =
+	| 'not_on_conference'
+	| 'speaker_conflict'
+	| 'not_on_committee'
+	| 'track_restricted';
+
+export type BulkAssignSkip = {
+	submissionId: number;
+	reason: AssignSkipReason;
+};
+
 export type BulkAssignResult = {
 	/** Fresh assignment rows written in this call. */
 	created: number;
@@ -467,7 +478,42 @@ export type BulkAssignResult = {
 	skipped: number;
 	/** Existing recusals left alone — not restored by bulk. */
 	recused: number;
+	/** Why each skipped id was refused — the same branches `skipped` already counted. */
+	skippedItems: BulkAssignSkip[];
 };
+
+const EMPTY_BULK: BulkAssignResult = {
+	created: 0,
+	already: 0,
+	skipped: 0,
+	recused: 0,
+	skippedItems: []
+};
+
+/**
+ * The cause behind an `invalid` write, named the way an agent can act on it.
+ *
+ * `eligibleReviewer` returns a boolean; this is the same tree with the branch
+ * labels left on. A cause the write path does not have (withdrawn, round window)
+ * is not invented here.
+ */
+async function classifySkip(tx: Tx, input: AssignmentInput): Promise<AssignSkipReason> {
+	if (!(await validAssignmentTarget(tx, input))) return 'not_on_conference';
+	if (await isSubmissionSpeaker(tx, input)) return 'speaker_conflict';
+	const memberships = await eligibleMemberships(tx, input);
+	if (memberships.length === 0) return 'not_on_committee';
+	const submission = await assignmentTrack(tx, input.submissionId);
+	if (!submission) return 'not_on_conference';
+	const restrictions = await restrictionsByMembership(
+		tx,
+		memberships.map((row) => row.id)
+	);
+	const allowed = memberships.some((membership) => {
+		const tracks = restrictions.get(membership.id);
+		return !tracks || (submission.trackId !== null && tracks.includes(submission.trackId));
+	});
+	return allowed ? 'not_on_committee' : 'track_restricted';
+}
 
 /**
  * Assign one reviewer to many submissions in a single transaction (ABS-06).
@@ -485,33 +531,34 @@ export async function assignReviewerToSubmissions(
 	reviewerUserId: string
 ): Promise<BulkAssignResult> {
 	const ids = [...new Set(submissionIds.filter((id) => Number.isInteger(id) && id > 0))];
-	if (ids.length === 0) return { created: 0, already: 0, skipped: 0, recused: 0 };
+	if (ids.length === 0) return { ...EMPTY_BULK };
 
 	return db.transaction(async (tx) => {
 		let created = 0;
 		let already = 0;
 		let skipped = 0;
 		let recused = 0;
+		const skippedItems: BulkAssignSkip[] = [];
 
 		for (const submissionId of ids) {
-			const result = await updateAssignment(
-				tx,
-				{
-					conferenceId,
-					submissionId,
-					roundId,
-					reviewerUserId,
-					assigned: true
-				},
-				{ restoreRecused: false }
-			);
+			const input = {
+				conferenceId,
+				submissionId,
+				roundId,
+				reviewerUserId,
+				assigned: true as const
+			};
+			const result = await updateAssignment(tx, input, { restoreRecused: false });
 			if (result === 'assigned') created += 1;
 			else if (result === 'unchanged' || result === 'complete') already += 1;
 			else if (result === 'recused') recused += 1;
-			else skipped += 1;
+			else {
+				skipped += 1;
+				skippedItems.push({ submissionId, reason: await classifySkip(tx, input) });
+			}
 		}
 
-		return { created, already, skipped, recused };
+		return { created, already, skipped, recused, skippedItems };
 	});
 }
 

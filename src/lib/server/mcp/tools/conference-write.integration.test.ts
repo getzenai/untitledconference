@@ -12,11 +12,12 @@ import {
 } from '$lib/server/conference/public-conference';
 import { addReviewRound } from '$lib/server/conference/review-rounds';
 import { db } from '$lib/server/db';
-import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	membershipTable,
-	roomTable
+	roomTable,
+	speakerProfileTable
 } from '$lib/server/db/conference/conference-schema';
 import { reviewTable } from '$lib/server/db/conference/review-schema';
 import { and, asc, eq } from 'drizzle-orm';
@@ -84,6 +85,8 @@ describe('organizer write tools', () => {
 				'restore_conference',
 				'delete_conference',
 				'invite_reviewer',
+				'list_reviewers',
+				'remove_reviewer',
 				'assign_reviews',
 				'create_review_round',
 				'list_review_rounds',
@@ -340,6 +343,189 @@ describe('organizer write tools', () => {
 		});
 		expect(twice.isError).toBe(true);
 		expect(twice.text).toContain('already exists');
+	});
+
+	it('treats "Talk, 30" as Talk with 30 minutes — the same parse addFormat uses', async () => {
+		const slug = `mcp-write-format-parse-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Format Parse Conf',
+			slug,
+			startsOn: '2027-12-05',
+			endsOn: '2027-12-05',
+			venue: null
+		});
+
+		const created = await call(organizer, 'create_session_format', {
+			conferenceSlug: slug,
+			name: 'Talk, 30'
+		});
+		expect(created.isError).toBe(false);
+		expect(created.data).toMatchObject({
+			created: true,
+			format: { name: 'Talk', minutes: 30 }
+		});
+
+		const again = await call(organizer, 'create_session_format', {
+			conferenceSlug: slug,
+			name: 'Talk, 30'
+		});
+		expect(again.isError).toBe(true);
+		expect(again.text).toContain('already exists');
+		expect(again.text).not.toContain('Check the name and minutes');
+	});
+});
+
+/**
+ * #337 and #333: the committee is readable and removable, and a skip says why.
+ */
+describe('review committee', () => {
+	it('lists nobody on a fresh conference, then the person invite_reviewer just added', async () => {
+		const slug = `mcp-write-committee-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Committee Conf',
+			slug,
+			startsOn: '2027-12-06',
+			endsOn: '2027-12-06',
+			venue: null
+		});
+
+		const empty = await call(organizer, 'list_reviewers', { conferenceSlug: slug });
+		expect(empty.isError).toBe(false);
+		expect(empty.data).toMatchObject({ count: 0, reviewers: [], pending: [] });
+
+		const ellis = seeded.people.find((person) => person.role === 'reviewer')!;
+		await call(organizer, 'invite_reviewer', { conferenceSlug: slug, email: ellis.email });
+
+		const listed = await call(organizer, 'list_reviewers', { conferenceSlug: slug });
+		expect(listed.data!.count).toBe(1);
+		expect(listed.data!.reviewers).toEqual([
+			expect.objectContaining({
+				email: ellis.email,
+				name: ellis.name,
+				role: 'conference',
+				assigned: 0,
+				recused: 0
+			})
+		]);
+	});
+
+	it('removes a reviewer so assign_reviews can no longer address them', async () => {
+		const slug = `mcp-write-uninvite-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Uninvite Conf',
+			slug,
+			startsOn: '2027-12-07',
+			endsOn: '2027-12-07',
+			venue: null
+		});
+		const ellis = seeded.people.find((person) => person.role === 'reviewer')!;
+		await call(organizer, 'invite_reviewer', { conferenceSlug: slug, email: ellis.email });
+
+		const removed = await call(organizer, 'remove_reviewer', {
+			conferenceSlug: slug,
+			email: ellis.email
+		});
+		expect(removed.isError).toBe(false);
+		expect(removed.data).toMatchObject({
+			removed: true,
+			reviewer: { email: ellis.email }
+		});
+
+		const listed = await call(organizer, 'list_reviewers', { conferenceSlug: slug });
+		expect(listed.data).toMatchObject({ count: 0, reviewers: [] });
+
+		const missing = await call(organizer, 'remove_reviewer', {
+			conferenceSlug: slug,
+			email: ellis.email
+		});
+		expect(missing.isError).toBe(true);
+		expect(missing.text).toContain('list_reviewers');
+
+		await call(organizer, 'create_review_round', { conferenceSlug: slug, name: 'Screening' });
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: 'After uninvite',
+				abstract: 'Should not assign.',
+				status: 'submitted'
+			})
+			.returning({ id: submissionTable.id });
+		const assigned = await call(organizer, 'assign_reviews', {
+			conferenceSlug: slug,
+			submissionIds: [submission.id],
+			reviewerEmail: ellis.email
+		});
+		expect(assigned.isError).toBe(true);
+		expect(assigned.text).toContain('not on the committee');
+	});
+
+	it('names a speaker conflict instead of returning skipped: 1', async () => {
+		const slug = `mcp-write-conflict-${suffix}`;
+		await call(organizer, 'create_conference', {
+			name: 'Conflict Conf',
+			slug,
+			startsOn: '2027-12-08',
+			endsOn: '2027-12-08',
+			venue: null
+		});
+
+		const casey = seeded.people.find((person) => person.id === seeded.speakerIds[0])!;
+		await call(organizer, 'invite_reviewer', { conferenceSlug: slug, email: casey.email });
+		const round = await call(organizer, 'create_review_round', {
+			conferenceSlug: slug,
+			name: 'Screening'
+		});
+		expect(round.isError).toBe(false);
+
+		const [conference] = await db
+			.select({ id: conferenceTable.id, organizationId: conferenceTable.organizationId })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		const [profile] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: conference.organizationId,
+				userId: casey.id,
+				name: casey.name,
+				sortName: casey.name,
+				email: casey.email
+			})
+			.returning({ id: speakerProfileTable.id });
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: 'Casey reviews Casey',
+				abstract: 'The conflict the assign path already guards.',
+				status: 'submitted'
+			})
+			.returning({ id: submissionTable.id });
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: submission.id,
+			speakerProfileId: profile.id,
+			position: 0
+		});
+
+		const assigned = await call(organizer, 'assign_reviews', {
+			conferenceSlug: slug,
+			submissionIds: [submission.id],
+			reviewerEmail: casey.email,
+			roundId: (round.data!.round as { id: number }).id
+		});
+		expect(assigned.isError).toBe(false);
+		expect(assigned.data).toMatchObject({
+			created: 0,
+			already: 0,
+			recused: 0,
+			skippedCount: 1,
+			skipped: [{ submissionId: submission.id, reason: 'speaker_conflict' }]
+		});
+		expect(assigned.data).not.toHaveProperty('skipped', 1);
 	});
 });
 

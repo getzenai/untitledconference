@@ -51,6 +51,12 @@ describe('the REST route table', () => {
 		expect(matchRestRoute('POST', '/conferences/harness/review-rounds')?.route.tool).toBe(
 			'create_review_round'
 		);
+		expect(matchRestRoute('GET', '/conferences/harness/reviewers')?.route.tool).toBe(
+			'list_reviewers'
+		);
+		expect(matchRestRoute('DELETE', '/conferences/harness/reviewers')?.route.tool).toBe(
+			'remove_reviewer'
+		);
 		expect(matchRestRoute('GET', '/conferences/harness/formats')?.route.tool).toBe(
 			'list_session_formats'
 		);
@@ -74,6 +80,11 @@ describe('the REST route table', () => {
 
 	it('answers 405 with Allow when the path exists for another method', () => {
 		expect(allowedMethods('/conferences').sort()).toEqual(['GET', 'POST']);
+		expect(allowedMethods('/conferences/harness/reviewers').sort()).toEqual([
+			'DELETE',
+			'GET',
+			'POST'
+		]);
 		expect(matchRestRoute('DELETE', '/conferences')).toBeNull();
 	});
 
