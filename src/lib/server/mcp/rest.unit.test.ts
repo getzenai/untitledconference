@@ -48,6 +48,13 @@ describe('the REST route table', () => {
 		);
 		expect(matchRestRoute('GET', '/conferences/harness/agenda')?.route.tool).toBe('get_agenda');
 		expect(matchRestRoute('GET', '/conferences/harness/rooms')?.route.tool).toBe('list_rooms');
+		expect(matchRestRoute('POST', '/conferences/harness/review-rounds')?.route.tool).toBe(
+			'create_review_round'
+		);
+		expect(matchRestRoute('GET', '/conferences/harness/formats')?.route.tool).toBe(
+			'list_session_formats'
+		);
+		expect(matchRestRoute('POST', '/conferences/harness/tracks')?.route.tool).toBe('create_track');
 		expect(matchRestRoute('POST', '/conferences/harness/agenda/placements')?.route.tool).toBe(
 			'place_talk'
 		);

@@ -81,10 +81,32 @@ export const REST_ROUTES: RestRoute[] = [
 	},
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/reviewers', tool: 'invite_reviewer' },
 	{
+		method: 'GET',
+		pattern: '/conferences/:conferenceSlug/review-rounds',
+		tool: 'list_review_rounds'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/review-rounds',
+		tool: 'create_review_round'
+	},
+	{
 		method: 'POST',
 		pattern: '/conferences/:conferenceSlug/reviews/assignments',
 		tool: 'assign_reviews'
 	},
+	{
+		method: 'GET',
+		pattern: '/conferences/:conferenceSlug/formats',
+		tool: 'list_session_formats'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/formats',
+		tool: 'create_session_format'
+	},
+	{ method: 'GET', pattern: '/conferences/:conferenceSlug/tracks', tool: 'list_tracks' },
+	{ method: 'POST', pattern: '/conferences/:conferenceSlug/tracks', tool: 'create_track' },
 	{
 		method: 'GET',
 		pattern: '/conferences/:conferenceSlug/reviews/:submissionId',
