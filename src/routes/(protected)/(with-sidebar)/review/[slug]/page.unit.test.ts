@@ -9,13 +9,9 @@
  */
 import { roundWindow } from '$lib/conference/round-window';
 import { render } from 'svelte/server';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { PageData } from './$types';
 import Page from './+page.svelte';
-
-vi.mock('$app/state', () => ({
-	page: { url: new URL('https://example.test/review/test-conf') }
-}));
 
 const row = (
 	submissionId: number,
@@ -109,6 +105,15 @@ describe('the review queue sorts from its column headers', () => {
 		// what the reader is looking at.
 		expect(body.match(/Fewest reviews first/g) ?? []).toHaveLength(1);
 		expect(body).toContain('The working list');
+	});
+
+	it('does not render a domain-less pathname as a permalink', () => {
+		const body = renderPage('coverage');
+
+		// The address bar already is the permalink. A path without the origin is not
+		// a link anyone can send, so this copy has no job left.
+		expect(body).not.toContain('Permalink for this view');
+		expect(body).not.toMatch(/<code>[^<]*\?sort=/);
 	});
 });
 
