@@ -361,18 +361,20 @@
 	</nav>
 
 	<div class="max-w-3xl space-y-6">
-		{#if data.setup}
+		{#if data.setup && !published}
+			<!-- After "New conference" the next click a juror must find is Publish.
+			     The old banner pointed at rooms and the CFP, so /c/<slug> stayed 404. -->
 			<section
-				class="border-border bg-muted/40 max-w-2xl rounded-lg border p-4"
+				class="border-status-warn/40 bg-status-warn-bg max-w-2xl rounded-lg border p-4"
 				data-testid="settings-setup-hint"
 				role="status"
 			>
-				<h2 class="text-sm font-semibold">Start with the structure</h2>
+				<h2 class="text-sm font-semibold">This conference is a draft</h2>
 				<p class="text-muted-foreground mt-1 text-sm">
-					Rooms, tracks and session formats below are what speakers pick when they submit. When
-					those look right, open
-					<a class="underline underline-offset-4" href="{base}/cfp">Call for papers</a>
-					to publish the form and set its dates.
+					Nobody outside can see it yet —
+					<code class="text-foreground">/c/{data.conference.slug}</code>
+					answers 404. The switch is
+					<a class="underline underline-offset-4" href="#visibility">Publish, in General below</a>.
 				</p>
 			</section>
 		{/if}

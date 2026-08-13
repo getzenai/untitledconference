@@ -44,8 +44,8 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		taskTemplates(conference.id),
 		pendingHandouts(conference.id)
 	]);
-	// `?setup=1` is the soft landing from "New conference": rooms, tracks and
-	// formats first, then the call for papers. Not a forced wizard — a pointer.
+	// `?setup=1` is the soft landing from "New conference": this is a draft, and
+	// Publish is the switch that makes /c/<slug> exist. Not a forced wizard — a pointer.
 	const setup = url.searchParams.get('setup') === '1';
 	return { config, templates, pending, setup };
 };
