@@ -11,6 +11,7 @@ import { member, organization, user } from '$lib/server/db/auth-schema';
 import {
 	conferenceTable,
 	membershipTable,
+	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
 import { evaluationPlanTable, reviewRoundTable } from '$lib/server/db/conference/review-schema';
@@ -26,7 +27,17 @@ const EMPTY_OWNER = `empty-owner-${suffix}`;
 const SCOPED_ORGANIZER = `scoped-${suffix}`;
 const ROUND_REVIEWER = `round-reviewer-${suffix}`;
 const SPEAKER = `speaker-${suffix}`;
-const PEOPLE = [OWNER, EMPTY_OWNER, SCOPED_ORGANIZER, ROUND_REVIEWER, SPEAKER];
+const CLAIMED_SPEAKER = `claimed-${suffix}`;
+const INVITED_SPEAKER = `invited-${suffix}`;
+const PEOPLE = [
+	OWNER,
+	EMPTY_OWNER,
+	SCOPED_ORGANIZER,
+	ROUND_REVIEWER,
+	SPEAKER,
+	CLAIMED_SPEAKER,
+	INVITED_SPEAKER
+];
 
 const emptyOrganizationId = `org-empty-${suffix}`;
 
@@ -104,6 +115,25 @@ beforeAll(async () => {
 		}
 	]);
 
+	// One claimed profile, and one an organizer created for an address that has
+	// not opened the portal yet (userId null) — the pre-claim case the menu
+	// entry must already cover (#248).
+	await db.insert(speakerProfileTable).values([
+		{
+			organizationId,
+			userId: CLAIMED_SPEAKER,
+			name: 'Claimed Speaker',
+			sortName: 'claimed'
+		},
+		{
+			organizationId,
+			userId: null,
+			email: `${INVITED_SPEAKER}@example.com`,
+			name: 'Invited Speaker',
+			sortName: 'invited'
+		}
+	]);
+
 	await db.insert(membershipTable).values([
 		{
 			userId: SCOPED_ORGANIZER,
@@ -127,42 +157,64 @@ afterAll(async () => {
 
 describe('navAccess', () => {
 	it('gives a speaker with no seat nothing beyond Speaking', async () => {
-		expect(await navAccess(SPEAKER)).toEqual({
+		expect(await navAccess(SPEAKER, `${SPEAKER}@example.com`)).toEqual({
 			conferences: false,
 			contacts: false,
-			reviewing: false
+			reviewing: false,
+			speakerProfile: false
 		});
 	});
 
 	it('gives the organization owner both organizer surfaces', async () => {
-		expect(await navAccess(OWNER)).toEqual({
+		expect(await navAccess(OWNER, `${OWNER}@example.com`)).toEqual({
 			conferences: true,
 			contacts: true,
-			reviewing: false
+			reviewing: false,
+			speakerProfile: false
 		});
 	});
 
 	it('keeps Conferences for an owner who has not created one yet', async () => {
 		// `/manage` is the only page carrying "New conference". A rule that counted
 		// conferences would lock this user out of making their first.
-		expect(await navAccess(EMPTY_OWNER)).toMatchObject({ conferences: true });
+		expect(await navAccess(EMPTY_OWNER, `${EMPTY_OWNER}@example.com`)).toMatchObject({
+			conferences: true
+		});
 	});
 
 	it('gives a scoped conference organizer Conferences but not Contacts', async () => {
 		// The directory reads org-wide seats alone, so that link would open an empty
 		// table for this user.
-		expect(await navAccess(SCOPED_ORGANIZER)).toEqual({
+		expect(await navAccess(SCOPED_ORGANIZER, `${SCOPED_ORGANIZER}@example.com`)).toEqual({
 			conferences: true,
 			contacts: false,
-			reviewing: false
+			reviewing: false,
+			speakerProfile: false
 		});
 	});
 
+	it('sees a claimed speaker profile', async () => {
+		expect(await navAccess(CLAIMED_SPEAKER, `${CLAIMED_SPEAKER}@example.com`)).toMatchObject({
+			speakerProfile: true
+		});
+	});
+
+	it('sees an unclaimed profile through the account email, and only that email', async () => {
+		// The organizer typed the address; the person never opened the portal.
+		// The menu entry is how they find it — so the check must match pre-claim.
+		expect(await navAccess(INVITED_SPEAKER, `${INVITED_SPEAKER}@example.com`)).toMatchObject({
+			speakerProfile: true
+		});
+		// Somebody else's unclaimed profile is not yours, and no email means no match.
+		expect(await navAccess(SPEAKER, null)).toMatchObject({ speakerProfile: false });
+	});
+
 	it('finds a reviewer whose seat is scoped to a round', async () => {
-		expect(await navAccess(ROUND_REVIEWER)).toEqual({
+		expect(await navAccess(ROUND_REVIEWER, `${ROUND_REVIEWER}@example.com`)).toEqual({
 			conferences: false,
 			contacts: false,
-			reviewing: true
+			reviewing: true,
+			speakerProfile: false
 		});
 	});
 });

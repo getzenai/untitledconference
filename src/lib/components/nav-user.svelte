@@ -6,6 +6,7 @@
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import HouseIcon from '@lucide/svelte/icons/house';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
+	import MicIcon from '@lucide/svelte/icons/mic';
 	import UserIcon from '@lucide/svelte/icons/user';
 
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
@@ -14,10 +15,13 @@
 	import { useSidebar } from '$lib/components/ui/sidebar/index.js';
 
 	let {
-		user
+		user,
+		speakerProfile = false
 	}: {
 		// eslint-disable-next-line no-undef -- App is a global SvelteKit type
 		user: App.Locals['user'];
+		/** Show "Your speaker profile" — true when a profile exists (#248). */
+		speakerProfile?: boolean;
 	} = $props();
 
 	const sidebar = useSidebar();
@@ -88,10 +92,27 @@
 
 				<DropdownMenu.Separator />
 				<DropdownMenu.Group>
-					<DropdownMenu.Item onclick={() => goto('/settings/account')}>
+					<!--
+						"Account", not "View profile": the destination is email, password and
+						sessions. Two pages answered to "profile" and this item pointed at the
+						one without the photo and bio (#248).
+					-->
+					<DropdownMenu.Item
+						data-testid="nav-user-account"
+						onclick={() => goto('/settings/account')}
+					>
 						<UserIcon />
-						View profile
+						Account
 					</DropdownMenu.Item>
+					{#if speakerProfile}
+						<DropdownMenu.Item
+							data-testid="nav-user-speaker-profile"
+							onclick={() => goto('/portal/profile')}
+						>
+							<MicIcon />
+							Your speaker profile
+						</DropdownMenu.Item>
+					{/if}
 					<DropdownMenu.Item onclick={() => goto('/settings/organization')}>
 						<BuildingIcon />
 						Organization

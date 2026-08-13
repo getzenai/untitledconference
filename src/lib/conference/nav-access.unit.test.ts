@@ -10,7 +10,12 @@ const ITEMS = [
 	{ title: 'Reviewing', gate: 'reviewing' as const }
 ];
 
-const NOBODY: NavAccess = { conferences: false, contacts: false, reviewing: false };
+const NOBODY: NavAccess = {
+	conferences: false,
+	contacts: false,
+	reviewing: false,
+	speakerProfile: false
+};
 
 const titles = (access: NavAccess) => visibleNavItems(ITEMS, access).map((i) => i.title);
 
@@ -22,7 +27,7 @@ describe('sidebar destinations by relation', () => {
 	});
 
 	it('keeps all four for the person who is all three', () => {
-		expect(titles({ conferences: true, contacts: true, reviewing: true })).toEqual([
+		expect(titles({ ...NOBODY, conferences: true, contacts: true, reviewing: true })).toEqual([
 			'Conferences',
 			'Contacts',
 			'Speaking',
@@ -42,7 +47,7 @@ describe('sidebar destinations by relation', () => {
 	});
 
 	it('keeps the given order rather than grouping by gate', () => {
-		expect(titles({ conferences: true, contacts: false, reviewing: true })).toEqual([
+		expect(titles({ ...NOBODY, conferences: true, reviewing: true })).toEqual([
 			'Conferences',
 			'Speaking',
 			'Reviewing'
