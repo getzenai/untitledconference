@@ -155,7 +155,7 @@ describe('the proposal form', () => {
 
 	it('keeps a space before the required marker on a custom question', () => {
 		// Svelte trims a text node that opens a block, so `{#if required} *</span>`
-		// used to render as "know?*". An expression keeps the space.
+		// used to render as "know?*". A non-breaking space survives the trim.
 		const html = render(ProposalForm, {
 			props: {
 				fields: [
@@ -180,7 +180,8 @@ describe('the proposal form', () => {
 		}).body;
 
 		expect(html).toContain('What should the audience already know?');
-		// The space lives in the span: a text node opening `{#if}` would have been trimmed.
-		expect(html).toMatch(/already know\?<!--[^>]*--><span class="text-status-bad"> \*</);
+		// The space lives in the span as &nbsp;: a plain text node opening `{#if}`
+		// would have been trimmed, and it keeps the star from wrapping alone.
+		expect(html).toMatch(/already know\?<!--[^>]*--><span class="text-status-bad">\u00a0\*</);
 	});
 });
