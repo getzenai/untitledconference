@@ -10,7 +10,6 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { Loader2 } from 'lucide-svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { initials } from '$lib/conference/public-view';
 	import { parseSpeakerLinks, SPEAKER_LINK_ROWS } from '$lib/conference/speaker-links';
@@ -29,30 +28,6 @@
 			}
 		};
 	};
-
-	// The headshot upload, separate so its button can say what it is doing while
-	// the bytes are in flight instead of sitting disabled next to the same label.
-	let headshotUploading = $state(false);
-	/** The image picked for the headshot, shown before the click. */
-	let pickedHeadshot: { name: string; size: number } | null = $state(null);
-
-	const submitHeadshot = () => {
-		headshotUploading = true;
-		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
-			try {
-				await update();
-			} finally {
-				headshotUploading = false;
-				busy = false;
-			}
-		};
-	};
-
-	const humanSize = (bytes: number) =>
-		bytes >= 1024 * 1024
-			? `${(bytes / 1024 / 1024).toFixed(1)} MB`
-			: `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 	/**
 	 * A different example per row.
@@ -153,7 +128,7 @@
 						method="POST"
 						action="?/headshot"
 						enctype="multipart/form-data"
-						use:enhance={submitHeadshot}
+						use:enhance={submitting}
 						class="mt-3 flex flex-wrap items-center gap-2"
 					>
 						<input type="hidden" name="profileId" value={profile.id} />
@@ -162,32 +137,10 @@
 							name="headshot"
 							accept="image/jpeg,image/png,image/webp"
 							aria-label="Choose a headshot"
-							data-testid="headshot-file-input"
-							onchange={(e) => {
-								const file = e.currentTarget.files?.[0] ?? null;
-								pickedHeadshot = file ? { name: file.name, size: file.size } : null;
-							}}
 							class="border-input bg-background max-w-full rounded-md border px-3 py-2 text-sm"
 						/>
-						<Button
-							type="submit"
-							size="sm"
-							disabled={busy || headshotUploading}
-							data-testid="headshot-upload-button"
-						>
-							{#if headshotUploading}
-								<Loader2 class="h-4 w-4 animate-spin" />
-								Uploading…
-							{:else}
-								Upload
-							{/if}
-						</Button>
+						<Button type="submit" size="sm" disabled={busy}>Upload</Button>
 					</form>
-					{#if pickedHeadshot}
-						<p class="text-muted-foreground mt-2 text-xs">
-							{pickedHeadshot.name} · {humanSize(pickedHeadshot.size)}
-						</p>
-					{/if}
 
 					{#if profile.headshotUrl}
 						<form method="POST" action="?/removeHeadshot" use:enhance={submitting} class="mt-2">
