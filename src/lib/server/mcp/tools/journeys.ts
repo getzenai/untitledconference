@@ -135,10 +135,9 @@ function submitProposal(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'submit_proposal',
 		description:
-			'Create a draft proposal on an open call. Same function as the public CFP ' +
-			'form (`saveSubmission`). You become the speaker. A draft needs only a title. ' +
+			'Create a draft proposal on an open call. You become the speaker. A draft needs only a title. ' +
 			'It is NOT handed in yet — call finalize_proposal when it is ready, which is ' +
-			'when the abstract (if this call asks for one) and any required form fields ' +
+			'when the abstract (if this call asks for one) and any required custom answers ' +
 			'have to be there. Format, track and co-speakers stay optional throughout. ' +
 			'Identity comes from the access token.',
 		inputSchema: {
