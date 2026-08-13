@@ -44,10 +44,8 @@
 
 <div class="bg-muted flex min-h-screen flex-col">
 	<LandingHeader selfHref="/" />
-	<div
-		class="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-12"
-	>
-			<Card class="w-full {wide ? 'max-w-md' : 'max-w-sm'} shadow-sm">
+	<div class="flex flex-1 flex-col items-center justify-center gap-6 px-4 py-12">
+		<Card class="w-full {wide ? 'max-w-md' : 'max-w-sm'} shadow-sm">
 			<CardHeader>
 				<CardTitle class="text-xl">{title}</CardTitle>
 				{#if description}
