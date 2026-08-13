@@ -54,6 +54,7 @@
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const config = $derived(data.config);
 	const published = $derived(data.conference.status === 'published');
+	const archived = $derived(data.conference.status === 'archived');
 
 	let busy = $state(false);
 	let roomsExpanded = $state(false);
@@ -405,23 +406,36 @@
 						: 'text-muted-foreground'}"
 					data-testid="visibility-state"
 				>
-					{published ? 'Live' : 'Draft'}
+					{archived ? 'Archived' : published ? 'Live' : 'Draft'}
 				</span>
 
-				<form method="POST" action="?/visibility" use:enhance={submitting}>
-					<!-- The state we want, not "toggle": a tab left open on the old value would
+				{#if archived}
+					<!-- Publish is deliberately not a second way out of the archive
+					     (`visibility.ts`), so while it is archived the only control here is
+					     the one door back. -->
+					{#if data.canArchive}
+						<form method="POST" action="?/restore" use:enhance={submitting}>
+							<Button type="submit" size="sm" disabled={busy} data-testid="restore-submit">
+								Restore
+							</Button>
+						</form>
+					{/if}
+				{:else}
+					<form method="POST" action="?/visibility" use:enhance={submitting}>
+						<!-- The state we want, not "toggle": a tab left open on the old value would
 				     otherwise flip the conference the wrong way when it is submitted. -->
-					<input type="hidden" name="published" value={published ? 'false' : 'true'} />
-					<Button
-						type="submit"
-						size="sm"
-						variant={published ? 'outline' : 'default'}
-						disabled={busy}
-						data-testid="visibility-submit"
-					>
-						{published ? 'Return to draft' : 'Publish'}
-					</Button>
-				</form>
+						<input type="hidden" name="published" value={published ? 'false' : 'true'} />
+						<Button
+							type="submit"
+							size="sm"
+							variant={published ? 'outline' : 'default'}
+							disabled={busy}
+							data-testid="visibility-submit"
+						>
+							{published ? 'Return to draft' : 'Publish'}
+						</Button>
+					</form>
+				{/if}
 
 				{#if published}
 					<a
@@ -435,7 +449,14 @@
 				{/if}
 			</div>
 
-			{#if !published}
+			{#if archived}
+				<p class="text-muted-foreground mt-3 text-xs">
+					Archived: <code>/c/{data.conference.slug}</code> answers 404 and the conference is out of
+					every list. Nothing was deleted, and it can still be edited here — restoring puts it back
+					{data.conference.statusBeforeArchive === 'published' ? 'live' : 'as a draft'}, exactly as
+					it was.
+				</p>
+			{:else if !published}
 				<p class="text-muted-foreground mt-3 text-xs">
 					While it is a draft, <code>/c/{data.conference.slug}</code> and the public submission form answer
 					404.
@@ -445,6 +466,65 @@
 			<div class="mt-3">
 				{@render feedback('visibility')}
 			</div>
+
+			{#if data.canArchive && !archived}
+				<!--
+					Archiving sits at the foot of the section it undoes, behind its own
+					disclosure: it is rare, and a button of the same weight as Publish
+					standing next to Publish is the one that gets pressed by accident.
+
+					The slug field appears only for a published conference — the same
+					grading `archive_conference` uses. A confirmation asked for every time
+					is one nobody reads, and then it does not guard the case it was for.
+				-->
+				<details class="border-border mt-4 border-t pt-3">
+					<summary
+						class="text-muted-foreground hover:text-foreground cursor-pointer text-xs"
+						data-testid="archive-disclosure"
+					>
+						Archive this conference
+					</summary>
+					<form
+						method="POST"
+						action="?/archive"
+						use:enhance={submitting}
+						class="mt-3 max-w-2xl space-y-2"
+					>
+						<p class="text-muted-foreground text-xs">
+							{#if published}
+								Archiving takes <code>/c/{data.conference.slug}</code> offline for everyone holding the
+								link, closes the call for papers and hides the conference from every list. Every row stays;
+								Restore brings it back live. Copies already cached at the edge can answer for up to a
+								minute longer.
+							{:else}
+								Archiving hides the conference from every list. Every row stays, and Restore brings
+								it back as a draft.
+							{/if}
+						</p>
+						{#if published}
+							<label class="block text-xs" for="archive-confirm-slug">
+								Type <code>{data.conference.slug}</code> to confirm
+							</label>
+							<Input
+								id="archive-confirm-slug"
+								name="confirmSlug"
+								autocomplete="off"
+								class="max-w-xs"
+								data-testid="archive-confirm-slug"
+							/>
+						{/if}
+						<Button
+							type="submit"
+							size="sm"
+							variant="outline"
+							disabled={busy}
+							data-testid="archive-submit"
+						>
+							Archive
+						</Button>
+					</form>
+				</details>
+			{/if}
 		</section>
 
 		<section

@@ -9,6 +9,7 @@
 import { MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
 import { addedMessage } from '$lib/conference/structure-lines';
 import { requireOrganizer } from '$lib/server/conference/access';
+import { archiveConference, restoreConference } from '$lib/server/conference/archive-conference';
 import {
 	addFormats,
 	addRooms,
@@ -36,7 +37,7 @@ import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
-	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+	const { conference, via } = await requireOrganizer(locals.user!.id, params.slug);
 	const [config, templates, pending] = await Promise.all([
 		conferenceConfig(conference.id),
 		taskTemplates(conference.id),
@@ -45,7 +46,10 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// `?setup=1` is the soft landing from "New conference": this is a draft, and
 	// Publish is the switch that makes /c/<slug> exist. Not a forced wizard — a pointer.
 	const setup = url.searchParams.get('setup') === '1';
-	return { config, templates, pending, setup };
+	// Archiving is an org-wide right, not a per-conference one (`archive-conference.ts`),
+	// and `via: 'org'` is set by exactly the seat check that function repeats. A scoped
+	// organizer sees nothing to press rather than a button that answers "not yours".
+	return { config, templates, pending, setup, canArchive: via === 'org' };
 };
 
 function text(form: FormData, key: string): string {
@@ -145,6 +149,75 @@ export const actions: Actions = {
 			message: wantsPublished
 				? `Published. /c/${conference.slug} is live and the call for papers can take submissions.`
 				: 'Back to draft. The public site and the public submission form answer 404 again.',
+			section: 'visibility'
+		};
+	},
+
+	/**
+	 * Archive — the product's delete, and until now the only one an organizer could
+	 * not reach.
+	 *
+	 * #329 gave the model `archived` and the tools to get there; over the web there
+	 * was no button, so an organizer whose agent archived a conference saw a dead
+	 * publish toggle and a message telling them to restore it with nothing to click.
+	 *
+	 * The confirmation is graded the same way `archive_conference` grades it: a
+	 * draft nobody outside the organization can see goes on the seat alone, and a
+	 * published conference — whose public address goes dark under everyone holding
+	 * the link — asks for the slug to be typed. Asking every time would make it the
+	 * thing you type without reading, and then it guards nothing where it mattered.
+	 */
+	archive: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const confirmSlug = text(await request.formData(), 'confirmSlug').trim();
+
+		if (conference.status === 'published' && confirmSlug !== conference.slug) {
+			return fail(400, {
+				error: `Type ${conference.slug} to confirm. Archiving takes /c/${conference.slug} offline for everyone holding the link. Nothing was archived.`,
+				section: 'visibility'
+			});
+		}
+
+		const result = await archiveConference(conference, locals.user!.id);
+
+		if (!result.ok) {
+			return fail(result.reason === 'not_org_wide' ? 403 : 400, {
+				error:
+					result.reason === 'not_org_wide'
+						? 'Archiving needs an owner or admin seat in this organization. Organizing this one event is not enough.'
+						: 'Already archived.',
+				section: 'visibility'
+			});
+		}
+
+		return {
+			message: result.wasPublic
+				? `Archived. /c/${conference.slug} answers 404 — copies already cached at the edge can still answer for up to a minute. Restore puts it back exactly as it was.`
+				: 'Archived. It is out of every list; restore puts it back exactly as it was.',
+			section: 'visibility'
+		};
+	},
+
+	/** The one door back out of the archive — see `visibility.ts` for why publish is not. */
+	restore: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const result = await restoreConference(conference, locals.user!.id);
+
+		if (!result.ok) {
+			return fail(result.reason === 'not_org_wide' ? 403 : 400, {
+				error:
+					result.reason === 'not_org_wide'
+						? 'Restoring needs an owner or admin seat in this organization. Organizing this one event is not enough.'
+						: 'This conference is not archived.',
+				section: 'visibility'
+			});
+		}
+
+		return {
+			message:
+				result.status === 'published'
+					? `Restored, and live again — /c/${conference.slug} is back where it was.`
+					: 'Restored as a draft.',
 			section: 'visibility'
 		};
 	},
