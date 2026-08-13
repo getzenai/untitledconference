@@ -23,7 +23,8 @@ export const SERVER_INSTRUCTIONS =
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
 	'open_cfp then publish_conference so speakers can submit, ' +
 	'create_session_format and create_track so proposals have a length and a track, ' +
-	'create_review_round then invite_reviewer then assign_reviews, ' +
+	'create_review_round then list_reviewers or invite_reviewer then assign_reviews, ' +
+	'remove_reviewer to take someone off the committee, ' +
 	'decide_submissions, then unpublish_conference to return to draft. ' +
 	'archive_conference is how a conference is removed: it disappears from every ' +
 	'public surface, everything under it is kept, and restore_conference undoes it. ' +
@@ -32,7 +33,7 @@ export const SERVER_INSTRUCTIONS =
 	'only one that was never published. ' +
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
-	'list_review_rounds, list_session_formats, list_tracks, ' +
+	'list_review_rounds, list_reviewers, list_session_formats, list_tracks, ' +
 	'and get_agenda for the scheduled programme. ' +
 	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
 	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +

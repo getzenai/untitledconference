@@ -55,8 +55,9 @@ returns.
 | `list_submissions`                               | The proposals, optionally filtered by status                                                           |
 | `get_submission`                                 | One proposal in full, with the reviews written for it (reviewer names are not returned)                |
 | `invite_reviewer`                                | Invite someone into the review round                                                                   |
+| `list_reviewers` / `remove_reviewer`             | The committee — who can be assigned, and taking one off. Same rows as Team & reviewers                 |
 | `create_review_round` / `list_review_rounds`     | Add a review round, or list the ones already there. A fresh conference has none                        |
-| `assign_reviews`                                 | Hand proposals to reviewers — needs a round from `create_review_round` first                           |
+| `assign_reviews`                                 | Hand proposals to reviewers — needs a round from `create_review_round` first. Skips name their reason  |
 | `create_session_format` / `list_session_formats` | Session shapes (Talk, Keynote, …) and their length. A fresh conference has none                        |
 | `create_track` / `list_tracks`                   | Tracks a proposal can pick. A fresh conference has none                                                |
 | `decide_submissions`                             | Accept, reject or waitlist — accepting also confirms the speakers and puts the talk in the agenda tray |

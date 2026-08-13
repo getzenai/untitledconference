@@ -38,6 +38,8 @@ describe('the MCP tool registry', () => {
 				'publish_conference',
 				'unpublish_conference',
 				'invite_reviewer',
+				'list_reviewers',
+				'remove_reviewer',
 				'assign_reviews',
 				'create_review_round',
 				'list_review_rounds',
@@ -67,6 +69,19 @@ describe('the MCP tool registry', () => {
 				'unplace_talk'
 			])
 		);
+	});
+
+	it('does not tell create_review_round that omitting a date leaves a current value', () => {
+		const tool = allTools(ctx).find((entry) => entry.name === 'create_review_round');
+		expect(tool).toBeDefined();
+		if (!tool) return;
+		const opensAt = tool.inputSchema.opensAt as {
+			description?: string;
+			unwrap?: () => { description?: string };
+		};
+		const description = opensAt.unwrap?.().description ?? opensAt.description ?? '';
+		expect(description).toContain('ISO-8601');
+		expect(description).not.toContain('Omit to leave the current value');
 	});
 
 	it('tells the model about every registered tool before it picks one', () => {
