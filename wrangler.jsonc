@@ -100,6 +100,18 @@
 		"BETTER_AUTH_TRUSTED_ORIGINS": "https://untitledconference.com",
 		"REQUIRE_EMAIL_VERIFICATION": "false",
 		"SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG": "false",
+		// RFC 7591 self-registration, which the MCP endpoint needs to be reachable
+		// by a client nobody registered by hand. `src/lib/auth.ts` keeps this off by
+		// default, and the caution there is right for a deployment with a known set
+		// of clients — but ours is the other kind: the README tells a stranger to
+		// connect by URL with no key to paste, and without this that instruction is
+		// false. `POST /api/auth/oauth2/register` answers 403 until this is set.
+		//
+		// What it costs: anyone can create an OAuth client row. Registration alone
+		// grants no access — a client still has to carry a real user through login
+		// and consent before any token exists, and tokens are audience-bound to the
+		// MCP endpoint. One deploy turns it off again.
+		"OAUTH_ALLOW_DYNAMIC_CLIENT_REGISTRATION": "true",
 		"RESEND_FROM": "Untitled Conference <conference@getzenai.com>",
 		"LOG_LEVEL": "info",
 		"LOG_FORMAT": "human"
