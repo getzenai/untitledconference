@@ -97,7 +97,10 @@
 						sessions. Two pages answered to "profile" and this item pointed at the
 						one without the photo and bio (#248).
 					-->
-					<DropdownMenu.Item data-testid="nav-user-account" onclick={() => goto('/settings/account')}>
+					<DropdownMenu.Item
+						data-testid="nav-user-account"
+						onclick={() => goto('/settings/account')}
+					>
 						<UserIcon />
 						Account
 					</DropdownMenu.Item>

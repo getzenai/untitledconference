@@ -29,7 +29,15 @@ const ROUND_REVIEWER = `round-reviewer-${suffix}`;
 const SPEAKER = `speaker-${suffix}`;
 const CLAIMED_SPEAKER = `claimed-${suffix}`;
 const INVITED_SPEAKER = `invited-${suffix}`;
-const PEOPLE = [OWNER, EMPTY_OWNER, SCOPED_ORGANIZER, ROUND_REVIEWER, SPEAKER, CLAIMED_SPEAKER, INVITED_SPEAKER];
+const PEOPLE = [
+	OWNER,
+	EMPTY_OWNER,
+	SCOPED_ORGANIZER,
+	ROUND_REVIEWER,
+	SPEAKER,
+	CLAIMED_SPEAKER,
+	INVITED_SPEAKER
+];
 
 const emptyOrganizationId = `org-empty-${suffix}`;
 
@@ -169,7 +177,9 @@ describe('navAccess', () => {
 	it('keeps Conferences for an owner who has not created one yet', async () => {
 		// `/manage` is the only page carrying "New conference". A rule that counted
 		// conferences would lock this user out of making their first.
-		expect(await navAccess(EMPTY_OWNER, `${EMPTY_OWNER}@example.com`)).toMatchObject({ conferences: true });
+		expect(await navAccess(EMPTY_OWNER, `${EMPTY_OWNER}@example.com`)).toMatchObject({
+			conferences: true
+		});
 	});
 
 	it('gives a scoped conference organizer Conferences but not Contacts', async () => {

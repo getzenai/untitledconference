@@ -61,9 +61,9 @@
 	<p class="text-muted-foreground mt-1 text-sm">
 		This is what appears next to your name on a public programme. Signed in as
 		<span class="text-foreground font-medium">{data.account.name || data.account.email}</span>.
-		Change your email or password in <a
-			href="/settings/account"
-			class="text-foreground underline underline-offset-4">account settings</a
+		Change your email or password in
+		<a href="/settings/account" class="text-foreground underline underline-offset-4"
+			>account settings</a
 		>.
 	</p>
 
