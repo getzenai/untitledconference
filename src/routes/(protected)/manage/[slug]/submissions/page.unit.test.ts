@@ -308,6 +308,9 @@ describe('the still-to-review filter and the reviews column', () => {
 		expect(body).toContain('href="/manage/test-conf/submissions?needsReview=on"');
 		expect(body).toContain('data-testid="unreviewed-count"');
 		expect(body).toContain('2 still to review');
+		// Same set as the filter. A second "awaiting a decision" would just ask
+		// the reader why the same 2 is printed twice.
+		expect(body).not.toContain('awaiting a decision');
 	});
 
 	it('offers the filter as a checkbox and shows it as on when it is', () => {
