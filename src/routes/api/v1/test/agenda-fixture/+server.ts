@@ -51,7 +51,7 @@ type FixtureRequest = {
 	 * still-to-review filter pass `submitted`: accepted talks are decisions, not
 	 * review work, and would never show under that filter.
 	 */
-	sessionStatus?: 'submitted' | 'in_review' | 'accepted';
+	sessionStatus?: 'draft' | 'submitted' | 'in_review' | 'accepted';
 	/**
 	 * Which of those titles already carry a handed-in review (#122).
 	 *
@@ -112,7 +112,7 @@ async function addSession(
 	title: string,
 	index: number,
 	trackId: number | null = null,
-	status: 'submitted' | 'in_review' | 'accepted' = 'accepted'
+	status: 'draft' | 'submitted' | 'in_review' | 'accepted' = 'accepted'
 ): Promise<void> {
 	const decided = status === 'accepted' ? new Date() : null;
 	const [submission] = await db
@@ -185,7 +185,7 @@ type Fixture = {
 	name: string;
 	days: string[];
 	sessions: string[];
-	sessionStatus: 'submitted' | 'in_review' | 'accepted';
+	sessionStatus: 'draft' | 'submitted' | 'in_review' | 'accepted';
 	reviewed: string[];
 	tracks: string[];
 };

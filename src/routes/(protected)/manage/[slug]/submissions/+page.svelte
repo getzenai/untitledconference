@@ -107,6 +107,25 @@
 	);
 
 	/**
+	 * How many of the selected rows are drafts the speaker has not handed in.
+	 *
+	 * Drafts are in the default view — there is no status filter — and
+	 * `decideSubmissions` refuses them (#327). The bar therefore names them before
+	 * the click rather than after it, the same way it names the already-decided.
+	 * They stay selectable because the other bulk action, assigning a reviewer,
+	 * has no quarrel with a draft.
+	 */
+	const selectedDrafts = $derived(
+		data.submissions.filter((s) => selected.has(s.id) && s.status === 'draft').length
+	);
+
+	/**
+	 * A selection of nothing but drafts: every decision button can only spin and
+	 * come back with "left for the speaker", so it is disabled instead.
+	 */
+	const onlyDraftsSelected = $derived(selected.size > 0 && selectedDrafts === selected.size);
+
+	/**
 	 * A link to another page of the same view.
 	 *
 	 * Built from the URL that is actually on screen rather than from the parsed
@@ -391,6 +410,13 @@
 						the speaker tasks nobody has touched yet.
 					</p>
 				{/if}
+				{#if selectedDrafts > 0}
+					<p class="text-status-warn w-full text-sm" role="status" data-testid="bulk-drafts">
+						<span class="font-medium tabular-nums">{selectedDrafts}</span>
+						of them {selectedDrafts === 1 ? 'is' : 'are'} still a draft the speaker has not handed in.
+						Drafts cannot be decided and are left for the speaker.
+					</p>
+				{/if}
 				<div class="flex flex-wrap items-center gap-2">
 					<Button
 						type="submit"
@@ -398,7 +424,7 @@
 						value="rejected"
 						variant="outline"
 						size="sm"
-						disabled={selected.size === 0 || busy}
+						disabled={selected.size === 0 || onlyDraftsSelected || busy}
 					>
 						Decline
 					</Button>
@@ -408,7 +434,7 @@
 						value="waitlisted"
 						variant="outline"
 						size="sm"
-						disabled={selected.size === 0 || busy}
+						disabled={selected.size === 0 || onlyDraftsSelected || busy}
 					>
 						Waitlist
 					</Button>
@@ -417,7 +443,7 @@
 						name="decision"
 						value="accepted"
 						size="sm"
-						disabled={selected.size === 0 || busy}
+						disabled={selected.size === 0 || onlyDraftsSelected || busy}
 					>
 						Accept
 					</Button>

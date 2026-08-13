@@ -138,31 +138,47 @@
 			<p class="text-muted-foreground mt-0.5 text-sm">{subtitle}</p>
 		</div>
 
-		<form
-			method="POST"
-			action="?/decide"
-			class="flex shrink-0 gap-2"
-			use:enhance={() => {
-				busy = true;
-				// `finally`, not a trailing line: a dropped connection would otherwise
-				// leave every button disabled with no way back except a reload.
-				return async ({ update }) => {
-					try {
-						await update();
-					} finally {
-						busy = false;
-					}
-				};
-			}}
-		>
-			<Button type="submit" name="decision" value="rejected" variant="outline" disabled={busy}>
-				Decline
-			</Button>
-			<Button type="submit" name="decision" value="waitlisted" variant="outline" disabled={busy}>
-				Waitlist
-			</Button>
-			<Button type="submit" name="decision" value="accepted" disabled={busy}>Accept</Button>
-		</form>
+		{#if s.status === 'draft'}
+			<!--
+			  A draft was never handed in, and `decideSubmissions` refuses one (#327).
+			  Offering the buttons anyway meant a click, a spinner, and "1 draft not
+			  submitted yet" coming back while the badge still read `draft` — the
+			  screen promising something the server had already ruled out (#331).
+			-->
+			<p
+				class="text-muted-foreground max-w-xs shrink-0 text-right text-sm"
+				data-testid="decision-draft-note"
+			>
+				Still a draft — the speaker has not handed it in yet. There is nothing to decide until they
+				submit.
+			</p>
+		{:else}
+			<form
+				method="POST"
+				action="?/decide"
+				class="flex shrink-0 gap-2"
+				use:enhance={() => {
+					busy = true;
+					// `finally`, not a trailing line: a dropped connection would otherwise
+					// leave every button disabled with no way back except a reload.
+					return async ({ update }) => {
+						try {
+							await update();
+						} finally {
+							busy = false;
+						}
+					};
+				}}
+			>
+				<Button type="submit" name="decision" value="rejected" variant="outline" disabled={busy}>
+					Decline
+				</Button>
+				<Button type="submit" name="decision" value="waitlisted" variant="outline" disabled={busy}>
+					Waitlist
+				</Button>
+				<Button type="submit" name="decision" value="accepted" disabled={busy}>Accept</Button>
+			</form>
+		{/if}
 	</div>
 
 	{#if form?.notificationResult}

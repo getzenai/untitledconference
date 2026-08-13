@@ -40,7 +40,7 @@ type Extras = {
 };
 
 function renderPage(
-	status: 'accepted' | 'submitted' | 'rejected',
+	status: 'accepted' | 'submitted' | 'rejected' | 'draft',
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
@@ -339,6 +339,25 @@ describe('the organizer talk editor', () => {
 		});
 
 		expect(body).toContain('an organizer');
+	});
+
+	it('offers no decision on a draft, and says why (#331)', () => {
+		const body = renderPage('draft');
+
+		// `decideSubmissions` refuses a draft, so the buttons were promising work
+		// the server had already ruled out. Drafts are in the default table view —
+		// there is no status filter — so this row is reachable, not hypothetical.
+		expect(body).toContain('data-testid="decision-draft-note"');
+		expect(body).not.toContain('value="accepted"');
+		expect(body).not.toContain('value="rejected"');
+		expect(body).not.toContain('value="waitlisted"');
+	});
+
+	it('still offers the decision on a handed-in proposal', () => {
+		const body = renderPage('submitted');
+
+		expect(body).not.toContain('data-testid="decision-draft-note"');
+		expect(body).toContain('value="accepted"');
 	});
 
 	it('warns when a declined talk still has a placement (#9)', () => {

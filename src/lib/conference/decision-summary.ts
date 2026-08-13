@@ -46,10 +46,11 @@ export function describeDecision(decision: string, result: DecisionResult): stri
 		);
 	}
 
-	// The screen only lists handed-in work, so this should never fire here. It is
-	// still said out loud rather than folded into silence: a click that decided
-	// fewer rows than were ticked has to say which ones it left, or the organizer
-	// reads the difference as a lost write.
+	// The bulk bar names drafts in the selection before the click and refuses one
+	// that is nothing but drafts (#331), so this should be rare on the screen — but
+	// a mixed selection still reaches it. Said out loud rather than folded into
+	// silence: a click that decided fewer rows than were ticked has to say which
+	// ones it left, or the organizer reads the difference as a lost write.
 	if (result.skippedDrafts > 0) {
 		parts.push(`${plural(result.skippedDrafts, 'draft')} not submitted yet, left for the speaker.`);
 	}

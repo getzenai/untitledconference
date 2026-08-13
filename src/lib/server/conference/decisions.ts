@@ -85,13 +85,15 @@ export async function decideSubmissions(
 				)
 			);
 
-		// A draft was never handed in — it is the speaker's private, unfinished form,
-		// and the organizer screens only ever offer submitted work. Deciding one
-		// produced a state the UI cannot: `status: accepted` with `submittedAt: null`,
-		// the talk sitting in the agenda tray and its speakers confirmed, all without
-		// the speaker ever pressing submit (#321). The screen reached this function
-		// with ids it had listed itself, so only the MCP surface could get here — but
-		// the rule belongs to the decision, not to one caller of it.
+		// A draft was never handed in — it is the speaker's private, unfinished form.
+		// Deciding one produced a state the UI cannot: `status: accepted` with
+		// `submittedAt: null`, the talk sitting in the agenda tray and its speakers
+		// confirmed, all without the speaker ever pressing submit (#321).
+		//
+		// Drafts *are* listed on the organizer screens — the submissions table has no
+		// status filter — so this is reachable from the web app and not only from MCP.
+		// Those screens now decline to offer a decision on one (#331), but the rule
+		// belongs to the decision, not to any caller of it.
 		const decidable = selected.filter((s) => s.status !== 'draft');
 		result.skippedDrafts = selected.length - decidable.length;
 
