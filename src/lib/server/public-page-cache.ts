@@ -23,14 +23,26 @@
  * under `Accept-Language: en-US`). The same HIT rewrote `max-age=60` to
  * `max-age=14400` (the zone's Browser Cache TTL). Locale cannot enter the
  * CDN key without an Enterprise custom cache key, so there is no `s-maxage`.
- * `CDN-Cache-Control: no-store` is not sent: measured on `7d2412d`, that
- * header is read on the Cache API `put()` path (`caches.default` is
- * Cloudflare's cache) and six same-colo misses in a row showed it blocked
- * the only layer that keys by locale. Dropping `s-maxage` is enough — the
- * zone makes no cache decision on HTML without `cache-control` (Hank's
- * Nürnberg measurement: `/` with no `cache-control` gets no
- * `cf-cache-status`; there is no Cache-Everything rule). The ~50 ms is
- * the Cache API; a CDN HIT would skip the only layer that keys by locale.
+ *
+ * Dropping `s-maxage` alone is NOT enough, and the header has to go to
+ * exactly one of the two consumers. Both facts are measured:
+ *
+ * - `CDN-Cache-Control: no-store` on the response handed to `put()` blocks
+ *   the write — `caches.default` is Cloudflare's cache and reads the header
+ *   (`7d2412d`, six same-colo `x-public-cache: miss` in a row).
+ * - Without the header on the response handed to the *visitor*, the zone
+ *   caches the page anyway (`031723c`, colo LHR, no query string): req 2
+ *   came back `cf-cache-status: HIT`, `max-age` rewritten 60 → 14400, and
+ *   an `Accept-Language: en-US` visitor got German HTML — the exact #357
+ *   bug. `public, max-age=60` is itself enough for the edge to store; the
+ *   zone only stays out of pages that carry no `cache-control` at all
+ *   (Hank's Nürnberg measurement of `/`), and this page must carry one for
+ *   browsers and for the Cache API TTL.
+ *
+ * So the belt is stamped on the outgoing copy only, after the clone for
+ * `put()` has been taken. The Cache API sees `public, max-age=60`; the edge
+ * sees `no-store` and keeps its hands off. A CDN HIT would skip the only
+ * layer that keys by locale, which is the whole point of the ~50 ms.
  *
  * Request cookies do not bypass Cloudflare's cache on this plan, so while
  * `s-maxage` was present the CDN also served the anonymous copy to signed-in
@@ -80,9 +92,22 @@ export const PUBLIC_CACHE_CONTROL = 'public, max-age=60';
  */
 export const PUBLIC_CACHE_VARY = 'accept-language';
 
+/**
+ * The belt that keeps the zone's edge cache out, stamped on the visitor's
+ * copy only. Never on the copy handed to `cache.put()`: `caches.default` is
+ * Cloudflare's cache and reads this header on the write path, so putting it
+ * there disables the layer that keys by locale.
+ */
+export const PUBLIC_CDN_CACHE_CONTROL = 'no-store';
+
 function stampPublicCacheHeaders(response: Response) {
 	response.headers.set('cache-control', PUBLIC_CACHE_CONTROL);
 	response.headers.set('vary', PUBLIC_CACHE_VARY);
+}
+
+/** Only ever the response going to the visitor — see the constant above. */
+function stampCdnBypass(response: Response) {
+	response.headers.set('cdn-cache-control', PUBLIC_CDN_CACHE_CONTROL);
 }
 
 /**
@@ -115,8 +140,7 @@ export function isCacheablePublicRequest(
  * The cache key is the request URL plus the locale Paraglide will render
  * with, resolved by the same function the middleware uses. The Cache API
  * ignores `Vary`, so the locale has to live in the key. `Vary` itself is
- * for browsers. There is no `CDN-Cache-Control`: measured on `7d2412d`,
- * that header is read on `put()` and blocked the Cache API write.
+ * for browsers.
  */
 export function publicPageCacheKey(url: URL, request: Request): Request {
 	const key = new URL(url.href);
@@ -138,7 +162,10 @@ export const publicPageCacheHandler: Handle = async ({ event, resolve }) => {
 		// fill. The headers still go out so the CDN-bypass is observable in
 		// dev and so a Node deployment behind a CDN stays consistent.
 		const response = await resolve(event);
-		if (response.status === 200) stampPublicCacheHeaders(response);
+		if (response.status === 200) {
+			stampPublicCacheHeaders(response);
+			stampCdnBypass(response);
+		}
 		return response;
 	}
 
@@ -156,6 +183,9 @@ export const publicPageCacheHandler: Handle = async ({ event, resolve }) => {
 		// security-headers handler above this one still has headers to add.
 		const response = new Response(hit.body, hit);
 		response.headers.set('x-public-cache', 'hit');
+		// The stored copy carries no bypass — it must not, or it would never
+		// have been stored. Every copy that leaves the Worker carries one.
+		stampCdnBypass(response);
 		return response;
 	}
 
@@ -164,8 +194,12 @@ export const publicPageCacheHandler: Handle = async ({ event, resolve }) => {
 	if (response.status === 200 && !response.headers.has('set-cookie')) {
 		stampPublicCacheHeaders(response);
 		response.headers.set('x-public-cache', 'miss');
+		// Clone for the Cache API *before* the CDN bypass goes on, so the
+		// stored copy is the one without it.
+		const forCache = response.clone();
+		stampCdnBypass(response);
 		const stored = cache
-			.put(key, response.clone() as unknown as Parameters<typeof cache.put>[1])
+			.put(key, forCache as unknown as Parameters<typeof cache.put>[1])
 			.catch((error) => {
 				logger.warn('Could not store a public page in the edge cache', {
 					path: event.url.pathname,
