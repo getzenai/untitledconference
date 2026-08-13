@@ -1,7 +1,7 @@
 import { roundWindow } from '$lib/conference/round-window';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
-import type { PageData } from './$types';
+import type { ActionData, PageData } from './$types';
 import Page from './+page.svelte';
 
 const conference = {
@@ -47,7 +47,7 @@ function page(
 		peers?: Peer[];
 		criteria?: Criterion[];
 		answers?: { label: string; kind: string; value: string | null }[];
-		form?: { message?: string; ok?: boolean } | null;
+		form?: ActionData;
 		/** The round's window (ABS-01); no dates means a round that is simply open. */
 		window?: ReturnType<typeof roundWindow>;
 	} = {}
