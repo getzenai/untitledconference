@@ -48,6 +48,21 @@ describe('the MCP tool registry', () => {
 		expect(names).toEqual(expect.arrayContaining([...JOURNEY_TOOLS]));
 	});
 
+	it('exports the agenda tools #300 adds', () => {
+		const names = allTools(ctx).map((tool) => tool.name);
+		expect(names).toEqual(
+			expect.arrayContaining([
+				'list_rooms',
+				'create_room',
+				'get_agenda_tray',
+				'place_talk',
+				'move_talk',
+				'swap_talks',
+				'unplace_talk'
+			])
+		);
+	});
+
 	it('tells the model about every registered tool before it picks one', () => {
 		for (const name of allTools(ctx).map((tool) => tool.name)) {
 			expect(SERVER_INSTRUCTIONS).toContain(name);

@@ -26,6 +26,9 @@ export const SERVER_INSTRUCTIONS =
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
 	'and get_agenda for the scheduled programme. ' +
+	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
+	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
+	'unplace_talk back to the tray. A collision is refused with the other talk named. ' +
 	'close_cfp stops new submissions without touching existing ones. ' +
 	'Speakers start with list_open_cfps, then submit_proposal (a draft), update_proposal or withdraw_proposal, ' +
 	'list_my_proposals for status, and update_my_speaker_profile for bio, photo and links. ' +
