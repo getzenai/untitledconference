@@ -46,6 +46,9 @@ describe('the REST route table', () => {
 		expect(matchRestRoute('POST', '/conferences/harness/submissions/decisions')?.route.tool).toBe(
 			'decide_submissions'
 		);
+		expect(
+			matchRestRoute('POST', '/conferences/harness/submissions/notifications')?.route.tool
+		).toBe('notify_speakers');
 		expect(matchRestRoute('GET', '/conferences/harness/agenda')?.route.tool).toBe('get_agenda');
 		expect(matchRestRoute('GET', '/conferences/harness/rooms')?.route.tool).toBe('list_rooms');
 		expect(matchRestRoute('POST', '/conferences/harness/review-rounds')?.route.tool).toBe(

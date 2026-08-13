@@ -13,6 +13,7 @@ import { archiveConference, restoreConference } from '$lib/server/conference/arc
 import { closeCfpForm, createCfpForm, publishCfpForm } from '$lib/server/conference/cfp-form';
 import { addFormat, addTrack, conferenceConfig } from '$lib/server/conference/config';
 import { createConference } from '$lib/server/conference/create-conference';
+import { notifySubmissionDecisions } from '$lib/server/conference/decision-notifications';
 import { deleteConference } from '$lib/server/conference/delete-conference';
 import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
 import { addReviewRound, reviewRounds } from '$lib/server/conference/review-rounds';
@@ -934,6 +935,38 @@ function createTrackTool(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+function notifySpeakersTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'notify_speakers',
+		description:
+			'Tell speakers the current decision on one or more proposals of a conference you organize. ' +
+			'Same path as the Notify button on the submissions table — not a second send. ' +
+			'A proposal with no decision is counted under notDecided and is not emailed. ' +
+			'A second call for the same decision reports alreadyNotified and sends nothing. ' +
+			'Call decide_submissions first.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			submissionIds: z
+				.array(z.number().int())
+				.min(1)
+				.max(100)
+				.describe('Submission ids to notify, from list_submissions (1-100).')
+		},
+		handler: async ({ conferenceSlug, submissionIds }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			// `notifySubmissionDecisions` is the Notify button. Reusing it is the
+			// point: a second send path would drift from the table, and deciding
+			// already refuses to mail anyone.
+			const result = await notifySubmissionDecisions(conference, submissionIds);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				requested: submissionIds.length,
+				...result
+			};
+		}
+	};
+}
+
 export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 	return [
 		createConferenceTool(ctx),
@@ -954,6 +987,7 @@ export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		listSessionFormatsTool(ctx),
 		createSessionFormatTool(ctx),
 		listTracksTool(ctx),
-		createTrackTool(ctx)
+		createTrackTool(ctx),
+		notifySpeakersTool(ctx)
 	];
 }

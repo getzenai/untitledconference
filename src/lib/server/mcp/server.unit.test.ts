@@ -46,7 +46,8 @@ describe('the MCP tool registry', () => {
 				'create_session_format',
 				'list_session_formats',
 				'create_track',
-				'list_tracks'
+				'list_tracks',
+				'notify_speakers'
 			])
 		);
 	});

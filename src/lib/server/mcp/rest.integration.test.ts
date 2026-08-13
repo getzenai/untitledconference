@@ -215,6 +215,7 @@ describe('REST adapter', () => {
 				'list_my_conferences',
 				'create_conference',
 				'decide_submissions',
+				'notify_speakers',
 				'submit_proposal',
 				'update_proposal',
 				'withdraw_proposal',
