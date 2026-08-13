@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpContext } from './context';
+import { registerConferenceTools } from './tools/conference';
 import { registerProfileTools } from './tools/profile';
 
 /**
@@ -8,10 +9,15 @@ import { registerProfileTools } from './tools/profile';
  * gets before choosing a tool.
  */
 export const SERVER_INSTRUCTIONS =
-	'MCP server for untitledconference. ' +
-	'Tools act as the authenticated user: get_my_profile returns that user, and ' +
-	'list_my_organizations returns the organizations they belong to. ' +
-	'Identity comes from the OAuth access token, so no tool takes a user or organization argument.';
+	'MCP server for untitledconference, a conference programme manager: ' +
+	'call for proposals, review rounds, decisions, and the scheduled agenda. ' +
+	'Tools act as the authenticated user and cover only the conferences they organize. ' +
+	'Identity comes from the OAuth access token, so no tool takes a user or organization argument. ' +
+	'Start with list_my_conferences — every other conference tool takes a slug it returns. ' +
+	'From a conference: list_submissions for the proposals (filter by status), ' +
+	'get_submission for one proposal in full with its reviews, ' +
+	'and get_agenda for the scheduled programme. ' +
+	'get_my_profile and list_my_organizations describe the caller.';
 
 /**
  * Register every MCP tool on a per-request server instance. `ctx` is the
@@ -21,4 +27,5 @@ export const SERVER_INSTRUCTIONS =
  */
 export function registerAllTools(server: McpServer, ctx: McpContext): void {
 	registerProfileTools(server, ctx);
+	registerConferenceTools(server, ctx);
 }
