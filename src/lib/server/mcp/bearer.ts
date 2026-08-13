@@ -1,6 +1,22 @@
-import { getMcpResource, getServerOrigin } from '$lib/auth';
-import { mcpHandler } from '@better-auth/oauth-provider';
+import { auth, getMcpResource, getServerOrigin } from '$lib/auth';
+import { verifyJwsAccessToken } from 'better-auth/oauth2';
 import { McpAuthError, resolveMcpContext, type McpContext } from './context';
+
+/** The key-set shape better-auth verifies against, without importing `jose` here. */
+type Jwks = NonNullable<
+	Awaited<
+		ReturnType<Extract<Parameters<typeof verifyJwsAccessToken>[1]['jwksFetch'], () => unknown>>
+	>
+>;
+
+/** Scope every MCP/REST caller must carry. */
+const REQUIRED_SCOPES = ['mcp:tools'];
+
+/**
+ * Stable identity for better-auth's JWKS cache. `jwksFetch` is a closure, so
+ * without a key object the key set would be read on every single request.
+ */
+const JWKS_CACHE_KEY = {};
 
 /**
  * Same verification the MCP endpoint uses: OAuth bearer, audience `/api/v1/mcp`,
@@ -8,20 +24,20 @@ import { McpAuthError, resolveMcpContext, type McpContext } from './context';
  */
 export function mcpVerifyOptions() {
 	const serverOrigin = getServerOrigin();
-	// The public URL, in dev and in production alike. The starter pointed this at
-	// `http://127.0.0.1:$PORT` to save a hop on a Node container; on Workers there
-	// is no loopback listener, the fetch throws, and every verified request — even
-	// a bad token that should be a 401 — comes back as a 500. This is also what
-	// better-auth computes by default from the auth server's baseURL.
-	const jwksUrl = `${serverOrigin}/api/auth/jwks`;
 
+	// The key set is read straight from our own database — the same rows
+	// /api/auth/jwks publishes — instead of being fetched over HTTP. On Workers
+	// a fetch of our own hostname re-enters the same script and fails ("Jwks
+	// failed: <none>"), which turned every authenticated call into a 500. There
+	// is no reason to leave the isolate for a value that is one query away.
 	return {
 		verifyOptions: {
 			issuer: serverOrigin,
 			audience: getMcpResource()
 		},
-		scopes: ['mcp:tools'],
-		jwksUrl
+		scopes: REQUIRED_SCOPES,
+		jwksFetch: async (): Promise<Jwks> => (await auth.api.getJwks()) as Jwks,
+		jwksCacheKey: JWKS_CACHE_KEY
 	};
 }
 
@@ -60,5 +76,34 @@ export function withMcpBearer(
 		jwt: { sub?: string; azp?: string } & Record<string, unknown>
 	) => Promise<Response>
 ): (req: Request) => Promise<Response> {
-	return mcpHandler(mcpVerifyOptions(), handler);
+	return async (req: Request) => {
+		const header = req.headers.get('authorization') ?? '';
+		const token = /^Bearer (.+)$/i.exec(header.trim())?.[1];
+		if (!token) {
+			return bearerError(401, 'invalid_token', 'missing authorization header');
+		}
+
+		const { verifyOptions, scopes, jwksFetch, jwksCacheKey } = mcpVerifyOptions();
+
+		let payload: Awaited<ReturnType<typeof verifyJwsAccessToken>>;
+		try {
+			payload = await verifyJwsAccessToken(token, { verifyOptions, jwksFetch, jwksCacheKey });
+		} catch (error) {
+			// Anything that stops a token from verifying is the caller's problem, not
+			// ours: expired, wrong audience, wrong signature, not a JWT at all. All of
+			// it is a 401 with a readable body — never an "Internal Error". JOSE's
+			// error name is checked rather than its class so `jose` stays a transitive
+			// dependency of better-auth instead of one we import directly.
+			const expired = error instanceof Error && error.name === 'JWTExpired';
+			return bearerError(401, 'invalid_token', expired ? 'token expired' : 'invalid access token');
+		}
+
+		const granted = new Set(typeof payload.scope === 'string' ? payload.scope.split(' ') : []);
+		const missing = scopes.find((scope) => !granted.has(scope));
+		if (missing) {
+			return bearerError(403, 'insufficient_scope', `invalid scope ${missing}`);
+		}
+
+		return handler(req, payload);
+	};
 }
