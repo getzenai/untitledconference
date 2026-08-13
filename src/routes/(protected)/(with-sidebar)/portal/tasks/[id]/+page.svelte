@@ -99,6 +99,10 @@
 		bytes === null ? '' : `${(bytes / 1024).toFixed(0)} KB`;
 
 	const megabytes = MAX_UPLOAD_BYTES / 1024 / 1024;
+	// Newest first. A rejected latest file is "ask for changes" — the task is
+	// open again, but the copy used to say the file was already handed in.
+	const latest = $derived(files[0] ?? null);
+	const latestRejected = $derived(latest?.approvalStatus === 'rejected');
 </script>
 
 <svelte:head>
@@ -126,6 +130,15 @@
 			<!-- One expression rather than an {#if} block: Svelte trims the whitespace that
 			     starts a block, and the line read "11 August— overdue" without it. -->
 			Due {dueLabel}{overdue ? ' — overdue' : ''}
+		</p>
+	{/if}
+
+	{#if latestRejected}
+		<p
+			class="border-status-warn/40 bg-status-warn-bg text-status-warn mt-4 rounded-md border px-3 py-2 text-sm"
+			role="status"
+		>
+			The organizers asked for a new version of this file.
 		</p>
 	{/if}
 
@@ -212,9 +225,10 @@
 			</h2>
 			<p class="text-muted-foreground mt-1 text-sm">
 				{files.length === 0
-					? 'Upload the requested file when it is ready.'
-					: 'Your file is already handed in. Upload here only to add a newer version.'}
-				Nothing you sent before is lost.
+					? 'Upload the requested file when it is ready. Nothing you sent before is lost.'
+					: latestRejected
+						? 'Upload a new version that addresses what they asked for. Nothing you sent before is lost.'
+						: 'Your file is already handed in. Upload here only to add a newer version. Nothing you sent before is lost.'}
 			</p>
 
 			<form
@@ -261,9 +275,18 @@
 										)}{/if}
 								</span>
 							</div>
-							{#if i === 0}
-								<Badge variant="secondary">Latest</Badge>
-							{/if}
+							<div class="flex items-center gap-2">
+								{#if i === 0}
+									<Badge variant="secondary">Latest</Badge>
+								{/if}
+								<Badge variant={file.approvalStatus === 'approved' ? 'secondary' : 'outline'}>
+									{file.approvalStatus === 'approved'
+										? 'Approved'
+										: file.approvalStatus === 'rejected'
+											? 'Changes requested'
+											: 'Waiting for a look'}
+								</Badge>
+							</div>
 						</div>
 						<p class="text-muted-foreground mt-0.5 text-sm">Uploaded {stamp(file.uploadedAt)}</p>
 

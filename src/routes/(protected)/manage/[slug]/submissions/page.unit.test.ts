@@ -113,6 +113,20 @@ describe('organizer submission decisions', () => {
 		expect(body).not.toContain('automatically notif');
 	});
 
+	it('asks in the page before a bulk decision so a missed click cannot decide the pile', () => {
+		const body = renderPage();
+
+		// In-page dialog, not window.confirm — Playwright dismisses a native
+		// dialog and CFP-12 would fail on the bulk path. The dialog itself is
+		// closed on first paint, so only the hook is in the SSR markup.
+		expect(body).toContain('data-testid="bulk-decide"');
+		expect(body).toContain('data-confirm-decision');
+		expect(body).toContain('data-confirm="dialog"');
+		expect(body).toContain('value="accepted"');
+		expect(body).toContain('value="rejected"');
+		expect(body).toContain('value="waitlisted"');
+	});
+
 	/**
 	 * ABS-06: selection already exists for decide/notify; bulk assign rides the
 	 * same checkboxes with a third action. Without a round there is nothing to
