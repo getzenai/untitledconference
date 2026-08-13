@@ -79,7 +79,9 @@ function saveFailure(result: Awaited<ReturnType<typeof saveSubmission>>): never 
 		);
 	}
 	if (result.reason !== 'invalid') {
-		throw new Error(`saveFailure: unhandled reason ${String((result as { reason: string }).reason)}`);
+		throw new Error(
+			`saveFailure: unhandled reason ${String((result as { reason: string }).reason)}`
+		);
 	}
 	const bits = [...Object.values(result.errors), ...Object.values(result.fieldErrors)].filter(
 		Boolean
