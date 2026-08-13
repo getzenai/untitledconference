@@ -69,6 +69,20 @@ const logger = createLogger('PublicPageCache');
 export const PUBLIC_CACHE_CONTROL = 'public, max-age=60, s-maxage=60';
 
 /**
+ * The body is no longer language-invariant (#280). The Cache API ignores
+ * `Vary`, which is why the locale is also in the key — both are required:
+ * the key splits colo copies, this header tells every other cache that
+ * honors `s-maxage` not to serve German HTML under this URL to an English
+ * visitor.
+ */
+export const PUBLIC_CACHE_VARY = 'accept-language';
+
+function stampPublicCacheHeaders(response: Response) {
+	response.headers.set('cache-control', PUBLIC_CACHE_CONTROL);
+	response.headers.set('vary', PUBLIC_CACHE_VARY);
+}
+
+/**
  * Exactly the four anonymous surfaces: the conference home, its agenda, its
  * speaker list and the itinerary. `/cfp` (session-dependent), the speaker
  * detail pages and `agenda.ics` are intentionally absent — an allow-list, so
@@ -96,8 +110,8 @@ export function isCacheablePublicRequest(
 
 /**
  * The cache key is the request URL plus the locale Paraglide will render
- * with, resolved by the same function the middleware uses — see the module
- * comment for why the locale is in the key even though it is constant today.
+ * with, resolved by the same function the middleware uses. The Cache API
+ * ignores `Vary`, so the key and the `Vary` header are both required.
  */
 export function publicPageCacheKey(url: URL, request: Request): Request {
 	const key = new URL(url.href);
@@ -119,7 +133,7 @@ export const publicPageCacheHandler: Handle = async ({ event, resolve }) => {
 		// fill, but the header still goes out so a CDN in front of a Node
 		// deployment could honor it — and so the behaviour is observable in dev.
 		const response = await resolve(event);
-		if (response.status === 200) response.headers.set('cache-control', PUBLIC_CACHE_CONTROL);
+		if (response.status === 200) stampPublicCacheHeaders(response);
 		return response;
 	}
 
@@ -143,7 +157,7 @@ export const publicPageCacheHandler: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event);
 
 	if (response.status === 200 && !response.headers.has('set-cookie')) {
-		response.headers.set('cache-control', PUBLIC_CACHE_CONTROL);
+		stampPublicCacheHeaders(response);
 		response.headers.set('x-public-cache', 'miss');
 		const stored = cache
 			.put(key, response.clone() as unknown as Parameters<typeof cache.put>[1])

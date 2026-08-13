@@ -12,6 +12,9 @@ export const paraglideCompilerOptions = {
 	outdir: './src/lib/paraglide',
 	strategy: ['localStorage', 'url', 'preferredLanguage', 'baseLocale'],
 	routeStrategies: [
+		// Hardcodes the non-base locales. A new locale (e.g. `/fr/...`) must
+		// get its own rule here or it falls into the catch-all, loses `url`,
+		// and renders in the header language while the path says otherwise.
 		{ match: '/de/:path(.*)?', strategy: ['url', 'baseLocale'] },
 		{
 			match: '/:path(.*)?',

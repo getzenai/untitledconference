@@ -2,6 +2,7 @@ import { extractLocaleFromRequest } from '$lib/paraglide/runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
 	PUBLIC_CACHE_CONTROL,
+	PUBLIC_CACHE_VARY,
 	isCacheablePublicRequest,
 	publicPageCacheHandler,
 	publicPageCacheKey
@@ -130,6 +131,7 @@ describe('publicPageCacheHandler', () => {
 		} as never);
 
 		expect(response.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
+		expect(response.headers.get('vary')).toBe(PUBLIC_CACHE_VARY);
 		expect(response.headers.get('x-public-cache')).toBe('miss');
 		expect(cache.put).toHaveBeenCalledOnce();
 		// The write is deferred so the visitor's bytes go out first.
@@ -177,6 +179,7 @@ describe('publicPageCacheHandler', () => {
 		const response = await publicPageCacheHandler({ event: makeEvent({}), resolve } as never);
 
 		expect(response.headers.get('cache-control')).toBe(PUBLIC_CACHE_CONTROL);
+		expect(response.headers.get('vary')).toBe(PUBLIC_CACHE_VARY);
 	});
 
 	it('renders normally when the cache lookup itself fails', async () => {
