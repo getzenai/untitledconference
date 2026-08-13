@@ -46,6 +46,8 @@ function page(
 		submissionStatus?: string;
 		peers?: Peer[];
 		criteria?: Criterion[];
+		answers?: { label: string; kind: string; value: string | null }[];
+		form?: { message?: string; ok?: boolean } | null;
 		/** The round's window (ABS-01); no dates means a round that is simply open. */
 		window?: ReturnType<typeof roundWindow>;
 	} = {}
@@ -78,10 +80,11 @@ function page(
 					criteria: opts.criteria ?? [],
 					peers,
 					peersPending: 0,
-					peersWithheld: false
+					peersWithheld: false,
+					answers: opts.answers ?? []
 				}
 			} as PageData,
-			form: null
+			form: opts.form ?? null
 		}
 	}).body;
 }
@@ -268,5 +271,47 @@ describe('the two prose boxes (#241)', () => {
 		// A rating does not get that line: only the text box can be mistaken for
 		// the comment.
 		expect(body).not.toContain('This round has no scorecard yet');
+	});
+});
+
+describe('custom CFP answers on the scorecard', () => {
+	it('renders the extra form answers the reviewer used to score without', () => {
+		const body = page('assigned', {
+			answers: [
+				{ label: 'Have you given this talk before?', kind: 'boolean', value: 'true' },
+				{ label: 'Anything else?', kind: 'long_text', value: 'I need a lectern.' }
+			]
+		});
+
+		expect(body).toContain('What they answered on the form');
+		expect(body).toContain('Have you given this talk before?');
+		expect(body).toContain('>Yes</dd>');
+		expect(body).not.toContain('>true</dd>');
+		expect(body).toContain('I need a lectern.');
+	});
+});
+
+describe('form messages', () => {
+	it('paints a failure red, not green', () => {
+		const body = page('assigned', {
+			form: {
+				message:
+					'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
+			}
+		});
+
+		expect(body).toContain('border-status-bad');
+		expect(body).toContain('role="alert"');
+		expect(body).not.toContain('border-status-good');
+	});
+
+	it('paints a successful save green', () => {
+		const body = page('assigned', {
+			form: { ok: true, message: 'Progress saved. It does not count as a review yet.' }
+		});
+
+		expect(body).toContain('border-status-good');
+		expect(body).toContain('role="status"');
+		expect(body).not.toContain('border-status-bad');
 	});
 });

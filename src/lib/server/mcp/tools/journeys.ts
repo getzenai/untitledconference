@@ -455,7 +455,8 @@ function getReviewAssignment(ctx: McpContext): AnyMcpToolDefinition {
 					valueText: criterion.valueText
 				})),
 				window: detail.window.state,
-				peersWithheld: detail.peersWithheld
+				peersWithheld: detail.peersWithheld,
+				answers: detail.answers
 			};
 		}
 	};

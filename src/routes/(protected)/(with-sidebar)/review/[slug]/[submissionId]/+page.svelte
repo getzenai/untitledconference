@@ -54,6 +54,8 @@
 
 	const stamp = (value: Date | string | null) =>
 		value ? new Date(value).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : '';
+
+	const formOk = $derived(Boolean(form && 'ok' in form && form.ok));
 </script>
 
 <svelte:head>
@@ -88,6 +90,28 @@
 		{#if s.keyTakeaway}
 			<h2 class="mt-4 text-sm font-semibold">What the audience takes away</h2>
 			<p class="mt-1 text-sm whitespace-pre-line">{s.keyTakeaway}</p>
+		{/if}
+
+		{#if s.answers.length > 0}
+			<section class="mt-6">
+				<h2 class="text-sm font-semibold">What they answered on the form</h2>
+				<dl class="mt-2 space-y-3 text-sm">
+					{#each s.answers as answer, i (i)}
+						<div>
+							<dt class="text-muted-foreground text-xs">{answer.label}</dt>
+							<dd class="mt-0.5 whitespace-pre-line">
+								{answer.value === null || answer.value === ''
+									? '—'
+									: answer.kind === 'boolean'
+										? answer.value === 'true'
+											? 'Yes'
+											: 'No'
+										: answer.value}
+							</dd>
+						</div>
+					{/each}
+				</dl>
+			</section>
 		{/if}
 
 		<section class="mt-6">
@@ -196,8 +220,10 @@
 
 		{#if form?.message}
 			<p
-				class="border-status-good text-status-good rounded-md border px-3 py-2 text-sm"
-				role="status"
+				class="rounded-md border px-3 py-2 text-sm {formOk
+					? 'border-status-good text-status-good'
+					: 'border-status-bad text-status-bad'}"
+				role={formOk ? 'status' : 'alert'}
 			>
 				{form.message}
 			</p>

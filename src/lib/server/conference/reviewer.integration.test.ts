@@ -8,7 +8,13 @@
  */
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	cfpFormTable,
+	formFieldTable,
+	submissionAnswerTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	membershipTable,
@@ -390,6 +396,32 @@ describe('a peer’s unfiled draft', () => {
 describe('one submission', () => {
 	it('is a null for a submission nobody assigned to me', async () => {
 		expect(await reviewerSubmission(await conferenceNow(), ME, notMine)).toBeNull();
+	});
+
+	it('includes the custom CFP answers the scorecard used to omit', async () => {
+		const [form] = await db
+			.insert(cfpFormTable)
+			.values({ conferenceId: conference.id, title: 'Proposals', status: 'published' })
+			.returning();
+		const [field] = await db
+			.insert(formFieldTable)
+			.values({
+				cfpFormId: form.id,
+				label: 'Have you given this talk before?',
+				kind: 'boolean',
+				position: 0
+			})
+			.returning();
+		await db.insert(submissionAnswerTable).values({
+			submissionId: mine,
+			formFieldId: field.id,
+			value: 'true'
+		});
+
+		const detail = await reviewerSubmission(await conferenceNow(), ME, mine);
+		expect(detail?.answers).toEqual([
+			{ label: 'Have you given this talk before?', kind: 'boolean', value: 'true' }
+		]);
 	});
 
 	it('keeps the author out of an anonymised round', async () => {

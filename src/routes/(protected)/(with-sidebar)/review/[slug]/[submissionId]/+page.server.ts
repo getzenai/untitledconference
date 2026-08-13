@@ -100,6 +100,7 @@ export const actions: Actions = {
 		}
 
 		return {
+			ok: true,
 			message:
 				form.get('intent') === 'submit'
 					? 'Review submitted. Nobody was emailed — telling people is the organizer’s call.'
