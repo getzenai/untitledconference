@@ -4,9 +4,11 @@ import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	addField,
 	cfpFormView,
+	closeCfpForm,
 	createCfpForm,
 	deleteField,
 	moveField,
+	publishCfpForm,
 	setFixedQuestionShown,
 	updateCfpForm,
 	updateField,
@@ -122,17 +124,7 @@ export const actions: Actions = {
 
 	publishForm: async ({ locals, params }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		const view = await cfpFormView(conference.id);
-		if (!view.form) {
-			return fail(404, { success: false, message: 'No call for papers yet.' });
-		}
-		const form = await updateCfpForm(conference.id, {
-			title: view.form.title,
-			description: view.form.description ?? '',
-			opensAt: view.form.opensAt,
-			closesAt: view.form.closesAt,
-			status: 'published'
-		});
+		const form = await publishCfpForm(conference.id);
 		if (!form) return fail(404, { success: false, message: 'No call for papers yet.' });
 		return {
 			success: true,
@@ -145,17 +137,7 @@ export const actions: Actions = {
 
 	closeForm: async ({ locals, params }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
-		const view = await cfpFormView(conference.id);
-		if (!view.form) {
-			return fail(404, { success: false, message: 'No call for papers yet.' });
-		}
-		const form = await updateCfpForm(conference.id, {
-			title: view.form.title,
-			description: view.form.description ?? '',
-			opensAt: view.form.opensAt,
-			closesAt: view.form.closesAt,
-			status: 'closed'
-		});
+		const form = await closeCfpForm(conference.id);
 		if (!form) return fail(404, { success: false, message: 'No call for papers yet.' });
 		return {
 			success: true,

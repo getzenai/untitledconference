@@ -15,6 +15,13 @@
  * with `MCP_HARNESS` in `src/lib/server/mcp/harness.ts` — that module is what
  * the later MCP tool tests import.
  *
+ * This script writes `INSERT INTO conference` and the two `conference_day`
+ * rows itself. It cannot call `createConference()` — that lives in the
+ * SvelteKit server graph. The two-day range happens to produce the same days
+ * `syncConferenceDays` would. A unit test keeps the *identifiers* in step, not
+ * the behaviour: if `createConference` grows a new step (a settings row, an
+ * empty CFP form), this tenant will not have it, and no test will say so.
+ *
  * Idempotent: deletes its own organisation and its five users first, then
  * rebuilds. Cascades take the conference with the organisation.
  *

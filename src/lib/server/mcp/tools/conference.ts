@@ -1,4 +1,4 @@
-import { organizedConferences, requireOrganizer } from '$lib/server/conference/access';
+import { organizedConferences } from '$lib/server/conference/access';
 import { decideSubmissions } from '$lib/server/conference/decisions';
 import { db } from '$lib/server/db';
 import { submissionStatus, submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -9,7 +9,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { McpContext } from '../context';
-import { McpToolError, registerMcpTool } from '../tool-helpers';
+import { organizerConference } from '../organizer';
+import { McpToolError, registerMcpTools, type AnyMcpToolDefinition } from '../tool-helpers';
+import { conferenceWriteTools } from './conference-write';
 
 /**
  * The conference tools — what an agent connected to this server can actually do
@@ -28,37 +30,26 @@ import { McpToolError, registerMcpTool } from '../tool-helpers';
  * Tools therefore take a conference **slug**, which is what `requireOrganizer`
  * resolves — and which a model handles better than an opaque integer anyway.
  */
+export function conferenceReadTools(ctx: McpContext): AnyMcpToolDefinition[] {
+	return [
+		listMyConferences(ctx),
+		listSubmissions(ctx),
+		getSubmission(ctx),
+		getAgenda(ctx),
+		decideSubmissionsTool(ctx)
+	];
+}
+
+export function conferenceTools(ctx: McpContext): AnyMcpToolDefinition[] {
+	return [...conferenceReadTools(ctx), ...conferenceWriteTools(ctx)];
+}
+
 export function registerConferenceTools(server: McpServer, ctx: McpContext): void {
-	registerListMyConferences(server, ctx);
-	registerListSubmissions(server, ctx);
-	registerGetSubmission(server, ctx);
-	registerGetAgenda(server, ctx);
-	registerDecideSubmissions(server, ctx);
+	registerMcpTools(server, ctx, conferenceTools(ctx));
 }
 
-/**
- * `requireOrganizer` throws a SvelteKit 404 — the right answer for a route and
- * the wrong shape for a tool, which would log it as an unexpected crash. This
- * turns it into the agent-facing refusal without widening what it permits.
- *
- * The message deliberately does not distinguish "no such conference" from "not
- * yours", exactly as the route behaviour does not: two different answers would
- * let an agent learn which slugs exist elsewhere.
- */
-async function organizerConference(slug: string, ctx: McpContext) {
-	try {
-		const { conference } = await requireOrganizer(ctx.userId, slug);
-		return conference;
-	} catch {
-		throw new McpToolError(
-			`No conference "${slug}" that you organize. ` +
-				'Call list_my_conferences to see the ones you can reach.'
-		);
-	}
-}
-
-function registerListMyConferences(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+function listMyConferences(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'list_my_conferences',
 		description:
 			'List the conferences the authenticated user organizes, newest first. ' +
@@ -79,11 +70,11 @@ function registerListMyConferences(server: McpServer, ctx: McpContext): void {
 				}))
 			};
 		}
-	});
+	};
 }
 
-function registerListSubmissions(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+function listSubmissions(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'list_submissions',
 		description:
 			'List the proposals submitted to a conference you organize, newest first, ' +
@@ -138,11 +129,11 @@ function registerListSubmissions(server: McpServer, ctx: McpContext): void {
 				}))
 			};
 		}
-	});
+	};
 }
 
-function registerGetSubmission(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+function getSubmission(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'get_submission',
 		description:
 			'Get one proposal of a conference you organize in full — abstract, key takeaway, ' +
@@ -211,11 +202,11 @@ function registerGetSubmission(server: McpServer, ctx: McpContext): void {
 				}))
 			};
 		}
-	});
+	};
 }
 
-function registerGetAgenda(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'get_agenda',
 		description:
 			'Get the scheduled programme of a conference you organize — every placed session, ' +
@@ -267,11 +258,11 @@ function registerGetAgenda(server: McpServer, ctx: McpContext): void {
 				}))
 			};
 		}
-	});
+	};
 }
 
-function registerDecideSubmissions(server: McpServer, ctx: McpContext): void {
-	registerMcpTool(server, ctx, {
+function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
 		name: 'decide_submissions',
 		description:
 			'Accept, reject or waitlist one or more proposals of a conference you organize. ' +
@@ -315,5 +306,5 @@ function registerDecideSubmissions(server: McpServer, ctx: McpContext): void {
 				notDecided: submissionIds.length - result.decided - result.unchanged
 			};
 		}
-	});
+	};
 }

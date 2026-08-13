@@ -125,6 +125,40 @@ export async function updateCfpForm(conferenceId: number, meta: FormMeta): Promi
 	return updated;
 }
 
+function formMeta(
+	form: CfpForm,
+	over: Partial<Pick<FormMeta, 'status' | 'opensAt' | 'closesAt' | 'title'>> = {}
+): FormMeta {
+	return {
+		title: over.title ?? form.title,
+		description: form.description ?? '',
+		opensAt: over.opensAt !== undefined ? over.opensAt : form.opensAt,
+		closesAt: over.closesAt !== undefined ? over.closesAt : form.closesAt,
+		status: over.status ?? form.status
+	};
+}
+
+/**
+ * The settings-screen "Publish the call" action. Does not create a form — a
+ * missing form is a missing click, not an implied one. The MCP `open_cfp` tool
+ * calls `createCfpForm` first when there is nothing to publish.
+ */
+export async function publishCfpForm(
+	conferenceId: number,
+	over: { title?: string; opensAt?: Date | null; closesAt?: Date | null } = {}
+): Promise<CfpForm | null> {
+	const form = await formOf(conferenceId);
+	if (!form) return null;
+	return updateCfpForm(conferenceId, formMeta(form, { ...over, status: 'published' }));
+}
+
+/** The settings-screen "Close the call" action. */
+export async function closeCfpForm(conferenceId: number): Promise<CfpForm | null> {
+	const form = await formOf(conferenceId);
+	if (!form) return null;
+	return updateCfpForm(conferenceId, formMeta(form, { status: 'closed' }));
+}
+
 /**
  * Switches one of the form's built-in questions off or back on (#159).
  *
