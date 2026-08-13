@@ -145,6 +145,40 @@ describe('REST adapter', () => {
 		expect(result.allow).toContain('GET');
 	});
 
+	/**
+	 * #324. DELETE is a method the adapter did not have before, so this measures
+	 * the whole path — the verb reaches a route, the body carries the second slug,
+	 * and the tool's own refusal comes back as a status rather than a throw.
+	 */
+	it('deletes a draft over DELETE, and refuses the same call without the confirmation', async () => {
+		const slug = `${suffix}-rest-delete`;
+		const created = await dispatchRest('POST', '/conferences', organizer, {
+			body: { name: 'Delete me over REST', slug, startsOn: '2027-12-01', endsOn: '2027-12-01' }
+		});
+		expect(created.status).toBe(200);
+
+		const unconfirmed = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {
+			body: { confirmSlug: `${slug}-oops` }
+		});
+		expect(unconfirmed.status).toBe(400);
+
+		const stillThere = await dispatchRest('GET', '/conferences', organizer, {});
+		expect(stillThere.body.conferences).toEqual(
+			expect.arrayContaining([expect.objectContaining({ slug })])
+		);
+
+		const deleted = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {
+			body: { confirmSlug: slug }
+		});
+		expect(deleted.status).toBe(200);
+		expect(deleted.body).toMatchObject({ slug, deleted: true });
+
+		const after = await dispatchRest('GET', '/conferences', organizer, {});
+		expect((after.body.conferences as { slug: string }[]).map((row) => row.slug)).not.toContain(
+			slug
+		);
+	});
+
 	it('publishes every registered REST tool in the OpenAPI document', () => {
 		const spec = buildOpenApiDocument('https://example.test') as {
 			openapi: string;

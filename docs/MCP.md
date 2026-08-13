@@ -48,6 +48,7 @@ returns.
 | `create_conference`                           | A new conference, always as a draft                                                                    |
 | `update_conference`                           | Name, venue, dates                                                                                     |
 | `publish_conference` / `unpublish_conference` | Put the public page live, or take it back to draft                                                     |
+| `delete_conference`                           | Delete a draft and everything under it, for good. Slug twice to confirm; drafts only, owner or admin   |
 | `open_cfp` / `close_cfp`                      | Open the call, or stop new submissions without touching the ones already in                            |
 | `list_submissions`                            | The proposals, optionally filtered by status                                                           |
 | `get_submission`                              | One proposal in full, with the reviews written for it (reviewer names are not returned)                |

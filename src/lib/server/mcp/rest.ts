@@ -12,7 +12,7 @@ import { classifyError } from './tool-helpers';
 
 const logger = createLogger('MCP');
 
-export type RestMethod = 'GET' | 'POST' | 'PATCH';
+export type RestMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE';
 
 export type RestRoute = {
 	method: RestMethod;
@@ -28,6 +28,10 @@ export const REST_ROUTES: RestRoute[] = [
 	{ method: 'GET', pattern: '/conferences', tool: 'list_my_conferences' },
 	{ method: 'POST', pattern: '/conferences', tool: 'create_conference' },
 	{ method: 'PATCH', pattern: '/conferences/:conferenceSlug', tool: 'update_conference' },
+	// The confirmation slug travels in the body — a DELETE that carries it in the
+	// path twice would be a URL nobody could type wrong, which is the opposite of
+	// what the second slug is for.
+	{ method: 'DELETE', pattern: '/conferences/:conferenceSlug', tool: 'delete_conference' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/publish', tool: 'publish_conference' },
 	{
 		method: 'POST',

@@ -23,6 +23,8 @@ export const SERVER_INSTRUCTIONS =
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
 	'open_cfp then publish_conference so speakers can submit, invite_reviewer then assign_reviews, ' +
 	'decide_submissions, then unpublish_conference to return to draft. ' +
+	'delete_conference removes a draft and everything under it for good — ' +
+	'it takes the slug twice and refuses anything that is not a draft. ' +
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
 	'and get_agenda for the scheduled programme. ' +

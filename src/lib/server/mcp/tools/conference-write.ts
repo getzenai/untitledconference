@@ -5,6 +5,7 @@
  */
 import { closeCfpForm, createCfpForm, publishCfpForm } from '$lib/server/conference/cfp-form';
 import { createConference } from '$lib/server/conference/create-conference';
+import { deleteConference } from '$lib/server/conference/delete-conference';
 import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
 import { reviewRounds } from '$lib/server/conference/review-rounds';
 import { addReviewer } from '$lib/server/conference/reviewer-roster';
@@ -257,6 +258,58 @@ function unpublishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+function deleteConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'delete_conference',
+		description:
+			'Permanently delete a draft conference in an organization you own or administer, ' +
+			'with everything under it: rooms, tracks, days, the call for papers and its ' +
+			'submissions, reviews and agenda. There is no undo and no archive. Only drafts ' +
+			'can be deleted, and only by an org-wide owner or admin — being added as an ' +
+			'organizer on the event is not enough. Repeat the slug in confirmSlug; the tool ' +
+			'refuses if the two differ. Speaker profiles are org-wide and stay.',
+		inputSchema: {
+			conferenceSlug: slugField,
+			confirmSlug: z
+				.string()
+				.min(1)
+				.describe('The same slug again. Must match conferenceSlug exactly.')
+		},
+		handler: async ({ conferenceSlug, confirmSlug }) => {
+			// Checked before the conference is even resolved: a mismatch is the caller
+			// contradicting itself, and that is worth stopping on whatever the slug names.
+			if (confirmSlug !== conferenceSlug) {
+				throw new McpToolError(
+					`confirmSlug "${confirmSlug}" does not match conferenceSlug "${conferenceSlug}". ` +
+						'Nothing was deleted. Pass the same slug twice to confirm.'
+				);
+			}
+			const conference = await organizerConference(conferenceSlug, ctx);
+			const result = await deleteConference(conference, ctx.userId);
+			if (!result.ok) {
+				throw new McpToolError(
+					result.reason === 'not_org_wide'
+						? `Deleting "${conferenceSlug}" needs an owner or admin seat in its organization. ` +
+								'Organizing this one event is not enough. Nothing was deleted.'
+						: // The status read a moment ago can already be stale; the delete itself
+							// refuses anything but a draft, so it is the one that decides.
+							conference.status === 'draft'
+							? `"${conferenceSlug}" was published while this call was in flight, and only a ` +
+								'draft can be deleted. Nothing was deleted.'
+							: `"${conferenceSlug}" is ${conference.status}, and only a draft can be deleted. ` +
+								'Nothing was deleted.'
+				);
+			}
+			return {
+				slug: conference.slug,
+				name: conference.name,
+				deleted: true,
+				removed: result.removed
+			};
+		}
+	};
+}
+
 function inviteReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'invite_reviewer',
@@ -354,6 +407,7 @@ export function conferenceWriteTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		closeCfpTool(ctx),
 		publishConferenceTool(ctx),
 		unpublishConferenceTool(ctx),
+		deleteConferenceTool(ctx),
 		inviteReviewerTool(ctx),
 		assignReviewsTool(ctx)
 	];
