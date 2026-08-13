@@ -3,6 +3,7 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import 'dotenv/config';
 import { defineConfig } from 'vitest/config';
+import { paraglideCompilerOptions } from './paraglide.config.mjs';
 
 // Only override DATABASE_URL with TEST_DATABASE_URL during actual test runs
 if (process.env.TEST && process.env.TEST_DATABASE_URL) {
@@ -10,15 +11,7 @@ if (process.env.TEST && process.env.TEST_DATABASE_URL) {
 }
 
 export default defineConfig({
-	plugins: [
-		tailwindcss(),
-		paraglideVitePlugin({
-			project: './project.inlang',
-			outdir: './src/lib/paraglide',
-			strategy: ['localStorage', 'url', 'preferredLanguage', 'baseLocale']
-		}),
-		sveltekit()
-	],
+	plugins: [tailwindcss(), paraglideVitePlugin(paraglideCompilerOptions), sveltekit()],
 	test: {
 		projects: [
 			{
