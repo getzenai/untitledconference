@@ -12,11 +12,11 @@
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { enhance } from '$app/forms';
-	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { cn } from '$lib/utils.js';
+	import ContentTaskList from './content-task-list.svelte';
 
 	let { data, form } = $props();
 
@@ -32,7 +32,7 @@
 	/**
 	 * Collapsed by default. A hundred speakers means a hundred cards each showing
 	 * every task, which turns the page into a scroll before it answers anything —
-	 * the header line (name, open/total) already says who needs chasing; the task
+	 * the header line (name, N of M to do) already says who needs chasing; the task
 	 * list is only worth opening for the ones that do. Not persisted across
 	 * reloads: there is nothing here worth remembering between visits.
 	 */
@@ -55,17 +55,11 @@
 		const needle = query.trim().toLowerCase();
 		if (!needle) return ordered;
 		return ordered.filter((s) =>
-			`${s.name} ${s.email ?? ''} ${s.tasks.map((t) => t.title).join(' ')}`
+			`${s.name} ${s.email ?? ''} ${s.tasks.map((t) => `${t.title} ${t.sessionTitle ?? ''}`).join(' ')}`
 				.toLowerCase()
 				.includes(needle)
 		);
 	});
-
-	const due = (value: Date | string | null) =>
-		value ? new Date(value).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : null;
-
-	const overdue = (value: Date | string | null, status: string) =>
-		Boolean(value && status !== 'done' && new Date(value) < new Date());
 
 	/**
 	 * Who a reminder would actually reach (CNT-08).
@@ -251,62 +245,15 @@
 								<StatusBadge
 									status="open"
 									tone={outstanding > 0 ? 'warn' : 'good'}
-									label="{outstanding} open · {speaker.tasks.length} {speaker.tasks.length === 1
+									label="{outstanding} of {speaker.tasks.length} {speaker.tasks.length === 1
 										? 'task'
-										: 'tasks'}"
+										: 'tasks'} to do"
 								/>
 							</button>
 						</div>
 
 						{#if isOpen}
-							<ul class="divide-border border-border mt-0 divide-y border-t px-4 pb-4">
-								{#each speaker.tasks as task (task.id)}
-									<li class="flex flex-wrap items-center justify-between gap-2 py-2">
-										<div class="min-w-0">
-											<a class="text-sm hover:underline" href="{base}/content/tasks/{task.id}">
-												{task.title}
-											</a>
-											<span class="text-muted-foreground ml-2 text-xs">
-												{#if task.fileCount > 0}
-													{task.latestFilename}{#if task.fileCount > 1}
-														<span class="px-1">·</span>v{task.fileCount}{/if}
-												{:else if task.kind === 'file_request'}
-													nothing handed in
-												{:else}
-													no file needed
-												{/if}
-												{#if task.dueOn}
-													<span class="px-1">·</span>
-													<span class={overdue(task.dueOn, task.status) ? 'text-status-bad' : ''}>
-														due {due(task.dueOn)}
-													</span>
-												{/if}
-											</span>
-										</div>
-
-										<div class="flex items-center gap-2">
-											{#if task.latestApproval && task.fileCount > 0}
-												<Badge
-													variant={task.latestApproval === 'approved' ? 'secondary' : 'outline'}
-												>
-													{task.latestApproval === 'approved'
-														? 'Approved'
-														: task.latestApproval === 'rejected'
-															? 'Rejected'
-															: 'Needs a look'}
-												</Badge>
-											{/if}
-											<Badge variant={task.status === 'open' ? 'outline' : 'secondary'}>
-												{task.status === 'open'
-													? 'Open'
-													: task.status === 'submitted'
-														? 'Handed in'
-														: 'Done'}
-											</Badge>
-										</div>
-									</li>
-								{/each}
-							</ul>
+							<ContentTaskList {base} tasks={speaker.tasks} />
 						{/if}
 					</section>
 				{/each}
