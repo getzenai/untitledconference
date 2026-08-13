@@ -45,6 +45,65 @@ const isBearerApi = (pathname: string) =>
 const securityHeadersHandler: Handle = async ({ event, resolve }) =>
 	applySecurityHeaders(await resolve(event), event.url.pathname);
 
+// SvelteKit's own `csrf.checkOrigin` is off in svelte.config.js, and this is the
+// check that replaces it — same rule, one exception.
+//
+// The exception is the OAuth token endpoint. RFC 6749 requires the token request
+// to be `application/x-www-form-urlencoded`, and it is made by the client
+// *server-to-server*, so it carries no `Origin` header at all. SvelteKit's rule
+// treats a missing origin as cross-site and answers 403 with an HTML body, which
+// reaches an MCP client as an unparseable OAuth error. That is exactly what
+// `claude mcp` reported: registration (JSON) succeeded, authorization succeeded,
+// and the token exchange died at the last step. `csrf.trustedOrigins` cannot fix
+// it — there is no origin to trust.
+//
+// Four sibling endpoints join it, and the list is exact paths rather than the
+// `/api/auth/oauth2/` prefix on purpose: token, register, revoke and introspect
+// are the machine half of the protocol — the caller proves itself with the client
+// credentials or the token it carries, and no browser cookie is at stake. The
+// rest of that prefix is not like that. `create-client`, `delete-client` and
+// `update-consent` are management endpoints authenticated by the signed-in user's
+// session cookie, which is exactly what the origin check protects; a prefix
+// exemption would hand them to any cross-site form.
+//
+// Everything else — every form action in the app — keeps the original rule.
+const CSRF_EXEMPT_PATHS = [
+	'/api/auth/oauth2/token',
+	'/api/auth/oauth2/register',
+	'/api/auth/oauth2/revoke',
+	'/api/auth/oauth2/introspect'
+];
+const FORM_CONTENT_TYPES = [
+	'application/x-www-form-urlencoded',
+	'multipart/form-data',
+	'text/plain'
+];
+const CSRF_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+const isFormContentType = (request: Request): boolean => {
+	const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+	return FORM_CONTENT_TYPES.includes(type);
+};
+
+const csrfHandler: Handle = ({ event, resolve }) => {
+	const { request, url } = event;
+	const exempt = CSRF_EXEMPT_PATHS.includes(url.pathname);
+
+	if (
+		!exempt &&
+		CSRF_METHODS.includes(request.method) &&
+		isFormContentType(request) &&
+		request.headers.get('origin') !== url.origin
+	) {
+		const message = `Cross-site ${request.method} form submissions are forbidden`;
+		return request.headers.get('accept') === 'application/json'
+			? Response.json({ message }, { status: 403 })
+			: new Response(message, { status: 403 });
+	}
+
+	return resolve(event);
+};
+
 // Gives the request its own database connection, on the platforms that require
 // one. A Cloudflare Worker cannot use a socket opened by an earlier request, so
 // a shared client makes every request after the first on a given isolate fail
@@ -381,6 +440,7 @@ export const handleError: HandleServerError = ({ error, status, message, event }
 // API Protection, Paraglide
 export const handle: Handle = sequence(
 	securityHeadersHandler, // Outermost, so every response below carries the headers
+	csrfHandler, // Replaces kit's csrf.checkOrigin; exempts the OAuth token endpoint
 	publicPageCacheHandler, // A hit here skips the database scope and auth entirely
 	databaseScopeHandler, // Before anything that queries — auth does, on every request
 	botDetectionHandler, // Reject crawlers before any auth/session work

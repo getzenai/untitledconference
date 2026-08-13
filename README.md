@@ -20,7 +20,17 @@ Live: **[untitledconference.com](https://untitledconference.com)**
 
 ### Two interfaces most conference tools do not have
 
-**An MCP server** at `/api/v1/mcp`, so an AI agent can work against your data with the same permissions as the person who authorised it. It speaks streamable HTTP and carries a full OAuth 2.1 provider — discovery under `/.well-known`, PKCE, a consent screen, JWKS-verified tokens — which means you connect Claude or any other MCP client by URL and approve it in the browser, with no key to paste anywhere. Tools today: `list_my_conferences`, `create_conference`, `update_conference`, `open_cfp`, `close_cfp`, `publish_conference`, `unpublish_conference`, `invite_reviewer`, `assign_reviews`, `list_submissions`, `get_submission`, `get_agenda`, `decide_submissions`, `list_rooms`, `create_room`, `get_agenda_tray`, `place_talk`, `move_talk`, `swap_talks`, `unplace_talk`, `list_open_cfps`, `submit_proposal`, `update_proposal`, `withdraw_proposal`, `list_my_proposals`, `update_my_speaker_profile`, `list_my_review_assignments`, `get_review_assignment`, `submit_review`, plus `get_my_profile` and `list_my_organizations`. Organizer tools go through the same `requireOrganizer` check the routes do; speaker and reviewer tools are scoped to the token user the same way the portal and the queue are.
+**An MCP server** at `/api/v1/mcp`, so you can run the conference by asking instead of clicking — "open the CFP and publish the page", "which proposals still have no review?", "put the accepted talks in the two big rooms and tell me what collides". The agent acts as you: it sees the conferences you can see, and can change only what you could change by hand.
+
+Connect it to Claude Code with one line:
+
+```bash
+claude mcp add --transport http untitledconference https://untitledconference.com/api/v1/mcp
+```
+
+Then run `/mcp` and approve it in the browser — the server is its own OAuth 2.1 provider (discovery under `/.well-known`, PKCE, a consent screen, JWKS-verified tokens), so there is no key to paste anywhere and no token in a config file. Any MCP client that speaks streamable HTTP and OAuth connects the same way, by URL alone.
+
+Thirty-one tools cover the three roles: an organizer runs the conference from the call to the placed agenda, a speaker submits and maintains proposals and their own profile, a reviewer works their assigned queue. What you can do is what the screens let you do — the tools call the same functions, refuse the same things, and a reviewer still cannot read a submission they were not assigned. [docs/MCP.md](docs/MCP.md) has the tool list and the details per role.
 
 **A REST API** under `/api/v1`. The conference tools above are also resource routes (`GET /api/v1/conferences`, `POST /api/v1/conferences/{slug}/publish`, …) that call the same handlers as the MCP server, authenticated with the same OAuth bearer token. OpenAPI 3.1 is at `/api/v1/openapi.json`; a readable list is at `/api/v1/docs`. Directory still decides the other tiers: `public/` is open (`public/health` is the uptime probe), `protected/` requires a session and is rejected centrally before the handler runs, `test/` answers only where `ENABLE_TEST_ENDPOINTS=true`.
 
