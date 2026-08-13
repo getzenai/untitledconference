@@ -552,11 +552,20 @@ function getReviewAssignment(ctx: McpContext): AnyMcpToolDefinition {
 			'reviewers are never returned. A submission you were not assigned is refused.',
 		inputSchema: {
 			conferenceSlug: slugField,
-			submissionId: z.number().int()
+			submissionId: z.number().int(),
+			roundId: z
+				.number()
+				.int()
+				.optional()
+				.describe(
+					'Which round to open, from the rounds this assignment reports. Omit and the ' +
+						'round that still wants work is picked — with two open rounds that is the ' +
+						'first, and the second is only reachable by naming it.'
+				)
 		},
-		handler: async ({ conferenceSlug, submissionId }) => {
+		handler: async ({ conferenceSlug, submissionId, roundId }) => {
 			const { conference } = await reviewerConference(conferenceSlug, ctx);
-			const detail = await reviewerSubmission(conference, ctx.userId, submissionId);
+			const detail = await reviewerSubmission(conference, ctx.userId, submissionId, roundId);
 			if (!detail) {
 				throw new McpToolError(
 					`No assignment for submission ${submissionId} on "${conferenceSlug}". ` +
@@ -580,7 +589,16 @@ function getReviewAssignment(ctx: McpContext): AnyMcpToolDefinition {
 				})),
 				window: detail.window.state,
 				peersWithheld: detail.peersWithheld,
-				answers: detail.answers
+				answers: detail.answers,
+				round: detail.round,
+				// Every round you hold this talk in. Two open rounds are two different
+				// scorecards, and without the ids the second one cannot be asked for.
+				rounds: detail.heldRounds.map((round) => ({
+					id: round.id,
+					name: round.name,
+					window: round.window.state,
+					submitted: round.submitted
+				}))
 			};
 		}
 	};
@@ -600,9 +618,18 @@ function submitReviewTool(ctx: McpContext): AnyMcpToolDefinition {
 			answers: z
 				.record(z.string(), z.string())
 				.describe('Criterion id (as a string key) to the score or text you entered.'),
-			comment: z.string().optional()
+			comment: z.string().optional(),
+			roundId: z
+				.number()
+				.int()
+				.optional()
+				.describe(
+					'The round these answers belong to — the one get_review_assignment reported. ' +
+						'Omit it while you hold the talk in two open rounds and the answers land in ' +
+						'the first.'
+				)
 		},
-		handler: async ({ conferenceSlug, submissionId, answers, comment }) => {
+		handler: async ({ conferenceSlug, submissionId, answers, comment, roundId }) => {
 			const { conference } = await reviewerConference(conferenceSlug, ctx);
 			const keyed: Record<number, string> = {};
 			for (const [key, value] of Object.entries(answers as Record<string, string>)) {
@@ -612,11 +639,17 @@ function submitReviewTool(ctx: McpContext): AnyMcpToolDefinition {
 				}
 				keyed[id] = value;
 			}
-			const result = await saveReview(conference, ctx.userId, submissionId, {
-				answers: keyed,
-				comment: comment ?? '',
-				submit: true
-			});
+			const result = await saveReview(
+				conference,
+				ctx.userId,
+				submissionId,
+				{
+					answers: keyed,
+					comment: comment ?? '',
+					submit: true
+				},
+				roundId
+			);
 			if (!result.ok) {
 				const messages: Record<(typeof result)['reason'], string> = {
 					not_assigned: `No assignment for submission ${submissionId} on "${conferenceSlug}".`,

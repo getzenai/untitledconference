@@ -23,7 +23,8 @@ const row = (
 	submissionId,
 	title,
 	track: 'Platform',
-	rounds,
+	// Ids the row can link with (#294) — one per name, in the order given.
+	rounds: rounds.map((name, i) => ({ id: i + 1, name, submitted: false })),
 	window,
 	reviewsSubmitted,
 	reviewsAssigned: 3,
@@ -121,7 +122,17 @@ describe('a submission held in more than one round', () => {
 	it('names the rounds on the row, so one filed review does not look like done', () => {
 		const body = renderQueue([row(1, 'Held twice', 0, ['Round 1', 'Blind round'])]);
 
-		expect(body).toContain('Round 1 · Blind round');
+		expect(body).toContain('Round 1');
+		expect(body).toContain('Blind round');
+	});
+
+	// #294: with both rounds open the bare permalink can only reach the first, so
+	// the names have to be links that name their round.
+	it('links each round separately, not just the submission', () => {
+		const body = renderQueue([row(1, 'Held twice', 0, ['Round 1', 'Blind round'])]);
+
+		expect(body).toContain('href="/review/test-conf/1?round=1"');
+		expect(body).toContain('href="/review/test-conf/1?round=2"');
 	});
 
 	it('stays quiet when there is only one round to name', () => {

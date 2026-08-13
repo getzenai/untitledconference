@@ -294,8 +294,13 @@ export type QueueEntry = {
 	title: string;
 	track: string | null;
 	sessionFormat: string | null;
-	/** Every round this reviewer holds this submission in, in board order. */
-	rounds: string[];
+	/**
+	 * Every round this reviewer holds this submission in, in board order.
+	 *
+	 * The id travels with the name because the queue links per round (#294): with
+	 * two open rounds the bare permalink can only reach the first.
+	 */
+	rounds: { id: number; name: string; submitted: boolean }[];
 	/**
 	 * Whether any of those rounds is taking answers (ABS-01), so the queue can say
 	 * "opens in 2 days" or "closed" instead of linking to a form that refuses.
@@ -333,6 +338,7 @@ export async function reviewQueue(
 		.select({
 			submissionId: reviewTable.submissionId,
 			status: reviewTable.status,
+			roundId: reviewRoundTable.id,
 			roundName: reviewRoundTable.name,
 			roundPosition: reviewRoundTable.position,
 			roundOpensAt: reviewRoundTable.opensAt,
@@ -374,6 +380,7 @@ export async function reviewQueue(
 type Assignment = {
 	submissionId: number;
 	status: string;
+	roundId: number;
 	roundName: string;
 	roundPosition: number;
 	roundOpensAt: Date | null;
@@ -418,7 +425,11 @@ function queueRow(
 		title: first.title,
 		track: first.track,
 		sessionFormat: first.sessionFormat,
-		rounds: inBoardOrder.map((row) => row.roundName),
+		rounds: inBoardOrder.map((row) => ({
+			id: row.roundId,
+			name: row.roundName,
+			submitted: row.status === 'submitted'
+		})),
 		// Built from the same rows in the same order `ownReview` reads them, so the
 		// window this row advertises is the window of the round the link leads to.
 		window: combineRoundWindows(
@@ -483,6 +494,16 @@ export type ReviewerSubmission = {
 	/** Assigned peers who have not filed yet — a count, never their answers. */
 	peersPending: number;
 	peersWithheld: boolean;
+	/** The round this page is showing — the one the form writes to (#294). */
+	round: { id: number; name: string };
+	/**
+	 * Every round this reviewer holds the submission in, in board order.
+	 *
+	 * With two open rounds the page can only show one form, so it has to name the
+	 * other one and link to it. A reviewer who cannot see the second round cannot
+	 * file in it, and the queue says the work is still outstanding.
+	 */
+	heldRounds: { id: number; name: string; window: RoundWindow; submitted: boolean }[];
 	/**
 	 * Custom CFP answers, in form order. Title / abstract / takeaway already sit
 	 * on the page; these are the extra questions the reviewer was scoring without.
@@ -500,9 +521,10 @@ export type ReviewerSubmission = {
 export async function reviewerSubmission(
 	conference: Conference,
 	userId: string,
-	submissionId: number
+	submissionId: number,
+	roundId?: number
 ): Promise<ReviewerSubmission | null> {
-	const own = await ownReview(conference.id, userId, submissionId);
+	const own = await ownReview(conference.id, userId, submissionId, roundId);
 	if (!own) return null;
 
 	const submission = await submissionFor(conference.id, submissionId);
@@ -544,7 +566,9 @@ export async function reviewerSubmission(
 		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
 		peersPending,
 		peersWithheld: !visible && peers.length > 0,
-		answers
+		answers,
+		round: { id: own.roundId, name: own.roundName },
+		heldRounds: own.heldRounds
 	};
 }
 
@@ -580,7 +604,21 @@ function answersOn(submissionId: number) {
  * still wants work first — and the query orders by round position and id underneath,
  * so equal states resolve the same way on every request.
  */
-async function ownReview(conferenceId: number, userId: string, submissionId: number) {
+async function ownReview(
+	conferenceId: number,
+	userId: string,
+	submissionId: number,
+	/**
+	 * The round the caller is looking at (#294).
+	 *
+	 * With two OPEN rounds the priority sort is a tie and position decides, so the
+	 * permalink always opened the first one and the second round's form was
+	 * unreachable. A named round wins over the priority rule; a round this
+	 * reviewer does not hold this submission in falls back to it rather than
+	 * 404ing, because a stale link is not a permission problem.
+	 */
+	roundId?: number
+) {
 	const rows = await db
 		.select({
 			reviewId: reviewTable.id,
@@ -588,6 +626,7 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 			submittedAt: reviewTable.submittedAt,
 			comment: reviewTable.comment,
 			roundId: reviewRoundTable.id,
+			roundName: reviewRoundTable.name,
 			anonymized: reviewRoundTable.anonymized,
 			opensAt: reviewRoundTable.opensAt,
 			closesAt: reviewRoundTable.closesAt
@@ -605,11 +644,25 @@ async function ownReview(conferenceId: number, userId: string, submissionId: num
 		)
 		.orderBy(asc(reviewRoundTable.position), asc(reviewTable.id));
 
-	const [own] = rows
-		.map((row) => ({ ...row, window: roundWindow(row.opensAt, row.closesAt) }))
-		.sort((a, b) => byRoundWindowPriority(a.window, b.window));
+	const held = rows.map((row) => ({ ...row, window: roundWindow(row.opensAt, row.closesAt) }));
+	const byPriority = [...held].sort((a, b) => byRoundWindowPriority(a.window, b.window));
 
-	return own ?? null;
+	const named = roundId === undefined ? undefined : held.find((row) => row.roundId === roundId);
+	const own = named ?? byPriority[0];
+	if (!own) return null;
+
+	// Every round this reviewer holds this submission in, in board order — what the
+	// page needs to offer the other one. Carried here rather than queried again:
+	// these are the same rows the choice was made from.
+	return {
+		...own,
+		heldRounds: held.map((row) => ({
+			id: row.roundId,
+			name: row.roundName,
+			window: row.window,
+			submitted: row.status === 'submitted'
+		}))
+	};
 }
 
 /** The proposal itself, scoped by conference so an id from the URL cannot travel. */
@@ -746,11 +799,17 @@ export async function saveReview(
 	conference: Conference,
 	userId: string,
 	submissionId: number,
-	draft: ReviewDraft
+	draft: ReviewDraft,
+	/**
+	 * The round the form was drawn for (#294). Without it a POST from the second
+	 * round's page would be written to the first one — the same tie that made the
+	 * permalink open the wrong form, one layer deeper and silent.
+	 */
+	roundId?: number
 ): Promise<SaveReviewResult> {
 	// The same query the page used to decide whether this reviewer may be here at all:
 	// the assignment is the permission.
-	const own = await ownReview(conference.id, userId, submissionId);
+	const own = await ownReview(conference.id, userId, submissionId, roundId);
 	if (!own) return { ok: false, reason: 'not_assigned' };
 
 	// Checked here rather than only hidden on the page. The queue stops offering a
