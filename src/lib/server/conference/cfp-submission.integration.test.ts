@@ -28,7 +28,14 @@ import {
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { guessSortName, openCall, saveSubmission, type SubmissionInput } from './cfp-submission';
+import {
+	guessSortName,
+	listOpenCalls,
+	openCall,
+	saveSubmission,
+	withdrawSubmission,
+	type SubmissionInput
+} from './cfp-submission';
 import { editableDraft, submissionForConference } from './speaker-portal';
 
 const suffix = `cfpsub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -914,5 +921,93 @@ describe('the public form points at what you already sent', () => {
 		const found = await submissionForConference(soloId, conference.id);
 		expect(found?.id).toBe(draft.submissionId);
 		expect(found?.status).toBe('draft');
+	});
+});
+
+describe('listOpenCalls', () => {
+	it('includes a published conference whose call is taking submissions', async () => {
+		const calls = await listOpenCalls();
+		expect(calls.some((row) => row.slug === slug)).toBe(true);
+	});
+
+	it('drops the conference the moment the public site would', async () => {
+		const [conference] = await db
+			.select({ id: conferenceTable.id, status: conferenceTable.status })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+		expect(conference?.status).toBe('published');
+
+		await db
+			.update(conferenceTable)
+			.set({ status: 'draft' })
+			.where(eq(conferenceTable.id, conference.id));
+		try {
+			expect((await listOpenCalls()).some((row) => row.slug === slug)).toBe(false);
+			expect(await openCall(slug)).toBeNull();
+		} finally {
+			await db
+				.update(conferenceTable)
+				.set({ status: 'published' })
+				.where(eq(conferenceTable.id, conference.id));
+		}
+
+		expect((await listOpenCalls()).some((row) => row.slug === slug)).toBe(true);
+	});
+});
+
+describe('withdrawSubmission', () => {
+	it('lets the speaker take a draft back, then refuses a second time', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Take this back' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a draft');
+
+		expect(await withdrawSubmission(submitterId, saved.submissionId)).toEqual({ ok: true });
+
+		const [row] = await db
+			.select({ status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+		expect(row?.status).toBe('withdrawn');
+
+		expect(await withdrawSubmission(submitterId, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'decided'
+		});
+	});
+
+	it('refuses a stranger the same way ownedSubmission does', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Not yours to pull' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a draft');
+
+		expect(await withdrawSubmission(strangerId, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'not_found'
+		});
+
+		const [row] = await db
+			.select({ status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, saved.submissionId));
+		expect(row?.status).toBe('draft');
+	});
+
+	it('will not overwrite a decision that landed between the check and the write', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Already judged' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'accepted', decidedAt: new Date() })
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		expect(await withdrawSubmission(submitterId, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'decided'
+		});
 	});
 });
