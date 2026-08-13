@@ -101,6 +101,63 @@ npm run db:studio        # Drizzle Studio on :5555
 
 Integration and E2E runs each create their own database on the test server and drop it afterwards, so parallel checkouts never share fixtures.
 
+## Development
+
+The product is one app. The engineering around it is what keeps that true as more than one person — or one agent — works on it at once. The commands are in [Usage](#usage); this is why they exist.
+
+### Tests: unit, integration, end-to-end — all three, automatically
+
+`npm test` is unit, then integration, then Cypress, in that order. CI runs the same three on every pull request. A change that only type-checks is not considered tested.
+
+- **Unit** (`*.unit.test.ts`) — no database. Pure logic, mocked I/O.
+- **Integration** (`*.integration.test.ts`) — real Postgres. `scripts/test/with-isolated-db.mjs` creates a throwaway database for the run and drops it afterwards, so two checkouts never share fixtures.
+- **E2E** (`npm run test:e2e`) — full browser journeys against another isolated database.
+
+A file named `*.test.ts` is silently not collected. The suffix is the contract, and tests sit next to the code they test.
+
+### One migration script, the same in CI and in production
+
+Locally, `npm run db:push` is enough. Anything that ships goes through a generated migration (`npm run db:generate`) applied by `scripts/db/migrate.mjs`. That is the same file CI runs against a fresh Postgres and the deploy job runs against Neon, immediately before `wrangler deploy`. It does not run inside the Worker — a Worker has no startup hook and no filesystem to read `drizzle/` from.
+
+The script refuses to report success unless the database is actually current:
+
+- Production runs must come from a clean `origin/main`. A stale branch can carry journal history that is absent from its own diff.
+- Journal timestamps must increase. Drizzle compares each migration against the *highest* applied timestamp, so one rounded `when` in the future silently swallows every successor and still exits 0.
+- After applying, every committed migration must be recorded as applied. The skip above only happens against a database with history — which is to say, only in production — so CI on an empty database cannot catch it alone.
+
+CI also fails if `drizzle-kit generate` would write anything: a schema change committed without its migration would otherwise deploy an app against a database that lacks its columns. The deploy job dumps the live database first. Drizzle is forward-only; the rollback is `psql < dump.sql`, not a down-migration.
+
+### Auth is a folder, not a check you remember to copy
+
+SvelteKit route groups draw the line once, so a new page inherits its access by living in the right directory:
+
+| Group | Who gets in |
+| --- | --- |
+| `(public)/` | anyone — login, register, the programme under `/c/<slug>` |
+| `(protected)/` | a signed-in user. The group's `+layout.server.ts` redirects to `/login` if `locals.user` is missing. Pages inside do not re-check. |
+| `(admin)/` | a platform admin. Same pattern, plus `locals.isAdmin`. |
+| `(protected)/manage/[slug]/` | an organizer of that conference. The slug layout calls `requireOrganizer` once for the whole tree. |
+
+A user who may not see the conference gets a 404, not a 403 — a 403 would confirm the slug exists.
+
+MCP tools and the REST resource routes call the same `requireOrganizer` and `requireReviewer` (and the speaker-portal helpers). A reviewer still cannot read a submission they were not assigned, whether they came through the UI, an agent, or `curl`.
+
+The same folder rule covers the other API tiers: `api/v1/public/` is open, `protected/` requires a session and is rejected before the handler runs, `test/` answers only where `ENABLE_TEST_ENDPOINTS=true`.
+
+### CI is the gate; deploy is a consequence
+
+`.github/workflows/lint_and_test.yaml` runs format, lint, types, a production build, unit, integration, E2E, and the migration check. Deploy (`deploy.yaml`) starts only after that workflow is green on `main` — never from a red tree, never from a pull request.
+
+Credentials come from Infisical over GitHub OIDC, bound to `refs/heads/main`. There are no long-lived secrets in the repository. After `wrangler deploy` the job hits `/api/v1/public/health` until it is 200: a green deploy step alone does not prove the Worker can reach the database.
+
+When `package-lock.json` changes, `npm audit signatures` runs as well.
+
+A few other things that are easy to miss and expensive to rediscover:
+
+- Environment variables are never read at module scope — `vite build` runs without secrets. Call `serverEnv()` inside a function.
+- `.env` is local, Infisical is shared, `wrangler secret put` is production. `npm run dev` reads `.env` first.
+- The commit hook is the same bar as CI minus the database jobs: format, lint, unused-export check (knip), `svelte-check`, a production build, and unit tests. Pre-push adds integration and E2E when a test database is on `:5433`.
+
 ## Deployment
 
 The app targets Cloudflare Workers through `@sveltejs/adapter-cloudflare`. `wrangler.jsonc` declares the domain, the R2 bucket for speaker uploads and the Hyperdrive binding that pools Postgres connections at the edge; it carries only non-secret configuration.
