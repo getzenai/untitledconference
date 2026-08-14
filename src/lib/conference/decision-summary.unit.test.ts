@@ -155,7 +155,7 @@ describe('describeBulkAssign', () => {
 
 	it('counts ineligible pairs without claiming they landed', () => {
 		expect(describeBulkAssign({ created: 1, already: 0, skipped: 2 })).toBe(
-			'1 assignment created. 2 submissions could not be assigned to that reviewer.'
+			'1 assignment created. 2 assignments skipped.'
 		);
 	});
 

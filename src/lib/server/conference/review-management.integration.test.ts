@@ -18,7 +18,9 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+	assignReviewersToSubmissions,
 	assignReviewerToSubmissions,
+	autoDistributeReviews,
 	conferenceAssignmentTargets,
 	queueReviewReminders,
 	reviewAssignmentMatrix,
@@ -422,6 +424,239 @@ describe('organizer reviewer assignments', () => {
 		expect(
 			await db.select({ id: reviewTable.id }).from(reviewTable).where(eq(reviewTable.id, review.id))
 		).toEqual([{ id: review.id }]);
+	});
+});
+
+describe('ABS-06 assignment at scale', () => {
+	async function insertTalks(titles: string[]) {
+		const rows = await db
+			.insert(submissionTable)
+			.values(
+				titles.map((title) => ({
+					conferenceId: conference.id,
+					title: `${title} ${suffix}`,
+					status: 'submitted' as const
+				}))
+			)
+			.returning({ id: submissionTable.id });
+		return rows.map((row) => row.id);
+	}
+
+	it('assigns two reviewers onto five talks in one call and names the skips', async () => {
+		const talkIds = await insertTalks(['A', 'B', 'C', 'D', 'E']);
+
+		const result = await assignReviewersToSubmissions(conference.id, talkIds, roundId, [
+			CONFERENCE_REVIEWER,
+			ROUND_REVIEWER
+		]);
+		expect(result).toEqual({
+			created: 10,
+			already: 0,
+			skipped: 0,
+			recused: 0,
+			skippedItems: []
+		});
+
+		for (const talkId of talkIds) {
+			const assigned = (await reviewAssignmentMatrix(conference.id, talkId))[0].reviewers
+				.filter((reviewer) => reviewer.status === 'assigned')
+				.map((reviewer) => reviewer.userId)
+				.sort();
+			expect(assigned).toEqual([CONFERENCE_REVIEWER, ROUND_REVIEWER].sort());
+		}
+
+		expect(await reviewQueue(conference, CONFERENCE_REVIEWER)).toHaveLength(5);
+		expect(await reviewQueue(conference, ROUND_REVIEWER)).toHaveLength(5);
+
+		const again = await assignReviewersToSubmissions(conference.id, talkIds, roundId, [
+			CONFERENCE_REVIEWER,
+			ROUND_REVIEWER
+		]);
+		expect(again).toEqual({
+			created: 0,
+			already: 10,
+			skipped: 0,
+			recused: 0,
+			skippedItems: []
+		});
+
+		await db.delete(submissionTable).where(inArray(submissionTable.id, talkIds));
+	});
+
+	it('keeps a speaker conflict on A from blocking B on the same talk', async () => {
+		const result = await assignReviewersToSubmissions(conference.id, [submissionId], roundId, [
+			SPEAKER_REVIEWER,
+			CONFERENCE_REVIEWER
+		]);
+		expect(result).toEqual({
+			created: 1,
+			already: 0,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId, reason: 'speaker_conflict' }]
+		});
+
+		const assigned = (await reviewAssignmentMatrix(conference.id, submissionId))[0].reviewers.find(
+			(reviewer) => reviewer.status === 'assigned'
+		);
+		expect(assigned?.userId).toBe(CONFERENCE_REVIEWER);
+	});
+
+	it('auto-distributes under a cap and never restores a recusal', async () => {
+		// Three conference-scoped reviewers exist. Four talks × cap 1 exhausts the
+		// pool; the recusal on the first talk must not be flipped to make a fourth.
+		const talkIds = await insertTalks(['D1', 'D2', 'D3', 'D4']);
+
+		await db.insert(reviewTable).values({
+			reviewRoundId: roundId,
+			submissionId: talkIds[0],
+			reviewerUserId: CONFERENCE_REVIEWER,
+			status: 'recused'
+		});
+
+		const result = await autoDistributeReviews(conference.id, talkIds, roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 1
+		});
+
+		expect(result.created).toBe(3);
+		expect(result.skipped).toBe(1);
+		expect(result.skippedItems).toEqual([{ submissionId: talkIds[3], reason: 'pool_exhausted' }]);
+
+		const recused = await db
+			.select({ status: reviewTable.status })
+			.from(reviewTable)
+			.where(
+				and(
+					eq(reviewTable.reviewRoundId, roundId),
+					eq(reviewTable.submissionId, talkIds[0]),
+					eq(reviewTable.reviewerUserId, CONFERENCE_REVIEWER)
+				)
+			);
+		expect(recused).toEqual([{ status: 'recused' }]);
+		expect(
+			(await reviewQueue(conference, CONFERENCE_REVIEWER)).some(
+				(row) => row.submissionId === talkIds[0]
+			)
+		).toBe(false);
+
+		await db.delete(submissionTable).where(inArray(submissionTable.id, talkIds));
+	});
+
+	it('does not assign a speaker-reviewer or a track-blocked reviewer when filling N', async () => {
+		const [allowedTrack, blockedTrack] = await db
+			.insert(trackTable)
+			.values([
+				{ conferenceId: conference.id, name: `Dist allowed ${suffix}` },
+				{ conferenceId: conference.id, name: `Dist blocked ${suffix}` }
+			])
+			.returning();
+		const [membership] = await db
+			.select({ id: membershipTable.id })
+			.from(membershipTable)
+			.where(eq(membershipTable.userId, CONFERENCE_REVIEWER));
+		await db
+			.insert(membershipTrackTable)
+			.values({ membershipId: membership.id, trackId: allowedTrack.id });
+
+		const [talkId] = await insertTalks(['Blocked track']);
+		await db
+			.update(submissionTable)
+			.set({ trackId: blockedTrack.id })
+			.where(eq(submissionTable.id, talkId));
+
+		const blocked = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10
+		});
+		expect(blocked.created).toBe(1);
+		const blockedAssignee = (await reviewAssignmentMatrix(conference.id, talkId))[0].reviewers.find(
+			(reviewer) => reviewer.status === 'assigned'
+		)?.userId;
+		expect(blockedAssignee).not.toBe(CONFERENCE_REVIEWER);
+
+		const ownTalk = await autoDistributeReviews(conference.id, [submissionId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10
+		});
+		expect(ownTalk.created).toBe(1);
+		const speakerMatrix = await reviewAssignmentMatrix(conference.id, submissionId);
+		expect(
+			speakerMatrix[0].reviewers.find((reviewer) => reviewer.userId === SPEAKER_REVIEWER)?.status
+		).not.toBe('assigned');
+
+		await db
+			.delete(membershipTrackTable)
+			.where(eq(membershipTrackTable.membershipId, membership.id));
+		await db.update(submissionTable).set({ trackId: null }).where(eq(submissionTable.id, talkId));
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+		await db.delete(trackTable).where(inArray(trackTable.id, [allowedTrack.id, blockedTrack.id]));
+	});
+
+	it('counts a dual-scoped reviewer once when filling N', async () => {
+		const [talkId] = await insertTalks(['Dual seat']);
+		await db.insert(membershipTable).values({
+			userId: CONFERENCE_REVIEWER,
+			role: 'reviewer',
+			scopeType: 'round',
+			scopeId: roundId
+		});
+
+		const result = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 2,
+			capPerReviewer: 10
+		});
+		// Without user-dedup this reports created=1, already=1 and leaves one seat empty.
+		expect(result.created).toBe(2);
+		expect(result.already).toBe(0);
+		const assigned = (await reviewAssignmentMatrix(conference.id, talkId))[0].reviewers
+			.filter((reviewer) => reviewer.status === 'assigned')
+			.map((reviewer) => reviewer.userId);
+		expect(assigned).toHaveLength(2);
+		expect(assigned).toContain(CONFERENCE_REVIEWER);
+
+		await db
+			.delete(membershipTable)
+			.where(
+				and(
+					eq(membershipTable.userId, CONFERENCE_REVIEWER),
+					eq(membershipTable.scopeType, 'round'),
+					eq(membershipTable.scopeId, roundId)
+				)
+			);
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+	});
+
+	it('auto-distributes only among the reviewers the organizer checked', async () => {
+		const talkIds = await insertTalks(['P1', 'P2']);
+		const result = await autoDistributeReviews(conference.id, talkIds, roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10,
+			reviewerUserIds: [ROUND_REVIEWER]
+		});
+		expect(result.created).toBe(2);
+		for (const talkId of talkIds) {
+			const assigned = (await reviewAssignmentMatrix(conference.id, talkId))[0].reviewers.find(
+				(reviewer) => reviewer.status === 'assigned'
+			)?.userId;
+			expect(assigned).toBe(ROUND_REVIEWER);
+		}
+		await db.delete(submissionTable).where(inArray(submissionTable.id, talkIds));
+	});
+
+	it('is a no-op when every selected talk already has N reviewers', async () => {
+		const [talkId] = await insertTalks(['Full']);
+		const first = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10
+		});
+		expect(first.created).toBe(1);
+		const again = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10
+		});
+		expect(again).toMatchObject({ created: 0, already: 1, skipped: 0 });
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
 	});
 });
 
