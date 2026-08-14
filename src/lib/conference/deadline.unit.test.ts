@@ -1,4 +1,4 @@
-import { formatInstant, SERVER_ZONE, zoneLabel } from '$lib/conference/deadline';
+import { callHint, formatInstant, SERVER_ZONE, zoneLabel } from '$lib/conference/deadline';
 import { describe, expect, it } from 'vitest';
 
 describe('formatInstant', () => {
@@ -56,5 +56,24 @@ describe('zoneLabel', () => {
 	it('matches the zone the stamp beside it prints', () => {
 		const at = new Date('2027-02-15T23:59:00.000Z');
 		expect(formatInstant(at, 'UTC').endsWith(zoneLabel('UTC', at))).toBe(true);
+	});
+});
+
+/**
+ * The line under the organizer's picker (#468).
+ *
+ * It exists because the field itself cannot say which clock it is on, and the
+ * empty case is the one that matters: with nothing typed there is no instant to
+ * read back, so the hint has to name the zone on its own or say nothing useful.
+ */
+describe('callHint', () => {
+	it('reads a stored deadline back in the zone it names', () => {
+		expect(callHint('2027-02-15T23:59:00.000Z', 'Europe/Berlin')).toBe(
+			'16 Feb 2027, 00:59 CET — speakers see this moment on their own clock'
+		);
+	});
+
+	it('names the zone alone while the field is still empty', () => {
+		expect(callHint(null, 'UTC')).toBe("Times are UTC, your browser's zone");
 	});
 });

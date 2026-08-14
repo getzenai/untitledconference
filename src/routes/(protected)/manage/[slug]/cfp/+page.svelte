@@ -14,7 +14,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { callWindow } from '$lib/conference/call-window';
-	import { formatInstant, zoneLabel } from '$lib/conference/deadline';
+	import { callHint } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
@@ -146,20 +146,9 @@
 		return callWindow(form.opensAt, form.closesAt, false, new Date());
 	});
 
-	/**
-	 * The zone the pickers above are typing in, and the stored instant read back
-	 * in it (#468).
-	 *
-	 * `DateTimePicker` posts wall time and `saveSettings` converts it with the
-	 * browser's offset, so the organizer has always been typing in their own
-	 * zone — the screen just never said which, and the speaker's page said a
-	 * different day. The line under each picker is that missing sentence.
-	 */
+	/** The sentence under each picker: which clock this field is on (#468). */
 	const zone = readerZone();
-	const deadlineHint = (value: Date | string | null) =>
-		value
-			? `${formatInstant(value, zone.current)} — speakers see this moment on their own clock`
-			: `Times are ${zoneLabel(zone.current)}, your browser's zone`;
+	const deadlineHint = (value: Date | string | null) => callHint(value, zone.current);
 
 	const YES_NO_OPTIONS = [
 		{ value: '', label: '—' },

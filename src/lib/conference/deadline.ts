@@ -63,6 +63,21 @@ export function formatInstant(
 }
 
 /**
+ * The line under a call-for-papers picker: which clock this field is on (#468).
+ *
+ * `DateTimePicker` posts wall time and the settings action converts it with the
+ * browser's offset, so the organizer has always been typing in their own zone —
+ * the screen just never said which, and the speaker's page said a different
+ * day. With a value stored, the hint reads it back as an instant; with the
+ * field still empty there is nothing to read back, so it names the zone alone.
+ */
+export function callHint(value: Date | string | null, timeZone: string): string {
+	return value
+		? `${formatInstant(value, timeZone)} — speakers see this moment on their own clock`
+		: `Times are ${zoneLabel(timeZone)}, your browser's zone`;
+}
+
+/**
  * How that zone is written on its own — "UTC", "CET", "GMT-5".
  *
  * For the sentence beside an input, where the organizer needs to know which
