@@ -293,27 +293,35 @@ describe('after a recusal (#463)', () => {
 describe('what can actually be filed today', () => {
 	const soon = roundWindow(new Date(Date.now() + 4 * 86_400_000), null);
 
+	/**
+	 * The counts line only — the "Mine" column header carries the same words in its
+	 * hint (#465), and a whole-page `toContain` would pass on that instead.
+	 */
+	const counts = (html: string) => {
+		const at = html.indexOf('data-testid="queue-counts"');
+		return at === -1 ? '' : html.slice(at, html.indexOf('</p>', at));
+	};
+
 	it('counts only the rows whose round is open', () => {
 		const waiting = { ...row(1, 'Open now', 0) };
 		const later = { ...row(2, 'Opens later', 0), window: soon };
-		const body = renderQueue([waiting, later]);
 
-		expect(body).toContain('1 you can file now');
+		expect(counts(renderQueue([waiting, later]))).toContain('1 you can file now');
 	});
 
 	it('says so plainly when the queue is full but nothing can be filed', () => {
 		const later = { ...row(1, 'Opens later', 0), window: soon };
-		const body = renderQueue([later]);
+		const line = counts(renderQueue([later]));
 
-		expect(body).toContain('nothing you can file today');
-		expect(body).not.toContain('you can file now');
+		expect(line).toContain('nothing you can file today');
+		expect(line).not.toContain('you can file now');
 	});
 
 	it('claims nothing when every assignment is answered', () => {
 		const done = { ...row(1, 'Filed', 0), ownReviewSubmitted: true };
-		const body = renderQueue([done]);
+		const line = counts(renderQueue([done]));
 
-		expect(body).not.toContain('you can file now');
-		expect(body).not.toContain('nothing you can file today');
+		expect(line).not.toContain('you can file now');
+		expect(line).not.toContain('nothing you can file today');
 	});
 });

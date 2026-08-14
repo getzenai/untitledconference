@@ -36,6 +36,23 @@
 			? `${task.conference.name} · ${task.submissionTitle}`
 			: task.conference.name;
 
+	/**
+	 * Whose page is this (#465)?
+	 *
+	 * A reviewer with 22 outstanding reviews opened `/home` and met a large dashed
+	 * card carrying the only styled call to action on the screen — *Create an
+	 * organization* — while "Reviews waiting" started below the fold. They will
+	 * never create an organization; it is not their job. So the section with work
+	 * in it goes first, and the events prompt only shouts at someone who could act
+	 * on it.
+	 *
+	 * Order, not visibility: an organizer-and-reviewer still sees both, and a
+	 * reviewer who is curious about starting an event still finds the link.
+	 */
+	const reviewsFirst = $derived(
+		Boolean(hub && hub.events.length === 0 && hub.openReviews.length > 0)
+	);
+
 	const hasAnyWork = $derived(
 		Boolean(
 			hub &&
@@ -100,112 +117,165 @@
 	{/if}
 
 	{#if hub}
-		<section aria-label="Your events">
-			<div class="flex flex-wrap items-baseline justify-between gap-2">
-				<h2 class="text-sm font-semibold tracking-tight">Your events</h2>
-				{#if hub.events.length > 0}
-					<a
-						href="/manage"
-						class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
-					>
-						All events
-					</a>
-				{/if}
-			</div>
-
-			{#if hub.events.length === 0}
-				{#if hub.canCreateEvent}
-					<EmptyState
-						class="mt-3"
-						goose={false}
-						title="No events yet"
-						description="Start a conference — a name and the dates are enough."
-						action={{ href: '/manage/new', label: 'Create an event' }}
-					/>
-				{:else if !data.onboarding}
-					<EmptyState
-						class="mt-3"
-						goose={false}
-						title="No events yet"
-						description="An organizer adds you to a conference, or you create an organization and start one."
-						action={{ href: '/settings/organization/new', label: 'Create an organization' }}
-					/>
-				{:else}
-					<p class="text-muted-foreground mt-3 text-sm">
-						Finish account setup above, then you can start or join an event.
-					</p>
-				{/if}
-			{:else}
-				<ul class="mt-3 space-y-2">
-					{#each hub.events as conference (conference.id)}
-						<li>
-							<a
-								href="/manage/{conference.slug}/dashboard"
-								class="border-border hover:bg-muted/50 focus-visible:ring-ring flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
-							>
-								<div>
-									<div class="font-medium">{conference.name}</div>
-									<div class="text-muted-foreground text-xs">
-										{dateRange(conference.startsOn, conference.endsOn)}{conference.venue
-											? ` · ${conference.venue}`
-											: ''}
-									</div>
-								</div>
-								<StatusBadge status={conference.status} />
-							</a>
-						</li>
-					{/each}
-				</ul>
-				{#if hub.canCreateEvent}
-					<p class="mt-3">
+		{#snippet eventsSection()}
+			<section aria-label="Your events">
+				<div class="flex flex-wrap items-baseline justify-between gap-2">
+					<h2 class="text-sm font-semibold tracking-tight">Your events</h2>
+					{#if hub.events.length > 0}
 						<a
-							href="/manage/new"
+							href="/manage"
 							class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
 						>
-							New event
+							All events
 						</a>
-					</p>
-				{/if}
-			{/if}
-		</section>
-
-		{#if hub.openReviews.length > 0 || hub.reviewConferences.length > 0}
-			<section aria-label="Reviews waiting">
-				<div class="flex flex-wrap items-baseline justify-between gap-2">
-					<h2 class="text-sm font-semibold tracking-tight">Reviews waiting</h2>
-					<a
-						data-testid="home-review-queue-link"
-						href={reviewQueueHref(
-							hub.reviewConferences.length === 1 ? hub.reviewConferences[0].slug : null
-						)}
-						class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
-					>
-						Review queue
-					</a>
+					{/if}
 				</div>
-				{#if hub.openReviews.length === 0}
-					<p class="text-muted-foreground mt-3 text-sm">
-						Nothing pending. You review for
-						{hub.reviewConferences.length === 1
-							? hub.reviewConferences[0].name
-							: `${hub.reviewConferences.length} events`}.
-					</p>
+
+				{#if hub.events.length === 0}
+					{#if hub.canCreateEvent}
+						<EmptyState
+							class="mt-3"
+							goose={false}
+							title="No events yet"
+							description="Start a conference — a name and the dates are enough."
+							action={{ href: '/manage/new', label: 'Create an event' }}
+						/>
+					{:else if !data.onboarding}
+						<!-- Someone whose work is reviewing gets the sentence, not the button
+						     (#465): "Create an organization" was the only styled action on
+						     their page and it is not a thing they will ever do. The link is
+						     still there for the one who is curious. -->
+						{#if reviewsFirst}
+							<p class="text-muted-foreground mt-3 text-sm" data-testid="home-no-events-reviewer">
+								You are not organizing an event. An organizer can add you to one — or you can
+								<a
+									href="/settings/organization/new"
+									class="hover:text-foreground underline underline-offset-4"
+									>start an organization</a
+								>
+								yourself.
+							</p>
+						{:else}
+							<EmptyState
+								class="mt-3"
+								goose={false}
+								title="No events yet"
+								description="An organizer adds you to a conference, or you create an organization and start one."
+								action={{ href: '/settings/organization/new', label: 'Create an organization' }}
+							/>
+						{/if}
+					{:else}
+						<p class="text-muted-foreground mt-3 text-sm">
+							Finish account setup above, then you can start or join an event.
+						</p>
+					{/if}
 				{:else}
 					<ul class="mt-3 space-y-2">
-						{#each hub.openReviews as item (item.submissionId)}
+						{#each hub.events as conference (conference.id)}
 							<li>
 								<a
-									href="/review/{item.conference.slug}/{item.submissionId}"
-									class="border-border hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+									href="/manage/{conference.slug}/dashboard"
+									class="border-border hover:bg-muted/50 focus-visible:ring-ring flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
 								>
-									<div class="font-medium">{item.title}</div>
-									<div class="text-muted-foreground text-xs">{item.conference.name}</div>
+									<div>
+										<div class="font-medium">{conference.name}</div>
+										<div class="text-muted-foreground text-xs">
+											{dateRange(conference.startsOn, conference.endsOn)}{conference.venue
+												? ` · ${conference.venue}`
+												: ''}
+										</div>
+									</div>
+									<StatusBadge status={conference.status} />
 								</a>
 							</li>
 						{/each}
 					</ul>
+					{#if hub.canCreateEvent}
+						<p class="mt-3">
+							<a
+								href="/manage/new"
+								class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
+							>
+								New event
+							</a>
+						</p>
+					{/if}
 				{/if}
 			</section>
+		{/snippet}
+
+		{#snippet reviewsSection()}
+			{#if hub.openReviews.length > 0 || hub.reviewConferences.length > 0}
+				<section aria-label="Reviews waiting">
+					<div class="flex flex-wrap items-baseline justify-between gap-2">
+						<div>
+							<h2 class="text-sm font-semibold tracking-tight">Reviews waiting</h2>
+							<!-- Six with no denominator reads as "six is all there is" (#465). The
+						     list is a sample and now says so, and names the number that decides
+						     whether tonight is worth opening the queue for. -->
+							{#if hub.openReviewCounts.total > 0}
+								<p
+									class="text-muted-foreground mt-0.5 text-xs tabular-nums"
+									data-testid="home-review-counts"
+								>
+									{#if hub.openReviewCounts.total > hub.openReviews.length}
+										{hub.openReviews.length} of {hub.openReviewCounts.total} assigned to you
+									{:else}
+										{hub.openReviewCounts.total} assigned to you
+									{/if}
+									{#if hub.openReviewCounts.filable > 0}
+										· <span class="text-foreground font-medium"
+											>{hub.openReviewCounts.filable} you can file now</span
+										>
+									{:else}
+										· nothing you can file today
+									{/if}
+								</p>
+							{/if}
+						</div>
+						<a
+							data-testid="home-review-queue-link"
+							href={reviewQueueHref(
+								hub.reviewConferences.length === 1 ? hub.reviewConferences[0].slug : null
+							)}
+							class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
+						>
+							Review queue
+						</a>
+					</div>
+					{#if hub.openReviews.length === 0}
+						<p class="text-muted-foreground mt-3 text-sm">
+							Nothing pending. You review for
+							{hub.reviewConferences.length === 1
+								? hub.reviewConferences[0].name
+								: `${hub.reviewConferences.length} events`}.
+						</p>
+					{:else}
+						<ul class="mt-3 space-y-2">
+							{#each hub.openReviews as item (item.submissionId)}
+								<li>
+									<a
+										href="/review/{item.conference.slug}/{item.submissionId}"
+										class="border-border hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+									>
+										<div class="font-medium">{item.title}</div>
+										<div class="text-muted-foreground text-xs">{item.conference.name}</div>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</section>
+			{/if}
+		{/snippet}
+
+		<!-- The one with work in it first (#465). -->
+		{#if reviewsFirst}
+			{@render reviewsSection()}
+			{@render eventsSection()}
+		{:else}
+			{@render eventsSection()}
+			{@render reviewsSection()}
 		{/if}
 
 		{#if hub.openSubmissions.length > 0 || hub.openTasks.length > 0}

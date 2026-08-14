@@ -14,6 +14,7 @@
  * is a second, worse navigation. Full lists live on `/manage`, `/portal`,
  * `/review`, and `/contacts`.
  */
+import { byRoundWindowPriority, roundWindow, type RoundWindow } from '$lib/conference/round-window';
 import { organizedConferences } from '$lib/server/conference/access';
 import { organizerOrganizationIds } from '$lib/server/conference/contacts';
 import { organizationForNewConference } from '$lib/server/conference/create-conference';
@@ -32,7 +33,7 @@ import {
 	reviewRoundTable,
 	reviewTable
 } from '$lib/server/db/conference/review-schema';
-import { and, desc, eq, ne } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, ne } from 'drizzle-orm';
 
 /** Cap on each list so the hub stays a glance, not a second workspace. */
 export const HOME_LIST_LIMIT = 6;
@@ -43,6 +44,10 @@ export type HomeOpenReview = {
 	submissionId: number;
 	title: string;
 	conference: { slug: string; name: string };
+	/** The round that still wants this reviewer's work — same rule as the queue (#464). */
+	window: RoundWindow;
+	/** How many reviews are already filed on it by anyone: 0 means nobody has looked. */
+	reviewsFiled: number;
 };
 
 export type HomeDashboard = {
@@ -54,6 +59,14 @@ export type HomeDashboard = {
 	openSubmissions: PortalSubmission[];
 	openTasks: PortalTask[];
 	openReviews: HomeOpenReview[];
+	/**
+	 * What the short list is a sample of (#465).
+	 *
+	 * The hub shows six. Six with no denominator reads as "six is all there is",
+	 * which is how a reviewer with 22 outstanding closed the tab. `filable` is the
+	 * subset whose round is open — the number they can act on tonight.
+	 */
+	openReviewCounts: { total: number; filable: number };
 	/** Review conferences the user sits on (for a "go review" jump when none pending). */
 	reviewConferences: Conference[];
 };
@@ -86,6 +99,10 @@ export async function loadHomeDashboard(userId: string): Promise<HomeDashboard> 
 		openSubmissions,
 		openTasks,
 		openReviews: openReviews.slice(0, HOME_LIST_LIMIT),
+		openReviewCounts: {
+			total: openReviews.length,
+			filable: openReviews.filter((r) => r.window.state === 'open').length
+		},
 		reviewConferences
 	};
 }
@@ -102,6 +119,8 @@ async function openReviewsFor(userId: string): Promise<HomeOpenReview[]> {
 			submissionId: reviewTable.submissionId,
 			title: submissionTable.title,
 			submissionStatus: submissionTable.status,
+			opensAt: reviewRoundTable.opensAt,
+			closesAt: reviewRoundTable.closesAt,
 			conferenceSlug: conferenceTable.slug,
 			conferenceName: conferenceTable.name
 		})
@@ -119,17 +138,63 @@ async function openReviewsFor(userId: string): Promise<HomeOpenReview[]> {
 		)
 		.orderBy(desc(reviewTable.id));
 
-	// One row per submission: a talk held in two rounds is one job on the hub.
-	const seen = new Set<number>();
-	const out: HomeOpenReview[] = [];
+	// One row per submission: a talk held in two rounds is one job on the hub. Which
+	// of those rounds speaks is the queue's rule (#464) — every row here is already
+	// outstanding, so among them the window order decides.
+	const bySubmission = new Map<number, (typeof rows)[number]>();
 	for (const row of rows) {
-		if (seen.has(row.submissionId)) continue;
-		seen.add(row.submissionId);
-		out.push({
+		const held = bySubmission.get(row.submissionId);
+		if (
+			!held ||
+			byRoundWindowPriority(
+				roundWindow(row.opensAt, row.closesAt),
+				roundWindow(held.opensAt, held.closesAt)
+			) < 0
+		) {
+			bySubmission.set(row.submissionId, row);
+		}
+	}
+
+	const filed = await filedReviewCounts([...bySubmission.keys()]);
+
+	return [...bySubmission.values()]
+		.map((row) => ({
 			submissionId: row.submissionId,
 			title: row.title,
-			conference: { slug: row.conferenceSlug, name: row.conferenceName }
-		});
-	}
-	return out;
+			conference: { slug: row.conferenceSlug, name: row.conferenceName },
+			window: roundWindow(row.opensAt, row.closesAt),
+			reviewsFiled: filed.get(row.submissionId) ?? 0
+		}))
+		.sort(byUrgency);
+}
+
+/**
+ * Which six of twenty-two the hub shows (#465).
+ *
+ * It used to be the six highest review ids — an accident of insertion order — so
+ * the proposals nobody had looked at yet were missing and a round that opens next
+ * week could take a slot. Urgency here means: what can be filed at all, then what
+ * nobody else has covered, then the oldest assignment. A short list is a
+ * recommendation whether or not it admits to being one.
+ */
+function byUrgency(a: HomeOpenReview, b: HomeOpenReview): number {
+	const priority = byRoundWindowPriority(a.window, b.window);
+	if (priority !== 0) return priority;
+	if (a.reviewsFiled !== b.reviewsFiled) return a.reviewsFiled - b.reviewsFiled;
+	return a.submissionId - b.submissionId;
+}
+
+/** Reviews already filed on each submission, by anyone — the coverage the row shows. */
+async function filedReviewCounts(submissionIds: number[]): Promise<Map<number, number>> {
+	if (submissionIds.length === 0) return new Map();
+
+	const rows = await db
+		.select({ submissionId: reviewTable.submissionId, filed: count(reviewTable.id) })
+		.from(reviewTable)
+		.where(
+			and(inArray(reviewTable.submissionId, submissionIds), eq(reviewTable.status, 'submitted'))
+		)
+		.groupBy(reviewTable.submissionId);
+
+	return new Map(rows.map((row) => [row.submissionId, Number(row.filed)]));
 }

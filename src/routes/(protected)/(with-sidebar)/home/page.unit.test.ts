@@ -3,6 +3,7 @@
  * want to go?" plus a second Logout) and three static role cards. These pins
  * hold the product hub: events, open work, sourcing jump — and refuse leftovers.
  */
+import { roundWindow } from '$lib/conference/round-window';
 import type { HomeDashboard } from '$lib/server/conference/home';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -21,6 +22,7 @@ const emptyHub: HomeDashboard = {
 	openSubmissions: [],
 	openTasks: [],
 	openReviews: [],
+	openReviewCounts: { total: 0, filable: 0 },
 	reviewConferences: []
 };
 
@@ -209,5 +211,71 @@ describe('home hub', () => {
 		expect(html).toContain('/onboarding/invitations');
 		expect(html).toContain('Review invitations');
 		expect(html).toContain('Your events');
+	});
+});
+
+/**
+ * #465: a reviewer with 22 outstanding reviews met a dashed card offering to
+ * create an organization — the only styled action on the page — while the work
+ * that is actually theirs started below the fold and showed six of twenty-two
+ * with no denominator.
+ */
+describe('a page that belongs to the reviewer', () => {
+	const openReview = (id: number, title: string) =>
+		({
+			submissionId: id,
+			title,
+			conference: { slug: 'devflow', name: 'DevFlow Summit' },
+			window: roundWindow(null, null),
+			reviewsFiled: 0
+		}) as never;
+
+	const reviewerHub = {
+		...emptyHub,
+		canCreateEvent: false,
+		openReviews: [openReview(1, 'First talk'), openReview(2, 'Second talk')],
+		openReviewCounts: { total: 22, filable: 9 }
+	};
+
+	it('puts the reviews above the events prompt when there are no events', () => {
+		const html = body(null, reviewerHub);
+
+		expect(html.indexOf('Reviews waiting')).toBeLessThan(html.indexOf('Your events'));
+	});
+
+	it('offers the organization as a sentence, not as the loudest thing on screen', () => {
+		const html = body(null, reviewerHub);
+
+		expect(html).toContain('data-testid="home-no-events-reviewer"');
+		// The link survives; the call to action does not.
+		expect(html).toContain('href="/settings/organization/new"');
+		expect(html).not.toContain('Create an organization</a>');
+	});
+
+	it('says what the short list is a sample of, and what can be filed today', () => {
+		const html = body(null, reviewerHub);
+
+		expect(html).toContain('2 of 22 assigned to you');
+		expect(html).toContain('9 you can file now');
+	});
+
+	it('does not claim a sample when the list is everything', () => {
+		const html = body(null, {
+			...reviewerHub,
+			openReviewCounts: { total: 2, filable: 0 }
+		});
+
+		expect(html).toContain('2 assigned to you');
+		expect(html).not.toContain('of 2 assigned');
+		expect(html).toContain('nothing you can file today');
+	});
+
+	it('leaves the organizer page in the order an organizer expects', () => {
+		const html = body(null, { ...emptyHub, canCreateEvent: true });
+
+		expect(html.indexOf('Your events')).toBeLessThan(
+			html.indexOf('Reviews waiting') === -1 ? Infinity : html.indexOf('Reviews waiting')
+		);
+		expect(html).not.toContain('data-testid="home-no-events-reviewer"');
 	});
 });

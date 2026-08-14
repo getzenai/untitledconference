@@ -161,14 +161,87 @@ describe('loadHomeDashboard', () => {
 
 		expect(hub.events).toEqual([]);
 		expect(hub.canSourcing).toBe(false);
-		expect(hub.openReviews).toEqual([
+		// `toMatchObject`, not `toEqual`: the row carries the round's window and the
+		// coverage count as well (#465), and this test is about who gets listed.
+		expect(hub.openReviews).toMatchObject([
 			{
 				submissionId,
 				title: 'Open talk for review',
 				conference: { slug: `home-conf-${suffix}`, name: 'Home Conf' }
 			}
 		]);
+		expect(hub.openReviewCounts).toEqual({ total: 1, filable: 1 });
 		expect(hub.reviewConferences.map((c) => c.id)).toContain(conferenceId);
+	});
+
+	/**
+	 * #465: the hub showed six of twenty-two by review id — insertion order — so
+	 * the talks nobody had looked at were missing and a round that opens next week
+	 * could take one of the six slots. A short list is a recommendation whether or
+	 * not it admits to being one.
+	 */
+	it('ranks what can be filed, and what nobody has covered, above the rest', async () => {
+		const later = await db
+			.insert(reviewRoundTable)
+			.values({
+				evaluationPlanId: planId,
+				name: 'Round 2',
+				position: 1,
+				opensAt: new Date(Date.now() + 7 * 86_400_000)
+			})
+			.returning();
+		const [waiting, covered] = await db
+			.insert(submissionTable)
+			.values([
+				{ conferenceId, title: 'Opens next week', status: 'in_review', submittedAt: new Date() },
+				{ conferenceId, title: 'Already covered', status: 'in_review', submittedAt: new Date() }
+			])
+			.returning();
+
+		const extra = await db
+			.insert(reviewTable)
+			.values([
+				// Assigned to me in a round that has not opened: real work, not tonight's.
+				{
+					reviewRoundId: later[0].id,
+					submissionId: waiting.id,
+					reviewerUserId: reviewerId,
+					status: 'assigned'
+				},
+				// Assigned to me in the open round, but somebody else has already filed.
+				{
+					reviewRoundId: roundId,
+					submissionId: covered.id,
+					reviewerUserId: reviewerId,
+					status: 'assigned'
+				},
+				{
+					reviewRoundId: roundId,
+					submissionId: covered.id,
+					reviewerUserId: ownerId,
+					status: 'submitted'
+				}
+			])
+			.returning();
+
+		try {
+			const hub = await loadHomeDashboard(reviewerId);
+
+			expect(hub.openReviews.map((r) => r.title)).toEqual([
+				'Open talk for review',
+				'Already covered',
+				'Opens next week'
+			]);
+			// Three jobs, two of them tonight's.
+			expect(hub.openReviewCounts).toEqual({ total: 3, filable: 2 });
+			expect(hub.openReviews[0].reviewsFiled).toBe(0);
+			expect(hub.openReviews[2].window.state).toBe('not_yet_open');
+		} finally {
+			for (const row of extra) await db.delete(reviewTable).where(eq(reviewTable.id, row.id));
+			await db.delete(submissionTable).where(eq(submissionTable.id, waiting.id));
+			await db.delete(submissionTable).where(eq(submissionTable.id, covered.id));
+			await db.delete(reviewRoundTable).where(eq(reviewRoundTable.id, later[0].id));
+		}
 	});
 
 	it('returns a real empty state for a stranger with no seats', async () => {

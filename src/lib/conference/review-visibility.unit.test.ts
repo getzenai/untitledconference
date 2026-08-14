@@ -30,6 +30,37 @@ describe('sortQueue', () => {
 		row({ title: 'Delta', reviewsSubmitted: 2, score: 4.9 })
 	];
 
+	/**
+	 * #465: the queue opened on `coverage` — "what still needs somebody", which is
+	 * the chair's question. A volunteer with a free evening asks what they can file
+	 * tonight, and the answer has to come first.
+	 */
+	it('puts what can be filed tonight first, then what is waiting, then what is done', () => {
+		const mine = [
+			row({ title: 'Filed already', ownReviewSubmitted: true }),
+			row({ title: 'Opens next week', window: { state: 'not_yet_open' } }),
+			row({ title: 'Covered but open', reviewsSubmitted: 3, window: { state: 'open' } }),
+			row({ title: 'Nobody has looked', reviewsSubmitted: 0, window: { state: 'open' } })
+		];
+
+		expect(sortQueue(mine, 'mine').map((r) => r.title)).toEqual([
+			'Nobody has looked',
+			'Covered but open',
+			'Opens next week',
+			'Filed already'
+		]);
+	});
+
+	it('treats a row with no window as workable rather than hiding it at the bottom', () => {
+		// A conference that never set round dates is the common case, not a shut one.
+		const mine = [
+			row({ title: 'Waiting', window: { state: 'not_yet_open' } }),
+			row({ title: 'No dates set' })
+		];
+
+		expect(sortQueue(mine, 'mine').map((r) => r.title)).toEqual(['No dates set', 'Waiting']);
+	});
+
 	it('puts the least-reviewed first, then alphabetically', () => {
 		expect(sortQueue(rows, 'coverage').map((r) => r.title)).toEqual([
 			'Alpha',
