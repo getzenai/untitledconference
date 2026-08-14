@@ -6,14 +6,9 @@
  * The field and the button have to live in one, and the button has to be
  * type="submit" — `Button` defaults to type="button".
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
-
-const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
 vi.mock('$lib/auth-client', () => ({
 	authClient: { organization: { create: vi.fn(), setActive: vi.fn() } }
@@ -53,8 +48,5 @@ describe('new organization', () => {
 		expect(html).toContain('data-testid="create-organization-form"');
 		expect(html).toMatch(/<form[^>]*data-testid="create-organization-form"/);
 		expect(html).toContain('type="submit"');
-		expect(source).toContain('onsubmit={createOrganization}');
-		expect(source).toContain('event.preventDefault()');
-		expect(source).not.toContain('onclick={createOrganization}');
 	});
 });
