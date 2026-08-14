@@ -174,7 +174,16 @@
 		</ul>
 	</article>
 {:else}
-	<div class="mb-6 flex items-center justify-between gap-4">
+	<!-- On a phone the day labels are wider than the screen, so the list wraps to one
+	     line per day while the two arrows stay vertically centred beside the block —
+	     which puts them level with the *middle* day, not the selected one (#392). The
+	     arrows then read as controls for a day they do not act on.
+
+	     Below `md` the switcher therefore shows only the selected day: ← day →, one
+	     line, nothing to wrap and nothing to point at wrongly. The price is that a
+	     phone visitor steps day by day instead of jumping; the tabs come back at the
+	     first width where three of them measurably fit on one line. -->
+	<div class="mb-6 flex items-center justify-between gap-4" data-testid="agenda-day-switcher">
 		<Button
 			variant="outline"
 			size="sm"
@@ -189,10 +198,11 @@
 					type="button"
 					role="tab"
 					aria-selected={i === dayIndex}
+					data-testid={i === dayIndex ? 'agenda-day-selected' : 'agenda-day'}
 					onclick={() => goToDay(i)}
 					class="rounded-md px-3 py-1.5 text-sm transition-colors {i === dayIndex
 						? 'bg-primary text-primary-foreground font-medium'
-						: 'text-muted-foreground hover:bg-muted'}"
+						: 'text-muted-foreground hover:bg-muted hidden md:block'}"
 				>
 					{d.label}
 				</button>
