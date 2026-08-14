@@ -196,7 +196,14 @@ describe('speaker task detail', () => {
 	it('does not call a completed task overdue', () => {
 		const body = draw(task({ status: 'done', dueOn: new Date('2020-01-01T12:00:00Z') }));
 
-		expect(body).toContain('Due Wednesday, 1 January 2020');
+		expect(body).toContain('Due 1 Jan 2020, 12:00 UTC');
 		expect(body).not.toContain('— overdue');
+	});
+
+	it('names the deadline as an instant and links the conference (#498)', () => {
+		const body = draw(task({ dueOn: new Date('2027-05-02T12:00:00Z') }));
+
+		expect(body).toContain('Due 2 May 2027, 12:00 UTC');
+		expect(body).toContain('href="/c/devflow-conf-2027"');
 	});
 });

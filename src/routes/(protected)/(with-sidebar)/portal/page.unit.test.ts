@@ -82,8 +82,18 @@ describe('speaker portal task list', () => {
 		expect(body).toContain('Done —');
 		expect(body).toContain('1 of 2 done');
 		// A finished task has no deadline left to meet; the open one keeps its own.
-		expect(body).not.toContain('Mon, 4 Jan');
-		expect(body).toContain('Thu, 11 Feb');
+		expect(body).not.toContain('4 Jan 2027');
+		// The instant, with a zone — a day-only stamp is how a speaker in another
+		// country misses the slot (#498).
+		expect(body).toContain('11 Feb 2027, 00:00 UTC');
+	});
+
+	it('names the deadline as an instant and links the conference (#498)', () => {
+		const body = draw([task(20, { dueOn: '2027-05-02T12:00:00.000Z' })]);
+
+		expect(body).toContain('2 May 2027, 12:00 UTC');
+		expect(body).toContain('href="/c/devflow-conf-2027"');
+		expect(body).toContain('DevFlow Conf 2027');
 	});
 
 	/**

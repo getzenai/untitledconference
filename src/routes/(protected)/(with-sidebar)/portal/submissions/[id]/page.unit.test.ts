@@ -29,9 +29,9 @@ const submission = (over: Partial<Record<string, unknown>> = {}) => ({
 	...over
 });
 
-const draw = (over: Partial<Record<string, unknown>> = {}) =>
+const draw = (over: Partial<Record<string, unknown>> = {}, closesAt: Date | null = null) =>
 	render(Page, {
-		props: { data: { submission: submission(over) } } as never
+		props: { data: { submission: submission(over), closesAt } } as never
 	}).body;
 
 describe('speaker submission detail', () => {
@@ -77,6 +77,16 @@ describe('speaker submission detail', () => {
 
 		expect(body).toContain(`/portal/submissions/${submission().id}/edit`);
 		expect(body).not.toContain('Editing closed');
+	});
+
+	it('names the close instant and the receipt zone (#498)', () => {
+		const open = draw({ status: 'in_review' }, new Date('2027-02-15T23:59:00.000Z'));
+
+		expect(open).toContain('until 15 Feb 2027, 23:59 UTC');
+		expect(open).toContain('Received 10 Mar 2027, 09:00 UTC');
+
+		const draft = draw({ status: 'draft' }, new Date('2027-02-15T23:59:00.000Z'));
+		expect(draft).toContain('any time before 15 Feb 2027, 23:59 UTC');
 	});
 
 	it('names a rejection so the speaker does not have to infer it from a badge', () => {

@@ -21,10 +21,13 @@
 	} from '$lib/components/ui/alert-dialog';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
 	import { withdrawWarning } from '$lib/conference/withdraw-warning';
 
 	let { data, form } = $props();
+	const zone = readerZone();
 
 	const task = $derived(data.task);
 	const files = $derived(data.files);
@@ -66,19 +69,10 @@
 			minute: '2-digit'
 		});
 
-	// Same rule as the portal list: the year shows up only when it is not this one,
-	// so a deadline in the next CFP year cannot be misread as one this month.
-	const dueLabel = $derived.by(() => {
-		if (!task.dueOn) return null;
-		const date = new Date(task.dueOn);
-		const options: Intl.DateTimeFormatOptions = {
-			weekday: 'long',
-			day: 'numeric',
-			month: 'long'
-		};
-		if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
-		return date.toLocaleDateString('en-GB', options);
-	});
+	// Same instant, same helper, same zone as the portal list (#498). The day-only
+	// stamp dropped the time and the zone, which is how "Due Sunday 2 May" could
+	// already be over in Lisbon while it still looked open in Auckland.
+	const dueLabel = $derived(task.dueOn ? formatInstant(task.dueOn, zone.current) : null);
 	const overdue = $derived(
 		task.status !== 'done' && Boolean(task.dueOn && new Date(task.dueOn) < new Date())
 	);
@@ -135,8 +129,8 @@
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{task.title}</h1>
 			<p class="text-muted-foreground mt-1 text-sm">
-				{task.conferenceName}{#if task.submissionTitle}<span class="px-1.5">·</span
-					>{task.submissionTitle}{/if}
+				<a class="hover:underline" href="/c/{task.conferenceSlug}">{task.conferenceName}</a
+				>{#if task.submissionTitle}<span class="px-1.5">·</span>{task.submissionTitle}{/if}
 			</p>
 		</div>
 		<!-- A withdrawal closes this task, so the status used to read "Done" on the
