@@ -38,6 +38,7 @@
 		TooltipTrigger
 	} from '$lib/components/ui/tooltip';
 	import { blockRows, gridSlots, laneLayout, type GridFrame } from '$lib/conference/agenda-grid';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { formatDayLong } from '$lib/conference/public-view';
 	import { DragController } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
@@ -53,9 +54,9 @@
 
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;
 			}
@@ -225,9 +226,9 @@
 	/** Close on a successful write, so the grid behind the dialog is the answer. */
 	const submittingSlot = () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
 				closeSlot();
 			} finally {
 				busy = false;

@@ -9,6 +9,7 @@
 	 * never posts.
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
 	import { optionsToText, type CriterionKind } from '$lib/conference/scorecard-criterion';
@@ -26,11 +27,11 @@
 	/** Editing state for an existing criterion's kind (drives conditional fields). */
 	let editKindById = $state<Record<number, CriterionKind>>({});
 
-	const submitting = () => {
+	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
@@ -42,13 +43,15 @@
 	 * typed in, so it becomes an ISO instant here. Same conversion the call for
 	 * papers does on its own window.
 	 */
-	const saveRound = ({ formData }: { formData: FormData }) => {
-		for (const name of ['opensAt', 'closesAt']) {
-			const raw = formData.get(name);
-			if (typeof raw === 'string' && raw) formData.set(name, new Date(raw).toISOString());
-		}
-		return submitting();
-	};
+	const saveRound =
+		(kind: FormResetKind) =>
+		({ formData }: { formData: FormData }) => {
+			for (const name of ['opensAt', 'closesAt']) {
+				const raw = formData.get(name);
+				if (typeof raw === 'string' && raw) formData.set(name, new Date(raw).toISOString());
+			}
+			return submitting(kind)();
+		};
 
 	/** What the picker reads back: local wall time, no zone suffix. */
 	const localInput = (value: Date | string | null) => {
@@ -129,7 +132,7 @@
 	<section class="border-border bg-card max-w-2xl rounded-lg border p-4" data-testid="rounds-add">
 		<h2 class="text-sm font-semibold">Add a round</h2>
 
-		<form method="POST" action="?/add" use:enhance={saveRound} class="mt-3 space-y-3">
+		<form method="POST" action="?/add" use:enhance={saveRound('add')} class="mt-3 space-y-3">
 			<label class="block">
 				<span class="text-sm font-medium">Name</span>
 				<input
@@ -202,7 +205,7 @@
 							<form
 								method="POST"
 								action="?/rename"
-								use:enhance={saveRound}
+								use:enhance={saveRound('edit')}
 								class="flex flex-1 flex-col gap-2"
 							>
 								<input type="hidden" name="id" value={round.id} />
@@ -246,7 +249,7 @@
 							</form>
 
 							{#if round.assignments === 0}
-								<form method="POST" action="?/remove" use:enhance={submitting}>
+								<form method="POST" action="?/remove" use:enhance={submitting('edit')}>
 									<input type="hidden" name="id" value={round.id} />
 									<Button type="submit" variant="ghost" disabled={busy}>Remove</Button>
 								</form>
@@ -299,7 +302,7 @@
 											<form
 												method="POST"
 												action="?/updateCriterion"
-												use:enhance={submitting}
+												use:enhance={submitting('edit')}
 												class="space-y-2"
 											>
 												<input type="hidden" name="id" value={criterion.id} />
@@ -399,7 +402,11 @@
 											</form>
 
 											<div class="mt-2 flex flex-wrap gap-1">
-												<form method="POST" action="?/moveCriterion" use:enhance={submitting}>
+												<form
+													method="POST"
+													action="?/moveCriterion"
+													use:enhance={submitting('edit')}
+												>
 													<input type="hidden" name="id" value={criterion.id} />
 													<input type="hidden" name="direction" value="up" />
 													<Button
@@ -412,7 +419,11 @@
 														Up
 													</Button>
 												</form>
-												<form method="POST" action="?/moveCriterion" use:enhance={submitting}>
+												<form
+													method="POST"
+													action="?/moveCriterion"
+													use:enhance={submitting('edit')}
+												>
 													<input type="hidden" name="id" value={criterion.id} />
 													<input type="hidden" name="direction" value="down" />
 													<Button
@@ -425,7 +436,11 @@
 														Down
 													</Button>
 												</form>
-												<form method="POST" action="?/removeCriterion" use:enhance={submitting}>
+												<form
+													method="POST"
+													action="?/removeCriterion"
+													use:enhance={submitting('edit')}
+												>
 													<input type="hidden" name="id" value={criterion.id} />
 													<Button
 														type="submit"
@@ -453,7 +468,7 @@
 							<form
 								method="POST"
 								action="?/addCriterion"
-								use:enhance={submitting}
+								use:enhance={submitting('add')}
 								class="border-border mt-3 space-y-2 rounded-md border border-dashed p-3"
 								data-testid="add-criterion"
 							>

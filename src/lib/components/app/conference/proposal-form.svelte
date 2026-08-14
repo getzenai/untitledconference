@@ -12,6 +12,7 @@
 	 * organizer's preview and the submit handler use.
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -165,9 +166,9 @@
 		busy = true;
 		// `finally`, not the success path: a network failure would otherwise leave
 		// every button disabled with no way back except a reload.
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;
 			}

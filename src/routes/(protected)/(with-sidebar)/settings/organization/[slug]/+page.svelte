@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -85,7 +86,7 @@
 					use:enhance={() => {
 						isRenaming = true;
 						return async ({ update }) => {
-							await update({ reset: false });
+							await update(formUpdateOptions('edit'));
 							await invalidateAll();
 							isRenaming = false;
 						};
@@ -227,7 +228,7 @@
 							use:enhance={() => {
 								isLeavingOrg = true;
 								return async ({ update }) => {
-									await update();
+									await update(formUpdateOptions('edit'));
 									isLeavingOrg = false;
 									showLeaveDialog = false;
 									selectedNewOwner = '';
@@ -275,7 +276,7 @@
 					use:enhance={() => {
 						isInviting = true;
 						return async ({ update }) => {
-							await update();
+							await update(formUpdateOptions('add'));
 							isInviting = false;
 							await invalidateAll();
 						};
@@ -362,7 +363,7 @@
 										action="?/updateMemberRole"
 										use:enhance={() => {
 											return async ({ update }) => {
-												await update();
+												await update(formUpdateOptions('edit'));
 												await invalidateAll();
 											};
 										}}
@@ -413,7 +414,7 @@
 													return async () => {};
 												}
 												return async ({ update }) => {
-													await update();
+													await update(formUpdateOptions('edit'));
 													await invalidateAll();
 												};
 											}}
@@ -492,7 +493,7 @@
 											action="?/cancelInvitation"
 											use:enhance={() => {
 												return async ({ update }) => {
-													await update();
+													await update(formUpdateOptions('edit'));
 													await invalidateAll();
 												};
 											}}

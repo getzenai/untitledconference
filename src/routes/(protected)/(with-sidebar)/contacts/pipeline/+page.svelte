@@ -3,6 +3,7 @@
 	 * Speaker sourcing kanban (CRM-07) with card detail notes + stage history (CRM-08).
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -59,9 +60,20 @@
 	let busy = $state(false);
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
+			} finally {
+				busy = false;
+			}
+		};
+	};
+
+	const submittingAdd = () => {
+		busy = true;
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+			try {
+				await update(formUpdateOptions('add'));
 			} finally {
 				busy = false;
 			}
@@ -296,7 +308,7 @@
 
 				<div>
 					<h3 class="text-xs font-semibold tracking-wide uppercase">Notes</h3>
-					<form method="POST" action="?/note" use:enhance={submitting} class="mt-2 space-y-2">
+					<form method="POST" action="?/note" use:enhance={submittingAdd} class="mt-2 space-y-2">
 						<input type="hidden" name="cardId" value={selected.id} />
 						<textarea
 							name="notes"

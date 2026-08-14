@@ -53,6 +53,7 @@
 	} from '$lib/components/ui/tooltip';
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import type { PageData, ActionData } from './$types';
 	import { INVITATION_EXPIRY_SECONDS } from '$lib/constants';
 	import { generateRandomPassword } from '$lib/utils/password';
@@ -547,12 +548,8 @@
 									use:enhance={() => {
 										isCreatingUser = true;
 										createUserError = null;
-										// Store the password value before form submission
-										const submittedPassword = createPassword;
 										return async ({ update }) => {
-											await update();
-											// Restore the password after update
-											createPassword = submittedPassword;
+											await update(formUpdateOptions('edit'));
 											isCreatingUser = false;
 										};
 									}}
@@ -697,7 +694,7 @@
 									use:enhance={() => {
 										isCreatingInvitation = true;
 										return async ({ update }) => {
-											await update();
+											await update(formUpdateOptions('edit'));
 										};
 									}}
 								>
@@ -1010,7 +1007,7 @@
 													use:enhance={() => {
 														regeneratingInvitationId = invitation.id;
 														return async ({ update }) => {
-															await update();
+															await update(formUpdateOptions('edit'));
 														};
 													}}
 													class="inline-flex"

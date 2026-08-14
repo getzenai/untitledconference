@@ -12,6 +12,7 @@
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -155,7 +156,7 @@
 				// `finally`, so a dropped connection cannot leave the button dead.
 				return async ({ update }) => {
 					try {
-						await update();
+						await update(formUpdateOptions('edit'));
 					} finally {
 						sending = false;
 					}

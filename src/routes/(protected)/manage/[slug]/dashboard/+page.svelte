@@ -22,6 +22,7 @@
 	import TrendingDownIcon from '@lucide/svelte/icons/trending-down';
 	import TrendingUpIcon from '@lucide/svelte/icons/trending-up';
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import type { Component, Snippet } from 'svelte';
 	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -365,7 +366,7 @@
 					// `finally`, so a dropped connection cannot leave the button dead.
 					return async ({ update }) => {
 						try {
-							await update();
+							await update(formUpdateOptions('edit'));
 						} finally {
 							busy = false;
 						}

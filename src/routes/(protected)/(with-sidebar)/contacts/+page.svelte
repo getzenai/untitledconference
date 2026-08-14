@@ -4,6 +4,7 @@
 	 * plus overview KPIs and top-companies analytics (CRM-12).
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
@@ -21,11 +22,11 @@
 	let addOpen = $state(false);
 	let importOpen = $state(false);
 
-	const submitting = () => {
+	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
@@ -95,7 +96,7 @@
 						<form
 							method="POST"
 							action="?/add"
-							use:enhance={submitting}
+							use:enhance={submitting('add')}
 							class="grid gap-3 sm:grid-cols-2"
 						>
 							<input type="hidden" name="organizationId" value={data.organizationId ?? ''} />
@@ -176,7 +177,7 @@
 						<SpeakerImport
 							embedded
 							{busy}
-							enhanceForm={submitting}
+							enhanceForm={submitting('add')}
 							form={form?.scope === 'import' ? form : null}
 						/>
 					</Dialog.Content>
@@ -396,7 +397,7 @@
 				<form
 					method="POST"
 					action="?/saveSegment"
-					use:enhance={submitting}
+					use:enhance={submitting('add')}
 					class="border-border bg-card flex flex-wrap items-end gap-2 rounded-lg border p-3"
 					data-testid="contacts-save-segment"
 				>
@@ -441,7 +442,7 @@
 							>
 								{segment.name}
 							</a>
-							<form method="POST" action="?/deleteSegment" use:enhance={submitting}>
+							<form method="POST" action="?/deleteSegment" use:enhance={submitting('edit')}>
 								<input type="hidden" name="segmentId" value={segment.id} />
 								<button
 									type="submit"
