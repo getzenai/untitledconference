@@ -571,3 +571,70 @@ describe('mySubmissions when another account already holds a profile with this a
 		expect(profiles).toEqual([{ userId: impostor.id }]);
 	});
 });
+
+/**
+ * The deadline the proposal page quotes at a speaker (#498).
+ *
+ * "You can still change it until the call closes" named no moment; the only
+ * screen that did was the editor, behind the button that sentence describes. The
+ * moment now comes off the submission, which means it has to be the *published*
+ * form's — a draft form's dates are the organizer's working copy, and quoting
+ * those at a speaker would be worse than saying nothing.
+ */
+describe('mySubmission and the call deadline', () => {
+	const tag = 'closes';
+	let orgId = '';
+	let speaker: { id: string; email: string };
+	let submissionId = 0;
+
+	const published = new Date('2027-02-15T22:59:00.000Z');
+	const draftForm = new Date('2027-09-09T09:09:00.000Z');
+
+	beforeAll(async () => {
+		const org = await makeOrg(tag);
+		orgId = org.organizationId;
+		speaker = await makeUser(tag);
+
+		// `makeOrg` already published one form; this is the organizer's next one,
+		// still a draft, with a date that must not reach the speaker.
+		await db
+			.update(cfpFormTable)
+			.set({ closesAt: published })
+			.where(eq(cfpFormTable.conferenceId, org.conference.id));
+		await db.insert(cfpFormTable).values({
+			conferenceId: org.conference.id,
+			title: 'Next year',
+			status: 'draft',
+			closesAt: draftForm
+		});
+
+		const [profile] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: orgId,
+				userId: speaker.id,
+				name: 'Priya Raman',
+				sortName: 'Raman, Priya',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		submissionId = await proposalFor(
+			org.conference.id,
+			profile.id,
+			'Build systems without the wait',
+			new Date('2027-01-04T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, orgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+	});
+
+	it('carries the published call’s closing moment, not the draft form’s', async () => {
+		const submission = await mySubmission(speaker.id, submissionId);
+
+		expect(submission?.callClosesAt).toEqual(published);
+	});
+});

@@ -10,9 +10,13 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 
 	let { data } = $props();
+
+	const zone = readerZone();
 
 	const open = $derived(data.tasks.filter((t) => t.status === 'open'));
 	const settled = $derived(data.tasks.filter((t) => t.status !== 'open'));
@@ -21,6 +25,7 @@
 		key: string;
 		title: string;
 		conferenceName: string;
+		conferenceSlug: string;
 		tasks: Task[];
 		doneCount: number;
 	};
@@ -54,6 +59,7 @@
 				key,
 				title: task.submissionTitle ?? 'Event-wide tasks',
 				conferenceName: task.conference.name,
+				conferenceSlug: task.conference.slug,
 				tasks: [task],
 				doneCount: 0
 			});
@@ -101,24 +107,22 @@
 	};
 
 	/**
-	 * The year appears only when it is not this one.
+	 * A deadline is an instant, and it says which clock it is on (#498).
 	 *
-	 * The list is sorted by deadline and spans a CFP, so without it the run reads
-	 * "Tue, 25 Aug" and then "Wed, 14 Apr" — which looks like the sort is broken
-	 * rather than like the next year has begun. Printing the year on every row
-	 * would pay for that with noise on the rows that are actually due soon.
+	 * `due_on` is `timestamptz` — one moment of the world — and this list used to
+	 * print its calendar day in whatever zone happened to be rendering. On the
+	 * server that is UTC and in the browser it is the speaker's own, so the same
+	 * row could read "Sun, 2 May" before hydration and "Mon, 3 May" after it, with
+	 * nothing on screen to say either was a zone at all. A speaker abroad who hands
+	 * in on the last evening loses a talk to that difference.
+	 *
+	 * `formatInstant` is the app's one shape for this, from #468 on the organizer
+	 * side. It carries the year, which the old heuristic added only for other
+	 * years — the reason for that heuristic was noise, and the time and zone this
+	 * row now has to carry make the year the cheapest part of the line.
 	 */
-	const dueLabel = (dueOn: Date | string | null) => {
-		if (!dueOn) return 'No deadline';
-		const date = new Date(dueOn);
-		const options: Intl.DateTimeFormatOptions = {
-			weekday: 'short',
-			day: 'numeric',
-			month: 'short'
-		};
-		if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
-		return date.toLocaleDateString('en-GB', options);
-	};
+	const dueLabel = (dueOn: Date | string | null) =>
+		dueOn ? formatInstant(dueOn, zone.current) : 'No deadline';
 
 	const overdue = (dueOn: Date | string | null) => Boolean(dueOn && new Date(dueOn) < new Date());
 </script>
@@ -175,7 +179,12 @@
 								>
 							{/if}
 						</div>
-						<p class="text-muted-foreground mt-0.5 text-sm">{group.conferenceName}</p>
+						<!-- The conference was plain text here: the portal knew which event was
+					     asking and offered no way to it — no programme, no venue, no
+					     organizers (#498). -->
+						<p class="text-muted-foreground mt-0.5 text-sm">
+							<a class="hover:underline" href="/c/{group.conferenceSlug}">{group.conferenceName}</a>
+						</p>
 						<ul class="divide-border mt-2 divide-y border-y">
 							{#each group.tasks as task (task.id)}
 								{@const gone = withdrawn(task)}

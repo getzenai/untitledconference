@@ -14,8 +14,12 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 
 	let { data } = $props();
+
+	const zone = readerZone();
 
 	const s = $derived(data.submission);
 
@@ -42,16 +46,22 @@
 		withdrawn: 'Withdrawn'
 	};
 
+	// "Received 14 August 2026 at 20:29" was the one time on this page and it named
+	// no zone (#498). The speaker and the organizers are routinely on different
+	// clocks, and this line is the receipt for a deadline.
 	const stamp = (value: Date | string | null) =>
-		value
-			? new Date(value).toLocaleString('en-GB', {
-					day: 'numeric',
-					month: 'long',
-					year: 'numeric',
-					hour: '2-digit',
-					minute: '2-digit'
-				})
-			: null;
+		value ? formatInstant(value, zone.current) : null;
+
+	/**
+	 * When the call closes, in words, on the page that talks about it (#498).
+	 *
+	 * "You can still change it until the call closes" named no date at all — the
+	 * moment was only inside the editor, which is behind the very button that
+	 * sentence describes.
+	 */
+	const closesLine = $derived(
+		s.callClosesAt ? ` — until ${formatInstant(s.callClosesAt, zone.current)}` : ''
+	);
 
 	/**
 	 * One string including its trailing space, rather than two template halves.
@@ -96,8 +106,8 @@
 				emailed again when the organizers decide.
 			</p>
 			<p class="text-muted-foreground mt-2">
-				You can still change it until the call closes — your place and the date above stay as they
-				are.
+				You can still change it until the call closes{closesLine} — your place and the date above stay
+				as they are.
 			</p>
 			<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
 				Edit this proposal
@@ -107,7 +117,7 @@
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">This is still a draft.</p>
 			<p class="text-muted-foreground mt-1">
-				Nobody has seen it yet. Pick it up where you left off, any time before the call closes.
+				Nobody has seen it yet. Pick it up where you left off, any time before the call closes{closesLine}.
 			</p>
 			<Button href="/portal/submissions/{s.id}/edit" size="sm" class="mt-3">
 				Finish this proposal

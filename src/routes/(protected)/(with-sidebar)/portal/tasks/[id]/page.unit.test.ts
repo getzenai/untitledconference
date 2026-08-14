@@ -196,7 +196,9 @@ describe('speaker task detail', () => {
 	it('does not call a completed task overdue', () => {
 		const body = draw(task({ status: 'done', dueOn: new Date('2020-01-01T12:00:00Z') }));
 
-		expect(body).toContain('Due Wednesday, 1 January 2020');
+		// The server renders in UTC and says so; the browser swaps in the reader's
+		// own zone after mount, and that line names itself too (#498).
+		expect(body).toContain('Due 1 Jan 2020, 12:00 UTC');
 		expect(body).not.toContain('— overdue');
 	});
 });

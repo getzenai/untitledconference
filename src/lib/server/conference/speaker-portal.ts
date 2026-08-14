@@ -12,6 +12,7 @@ import type { ProposalDraft } from '$lib/conference/proposal-draft';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import {
+	cfpFormTable,
 	formFieldTable,
 	submissionAnswerTable,
 	submissionSpeakerTable,
@@ -228,7 +229,16 @@ async function ownedSubmissionRow(userId: string, submissionId: number) {
 			conferenceSlug: conferenceTable.slug,
 			conferenceName: conferenceTable.name,
 			formatName: sessionFormatTable.name,
-			trackName: trackTable.name
+			trackName: trackTable.name,
+			/**
+			 * When the speaker's right to rewrite this actually ends (#498).
+			 *
+			 * The page said "until the call closes" and never named the moment; the
+			 * only screen that did was the editor, which is behind the button the
+			 * sentence is talking about. Null where a call has no closing date, which
+			 * is the same "no deadline" every other surface already renders.
+			 */
+			callClosesAt: cfpFormTable.closesAt
 		})
 		.from(submissionTable)
 		.innerJoin(conferenceTable, eq(conferenceTable.id, submissionTable.conferenceId))
@@ -239,6 +249,16 @@ async function ownedSubmissionRow(userId: string, submissionId: number) {
 		)
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
+		// The published form is the one the speaker submitted through and the one
+		// whose deadline binds them; a draft form's dates are the organizer's
+		// working copy and must not be quoted at a speaker.
+		.leftJoin(
+			cfpFormTable,
+			and(
+				eq(cfpFormTable.conferenceId, submissionTable.conferenceId),
+				eq(cfpFormTable.status, 'published')
+			)
+		)
 		.where(and(eq(submissionTable.id, submissionId), eq(speakerProfileTable.userId, userId)))
 		.limit(1);
 

@@ -11,6 +11,7 @@ const submission = (over: Partial<Record<string, unknown>> = {}) => ({
 	audienceLevel: 'intermediate',
 	status: 'accepted',
 	submittedAt: new Date('2027-03-10T09:00:00Z'),
+	callClosesAt: new Date('2027-02-15T22:59:00Z'),
 	decidedAt: new Date('2027-03-20T09:00:00Z'),
 	conferenceId: 3,
 	conferenceSlug: 'devflow-conf-2027',
@@ -77,6 +78,23 @@ describe('speaker submission detail', () => {
 
 		expect(body).toContain(`/portal/submissions/${submission().id}/edit`);
 		expect(body).not.toContain('Editing closed');
+	});
+
+	it('names the moment the call closes, and the zone every time is on (#498)', () => {
+		const body = draw({ status: 'submitted' });
+
+		// "until the call closes" named no date: the moment lived only inside the
+		// editor, behind the button that sentence is about.
+		expect(body).toContain('until 15 Feb 2027, 22:59 UTC');
+		// And the receipt was the one time on the page with no zone at all.
+		expect(body).toContain('Received 10 Mar 2027, 09:00 UTC');
+	});
+
+	it('still reads as a sentence when the call has no closing date', () => {
+		const body = draw({ status: 'submitted', callClosesAt: null });
+
+		expect(body).toContain('until the call closes —');
+		expect(body).not.toContain('until  —');
 	});
 
 	it('names a rejection so the speaker does not have to infer it from a badge', () => {

@@ -54,6 +54,14 @@ describe('speaker portal task list', () => {
 		expect(body).toContain('Complete bio and profile');
 	});
 
+	it('offers a way to the conference that is asking (#498)', () => {
+		const body = draw([task(1)]);
+
+		// The portal named the event and led nowhere near it: no programme, no
+		// venue, no organizers.
+		expect(body).toContain('href="/c/devflow-conf-2027"');
+	});
+
 	it('keeps a finished task under its talk instead of in a separate list', () => {
 		const body = draw([
 			task(5, { status: 'done', title: 'Sign release' }),
@@ -81,9 +89,10 @@ describe('speaker portal task list', () => {
 
 		expect(body).toContain('Done —');
 		expect(body).toContain('1 of 2 done');
-		// A finished task has no deadline left to meet; the open one keeps its own.
-		expect(body).not.toContain('Mon, 4 Jan');
-		expect(body).toContain('Thu, 11 Feb');
+		// A finished task has no deadline left to meet; the open one keeps its own,
+		// and now states it as the instant it is, in a zone it names (#498).
+		expect(body).not.toContain('4 Jan 2027');
+		expect(body).toContain('11 Feb 2027, 00:00 UTC');
 	});
 
 	/**

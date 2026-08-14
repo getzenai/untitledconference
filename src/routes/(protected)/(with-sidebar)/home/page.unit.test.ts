@@ -197,6 +197,29 @@ describe('home hub', () => {
 		expect(html).toContain('href="/portal/tasks/12"');
 	});
 
+	it('spaces and dates a deadline the reader can act on (#498)', () => {
+		const html = body(null, {
+			...emptyHub,
+			canCreateEvent: false,
+			openTasks: [
+				{
+					id: 21,
+					submissionId: null,
+					title: 'Upload your headshot',
+					instructions: null,
+					status: 'open',
+					dueOn: new Date('2027-05-02T21:59:00Z'),
+					conference: { slug: 'devflow', name: 'DevFlow Summit' },
+					submissionTitle: null
+				} as never
+			]
+		});
+
+		// The block form of this line ate its own leading space — "DevFlow Summit·
+		// due 2 May" — and printed a day with no year and no zone.
+		expect(html).toContain('DevFlow Summit · due 2 May 2027, 21:59 UTC');
+	});
+
 	it('surfaces unfinished onboarding without burying the hub', () => {
 		const html = body(
 			{
