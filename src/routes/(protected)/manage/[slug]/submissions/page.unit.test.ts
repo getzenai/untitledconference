@@ -1,4 +1,5 @@
 /** The table must expose two distinct actions: decide now, notify later. */
+import { BULK_SELECT_REASON } from '$lib/conference/bulk-toolbar';
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -167,6 +168,27 @@ describe('organizer submission decisions', () => {
 
 		expect(body).not.toContain('data-testid="bulk-assign"');
 		expect(body).not.toContain('formaction="?/assign"');
+	});
+
+	/**
+	 * #453: first paint has no selection, so all three are dead for that reason —
+	 * not "nothing decided", not a closed round. After a selection the other
+	 * gates surface; SSR can only pin the first one.
+	 */
+	it('names why Assign, Auto-distribute and Notify are grey on first paint', () => {
+		const body = renderPage();
+
+		expect(body).toContain('data-testid="notify-block-reason"');
+		expect(body).toContain('data-testid="assign-block-reason"');
+		expect(body).toContain('data-testid="distribute-block-reason"');
+		expect(body).toContain(BULK_SELECT_REASON);
+		expect(body).not.toMatch(/nothing has been decided/i);
+
+		const notify = body.slice(
+			body.lastIndexOf('<button', body.indexOf('formaction="?/notify"')),
+			body.indexOf('</button>', body.indexOf('formaction="?/notify"'))
+		);
+		expect(notify).toContain('disabled');
 	});
 
 	/**

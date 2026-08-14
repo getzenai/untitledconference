@@ -13,6 +13,7 @@
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
+	import { bulkToolbarBlockReason, type BulkToolbarFacts } from '$lib/conference/bulk-toolbar';
 	import {
 		describeBulkAssign,
 		describeDecision,
@@ -66,21 +67,16 @@
 	const assignReviewers = $derived(
 		data.assignmentTargets.find((round) => String(round.id) === assignRoundId)?.reviewers ?? []
 	);
-	const canBulkAssign = $derived(
-		selected.size > 0 &&
-			assignRoundId !== '' &&
-			assignReviewerIds.size > 0 &&
-			!busy &&
-			data.assignmentTargets.length > 0
-	);
-	const canDistribute = $derived(
-		selected.size > 0 &&
-			assignRoundId !== '' &&
-			Number.parseInt(reviewsPerSubmission, 10) > 0 &&
-			Number.parseInt(capPerReviewer, 10) > 0 &&
-			!busy &&
-			data.assignmentTargets.length > 0
-	);
+	const toolbarFacts: BulkToolbarFacts = $derived({
+		selectedCount: selected.size,
+		hasRound: assignRoundId !== '',
+		reviewerCount: assignReviewerIds.size,
+		reviewsPerSubmission: Number(reviewsPerSubmission),
+		capPerReviewer: Number(capPerReviewer)
+	});
+	const notifyBlockReason = $derived(bulkToolbarBlockReason('notify', toolbarFacts));
+	const assignBlockReason = $derived(bulkToolbarBlockReason('assign', toolbarFacts));
+	const distributeBlockReason = $derived(bulkToolbarBlockReason('distribute', toolbarFacts));
 
 	// A selection that survives a filter change would decide rows the organizer can
 	// no longer see — so anything that scrolled out of view drops out of the selection.
@@ -527,15 +523,27 @@
 					>
 						Accept
 					</Button>
-					<Button
-						type="submit"
-						formaction="?/notify"
-						variant="secondary"
-						size="sm"
-						disabled={selected.size === 0 || busy}
-					>
-						Notify decisions
-					</Button>
+					<div class="flex flex-col items-start gap-1">
+						<Button
+							type="submit"
+							formaction="?/notify"
+							variant="secondary"
+							size="sm"
+							disabled={busy || Boolean(notifyBlockReason)}
+							aria-describedby={notifyBlockReason ? 'notify-block-reason' : undefined}
+						>
+							Notify decisions
+						</Button>
+						{#if notifyBlockReason}
+							<p
+								id="notify-block-reason"
+								class="text-muted-foreground max-w-48 text-xs"
+								data-testid="notify-block-reason"
+							>
+								{notifyBlockReason}
+							</p>
+						{/if}
+					</div>
 					{#if data.assignmentTargets.length > 0}
 						<!--
 							ABS-06 part A: same selection as decide/notify. Round first,
@@ -562,16 +570,28 @@
 										assignReviewerIds.clear();
 									}}
 								/>
-								<Button
-									type="submit"
-									formaction="?/assign"
-									variant="secondary"
-									size="sm"
-									disabled={!canBulkAssign}
-									data-testid="bulk-assign-submit"
-								>
-									Assign reviewers
-								</Button>
+								<div class="flex flex-col items-start gap-1">
+									<Button
+										type="submit"
+										formaction="?/assign"
+										variant="secondary"
+										size="sm"
+										disabled={busy || Boolean(assignBlockReason)}
+										data-testid="bulk-assign-submit"
+										aria-describedby={assignBlockReason ? 'assign-block-reason' : undefined}
+									>
+										Assign reviewers
+									</Button>
+									{#if assignBlockReason}
+										<p
+											id="assign-block-reason"
+											class="text-muted-foreground max-w-48 text-xs"
+											data-testid="assign-block-reason"
+										>
+											{assignBlockReason}
+										</p>
+									{/if}
+								</div>
 								<label class="text-muted-foreground flex items-center gap-1 text-sm">
 									<input
 										type="number"
@@ -598,16 +618,28 @@
 										aria-label="Cap per reviewer"
 									/>
 								</label>
-								<Button
-									type="submit"
-									formaction="?/distribute"
-									variant="secondary"
-									size="sm"
-									disabled={!canDistribute}
-									data-testid="bulk-distribute-submit"
-								>
-									Auto-distribute
-								</Button>
+								<div class="flex flex-col items-start gap-1">
+									<Button
+										type="submit"
+										formaction="?/distribute"
+										variant="secondary"
+										size="sm"
+										disabled={busy || Boolean(distributeBlockReason)}
+										data-testid="bulk-distribute-submit"
+										aria-describedby={distributeBlockReason ? 'distribute-block-reason' : undefined}
+									>
+										Auto-distribute
+									</Button>
+									{#if distributeBlockReason}
+										<p
+											id="distribute-block-reason"
+											class="text-muted-foreground max-w-48 text-xs"
+											data-testid="distribute-block-reason"
+										>
+											{distributeBlockReason}
+										</p>
+									{/if}
+								</div>
 							</div>
 							<p class="text-muted-foreground text-xs">
 								Auto-distribute fills from the checked reviewers, or the whole committee if none are

@@ -1,3 +1,4 @@
+import { bulkToolbarBlockReason } from '$lib/conference/bulk-toolbar';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	decisionNotificationStatuses,
@@ -89,9 +90,8 @@ export const actions: Actions = {
 	notify: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const ids = selectedIds(await request.formData());
-		if (ids.length === 0) {
-			return fail(400, { message: 'Select at least one submission first.' });
-		}
+		const blocked = bulkToolbarBlockReason('notify', { selectedCount: ids.length });
+		if (blocked) return fail(400, { message: blocked });
 
 		return { notificationResult: await notifySubmissionDecisions(conference, ids) };
 	},
@@ -112,12 +112,12 @@ export const actions: Actions = {
 			.getAll('reviewerUserId')
 			.filter((value): value is string => typeof value === 'string' && value !== '');
 
-		if (ids.length === 0) {
-			return fail(400, { message: 'Select at least one submission first.' });
-		}
-		if (!Number.isInteger(roundId) || roundId <= 0 || reviewerUserIds.length === 0) {
-			return fail(400, { message: 'Choose a review round and at least one reviewer.' });
-		}
+		const blocked = bulkToolbarBlockReason('assign', {
+			selectedCount: ids.length,
+			hasRound: Number.isInteger(roundId) && roundId > 0,
+			reviewerCount: reviewerUserIds.length
+		});
+		if (blocked) return fail(400, { message: blocked });
 
 		const assignResult = await assignReviewersToSubmissions(
 			conference.id,
@@ -143,22 +143,14 @@ export const actions: Actions = {
 			.getAll('reviewerUserId')
 			.filter((value): value is string => typeof value === 'string' && value !== '');
 
-		if (ids.length === 0) {
-			return fail(400, { message: 'Select at least one submission first.' });
-		}
-		if (!Number.isInteger(roundId) || roundId <= 0) {
-			return fail(400, { message: 'Choose a review round.' });
-		}
-		if (
-			!Number.isInteger(reviewsPerSubmission) ||
-			reviewsPerSubmission < 1 ||
-			!Number.isInteger(capPerReviewer) ||
-			capPerReviewer < 1
-		) {
-			return fail(400, {
-				message: 'Set how many reviewers each talk needs, and the cap per reviewer.'
-			});
-		}
+		const blocked = bulkToolbarBlockReason('distribute', {
+			selectedCount: ids.length,
+			hasRound: Number.isInteger(roundId) && roundId > 0,
+			reviewerCount: reviewerUserIds.length,
+			reviewsPerSubmission,
+			capPerReviewer
+		});
+		if (blocked) return fail(400, { message: blocked });
 
 		const assignResult = await autoDistributeReviews(conference.id, ids, roundId, {
 			reviewsPerSubmission,
