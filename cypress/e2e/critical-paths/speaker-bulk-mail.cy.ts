@@ -99,6 +99,65 @@ describe('Speaker bulk mail', () => {
 	});
 
 	/**
+	 * Escape must not cost a written message (#435).
+	 *
+	 * The dialog's own documented way out unmounts the form, and the form held
+	 * the only copy of the text. This can only be seen in a browser: the fields
+	 * render fine either way, and what is being tested is whether they still
+	 * carry anything after the component that drew them has been destroyed and
+	 * rebuilt.
+	 */
+	it('keeps a half-written message when the dialog is dismissed', () => {
+		cy.visit(`/manage/${slug}/speakers`);
+		cy.waitForHydration();
+
+		cy.get('[data-testid="speaker-mail-open"]').click();
+		cy.get('[data-testid="speaker-mail-compose"]').within(() => {
+			cy.get('[data-testid="speaker-mail-subject"]').type('Arrival details');
+			cy.get('[data-testid="speaker-mail-body"]').type('Please reply with your travel time.');
+		});
+
+		cy.get('body').type('{esc}');
+		cy.get('[data-testid="speaker-mail-compose"]').should('not.exist');
+
+		cy.get('[data-testid="speaker-mail-open"]').click();
+		cy.get('[data-testid="speaker-mail-compose"]').within(() => {
+			cy.get('[data-testid="speaker-mail-subject"]').should('have.value', 'Arrival details');
+			cy.get('[data-testid="speaker-mail-body"]').should(
+				'have.value',
+				'Please reply with your travel time.'
+			);
+		});
+	});
+
+	/**
+	 * A sent message must not come back (#435).
+	 *
+	 * Keeping the draft and clearing it after a send are the same feature seen
+	 * from both ends: the second one is what stops the next mail from opening
+	 * pre-filled with the last one and going out twice.
+	 */
+	it('starts empty again after the message has gone out', () => {
+		cy.visit(`/manage/${slug}/speakers`);
+		cy.waitForHydration();
+
+		cy.get('[data-testid="speaker-mail-open"]').click();
+		cy.get('[data-testid="speaker-mail-compose"]').within(() => {
+			cy.get('[data-testid="speaker-mail-subject"]').type('Room change');
+			cy.get('[data-testid="speaker-mail-body"]').type('We moved to the main hall.');
+			cy.get('[data-testid="speaker-mail-submit"]').click();
+		});
+		cy.get('[data-testid="speaker-mail-compose"]').should('not.exist');
+		cy.get('[data-testid="speakers-message"]').should('contain', 'queued');
+
+		cy.get('[data-testid="speaker-mail-open"]').click();
+		cy.get('[data-testid="speaker-mail-compose"]').within(() => {
+			cy.get('[data-testid="speaker-mail-subject"]').should('have.value', '');
+			cy.get('[data-testid="speaker-mail-body"]').should('have.value', '');
+		});
+	});
+
+	/**
 	 * The row's status control saves on pick, and now has to reach its form the
 	 * long way round (#124).
 	 *

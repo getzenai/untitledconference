@@ -35,6 +35,11 @@
 	let busy = $state(false);
 	let editingId = $state<number | null>(null);
 	let composeOpen = $state(false);
+	// The compose draft lives here, not in the dialog, so Escape — the documented
+	// way out of that dialog — puts a half-written message to fourteen speakers
+	// away instead of destroying it (#435). Cleared only once it has been sent.
+	let mailSubject = $state('');
+	let mailBody = $state('');
 	let addOpen = $state(false);
 	let importOpen = $state(false);
 
@@ -139,7 +144,13 @@
 						filters={data.filters}
 						{busy}
 						{form}
-						enhanceForm={submitting('add', () => (composeOpen = false))}
+						bind:subject={mailSubject}
+						bind:body={mailBody}
+						enhanceForm={submitting('add', () => {
+							composeOpen = false;
+							mailSubject = '';
+							mailBody = '';
+						})}
 					/>
 				</Dialog.Content>
 			</Dialog.Root>
