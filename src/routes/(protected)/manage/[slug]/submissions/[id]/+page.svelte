@@ -13,6 +13,7 @@
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import {
+		decisionBlockReason,
 		describeDecision,
 		describeNotification,
 		notificationTone
@@ -98,6 +99,7 @@
 	const decided = $derived(
 		s.status === 'accepted' || s.status === 'rejected' || s.status === 'waitlisted'
 	);
+	const cannotDecide = $derived(decisionBlockReason(s.status));
 	const inTray = $derived(s.placements.length > 0);
 	const notificationLabel = $derived(
 		data.notificationStatus === 'queued'
@@ -148,31 +150,64 @@
 			<p class="text-muted-foreground mt-0.5 text-sm">{subtitle}</p>
 		</div>
 
-		<form
-			method="POST"
-			action="?/decide"
-			class="flex shrink-0 gap-2"
-			use:enhance={() => {
-				busy = true;
-				// `finally`, not a trailing line: a dropped connection would otherwise
-				// leave every button disabled with no way back except a reload.
-				return async ({ update }) => {
-					try {
-						await update(formUpdateOptions('edit'));
-					} finally {
-						busy = false;
-					}
-				};
-			}}
-		>
-			<Button type="submit" name="decision" value="rejected" variant="outline" disabled={busy}>
-				Decline
-			</Button>
-			<Button type="submit" name="decision" value="waitlisted" variant="outline" disabled={busy}>
-				Waitlist
-			</Button>
-			<Button type="submit" name="decision" value="accepted" disabled={busy}>Accept</Button>
-		</form>
+		<div class="flex shrink-0 flex-col items-end gap-1">
+			<form
+				method="POST"
+				action="?/decide"
+				class="flex gap-2"
+				use:enhance={() => {
+					busy = true;
+					// `finally`, not a trailing line: a dropped connection would otherwise
+					// leave every button disabled with no way back except a reload.
+					return async ({ update }) => {
+						try {
+							await update(formUpdateOptions('edit'));
+						} finally {
+							busy = false;
+						}
+					};
+				}}
+			>
+				<Button
+					type="submit"
+					name="decision"
+					value="rejected"
+					variant="outline"
+					disabled={busy || Boolean(cannotDecide)}
+					aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+				>
+					Decline
+				</Button>
+				<Button
+					type="submit"
+					name="decision"
+					value="waitlisted"
+					variant="outline"
+					disabled={busy || Boolean(cannotDecide)}
+					aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+				>
+					Waitlist
+				</Button>
+				<Button
+					type="submit"
+					name="decision"
+					value="accepted"
+					disabled={busy || Boolean(cannotDecide)}
+					aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+				>
+					Accept
+				</Button>
+			</form>
+			{#if cannotDecide}
+				<p
+					id="decision-block-reason"
+					class="text-muted-foreground max-w-56 text-right text-xs"
+					data-testid="decision-block-reason"
+				>
+					{cannotDecide}
+				</p>
+			{/if}
+		</div>
 	</div>
 
 	{#if form?.notificationResult}

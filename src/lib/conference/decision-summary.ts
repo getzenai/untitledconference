@@ -16,6 +16,24 @@ const PAST_TENSE: Record<string, string> = {
 	waitlisted: 'waitlisted'
 };
 
+/**
+ * Why Accept / Waitlist / Decline is dead on a single submission (#471).
+ *
+ * The bulk summary still says "N drafts not submitted yet, left for the speaker"
+ * after a mixed click — that sentence earns its keep on the table. On one
+ * talk the same click used to paint that line in success green while the
+ * status stayed Draft, so an organizer walking twenty of them thought they
+ * had decided. The buttons go grey instead, and this is the sentence next
+ * to them. The server refuses the same case: a disabled button is not a lock.
+ */
+export const DRAFT_DECISION_REASON =
+	'This draft has not been submitted yet — leave it for the speaker.';
+
+/** `null` when Accept / Waitlist / Decline may run. */
+export function decisionBlockReason(status: string): string | null {
+	return status === 'draft' ? DRAFT_DECISION_REASON : null;
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**

@@ -2,6 +2,8 @@ import type { NotificationResult } from '$lib/server/conference/decision-notific
 import type { DecisionResult } from '$lib/server/conference/decisions';
 import { describe, expect, it } from 'vitest';
 import {
+	DRAFT_DECISION_REASON,
+	decisionBlockReason,
 	describeBulkAssign,
 	describeDecision,
 	describeNotification,
@@ -51,6 +53,19 @@ describe('describeDecision', () => {
 		expect(describeDecision('accepted', result({ decided: 1, skippedDrafts: 2 }))).toBe(
 			'1 submission accepted. 2 drafts not submitted yet, left for the speaker.'
 		);
+	});
+});
+
+describe('decisionBlockReason', () => {
+	it('names the draft so the three buttons can go grey instead of succeeding at nothing', () => {
+		expect(decisionBlockReason('draft')).toBe(DRAFT_DECISION_REASON);
+		expect(DRAFT_DECISION_REASON).toMatch(/not been submitted yet/i);
+	});
+
+	it('is silent once the speaker has handed the talk in', () => {
+		for (const status of ['submitted', 'in_review', 'accepted', 'rejected', 'waitlisted']) {
+			expect(decisionBlockReason(status)).toBeNull();
+		}
 	});
 });
 
