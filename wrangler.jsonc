@@ -18,6 +18,15 @@
 	"observability": {
 		"enabled": true
 	},
+	// Smart Placement: run the Worker near the origin that dominates request
+	// duration (Hyperdrive → Postgres in us-west-2) instead of always at the
+	// colo closest to the visitor. Cloudflare needs ~15 min and traffic from
+	// more than one place before it decides. The docs say it looks at fetch()
+	// subrequests; whether Hyperdrive traffic counts is the measurement this
+	// line exists to make. Revert if the logged-in TTFB does not move.
+	"placement": {
+		"mode": "smart"
+	},
 	// The real domain. `custom_domain` makes Cloudflare create and manage the DNS
 	// record and the certificate for us, so there is nothing to set by hand.
 	//
