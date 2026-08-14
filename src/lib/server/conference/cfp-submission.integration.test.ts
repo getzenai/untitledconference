@@ -1488,4 +1488,119 @@ describe('a co-presenter needs an address (#229 A)', () => {
 		expect(rows[0].id).toBe(before.id);
 		expect(rows[0].email).toBe(email);
 	});
+
+	it('keeps a second same-named keyless row instead of collapsing the queue', async () => {
+		// `reusable` used to be Map<name, id>. Two "Alex"s, no address: the second
+		// id was overwritten, the next save had no reuseId for that slot, and it
+		// inserted again. A queue per name on *this* proposal is the fix — not a
+		// name match across the organization (#368).
+		const name = `Twin-keyless ${suffix}`;
+		const pair = [
+			{ name, email: null, roleLabel: 'Co-presenter' },
+			{ name, email: null, roleLabel: 'Co-presenter' }
+		];
+		const first = await saveSubmission(
+			submitterId,
+			slug,
+			input({ title: 'Two of the same name', coSpeakers: pair }),
+			{ submit: false }
+		);
+		if (!first.ok) throw new Error('expected a saved draft');
+
+		const afterFirst = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.name, name)
+				)
+			);
+		expect(afterFirst).toHaveLength(2);
+
+		const again = await saveSubmission(
+			submitterId,
+			slug,
+			input({ title: 'Two of the same name again', coSpeakers: pair }),
+			{ submit: false, submissionId: first.submissionId }
+		);
+		expect(again.ok).toBe(true);
+
+		const rows = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.name, name)
+				)
+			);
+		expect(rows).toHaveLength(2);
+		expect(new Set(rows.map((row) => row.id))).toEqual(new Set(afterFirst.map((row) => row.id)));
+	});
+
+	it('deletes the unused placeholder when the later address already belongs to someone else', async () => {
+		// The keyless row was taken out of `reusable` and the submission_speaker
+		// row is gone. The write then resolves by address to a *foreign* profile,
+		// so the placeholder would stay on the organizer roster with no talk.
+		// Delete that unused reuseId exactly then — not when the submitter just
+		// dropped a row from the form (#368).
+		const name = `Placeholder ${suffix}`;
+		const takenEmail = `taken-${suffix}@example.test`;
+		const [foreign] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId,
+				name: `Foreign ${suffix}`,
+				sortName: `Foreign, ${suffix}`,
+				email: takenEmail
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		const first = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Will match a taken address',
+				coSpeakers: [{ name, email: null, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false }
+		);
+		if (!first.ok) throw new Error('expected a saved draft');
+
+		const [placeholder] = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.name, name)
+				)
+			);
+		expect(placeholder).toBeDefined();
+
+		const again = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Now names a taken address',
+				coSpeakers: [{ name, email: takenEmail, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false, submissionId: first.submissionId }
+		);
+		expect(again.ok).toBe(true);
+
+		const leftover = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.id, placeholder.id));
+		expect(leftover).toHaveLength(0);
+
+		const speakers = await db
+			.select({ profileId: submissionSpeakerTable.speakerProfileId })
+			.from(submissionSpeakerTable)
+			.where(eq(submissionSpeakerTable.submissionId, first.submissionId));
+		expect(speakers.map((row) => row.profileId)).toContain(foreign.id);
+		expect(speakers.map((row) => row.profileId)).not.toContain(placeholder.id);
+	});
 });

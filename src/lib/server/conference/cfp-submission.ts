@@ -519,7 +519,10 @@ async function upsertOwnProfile(
  * is not a name match across the organization: it is "the address-less row
  * already on *this* proposal under this name", so a draft save does not fork
  * the same half-filled person. When the next save brings an address nobody
- * here holds, that row is stamped rather than replaced.
+ * here holds, that row is stamped rather than replaced. When it brings an
+ * address someone else already holds, the write lands on that profile and the
+ * unused placeholder is deleted — otherwise it stays on the organizer roster
+ * with no talk attached (#368).
  */
 async function upsertCoSpeaker(
 	tx: Tx,
@@ -540,7 +543,16 @@ async function upsertCoSpeaker(
 				)
 			)
 			.limit(1);
-		if (existing) return existing.id;
+		if (existing) {
+			// Taken out of `reusable` already; the submission_speaker row is gone.
+			// Delete only this unused placeholder, and only because the write
+			// resolved to a *different* profile. A row the submitter just dropped
+			// from the form is a different leak and is not ours to clean (#368).
+			if (reuseId !== null && reuseId !== existing.id) {
+				await tx.delete(speakerProfileTable).where(eq(speakerProfileTable.id, reuseId));
+			}
+			return existing.id;
+		}
 
 		if (reuseId !== null) {
 			await tx
@@ -634,7 +646,10 @@ async function writeSpeakers(
 	// co-presenter has no key in the organization, but "the row that was already
 	// on this proposal under this name" is one. Without it every draft save
 	// inserted a fresh profile and left the last one orphaned on the organizer's
-	// roster (#229 A). Deliberately not a name match across the organization.
+	// roster (#229 A). A Map of one id per name would collapse two same-named
+	// keyless rows into one slot, so this is a queue: one id shifted per
+	// matching name on *this* proposal. Deliberately not a name match across
+	// the organization (#368).
 	const priorKeyless = await tx
 		.select({ id: speakerProfileTable.id, name: speakerProfileTable.name })
 		.from(submissionSpeakerTable)
@@ -649,8 +664,14 @@ async function writeSpeakers(
 				isNull(speakerProfileTable.email),
 				isNull(speakerProfileTable.userId)
 			)
-		);
-	const reusable = new Map(priorKeyless.map((row) => [row.name, row.id]));
+		)
+		.orderBy(asc(submissionSpeakerTable.position));
+	const reusable = new Map<string, number[]>();
+	for (const row of priorKeyless) {
+		const queue = reusable.get(row.name);
+		if (queue) queue.push(row.id);
+		else reusable.set(row.name, [row.id]);
+	}
 
 	await tx
 		.delete(submissionSpeakerTable)
@@ -667,8 +688,7 @@ async function writeSpeakers(
 	let position = 1;
 	for (const co of coSpeakers) {
 		if (!co.name.trim()) continue;
-		const reuseId = reusable.get(co.name.trim()) ?? null;
-		if (reuseId !== null) reusable.delete(co.name.trim());
+		const reuseId = reusable.get(co.name.trim())?.shift() ?? null;
 		const profileId = await upsertCoSpeaker(tx, organizationId, co, reuseId);
 		if (placed.has(profileId)) continue;
 		placed.add(profileId);
