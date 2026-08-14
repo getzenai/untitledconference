@@ -965,9 +965,12 @@ describe('reviewer recusal', () => {
 			})
 			.returning();
 
-		expect(await recuseReview(conference.id, CONFERENCE_REVIEWER, submissionId, review.id)).toEqual(
-			{ ok: true }
-		);
+		// The title rides along so the queue can name what was handed back (#463);
+		// what this test is about is the removal, so it asserts the flag, not the
+		// whole shape.
+		expect(
+			await recuseReview(conference.id, CONFERENCE_REVIEWER, submissionId, review.id)
+		).toMatchObject({ ok: true });
 		expect(await reviewQueue(conference, CONFERENCE_REVIEWER)).toEqual([]);
 		expect(await reviewerSubmission(conference, CONFERENCE_REVIEWER, submissionId)).toBeNull();
 	});
