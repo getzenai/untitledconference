@@ -101,8 +101,29 @@ describe('the REST route table', () => {
 		};
 		for (const route of REST_ROUTES) {
 			const path = `/api/v1${route.pattern.replace(/:([A-Za-z]+)/g, '{$1}')}`;
-			expect(spec.paths[path]?.[route.method.toLowerCase()]?.operationId, path).toBe(route.tool);
+			expect(spec.paths[path]?.[route.method.toLowerCase()]?.operationId, path).toBe(
+				route.operationId ?? route.tool
+			);
 		}
+	});
+
+	// The reason `operationId` exists on a route at all: the second way to reach
+	// `archive_conference` would otherwise publish the tool name twice, and a
+	// document with two operations under one id is one many generators refuse.
+	it('gives every published operation its own id', () => {
+		const ids = REST_ROUTES.map((route) => route.operationId ?? route.tool);
+
+		expect(new Set(ids).size).toBe(ids.length);
+	});
+
+	// A write reads its arguments from the body. Stated as a property of the
+	// table rather than of one call, because the fault it prevents — a
+	// confirmation that a URL can carry — is one any future route could reopen.
+	it('offers a confirmed archive that does not need a DELETE body', () => {
+		const matched = matchRestRoute('POST', '/conferences/hallway/archive');
+
+		expect(matched?.route.tool).toBe('archive_conference');
+		expect(matched?.params).toEqual({ conferenceSlug: 'hallway' });
 	});
 });
 

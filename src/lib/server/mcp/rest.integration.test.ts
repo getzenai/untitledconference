@@ -201,6 +201,68 @@ describe('REST adapter', () => {
 		);
 	});
 
+	/**
+	 * The confirmation the URL must not be able to carry (#369).
+	 *
+	 * `rest.ts` said in a comment that confirmSlug travels in the body, and the
+	 * dispatcher merged `input.query` into every call regardless — so
+	 * `?confirmSlug=x` archived a published conference from the address bar, and
+	 * the confirmation ended up in access logs, referrers and shell history.
+	 *
+	 * Asserted through `dispatchRest` rather than against the merge itself: what
+	 * matters is that the whole path refuses, not which line does the refusing.
+	 */
+	it('does not let the query confirm what the body is supposed to', async () => {
+		const slug = `${suffix}-rest-query-confirm`;
+		await dispatchRest('POST', '/conferences', organizer, {
+			body: { name: 'Confirm me properly', slug, startsOn: '2027-12-02', endsOn: '2027-12-02' }
+		});
+		const published = await dispatchRest('POST', `/conferences/${slug}/publish`, organizer, {});
+		expect(published.status).toBe(200);
+
+		const overTheUrl = await dispatchRest('DELETE', `/conferences/${slug}`, organizer, {
+			query: { confirmSlug: slug }
+		});
+
+		expect(overTheUrl.status).toBe(400);
+		expect(String(overTheUrl.body.error)).toContain('confirmSlug');
+
+		// And it is a refusal, not a slow archive: the conference is still served.
+		const untouched = await dispatchRest('GET', '/conferences', organizer, {});
+		expect(untouched.body.conferences).toEqual(
+			expect.arrayContaining([expect.objectContaining({ slug, status: 'published' })])
+		);
+	});
+
+	/**
+	 * The way out that closing the query would otherwise have taken away: a
+	 * `DELETE` body is the one part of a request clients and proxies drop, and
+	 * with the query shut there would be no way left to archive a published
+	 * conference over REST. So the confirmation gets a named step of its own.
+	 */
+	it('archives a published conference over POST /archive, confirmation in the body', async () => {
+		const slug = `${suffix}-rest-archive-post`;
+		await dispatchRest('POST', '/conferences', organizer, {
+			body: { name: 'Archive me by name', slug, startsOn: '2027-12-03', endsOn: '2027-12-03' }
+		});
+		await dispatchRest('POST', `/conferences/${slug}/publish`, organizer, {});
+
+		const withoutConfirmation = await dispatchRest(
+			'POST',
+			`/conferences/${slug}/archive`,
+			organizer,
+			{}
+		);
+		expect(withoutConfirmation.status).toBe(400);
+
+		const archived = await dispatchRest('POST', `/conferences/${slug}/archive`, organizer, {
+			body: { confirmSlug: slug }
+		});
+
+		expect(archived.status).toBe(200);
+		expect(archived.body).toMatchObject({ slug, status: 'archived' });
+	});
+
 	it('publishes every registered REST tool in the OpenAPI document', () => {
 		const spec = buildOpenApiDocument('https://example.test') as {
 			openapi: string;
