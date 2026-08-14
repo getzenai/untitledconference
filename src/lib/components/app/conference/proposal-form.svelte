@@ -224,13 +224,20 @@
 		];
 	});
 
-	let focusedErrors = $state('');
+	/**
+	 * Jump once per rejected submit, not once per error text.
+	 *
+	 * A second click with the same missing field used to do nothing:
+	 * the key was the message, and the message had not changed. That
+	 * is the silence this page is here to end, one click later. `form`
+	 * is a new object on every failed action; typing does not replace it.
+	 */
+	let focusedForm = $state<object | null | undefined>(undefined);
 
 	$effect(() => {
 		const items = errorItems;
-		const key = items.map((item) => item.message).join('|');
-		if (!key || key === focusedErrors) return;
-		focusedErrors = key;
+		if (items.length === 0 || form === focusedForm) return;
+		focusedForm = form;
 		const selector = items[0].selector;
 		void tick().then(() => {
 			const el = formEl?.querySelector<HTMLElement>(selector);
