@@ -15,11 +15,27 @@ describe('parseSetCookie', () => {
 
 		expect(parsed).toEqual({
 			name: 'better-auth.session_token',
-			// Left encoded: SvelteKit encodes on write, and decoding here would send a
-			// different token than the one Better Auth signed.
-			value: 'abc.def%3D',
+			// Decoded: SvelteKit encodes on write. The header is already encoded
+			// (`signCookieValue` percent-encodes the signed token), so handing that
+			// string to `cookies.set` would store `abc.def%253D`.
+			value: 'abc.def=',
 			options: { path: '/', maxAge: 604800, httpOnly: true, sameSite: 'lax', secure: true }
 		});
+	});
+
+	it('hands SvelteKit the raw token so its encode matches the Better Auth header', () => {
+		const header = 'better-auth.session_token=abc.xy%2B%2F%3D; Path=/; HttpOnly; SameSite=Lax';
+		const parsed = parseSetCookie(header);
+
+		expect(parsed?.value).toBe('abc.xy+/=');
+		// `cookie` serialize, which SvelteKit uses, encodes with encodeURIComponent.
+		expect(`better-auth.session_token=${encodeURIComponent(parsed!.value)}`).toBe(
+			'better-auth.session_token=abc.xy%2B%2F%3D'
+		);
+	});
+
+	it('leaves a value that is not valid percent-encoding alone', () => {
+		expect(parseSetCookie('a=100%done')?.value).toBe('100%done');
 	});
 
 	it('keeps an expiry as a date and a domain as given', () => {
