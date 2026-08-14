@@ -57,6 +57,7 @@
 	import { INVITATION_EXPIRY_SECONDS } from '$lib/constants';
 	import { generateRandomPassword } from '$lib/utils/password';
 	import { PASSWORD_MIN_LENGTH } from '$lib/validators/password';
+	import { banTakesEffectCopy } from './ban-copy';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -860,7 +861,10 @@
 								</TableCell>
 								<TableCell>
 									{#if user.banned}
-										<Badge variant="destructive">Banned</Badge>
+										<div class="space-y-1">
+											<Badge variant="destructive">Banned</Badge>
+											<p class="text-muted-foreground text-xs">{banTakesEffectCopy()}</p>
+										</div>
 									{:else}
 										<Badge variant="outline">Enabled</Badge>
 									{/if}
@@ -1058,8 +1062,8 @@
 		<AlertDialogHeader>
 			<AlertDialogTitle>Ban User</AlertDialogTitle>
 			<AlertDialogDescription>
-				Are you sure you want to ban {selectedUser?.email}? This user will no longer be able to
-				access the platform.
+				Are you sure you want to ban {selectedUser?.email}? New sign-ins are blocked immediately.
+				{banTakesEffectCopy()}
 			</AlertDialogDescription>
 		</AlertDialogHeader>
 		<AlertDialogFooter>
