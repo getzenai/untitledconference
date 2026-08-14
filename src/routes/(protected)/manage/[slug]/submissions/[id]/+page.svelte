@@ -16,6 +16,7 @@
 		notificationTone
 	} from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -116,6 +117,13 @@
 	 * has no answer.
 	 */
 	const scheduled = $derived(s.placements.find((p) => p.status === 'confirmed') ?? null);
+
+	const tiers = $derived(data.sponsorTiers ?? []);
+	const selectedTier = $derived(tiers.find((tier) => tier.name === s.sponsorTier) ?? null);
+	const sponsorOptions = $derived([
+		{ value: 'none', label: 'No sponsor' },
+		...tiers.map((tier) => ({ value: String(tier.id), label: tier.name }))
+	]);
 </script>
 
 <svelte:head>
@@ -542,21 +550,62 @@
 			{/if}
 		</section>
 
-		{#if s.sponsorTier}
-			<section class="border-border bg-card rounded-lg border p-4">
-				<div class="flex items-center justify-between gap-2">
-					<h2 class="text-sm font-medium">Sponsorship</h2>
-					<StatusBadge status="internal" tone="internal" label="internal only" />
-				</div>
-				<p class="mt-2 text-sm font-medium">{s.sponsorTier}</p>
-				{#if s.sponsorNote}
-					<p class="text-muted-foreground mt-1 text-sm">{s.sponsorNote}</p>
-				{/if}
-				<p class="text-muted-foreground mt-2 text-xs">
-					Reviewers do not see this, and the public programme shows only the format.
+		<section class="border-border bg-card rounded-lg border p-4" data-testid="submission-sponsor">
+			<div class="flex items-center justify-between gap-2">
+				<h2 class="text-sm font-medium">Sponsorship</h2>
+				<StatusBadge status="internal" tone="internal" label="internal only" />
+			</div>
+			<p class="text-muted-foreground mt-1 text-xs">
+				Reviewers do not see this, and the public programme shows only the format.
+			</p>
+
+			{#if tiers.length === 0}
+				<p class="text-muted-foreground mt-3 text-sm">
+					No sponsor tiers yet.
+					<a class="underline underline-offset-4" href="{base}/settings#sponsors">
+						Add them in Settings
+					</a>.
 				</p>
-			</section>
-		{/if}
+				{#if s.sponsorTier}
+					<p class="mt-2 text-sm font-medium">{s.sponsorTier}</p>
+				{/if}
+			{:else}
+				<form
+					method="POST"
+					action="?/sponsor"
+					class="mt-3 space-y-2"
+					use:enhance={() => {
+						busy = true;
+						return async ({ update }) => {
+							try {
+								await update();
+							} finally {
+								busy = false;
+							}
+						};
+					}}
+				>
+					<AppSelect
+						name="sponsorTierId"
+						value={selectedTier ? String(selectedTier.id) : 'none'}
+						options={sponsorOptions}
+						size="sm"
+						aria-label="Sponsor tier"
+						testId="sponsor-tier-select"
+					/>
+					<Button type="submit" size="sm" variant="outline" disabled={busy}>Save marker</Button>
+				</form>
+			{/if}
+
+			{#if selectedTier?.note ?? s.sponsorNote}
+				<p class="text-muted-foreground mt-2 text-sm">{selectedTier?.note ?? s.sponsorNote}</p>
+			{/if}
+			{#if form?.sponsorError}
+				<p class="text-status-bad mt-2 text-sm" role="alert">{form.sponsorError}</p>
+			{:else if form?.sponsorMessage}
+				<p class="text-status-good mt-2 text-sm" role="status">{form.sponsorMessage}</p>
+			{/if}
+		</section>
 
 		<!-- Deciding changes the programme; notifying people is deliberately separate. -->
 		<section class="border-border bg-card rounded-lg border p-4">

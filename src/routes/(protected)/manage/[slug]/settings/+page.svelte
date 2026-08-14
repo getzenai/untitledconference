@@ -26,7 +26,7 @@
 	/**
 	 * The page's own table of contents (#153).
 	 *
-	 * Six sections, one under the other, made this the longest column in the
+	 * Seven sections, one under the other, made this the longest column in the
 	 * product — you had to scroll past the rooms to learn that session formats
 	 * exist. The list is written out rather than derived from the DOM so the order
 	 * is decided here, next to the sections themselves, and so the nav renders
@@ -39,6 +39,7 @@
 		{ id: 'rooms', label: 'Rooms' },
 		{ id: 'tracks', label: 'Tracks' },
 		{ id: 'formats', label: 'Session formats' },
+		{ id: 'sponsors', label: 'Sponsor tiers' },
 		{ id: 'tasks', label: 'Speaker tasks' }
 	] as const;
 
@@ -53,6 +54,7 @@
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const config = $derived(data.config);
+	const sponsorTiers = $derived(data.sponsorTiers ?? []);
 	const published = $derived(data.conference.status === 'published');
 	const archived = $derived(data.conference.status === 'archived');
 	const listed = $derived(data.conference.listedPublicly);
@@ -61,6 +63,7 @@
 	let roomsExpanded = $state(false);
 	let tracksExpanded = $state(false);
 	let formatsExpanded = $state(false);
+	let sponsorsExpanded = $state(false);
 	let tasksExpanded = $state(false);
 
 	/**
@@ -793,6 +796,85 @@
 					</span>
 				</div>
 				{@render feedback('formats')}
+			</form>
+		</section>
+
+		<section
+			id="sponsors"
+			class="border-border bg-card scroll-mt-5 rounded-lg border p-4"
+			data-testid="settings-sponsors"
+		>
+			<h2 class="text-sm font-semibold">Sponsor tiers</h2>
+			<p class="text-muted-foreground mt-0.5 text-xs">
+				Internal only. A talk marked as one of these shows a badge on the submissions list;
+				reviewers never see it, and the public programme shows only the format. A tier can only go
+				once no submission is marked as it.
+			</p>
+
+			{#if sponsorTiers.length === 0}
+				<p class="text-muted-foreground mt-3 text-sm">No sponsor tiers yet.</p>
+			{:else}
+				<ul class="divide-border mt-3 divide-y text-sm">
+					{#each preview(sponsorTiers, sponsorsExpanded) as tier (tier.id)}
+						<li
+							class="flex flex-wrap items-center gap-2 py-2"
+							data-testid="settings-sponsor-row"
+							data-name={tier.name}
+						>
+							<form
+								method="POST"
+								action="?/updateSponsorTier"
+								use:enhance={submitting}
+								class="flex flex-1 flex-wrap items-center gap-2"
+							>
+								<input type="hidden" name="id" value={tier.id} />
+								<Input
+									name="name"
+									value={tier.name}
+									aria-label="Sponsor tier name"
+									class="h-8 min-w-[8rem] flex-1 text-sm"
+									required
+								/>
+								<Input
+									name="note"
+									value={tier.note ?? ''}
+									aria-label="Sponsor tier note"
+									placeholder="note"
+									class="h-8 min-w-[8rem] flex-1 text-sm"
+								/>
+								<Input
+									name="position"
+									type="number"
+									min="0"
+									value={tier.position}
+									aria-label="Sponsor tier order"
+									class="h-8 w-16 text-sm"
+									required
+								/>
+								<Button type="submit" size="sm" variant="outline" disabled={busy}>Save</Button>
+							</form>
+							{@render removeRow('?/deleteSponsorTier', tier.id, 'Remove sponsor tier')}
+						</li>
+					{/each}
+				</ul>
+				{@render showMore(sponsorTiers.length, 'sponsors', sponsorsExpanded, () => {
+					sponsorsExpanded = !sponsorsExpanded;
+				})}
+			{/if}
+
+			<form method="POST" action="?/addSponsorTier" use:enhance={submitting} class="mt-3 space-y-2">
+				<div class="flex flex-wrap items-end gap-2">
+					<label class="min-w-[10rem] flex-1 text-xs">
+						<span class="text-muted-foreground">Name</span>
+						<Input name="name" class="mt-1 h-8 text-sm" placeholder="Gold" required />
+					</label>
+					<label class="min-w-[10rem] flex-1 text-xs">
+						<span class="text-muted-foreground">Note — optional</span>
+						<Input name="note" class="mt-1 h-8 text-sm" placeholder="paid keynote slot" />
+					</label>
+					<Button type="submit" size="sm" disabled={busy}>Add tier</Button>
+				</div>
+				{@render feedback('sponsors')}
 			</form>
 		</section>
 
