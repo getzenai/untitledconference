@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
 	agendaReadyLine,
 	autoPlaceResult,
+	classifyAcceptedTalk,
 	dashboardSchedulingEmpty,
 	dashboardSchedulingHeadline,
 	dashboardSchedulingLabel,
 	dashboardSchedulingSubhead,
 	dashboardSchedulingTile,
 	notPublished,
+	placementHasSlot,
 	PROGRAM_LEGEND,
 	PROGRAM_WORDS
 } from './program-states';
@@ -51,6 +53,48 @@ describe('program-states (#466)', () => {
 		expect(draftsOnly).not.toBe('Every accepted talk has a slot.');
 		expect(draftsOnly).toContain(PROGRAM_WORDS.draft);
 		expect(dashboardSchedulingEmpty(2)).toBe('Every accepted talk is published.');
+	});
+
+	it('classifies the accept-path row as unplaced, not draft', () => {
+		// `putInAgendaTray` writes exactly this: tentative, no day, no room, no time.
+		const parked = {
+			status: 'tentative',
+			kind: 'session',
+			dayId: null,
+			roomId: null,
+			startsAt: null
+		};
+		expect(placementHasSlot(parked)).toBe(false);
+		expect(classifyAcceptedTalk([parked])).toBe('unplaced');
+		expect(classifyAcceptedTalk([])).toBe('unplaced');
+		expect(
+			classifyAcceptedTalk([
+				{
+					status: 'tentative',
+					kind: 'session',
+					dayId: 1,
+					roomId: 1,
+					startsAt: new Date('2027-05-12T09:00:00Z')
+				}
+			])
+		).toBe('draft');
+		expect(
+			classifyAcceptedTalk([
+				{
+					status: 'confirmed',
+					kind: 'session',
+					dayId: 1,
+					roomId: 1,
+					startsAt: new Date('2027-05-12T09:00:00Z')
+				}
+			])
+		).toBe('published');
+	});
+
+	it('does not let a board of only breaks claim the talks are published', () => {
+		expect(agendaReadyLine({ unplaced: 0, draft: 0, placed: 0 })).toBe(
+			'Nothing has been accepted yet, so there is nothing to schedule.'
+		);
 	});
 
 	it('says fill-the-slots left drafts, not a live programme', () => {

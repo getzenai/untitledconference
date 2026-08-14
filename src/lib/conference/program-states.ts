@@ -3,15 +3,17 @@
  *
  * Named once so dashboard and agenda cannot answer "is the programme finished?"
  * with two different words. `confirmed` is a database value; the screens say
- * `published`.
+ * `published`. The split is the slot, not the existence of a placement row —
+ * accepting writes a tentative row with no day or room (`putInAgendaTray`),
+ * and that parked row is unplaced on both screens.
  *
- *   unplaced  — no slot (not even in the tray, or still waiting in it)
- *   draft     — on the grid, `tentative`, invisible to the public
+ *   unplaced  — no placement, or a placement with no slot (the tray)
+ *   draft     — tentative *with* a slot: white card on the grid, not public
  *   published — `confirmed`, on the public agenda
  *
  * Dashboard counts unplaced + draft (not yet published). Agenda's headline
- * counts only unplaced (still waiting for a slot). Both numbers are right;
- * both sentences have to say which set they mean.
+ * counts only unplaced (still waiting for a slot). After a real accept those
+ * two unplaced numbers are the same set.
  */
 
 export const PROGRAM_WORDS = {
@@ -20,9 +22,49 @@ export const PROGRAM_WORDS = {
 	published: 'published'
 } as const;
 
+/** The columns `isPlaced` / `schedulingGap` both need to draw the same line. */
+export type PlacementSlot = {
+	status: string;
+	kind: string;
+	dayId: number | null;
+	roomId: number | null;
+	startsAt: Date | null;
+};
+
+/**
+ * Is this placement on the grid?
+ *
+ * A session needs day, time and room. A break does not: a null room means
+ * "across every room", and requiring one would drop every lunch into the tray.
+ */
+export function placementHasSlot(row: {
+	kind: string;
+	dayId: number | null;
+	roomId: number | null;
+	startsAt: Date | null;
+}): boolean {
+	if (row.dayId === null || row.startsAt === null) return false;
+	return row.kind !== 'session' || row.roomId !== null;
+}
+
+/**
+ * One accepted talk, given the placements the server actually writes.
+ *
+ * The accept path inserts a tentative row with no day, room or time. That is
+ * unplaced — the same box the agenda tray already uses — not a draft.
+ */
+export function classifyAcceptedTalk(
+	placements: PlacementSlot[]
+): 'unplaced' | 'draft' | 'published' {
+	const slotted = placements.filter(placementHasSlot);
+	if (slotted.some((p) => p.status === 'confirmed')) return 'published';
+	if (slotted.length > 0) return 'draft';
+	return 'unplaced';
+}
+
 export type SchedulingCounts = {
 	unplaced: number;
-	/** Accepted talks with a tentative placement — tray or draft on the grid. */
+	/** Accepted talks with a tentative placement *and* a slot. */
 	draft: number;
 };
 
@@ -34,7 +76,7 @@ export function notPublished(counts: SchedulingCounts): number {
 export function dashboardSchedulingHeadline(counts: SchedulingCounts): string | null {
 	const n = notPublished(counts);
 	if (n === 0) return null;
-	return n === 1 ? '1 accepted not yet published' : `${n} accepted not yet published`;
+	return `${n} accepted not yet published`;
 }
 
 export function dashboardSchedulingTile(counts: SchedulingCounts): string {

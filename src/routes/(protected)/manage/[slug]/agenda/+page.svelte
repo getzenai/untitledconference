@@ -144,12 +144,15 @@
 	const liveTalks = $derived(
 		placedTalks.filter((p) => p.status === 'confirmed' && p.submissionStatus === 'accepted')
 	);
+	// Includes a declined talk that still has a tentative slot. #497 keeps a
+	// confirmed declined slot on purpose; a tentative one is unpublished either
+	// way, so it belongs in this count.
 	const draftTalks = $derived(placedTalks.filter((p) => p.status !== 'confirmed'));
 	const readyLine = $derived(
 		agendaReadyLine({
 			unplaced: unscheduled,
 			draft: draftTalks.length,
-			placed: board.placed.length
+			placed: placedTalks.length
 		})
 	);
 	/**

@@ -2,6 +2,11 @@
  * #466 — dashboard and agenda used to answer "is the programme finished?"
  * with opposite yes/no. They still count different sets (not-published vs
  * unplaced); this pins that both screens name the set, with the same words.
+ *
+ * The dashboard `state` here is what `schedulingGap` actually returns after
+ * splitting on the slot: a tray talk is `unplaced`, a white card is `tentative`.
+ * The accept-path shape (tentative row, no day/room) is pinned in
+ * `program-states.unit.test.ts` and `dashboard.integration.test.ts`.
  */
 import {
 	agendaReadyLine,
@@ -151,6 +156,32 @@ describe('dashboard vs agenda (#466)', () => {
 			expect(dashboard.toLowerCase()).toContain(word);
 			expect(agenda.toLowerCase()).toContain(word);
 		}
+	});
+
+	it('after accept, both screens count the tray as unplaced — not draft', () => {
+		const dashboard = dashboardBody({
+			accepted: 2,
+			unplaced: 2,
+			tentative: 0,
+			items: [
+				{ id: 1, title: 'Just accepted', state: 'unplaced' },
+				{ id: 2, title: 'Also accepted', state: 'unplaced' }
+			]
+		});
+		const agenda = agendaBody({
+			tray: [
+				talk(1, { dayId: null, roomId: null, startMinutes: null, endMinutes: null }),
+				talk(2, { dayId: null, roomId: null, startMinutes: null, endMinutes: null })
+			],
+			placed: []
+		});
+
+		expect(dashboard).toContain('2 accepted not yet published');
+		expect(dashboard).toContain('0 drafts · 2 unplaced');
+		expect(dashboard).toContain('Unplaced');
+		expect(dashboard).not.toContain('Draft');
+		expect(agenda).toContain('2 unplaced talks need a slot.');
+		expect(agenda).not.toContain('still drafts');
 	});
 
 	it('does not let an empty tray claim the programme is finished while drafts sit on the grid', () => {

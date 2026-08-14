@@ -481,6 +481,13 @@ describe('agenda public state (#497)', () => {
 		expect(body).not.toContain('Unpublish the agenda');
 	});
 
+	it('does not let a board of only breaks claim every talk has a published slot', () => {
+		const body = renderWith(1, 1, { placed: [breakSlot()] });
+
+		expect(body).toContain('Nothing has been accepted yet, so there is nothing to schedule.');
+		expect(body).not.toContain('Every accepted talk has a published slot.');
+	});
+
 	it('does not count a declined talk that kept its confirmed slot as live', () => {
 		// The public loader also requires status=accepted. A withdrawn acceptance
 		// leaves the confirmed placement standing, visibly wrong, for a human to

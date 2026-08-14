@@ -11,7 +11,9 @@ import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
+	conferenceDayTable,
 	conferenceTable,
+	roomTable,
 	speakerProfileTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
@@ -25,6 +27,7 @@ import {
 } from '$lib/server/db/conference/review-schema';
 import { asc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { agendaBoard, placeSession, setPlacementStatus } from './agenda';
 import { conferenceDashboard, MAX_ITEMS, TIMELINE_DAYS } from './dashboard';
 import { decideSubmissions } from './decisions';
 
@@ -206,21 +209,86 @@ describe('the decision queue', () => {
 });
 
 describe('the scheduling gap', () => {
-	it('separates "not even parked" from "in the tray" and drops what is confirmed', async () => {
-		const unplaced = await addSubmission(conference, 'Nowhere yet', 'accepted');
-		const parked = await addSubmission(conference, 'In the tray', 'accepted');
-		const scheduled = await addSubmission(conference, 'On the grid', 'accepted');
+	let dayId: number;
+	let roomId: number;
 
-		await db.insert(placementTable).values([
-			{ conferenceId: conference.id, submissionId: parked, status: 'tentative' },
-			{ conferenceId: conference.id, submissionId: scheduled, status: 'confirmed' }
-		]);
+	beforeAll(async () => {
+		const [day] = await db
+			.insert(conferenceDayTable)
+			.values({ conferenceId: conference.id, date: '2027-05-12', position: 0 })
+			.returning();
+		const [room] = await db
+			.insert(roomTable)
+			.values({ conferenceId: conference.id, name: 'Main', position: 0 })
+			.returning();
+		dayId = day.id;
+		roomId = room.id;
+	});
+
+	it('counts a talk parked by accept as unplaced — the same set as the agenda tray', async () => {
+		const first = await addSubmission(conference, 'Just accepted', 'submitted');
+		const second = await addSubmission(conference, 'Also accepted', 'submitted');
+		await decideSubmissions(conference, [first, second], 'accepted');
+
+		const { scheduling } = await conferenceDashboard(conference.id, NOW);
+		const board = await agendaBoard(conference.id);
+
+		expect(scheduling).toMatchObject({ accepted: 2, unplaced: 2, tentative: 0 });
+		expect(scheduling.items.map((i) => i.state)).toEqual(['unplaced', 'unplaced']);
+		expect(board.tray).toHaveLength(2);
+		expect(scheduling.unplaced).toBe(board.tray.length);
+	});
+
+	it('splits on the slot: tray stays unplaced, a white card is draft, confirmed drops out', async () => {
+		const parked = await addSubmission(conference, 'In the tray', 'submitted');
+		const draft = await addSubmission(conference, 'Draft on the grid', 'submitted');
+		const live = await addSubmission(conference, 'On the grid', 'submitted');
+		await decideSubmissions(conference, [parked, draft, live], 'accepted');
+
+		const waiting = await agendaBoard(conference.id);
+		const draftPlacement = waiting.tray.find((t) => t.submissionId === draft);
+		const livePlacement = waiting.tray.find((t) => t.submissionId === live);
+		expect(draftPlacement).toBeTruthy();
+		expect(livePlacement).toBeTruthy();
+
+		expect(
+			await placeSession(conference.id, draftPlacement!.placementId, {
+				dayId,
+				roomId,
+				startMinutes: 9 * 60
+			})
+		).toMatchObject({ ok: true });
+		expect(
+			await placeSession(conference.id, livePlacement!.placementId, {
+				dayId,
+				roomId,
+				startMinutes: 10 * 60
+			})
+		).toMatchObject({ ok: true });
+		expect(await setPlacementStatus(conference.id, livePlacement!.placementId, 'confirmed')).toBe(
+			true
+		);
+
+		const { scheduling } = await conferenceDashboard(conference.id, NOW);
+		const board = await agendaBoard(conference.id);
+
+		expect(scheduling).toMatchObject({ accepted: 3, unplaced: 1, tentative: 1 });
+		expect(scheduling.items.map((i) => i.id)).toEqual([parked, draft]);
+		expect(scheduling.items.map((i) => i.state)).toEqual(['unplaced', 'tentative']);
+		expect(board.tray.map((t) => t.submissionId)).toEqual([parked]);
+		expect(scheduling.unplaced).toBe(board.tray.length);
+		expect(scheduling.tentative).toBe(
+			board.placed.filter((p) => p.submissionId !== null && p.status !== 'confirmed').length
+		);
+	});
+
+	it('still counts a talk that fell out of the process (accepted, no placement row)', async () => {
+		const orphan = await addSubmission(conference, 'Nowhere yet', 'accepted');
 
 		const { scheduling } = await conferenceDashboard(conference.id, NOW);
 
-		expect(scheduling).toMatchObject({ accepted: 3, unplaced: 1, tentative: 1 });
-		expect(scheduling.items.map((i) => i.id)).toEqual([unplaced, parked]);
-		expect(scheduling.items.map((i) => i.state)).toEqual(['unplaced', 'tentative']);
+		expect(scheduling).toMatchObject({ accepted: 1, unplaced: 1, tentative: 0 });
+		expect(scheduling.items).toEqual([expect.objectContaining({ id: orphan, state: 'unplaced' })]);
 	});
 
 	it('says nothing about talks that were never accepted', async () => {
