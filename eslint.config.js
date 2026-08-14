@@ -95,6 +95,29 @@ export default ts.config(
 		}
 	},
 	{
+		// `use:enhance` has to come from `$lib/forms/enhance` (#482). SvelteKit's
+		// own action replaces the page when an action throws, which on a form means
+		// the typed values die with it. Wrapping was opt-in for one release and 32
+		// forms never opted in — so the wrapper is the import now, and this rule is
+		// what keeps the next form from reaching past it by habit.
+		files: ['src/**/*.svelte'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: '$app/forms',
+							importNames: ['enhance'],
+							message:
+								"Import { enhance } from '$lib/forms/enhance' — SvelteKit's own enhance destroys the page, and the form with it, when an action throws (#482)."
+						}
+					]
+				}
+			]
+		}
+	},
+	{
 		files: ['cypress/**/*.ts', 'cypress.config.ts', '**/*.test.ts', '**/*.spec.ts'],
 		languageOptions: {
 			globals: {

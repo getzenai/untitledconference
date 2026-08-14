@@ -12,7 +12,7 @@
 	 * submission handler use. A preview with its own rendering logic is a demo, not a
 	 * preview.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { callWindow } from '$lib/conference/call-window';
 	import { callHint } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';

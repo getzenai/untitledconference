@@ -30,7 +30,7 @@
 	import GavelIcon from '@lucide/svelte/icons/gavel';
 	import TrendingDownIcon from '@lucide/svelte/icons/trending-down';
 	import TrendingUpIcon from '@lucide/svelte/icons/trending-up';
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import type { Component, Snippet } from 'svelte';
 	import { untrack } from 'svelte';

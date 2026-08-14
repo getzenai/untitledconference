@@ -2,7 +2,7 @@
 	/**
 	 * One contact: identity + notes + tags + history + push to event.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';

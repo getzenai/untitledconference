@@ -6,7 +6,7 @@
 	 * spoken for two organizers has two records and may want a different bio in
 	 * each. Merging them into one form would silently overwrite both.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import {
 		AlertDialog,

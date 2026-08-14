@@ -5,7 +5,7 @@
 	 * Reviewer visibility used to sit alone on Settings (#63). The full people
 	 * roster is still to come; this is the right place for the mode already.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { REVIEW_VISIBILITY_MODES } from '$lib/conference/review-visibility';
 	import { Button } from '$lib/components/ui/button';

@@ -101,6 +101,11 @@ resolution (`hooks.server.locale.unit.test.ts`) and the public cache key `__rend
 </form>
 ```
 
+Plain forms — everything that posts to an action without Superforms — import
+`enhance` from `$lib/forms/enhance`, never from `$app/forms` (ESLint says so).
+SvelteKit's own action replaces the page with `+error.svelte` when an action
+throws, and takes everything typed into the form with it (#482).
+
 See `ai-dev-docs/howtos/formsnap-superforms-with-actions.md` and
 `ai-dev-docs/howtos/formsnap-superforms-client-only.md` for the two supported patterns (server
 actions vs. client-only/SPA forms), and `ai-dev-docs/howtos/zod-v4-superforms-compatibility.md` for

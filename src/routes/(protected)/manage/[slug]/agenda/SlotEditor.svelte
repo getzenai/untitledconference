@@ -19,7 +19,7 @@
 	 * the filtered ones is a question about the page, and is pinned in the Cypress
 	 * agenda spec with the room filter actually set.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 

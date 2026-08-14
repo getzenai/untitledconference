@@ -3,7 +3,7 @@
 	 * Speaker CRM directory — org-wide contacts across events (CRM-01 / CRM-02 / CRM-05)
 	 * plus overview KPIs and top-companies analytics (CRM-12).
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';

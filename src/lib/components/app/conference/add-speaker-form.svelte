@@ -7,7 +7,7 @@
 	 * an org-wide profile (or reuses one by email) and puts them on this
 	 * conference.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';

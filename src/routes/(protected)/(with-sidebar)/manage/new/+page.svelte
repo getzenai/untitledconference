@@ -6,7 +6,7 @@
 	 * organizer should see the public address before it is theirs, not discover it
 	 * afterwards, but should not have to invent it.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { Button } from '$lib/components/ui/button';
 	import DatePicker from '$lib/components/app/date-picker.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';

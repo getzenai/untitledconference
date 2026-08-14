@@ -7,9 +7,8 @@
 	 * split with a sticky jump nav (#153), not tabs: every section stays on one page
 	 * so form posts can keep their own save feedback without a tab-state machine.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
-	import { keepPageOnActionError } from '$lib/forms/keep-page-on-action-error';
 	import { MAX_MINUTES } from '$lib/conference/structure-lines';
 	import { unpublishWarning } from '$lib/conference/unpublish-warning';
 	import {
@@ -147,7 +146,7 @@
 			? '16:9, PDF, no larger than 20 MB'
 			: 'Anything the speaker needs to know';
 
-	const submitting = keepPageOnActionError(() => {
+	const submitting = () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
@@ -156,9 +155,9 @@
 				busy = false;
 			}
 		};
-	});
+	};
 
-	const submittingAdd = keepPageOnActionError(() => {
+	const submittingAdd = () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
@@ -167,7 +166,7 @@
 				busy = false;
 			}
 		};
-	});
+	};
 
 	/**
 	 * The structure forms, which are typed into over and over.
@@ -183,8 +182,9 @@
 	 * Enter: the sixth would sit behind "Show all" and look like it never saved.
 	 * Expanding only on success keeps the quiet entry for everyone else.
 	 */
-	const addingLines = (expand: () => void) =>
-		keepPageOnActionError(({ formElement }: { formElement: HTMLFormElement }) => {
+	const addingLines =
+		(expand: () => void) =>
+		({ formElement }: { formElement: HTMLFormElement }) => {
 			busy = true;
 			return async ({
 				result,
@@ -203,7 +203,7 @@
 					busy = false;
 				}
 			};
-		});
+		};
 
 	/**
 	 * Examples in the field itself, so the shape of a batch is visible before the
