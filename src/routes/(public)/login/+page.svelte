@@ -13,6 +13,7 @@
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
+	import { safeReturnTo } from '$lib/safe-return-to';
 	import { loginSchema } from './schema';
 
 	// The server action's answer (#221). It only ever renders for a submit that
@@ -51,8 +52,8 @@
 						// Handle email verification error
 						if (signInError.status === 403 && signInError.message?.includes('Email not verified')) {
 							const params = new SvelteURLSearchParams({ email });
-							const returnTo = page.url.searchParams.get('returnTo');
-							if (returnTo) params.set('returnTo', returnTo);
+							const rawReturnTo = page.url.searchParams.get('returnTo');
+							if (rawReturnTo) params.set('returnTo', safeReturnTo(rawReturnTo, page.url.origin));
 							await goto(`/verify-email?${params}`);
 							return;
 						}
@@ -82,10 +83,7 @@
 						// session in hand means the server let them in, and the only thing
 						// left to do is take them where they were going.
 
-						// Redirect to home or returnTo URL
-						const rawReturnTo = page.url.searchParams.get('returnTo') || '/home';
-						const returnTo =
-							rawReturnTo.startsWith('/') && !rawReturnTo.startsWith('//') ? rawReturnTo : '/home';
+						const returnTo = safeReturnTo(page.url.searchParams.get('returnTo'), page.url.origin);
 
 						// Goose easter egg: one-time "welcome back" toast, consumed by the
 						// protected layout on mount. sessionStorage rather than a query
