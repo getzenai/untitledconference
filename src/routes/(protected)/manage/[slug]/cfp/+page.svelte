@@ -43,11 +43,13 @@
 	// A placeholder rather than a default value: the real text is the one thing on
 	// this screen only the organizer knows, and a prefilled box invites shipping
 	// someone else's words.
-	const DESCRIPTION_HINT = `We want talks that show the work — the migration that failed first, the number that moved.
+	const DESCRIPTION_HINT = `## What we are looking for
+
+We want talks that show the work — **the migration that failed first**, the number that moved.
 
 - Reviews are anonymous; your name is hidden from reviewers.
 - Travel is covered for accepted speakers.
-- You can edit until the call closes.`;
+- You can edit until the call closes. See [last year's programme](https://example.com/2026).`;
 
 	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
@@ -382,8 +384,9 @@
 								placeholder={DESCRIPTION_HINT}
 							/>
 							<span class="mt-1 block">
-								Shown above the form. Blank line starts a paragraph, a line beginning with “-”
-								becomes a bullet.
+								Shown above the form. Markdown: <code>#</code> headings, <code>-</code> or
+								<code>1.</code> lists, <code>**bold**</code>, <code>[text](https://…)</code>, and
+								<code>---</code> for a rule. A blank line starts a paragraph.
 							</span>
 						</label>
 						<div class="sm:col-span-2">

@@ -100,6 +100,40 @@ describe('the public call for papers', () => {
 		expect(body).toContain('&lt;script>alert(1)&lt;/script>');
 	});
 
+	/**
+	 * #509: a real call is two thousand words with sections and links out. This
+	 * page used to render one grey run of text in which a pasted URL was
+	 * characters to select and copy.
+	 */
+	it('gives a long call headings and working links', () => {
+		const body = renderCfp(
+			'open',
+			'## Session formats\n\nSee [past talks](https://ai.engineer/nyc) — acceptance is **5-15%**.'
+		);
+
+		// Svelte's server renderer sprinkles comment markers between nodes, so the
+		// tag and its text are asserted apart.
+		expect(body).toMatch(/<h4[^>]*>[\s\S]*Session formats[\s\S]*<\/h4>/);
+		expect(body).toContain('href="https://ai.engineer/nyc"');
+		expect(body).toMatch(/<a[^>]*>past talks<\/a>/);
+		expect(body).toMatch(/<strong[^>]*>5-15%<\/strong>/);
+		// The markers themselves are gone: the reader gets the formatting, not the
+		// syntax an organizer typed to ask for it.
+		expect(body).not.toContain('## Session formats');
+		expect(body).not.toContain('**5-15%**');
+	});
+
+	it('refuses a link that is not http, https or mailto', () => {
+		// The href is the one value from organizer text that reaches an attribute.
+		const body = renderCfp('open', '[Click me](javascript:alert(1))');
+
+		expect(body).not.toContain('href="javascript:');
+		expect(body).not.toMatch(/<a[^>]*>Click me<\/a>/);
+		// The characters the organizer typed stay on the page, so they can see
+		// their link did not take.
+		expect(body).toContain('[Click me](javascript:alert(1))');
+	});
+
 	it('drops the box once the call has closed', () => {
 		const body = renderCfp('closed', 'Travel is covered', null, new Date('2027-04-14T12:00:00Z'));
 
