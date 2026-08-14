@@ -20,7 +20,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { draftFromFormData } from '$lib/conference/pending-proposal';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import {
 		ALL_FIXED_QUESTIONS_SHOWN,
 		asks,
@@ -83,11 +83,18 @@
 	}: Props = $props();
 
 	let title = $state(initial.title);
+	let abstract = $state(initial.abstract);
+	let keyTakeaway = $state(initial.keyTakeaway);
+	let audienceLevel = $state(initial.audienceLevel);
 	let sessionFormatId = $state(initial.sessionFormatId);
 	let trackId = $state(initial.trackId);
 	let answers = $state<Record<number, string>>({ ...initial.answers });
 	let speakerName = $state(initial.speaker.name);
 	let sortName = $state(initial.speaker.sortName);
+	let speakerEmail = $state(initial.speaker.email);
+	let speakerJobTitle = $state(initial.speaker.jobTitle);
+	let speakerCompany = $state(initial.speaker.company);
+	let speakerBio = $state(initial.speaker.bio);
 	// A prefilled sort name came from a person, not from the guess, so it is never
 	// overwritten by typing in the name field.
 	let sortNameTouched = $state(Boolean(initial.speaker.sortName));
@@ -159,6 +166,57 @@
 	let formEl = $state<HTMLFormElement | undefined>();
 
 	/**
+	 * What a rejected submit has to say, in the order the form asks it (#493).
+	 *
+	 * The server already names the missing organizer question. The form used to
+	 * print that only next to the field — in a block titled "Questions from the
+	 * organizers" that a speaker does not read as "required" — while they were
+	 * still looking at the button. The summary is the same sentences, at the
+	 * top; the first selector is where focus goes.
+	 */
+	const errorItems = $derived.by(() => {
+		const items: { message: string; selector: string }[] = [];
+		const errors = form?.errors ?? {};
+		const fieldErrors = form?.fieldErrors ?? {};
+		if (errors.title) items.push({ message: errors.title, selector: '[name="title"]' });
+		if (errors.abstract) items.push({ message: errors.abstract, selector: '[name="abstract"]' });
+		for (const field of shown) {
+			const message = fieldErrors[field.id];
+			if (!message) continue;
+			items.push({
+				message,
+				selector: `[name="answer:${field.id}"], [data-testid="app-select-answer:${field.id}"]`
+			});
+		}
+		if (errors.speakerName) {
+			items.push({ message: errors.speakerName, selector: '[name="speakerName"]' });
+		}
+		if (errors.speakerEmail) {
+			items.push({ message: errors.speakerEmail, selector: '[name="speakerEmail"]' });
+		}
+		if (errors.coSpeakerEmail) {
+			items.push({ message: errors.coSpeakerEmail, selector: '[name="co-email"]' });
+		}
+		return items;
+	});
+
+	let focusedErrors = $state('');
+
+	$effect(() => {
+		const items = errorItems;
+		const key = items.map((item) => item.message).join('|');
+		if (!key || key === focusedErrors) return;
+		focusedErrors = key;
+		const selector = items[0].selector;
+		void tick().then(() => {
+			const el = formEl?.querySelector<HTMLElement>(selector);
+			if (!el) return;
+			el.focus();
+			el.scrollIntoView({ block: 'center' });
+		});
+	});
+
+	/**
 	 * A thrown action must not replace this page (#482).
 	 *
 	 * The visitor has no draft and no way back. SvelteKit's default `update()`
@@ -199,6 +257,21 @@
 {/if}
 
 <form bind:this={formEl} method="POST" use:enhance={submitting} class="mt-6 space-y-8">
+	{#if errorItems.length > 0}
+		<div
+			class="border-status-bad/40 bg-status-bad/5 rounded-lg border p-4"
+			role="alert"
+			data-testid="proposal-errors"
+		>
+			<p class="text-sm font-medium">This proposal cannot be submitted yet.</p>
+			<ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+				{#each errorItems as item (item.message)}
+					<li>{item.message}</li>
+				{/each}
+			</ul>
+		</div>
+	{/if}
+
 	<section class="space-y-4">
 		<h3 class="text-sm font-medium">Your talk</h3>
 
@@ -231,7 +304,13 @@
 		{#if asked('abstract')}
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Abstract *</span>
-				<Textarea name="abstract" rows={6} class="mt-1" value={initial.abstract} />
+				<Textarea
+					name="abstract"
+					rows={6}
+					class="mt-1"
+					bind:value={abstract}
+					aria-invalid={Boolean(form?.errors?.abstract)}
+				/>
 				{#if form?.errors?.abstract}
 					<span class="text-status-bad mt-1 block text-xs">{form.errors.abstract}</span>
 				{/if}
@@ -241,7 +320,7 @@
 		{#if asked('keyTakeaway')}
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Key takeaway</span>
-				<Input name="keyTakeaway" class="mt-1" value={initial.keyTakeaway} />
+				<Input name="keyTakeaway" class="mt-1" bind:value={keyTakeaway} />
 			</label>
 		{/if}
 
@@ -285,7 +364,7 @@
 				<Input
 					name="audienceLevel"
 					class="mt-1"
-					value={initial.audienceLevel}
+					bind:value={audienceLevel}
 					placeholder="Beginner, intermediate, advanced"
 				/>
 			</label>
@@ -308,6 +387,7 @@
 							rows={4}
 							class="mt-1"
 							value={answers[field.id] ?? ''}
+							aria-invalid={Boolean(form?.fieldErrors?.[field.id])}
 							oninput={(e) => (answers[field.id] = e.currentTarget.value)}
 						/>
 					{:else if field.kind === 'select'}
@@ -315,6 +395,7 @@
 							name="answer:{field.id}"
 							class="mt-1"
 							aria-label={field.label}
+							aria-invalid={Boolean(form?.fieldErrors?.[field.id])}
 							placeholder="—"
 							value={answers[field.id] ?? ''}
 							options={parseOptions(field.options).map((option) => ({
@@ -328,6 +409,7 @@
 							name="answer:{field.id}"
 							class="mt-1"
 							aria-label={field.label}
+							aria-invalid={Boolean(form?.fieldErrors?.[field.id])}
 							placeholder="—"
 							value={answers[field.id] ?? ''}
 							options={YES_NO}
@@ -338,6 +420,7 @@
 							name="answer:{field.id}"
 							class="mt-1"
 							value={answers[field.id] ?? ''}
+							aria-invalid={Boolean(form?.fieldErrors?.[field.id])}
 							placeholder={field.kind === 'file' ? 'Link to the file' : undefined}
 							oninput={(e) => (answers[field.id] = e.currentTarget.value)}
 						/>
@@ -390,7 +473,7 @@
 		<div class={pairClass(asked('speakerJobTitle'))}>
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Email *</span>
-				<Input name="speakerEmail" type="email" class="mt-1" value={initial.speaker.email} />
+				<Input name="speakerEmail" type="email" class="mt-1" bind:value={speakerEmail} />
 				{#if form?.errors?.speakerEmail}
 					<span class="text-status-bad mt-1 block text-xs">{form.errors.speakerEmail}</span>
 				{/if}
@@ -399,7 +482,7 @@
 			{#if asked('speakerJobTitle')}
 				<label class="block text-sm">
 					<span class="text-muted-foreground text-xs">Job title</span>
-					<Input name="speakerJobTitle" class="mt-1" value={initial.speaker.jobTitle} />
+					<Input name="speakerJobTitle" class="mt-1" bind:value={speakerJobTitle} />
 				</label>
 			{/if}
 		</div>
@@ -407,14 +490,14 @@
 		{#if asked('speakerCompany')}
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Company</span>
-				<Input name="speakerCompany" class="mt-1" value={initial.speaker.company} />
+				<Input name="speakerCompany" class="mt-1" bind:value={speakerCompany} />
 			</label>
 		{/if}
 
 		{#if asked('speakerBio')}
 			<label class="block text-sm">
 				<span class="text-muted-foreground text-xs">Short bio</span>
-				<Textarea name="speakerBio" rows={4} class="mt-1" value={initial.speaker.bio} />
+				<Textarea name="speakerBio" rows={4} class="mt-1" bind:value={speakerBio} />
 			</label>
 		{/if}
 	</section>
