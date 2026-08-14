@@ -30,8 +30,10 @@ describe('app sidebar starter cleanup', () => {
 		expect(source).toContain('NavUser');
 		// Conference destinations ride along in the mobile sheet; desktop has
 		// ConferenceSidebar. One list (`NavConference`), not a second <aside>.
+		// The landmark lives on Sidebar.Root (`aria-label="Application"`).
 		expect(source).toContain('NavConference');
 		expect(source).toContain('isConferencePath(page.url.pathname)');
+		expect(source).toContain('aria-label="Application"');
 		expect(source).not.toMatch(/<aside[\s>]/);
 	});
 

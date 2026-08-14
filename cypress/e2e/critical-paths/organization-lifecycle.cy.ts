@@ -64,12 +64,7 @@ describe.skip('Critical Organization Lifecycle', () => {
 			orgPage.shouldHaveName(organizationName);
 
 			// STEP 2: Owner invites the member as admin
-			orgPage.inviteEmailInput().clear().type(member.email);
-			// The page renders an sr-only native <select> next to the bits-ui
-			// dropdown specifically so tests can pick a role; it is visually
-			// covered, hence force.
-			cy.get('select[aria-label="Role for testing"]').select('admin', { force: true });
-			orgPage.inviteButton().click();
+			orgPage.inviteMember(member.email, 'admin');
 			cy.contains('td', member.email, { timeout: 20000 }).should('exist');
 
 			// STEP 3: Member accepts the invitation

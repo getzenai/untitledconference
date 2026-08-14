@@ -59,7 +59,7 @@
      palette in app.css is unreachable. -->
 <ModeWatcher defaultMode="light" track={false} />
 
-<Toaster />
+<Toaster richColors closeButton />
 {#if page.data.impersonating}
 	<div class="fixed inset-x-0 top-0 z-[100]">
 		<ImpersonationBanner

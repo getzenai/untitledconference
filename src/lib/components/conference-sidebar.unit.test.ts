@@ -16,6 +16,7 @@ describe('conference sidebar', () => {
 		expect(source).toContain('data-testid="conference-sidebar"');
 		expect(source).toContain('NavConference');
 		expect(source).toContain('data-testid="switch-conference"');
+		expect(source).toContain('aria-label="Conference"');
 		expect(source).not.toMatch(/<aside[\s>]/);
 		expect(source).not.toContain('AccountMenu');
 		expect(source).not.toContain('NavUser');

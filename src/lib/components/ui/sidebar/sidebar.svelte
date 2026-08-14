@@ -12,8 +12,9 @@
 		collapsible = "offcanvas",
 		class: className,
 		children,
+		"aria-label": ariaLabel = "Sidebar",
 		...restProps
-	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+	}: WithElementRef<HTMLAttributes<HTMLElement>> & {
 		side?: "left" | "right";
 		variant?: "sidebar" | "floating" | "inset";
 		collapsible?: "offcanvas" | "icon" | "none";
@@ -23,16 +24,17 @@
 </script>
 
 {#if collapsible === "none"}
-	<div
+	<aside
 		class={cn(
 			"bg-sidebar text-sidebar-foreground w-(--sidebar-width) flex h-full flex-col",
 			className
 		)}
 		bind:this={ref}
+		aria-label={ariaLabel}
 		{...restProps}
 	>
 		{@render children?.()}
-	</div>
+	</aside>
 {:else if sidebar.isMobile}
 	<Sheet.Root
 		bind:open={() => sidebar.openMobile, (v) => sidebar.setOpenMobile(v)}
@@ -50,9 +52,9 @@
 				<Sheet.Title>Sidebar</Sheet.Title>
 				<Sheet.Description>Displays the mobile sidebar.</Sheet.Description>
 			</Sheet.Header>
-			<div class="flex h-full w-full flex-col">
+			<nav class="flex h-full w-full flex-col" aria-label={ariaLabel}>
 				{@render children?.()}
-			</div>
+			</nav>
 		</Sheet.Content>
 	</Sheet.Root>
 {:else}
@@ -92,13 +94,14 @@
 			)}
 			{...restProps}
 		>
-			<div
+			<aside
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
+				aria-label={ariaLabel}
 				class="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
 			>
 				{@render children?.()}
-			</div>
+			</aside>
 		</div>
 	</div>
 {/if}
