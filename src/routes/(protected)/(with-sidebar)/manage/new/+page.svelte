@@ -12,6 +12,7 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import { CONFERENCE_CREATE_FIELDS, createFormBlockReason } from '$lib/conference/create-form';
 	import { slugify } from '$lib/conference/slug';
 
 	let { data, form } = $props();
@@ -30,6 +31,15 @@
 	// The address follows the name until the organizer touches it, and then stops
 	// — otherwise their edit would disappear on the next keystroke in the name.
 	const slug = $derived(slugEdit ?? form?.values?.slug ?? slugify(name));
+
+	const submitBlockReason = $derived(
+		createFormBlockReason([
+			{ ...CONFERENCE_CREATE_FIELDS.name, value: name },
+			{ ...CONFERENCE_CREATE_FIELDS.slug, value: slug },
+			{ ...CONFERENCE_CREATE_FIELDS.startsOn, value: form?.values?.startsOn ?? '' },
+			{ ...CONFERENCE_CREATE_FIELDS.endsOn, value: form?.values?.endsOn ?? '' }
+		])
+	);
 
 	const submitting = () => {
 		busy = true;
@@ -66,13 +76,17 @@
 
 		<form method="POST" use:enhance={submitting} class="mt-8 space-y-5">
 			<div class="space-y-2">
-				<Label for="name">Name</Label>
+				<Label for="name">
+					Name{#if CONFERENCE_CREATE_FIELDS.name.required}<span class="text-status-bad"
+							>&nbsp;*</span
+						>{/if}
+				</Label>
 				<Input
 					id="name"
 					name="name"
 					value={name}
 					oninput={(event) => (nameEdit = event.currentTarget.value)}
-					required
+					required={CONFERENCE_CREATE_FIELDS.name.required}
 					maxlength={120}
 				/>
 			</div>
@@ -110,7 +124,24 @@
 				<p class="text-destructive text-sm" role="alert">{form.error}</p>
 			{/if}
 
-			<Button type="submit" disabled={busy}>Create conference</Button>
+			<div class="flex flex-col items-start gap-1">
+				<Button
+					type="submit"
+					disabled={busy}
+					aria-describedby={submitBlockReason ? 'create-block-reason' : undefined}
+				>
+					Create conference
+				</Button>
+				{#if submitBlockReason}
+					<p
+						id="create-block-reason"
+						class="text-muted-foreground text-xs"
+						data-testid="create-block-reason"
+					>
+						{submitBlockReason}
+					</p>
+				{/if}
+			</div>
 		</form>
 	{/if}
 </div>

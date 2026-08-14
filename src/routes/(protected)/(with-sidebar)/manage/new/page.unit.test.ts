@@ -40,4 +40,21 @@ describe('new conference', () => {
 		expect(html).toContain('Settings next');
 		expect(html).toContain('call for papers');
 	});
+
+	/**
+	 * #436: Name is required in the markup and on the server; the label used
+	 * to look optional. Slug and dates are optional — the explorer's
+	 * "almost all required" is not what the action checks.
+	 */
+	it('marks Name required and names why create cannot run on first paint', () => {
+		const html = body(true);
+
+		expect(html).toContain('Name');
+		expect(html).toMatch(/Name<!--[^>]*--><span class="text-status-bad">\u00a0\*/);
+		expect(html).toContain('data-testid="create-block-reason"');
+		expect(html).toContain('Name is required.');
+		// The button stays enabled so a no-JS submit still posts; HTML required
+		// and the server reason are the lock. The org form is the one that greys.
+		expect(html).toContain('Create conference');
+	});
 });
