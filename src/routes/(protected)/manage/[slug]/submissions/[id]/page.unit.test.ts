@@ -1,4 +1,5 @@
 /** A single decision is saved before, and independently from, its notification. */
+import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
 import { unassignBlockReason } from '$lib/conference/review-assignment';
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
@@ -45,7 +46,7 @@ type Extras = {
 };
 
 function renderPage(
-	status: 'accepted' | 'submitted' | 'rejected',
+	status: 'accepted' | 'submitted' | 'rejected' | 'draft' | 'waitlisted',
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
@@ -69,7 +70,7 @@ function renderPage(
 					audienceLevel: extras.audienceLevel ?? null,
 					status,
 					contentApproval: 'pending',
-					submittedAt: new Date('2027-01-02T00:00:00Z'),
+					submittedAt: status === 'draft' ? null : new Date('2027-01-02T00:00:00Z'),
 					decidedAt: status === 'accepted' ? new Date('2027-01-03T00:00:00Z') : null,
 					track: null,
 					sessionFormat: null,
@@ -112,6 +113,33 @@ function renderPage(
 }
 
 describe('organizer submission detail decision workflow', () => {
+	it('greys Accept, Waitlist and Decline on a draft and says why (#471)', () => {
+		const body = renderPage('draft');
+		const decide = body.slice(
+			body.indexOf('action="?/decide"'),
+			body.indexOf('</form>', body.indexOf('action="?/decide"'))
+		);
+
+		expect(decide).toContain('value="rejected"');
+		expect(decide).toContain('value="waitlisted"');
+		expect(decide).toContain('value="accepted"');
+		expect(decide.match(/disabled=""/g)?.length).toBe(3);
+		expect(body).toContain('data-testid="decision-block-reason"');
+		expect(body).toContain(DRAFT_DECISION_REASON);
+		expect(body).not.toContain('text-status-good');
+	});
+
+	it('leaves the three buttons live once the speaker has handed the talk in', () => {
+		const body = renderPage('submitted');
+		const decide = body.slice(
+			body.indexOf('action="?/decide"'),
+			body.indexOf('</form>', body.indexOf('action="?/decide"'))
+		);
+
+		expect(decide).not.toContain('disabled=""');
+		expect(body).not.toContain('data-testid="decision-block-reason"');
+	});
+
 	it('renders separate decide and notify forms and names the boundary', () => {
 		const body = renderPage('accepted');
 

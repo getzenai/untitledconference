@@ -1,3 +1,4 @@
+import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
 import { normalizeRecordingUrl } from '$lib/conference/recording-url';
 import { SUBMITTED_REVIEW_UNASSIGN_REASON } from '$lib/conference/review-assignment';
 import { requireOrganizer } from '$lib/server/conference/access';
@@ -76,6 +77,12 @@ export const actions: Actions = {
 			[submissionId(params.id)],
 			decision as Decision
 		);
+		// A disabled button is not a lock (#471). The bulk path still reports
+		// skipped drafts as a success summary; on this one talk that line used
+		// to look like confirmation. Refuse instead.
+		if (result.skippedDrafts > 0 && result.decided === 0 && result.unchanged === 0) {
+			return fail(400, { message: DRAFT_DECISION_REASON });
+		}
 		return { decision, result };
 	},
 
