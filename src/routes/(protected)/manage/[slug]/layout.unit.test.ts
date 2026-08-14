@@ -2,10 +2,17 @@
  * The organizer shell must offer a real way out of a conference. "Switch
  * conference" that is only a label is the trap in #62; the control has to be a
  * link to /manage (which no longer redirects back into the only event).
+ *
+ * #410: that exit lives on ConferenceSidebar (a real Sidebar.Root), not a
+ * handwritten <aside>. The account menu and the product home link belong to
+ * AppSidebar, which the parent layout keeps mounted.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
-import Layout from './+layout.svelte';
+import Host from './layout-ssr-host.svelte';
 
 vi.mock('$app/state', () => ({
 	page: { url: new URL('https://example.test/manage/devflow-2028/dashboard') }
@@ -26,35 +33,48 @@ const conference = {
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
 
+const layoutSource = readFileSync(
+	join(dirname(fileURLToPath(import.meta.url)), '+layout.svelte'),
+	'utf8'
+);
+
+const empty = (() => '') as unknown as import('svelte').Snippet;
+
+const shell = (status: 'draft' | 'published') =>
+	render(Host, {
+		props: {
+			data: {
+				conference: { ...conference, status },
+				user: { id: 'owner-1', name: 'Jordan' },
+				speakerProfile: false,
+				impersonating: null,
+				analytics: { apiKey: undefined, host: undefined }
+			} as never,
+			children: empty
+		}
+	}).body;
+
+describe('shared sidebar architecture', () => {
+	it('uses the shadcn conference rail instead of a handwritten aside', () => {
+		expect(layoutSource).toContain('ConferenceSidebar');
+		expect(layoutSource).not.toMatch(/<aside[\s>]/);
+		// Account and home stay on AppSidebar so the two shells cannot drift (#127).
+		expect(layoutSource).not.toContain('AccountMenu');
+		expect(layoutSource).not.toContain('manage-home-link');
+	});
+});
+
 describe('organizer shell exit', () => {
-	it('links Switch/All conferences to /manage and home to /home', () => {
-		const empty = (() => '') as unknown as import('svelte').Snippet;
-		const { body } = render(Layout, {
-			props: {
-				data: {
-					conference,
-					user: { id: 'owner-1', name: 'Jordan' },
-					speakerProfile: false,
-					impersonating: null,
-					analytics: { apiKey: undefined, host: undefined }
-					// Layout props are looser than the full PageData tree; cast once.
-				} as never,
-				children: empty
-			}
-		});
+	it('links All conferences to /manage', () => {
+		const body = shell('draft');
 
 		expect(body).toContain('data-testid="switch-conference"');
 		expect(body).toContain('href="/manage"');
 		expect(body).toContain('All conferences');
-		expect(body).toContain('data-testid="manage-home-link"');
-		expect(body).toContain('href="/home"');
-		expect(body).toContain('Back to home');
-		// The account menu, the same one the app sidebar carries (#127). Its items
-		// only exist once the menu is open, so the shell can only be asked for the
-		// trigger — that the items are shared is a property of AccountMenu itself.
-		expect(body).toContain('data-testid="account-menu-trigger"');
 		// Old label that looked clickable but described a no-op in earlier builds.
 		expect(body).not.toContain('Switch conference');
+		// The account menu is the parent's AppSidebar footer, not a second copy.
+		expect(body).not.toContain('data-testid="account-menu-trigger"');
 	});
 });
 
@@ -65,27 +85,10 @@ describe('organizer shell exit', () => {
  * 404 — the switch lives in Settings, and only Settings knew it existed.
  */
 describe('draft state in the shell', () => {
-	const empty = (() => '') as unknown as import('svelte').Snippet;
-
-	const shell = (status: 'draft' | 'published') =>
-		render(Layout, {
-			props: {
-				data: {
-					conference: { ...conference, status },
-					user: { id: 'owner-1', name: 'Jordan' },
-					speakerProfile: false,
-					impersonating: null,
-					analytics: { apiKey: undefined, host: undefined }
-				} as never,
-				children: empty
-			}
-		}).body;
-
 	it('shows the draft state on every organizer page, pointing at the switch', () => {
 		const body = shell('draft');
 
 		expect(body).toContain('data-testid="draft-badge"');
-		expect(body).toContain('data-testid="draft-badge-mobile"');
 		// The badge is only worth anything if it leads to the control that changes it.
 		expect(body).toContain('href="/manage/devflow-2028/settings"');
 		expect(body).toContain('not public yet');
@@ -98,12 +101,11 @@ describe('draft state in the shell', () => {
 		expect(body).not.toContain('not public yet');
 	});
 
-	/** The way out to the public site belongs to the shell, on every page and on a phone. */
-	it('offers the public site from the shell in both layouts', () => {
+	/** The way out to the public site belongs to the shell, on every page. */
+	it('offers the public site from the conference rail', () => {
 		const body = shell('published');
 
 		expect(body).toContain('data-testid="view-public-site"');
-		expect(body).toContain('data-testid="view-public-site-mobile"');
 		expect(body).toContain('href="/c/devflow-2028"');
 	});
 });
@@ -114,19 +116,7 @@ describe('draft state in the shell', () => {
  */
 describe('abstract-management labels on the rail', () => {
 	it('names scorecards and the reviewer pool on the destinations that hold them', () => {
-		const empty = (() => '') as unknown as import('svelte').Snippet;
-		const { body } = render(Layout, {
-			props: {
-				data: {
-					conference,
-					user: { id: 'owner-1', name: 'Jordan' },
-					speakerProfile: false,
-					impersonating: null,
-					analytics: { apiKey: undefined, host: undefined }
-				} as never,
-				children: empty
-			}
-		});
+		const body = shell('draft');
 
 		expect(body).toContain('Rounds &amp; scorecards');
 		expect(body).toContain('href="/manage/devflow-2028/rounds"');

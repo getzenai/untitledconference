@@ -1,35 +1,16 @@
 <script lang="ts">
 	/**
-	 * Signed-in chrome for the non-conference surfaces (/home, settings, examples).
-	 *
-	 * The breadcrumb strip used to show starter-template labels ("Building Your
-	 * Application", "Data Fetching") on every page — the same class of leftover as
-	 * the "Where do you want to go?" box on /home. Keep the sidebar trigger; drop
-	 * the fake trail.
+	 * Inset for the non-conference surfaces. AppSidebar and its Provider live
+	 * one level up so they stay mounted when the organizer opens a conference.
 	 */
-	import { page } from '$app/state';
-	import AppSidebar from '$lib/components/app-sidebar.svelte';
-	import { Separator } from '$lib/components/ui/separator/index.js';
+	import AppShellHeader from '$lib/components/app-shell-header.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	let { children } = $props();
 </script>
 
-<Sidebar.Provider>
-	<AppSidebar
-		user={page.data.user}
-		navAccess={page.data.navAccess}
-		variant="inset"
-		data-testid="app-sidebar"
-	/>
-	<Sidebar.Inset>
-		<header class="flex h-16 shrink-0 items-center gap-2">
-			<div class="flex items-center gap-2 px-4">
-				<Sidebar.Trigger class="-ml-1" />
-				<Separator orientation="vertical" class="mr-2 data-[orientation=vertical]:h-4" />
-			</div>
-		</header>
-		<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
-			{@render children()}
-		</div>
-	</Sidebar.Inset>
-</Sidebar.Provider>
+<Sidebar.Inset>
+	<AppShellHeader />
+	<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
+		{@render children()}
+	</div>
+</Sidebar.Inset>

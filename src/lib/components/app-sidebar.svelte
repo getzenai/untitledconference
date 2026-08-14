@@ -58,18 +58,27 @@
 </script>
 
 <script lang="ts">
+	import { page } from '$app/state';
+	import {
+		conferenceDateRange,
+		isConferencePath,
+		isConferenceRail,
+		type ConferenceRail
+	} from '$lib/conference/conference-nav';
+	import { reviewQueueHref, visibleNavItems, type NavAccess } from '$lib/conference/nav-access';
+	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import type { ComponentProps } from 'svelte';
+	import NavAdmin from './nav-admin.svelte';
+	import NavConference from './nav-conference.svelte';
 	import NavMain from './nav-main.svelte';
 	import NavSecondary from './nav-secondary.svelte';
 	import NavUser from './nav-user.svelte';
-	import NavAdmin from './nav-admin.svelte';
-	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import { reviewQueueHref, visibleNavItems, type NavAccess } from '$lib/conference/nav-access';
-	import type { ComponentProps } from 'svelte';
 
 	let {
 		ref = $bindable(null),
 		class: className,
 		variant,
+		collapsible = 'icon',
 		user,
 		navAccess
 	}: ComponentProps<typeof Sidebar.Root> & {
@@ -87,20 +96,79 @@
 
 	// Check if user is admin
 	const isAdmin = $derived(user?.role === 'admin');
+
+	/**
+	 * Conference pages merge their layout data onto `page.data`. The second rail
+	 * renders that workspace on desktop; this group is the same list inside the
+	 * mobile sheet, hidden from `md` up so the two do not double up.
+	 *
+	 * Review pages also put a `conference` on `page.data`. CFP-10: that must not
+	 * grow organizer destinations into the reviewer's sheet — only a manage URL
+	 * is the organizer workspace.
+	 */
+	const conference = $derived.by((): ConferenceRail | null => {
+		if (!isConferencePath(page.url.pathname)) return null;
+		const candidate = (page.data as { conference?: unknown }).conference;
+		return isConferenceRail(candidate) ? candidate : null;
+	});
+
+	const conferenceDates = $derived(conference ? conferenceDateRange(conference) : '');
+
+	const draftBadgeClass =
+		'focus-visible:ring-sidebar-ring mx-2 mb-1 inline-block shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:outline-none';
 </script>
 
-<Sidebar.Root bind:ref {variant} class={className} data-testid="app-sidebar">
+<Sidebar.Root bind:ref {variant} {collapsible} class={className} data-testid="app-sidebar">
 	<Sidebar.Header>
-		<a
-			href="/home"
-			data-testid="sidebar-home-link"
-			class="hover:bg-sidebar-accent focus-visible:ring-sidebar-ring rounded-md px-2 py-2 text-sm font-semibold tracking-tight focus-visible:ring-2 focus-visible:outline-none"
-		>
-			untitledconference
-		</a>
+		<Sidebar.Menu>
+			<Sidebar.MenuItem>
+				<Sidebar.MenuButton size="lg" tooltipContent="Home">
+					{#snippet child({ props })}
+						<a href="/home" data-testid="sidebar-home-link" {...props}>
+							<img src="/mascot/goose-signet.svg" alt="" class="size-6 shrink-0" />
+							<span class="truncate font-semibold tracking-tight">untitledconference</span>
+						</a>
+					{/snippet}
+				</Sidebar.MenuButton>
+			</Sidebar.MenuItem>
+		</Sidebar.Menu>
 	</Sidebar.Header>
 	<Sidebar.Content>
 		<NavMain items={navMain} />
+		{#if conference}
+			<div class="md:hidden" data-testid="manage-mobile-nav">
+				<a
+					href="/manage"
+					data-testid="switch-conference-mobile"
+					class="text-muted-foreground hover:text-foreground mx-2 mb-1 block truncate text-xs"
+				>
+					{conference.name}
+					{#if conferenceDates}
+						· {conferenceDates}
+					{/if}
+					· All conferences
+				</a>
+				{#if conference.status !== 'published'}
+					<a
+						href="/manage/{conference.slug}/settings"
+						data-testid="draft-badge-mobile"
+						class={draftBadgeClass}
+					>
+						Draft
+					</a>
+				{/if}
+				<NavConference {conference} />
+				<a
+					href="/c/{conference.slug}"
+					target="_blank"
+					rel="noopener"
+					data-testid="view-public-site-mobile"
+					class="text-muted-foreground hover:text-foreground mx-2 mt-1 block text-xs underline underline-offset-4"
+				>
+					Public site
+				</a>
+			</div>
+		{/if}
 		{#if isAdmin}
 			<NavAdmin />
 		{/if}
@@ -109,4 +177,5 @@
 	<Sidebar.Footer>
 		<NavUser {user} speakerProfile={navAccess.speakerProfile} />
 	</Sidebar.Footer>
+	<Sidebar.Rail />
 </Sidebar.Root>

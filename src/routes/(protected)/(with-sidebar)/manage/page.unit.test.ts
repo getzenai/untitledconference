@@ -45,8 +45,17 @@ describe('my conferences', () => {
 
 		expect(html).toContain('/manage/new');
 		expect(html).toContain('New conference');
-		// The one they have is still listed and still reachable.
-		expect(html).toContain('/manage/devflow-2028/submissions');
+		// The one they have is still listed, and the door is the dashboard (#411).
+		expect(html).toContain('/manage/devflow-2028/dashboard');
+	});
+
+	it('opens a conference on its dashboard, not in the submissions table', () => {
+		// #411: `/home` and this list disagreed about the front door. The dashboard
+		// is the overview an organizer expects; the table is one destination in it.
+		const html = body([conference(1, 'devflow-2028')], true);
+
+		expect(html).toContain('/manage/devflow-2028/dashboard');
+		expect(html).not.toContain('/manage/devflow-2028/submissions');
 	});
 
 	it('offers the create step to an owner with none yet', () => {
@@ -69,7 +78,7 @@ describe('my conferences', () => {
 		// org-wide right — an offer they cannot accept is worse than no offer.
 		const html = body([conference(1, 'devflow-2028'), conference(2, 'other-2028')], false);
 
-		expect(html).toContain('/manage/devflow-2028/submissions');
+		expect(html).toContain('/manage/devflow-2028/dashboard');
 		expect(html).not.toContain('/manage/new');
 	});
 });

@@ -123,6 +123,11 @@ type PlacementRow = {
 };
 
 function selectPlacements(conferenceId: number) {
+	// Tray rows have no startsAt, so a second key has to be the title — otherwise
+	// the waitlist follows insert id, and that id is whatever Postgres returned
+	// from an unordered SELECT. `lower(...)` matches the submissions table:
+	// a C-collated database would otherwise put every capitalised title in its
+	// own block.
 	return db
 		.select({
 			placementId: placementTable.id,
@@ -145,7 +150,11 @@ function selectPlacements(conferenceId: number) {
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.where(eq(placementTable.conferenceId, conferenceId))
-		.orderBy(asc(placementTable.startsAt), asc(placementTable.id));
+		.orderBy(
+			asc(placementTable.startsAt),
+			sql`lower(coalesce(${submissionTable.title}, ${placementTable.title}, '')) asc`,
+			asc(placementTable.id)
+		);
 }
 
 async function speakersBySubmission(ids: number[]): Promise<Map<number, string[]>> {
@@ -893,7 +902,11 @@ export async function backfillTray(conferenceId: number): Promise<number> {
 				eq(submissionTable.status, 'accepted'),
 				isNull(placementTable.id)
 			)
-		);
+		)
+		// Same alphabet as the read. Without this the insert assigns placement ids
+		// in an undefined order, and anything still keyed on id (auto-place ties)
+		// follows that.
+		.orderBy(sql`lower(${submissionTable.title}) asc`, asc(submissionTable.id));
 
 	if (orphans.length === 0) return 0;
 
