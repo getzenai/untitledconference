@@ -463,10 +463,21 @@ export type AssignSkipReason =
 	| 'speaker_conflict'
 	| 'not_in_round'
 	| 'track_restricted'
-	/** Auto-distribute: remaining seats, and every remaining candidate is at the cap. */
+	/** Auto-distribute: candidates are left, and every one of them is at the cap. */
 	| 'pool_exhausted'
+	/**
+	 * Auto-distribute: nobody is left to ask — everyone in the pool already sits
+	 * on this paper or is recused from it. Not a cap problem: the committee is
+	 * smaller than the number of reviews asked for.
+	 */
+	| 'committee_too_small'
 	/** Auto-distribute: the candidate pool is empty (no committee, or none of the checked reviewers). */
-	| 'empty_committee';
+	| 'empty_committee'
+	/**
+	 * Auto-distribute: every gate was open and the write still refused the
+	 * candidate — they stopped being an eligible reviewer after the snapshot.
+	 */
+	| 'not_eligible';
 
 export type BulkAssignSkip = {
 	submissionId: number;
@@ -609,7 +620,12 @@ type DistributeSnapshot = {
 	load: Map<string, number>;
 };
 
-type DistributeAcc = BulkAssignResult & { load: Map<string, number> };
+/**
+ * `skipped` is deliberately absent: `resultOf` derives it from `skippedItems`,
+ * so a field here would be a write that does nothing — and the next skip branch
+ * someone adds would reach for `acc.skipped += 1`, compile, and count nothing.
+ */
+type DistributeAcc = Omit<BulkAssignResult, 'skipped'> & { load: Map<string, number> };
 
 type FillInput = {
 	conferenceId: number;
@@ -814,23 +830,44 @@ function eligibleDistributeCandidates(
 		});
 }
 
-/** Why the remaining seats on this paper could not be filled. First empty filter wins. */
+/**
+ * Why the remaining seats on this paper could not be filled.
+ *
+ * The checks are `eligibleDistributeCandidates`'s filters, in its order, and the
+ * first one that leaves nothing wins — so the reason names the gate that really
+ * closed. The cap is the last of them, which is why it needs the load map: a
+ * reason that stops before the cap must never be reported as a cap problem
+ * (#384 — two reviewers and "each" 9 said "over the cap" with the cap at 9).
+ */
 function classifyUnfilled(
 	input: FillInput,
 	active: Set<string>,
-	recusedIds: Set<string>
+	recusedIds: Set<string>,
+	load: Map<string, number>
 ): AssignSkipReason {
 	if (input.pool.length === 0) return 'empty_committee';
 	const remaining = input.pool.filter(
 		(membership) => !active.has(membership.userId) && !recusedIds.has(membership.userId)
 	);
-	if (remaining.length === 0) return 'pool_exhausted';
+	// `active` has grown with everyone this run seated, so an empty set here means
+	// the committee ran out of people, not out of capacity. Different handgrip:
+	// invite reviewers, or ask for fewer reviews per paper.
+	if (remaining.length === 0) return 'committee_too_small';
 	const notSpeakers = remaining.filter((membership) => !input.speakers.has(membership.userId));
 	if (notSpeakers.length === 0) return 'speaker_conflict';
 	const allowed = notSpeakers.filter((membership) =>
 		userAllowsTrack(membership.userId, input.trackId, input.restrictions)
 	);
-	return allowed.length === 0 ? 'track_restricted' : 'pool_exhausted';
+	if (allowed.length === 0) return 'track_restricted';
+	const underCap = allowed.filter(
+		(membership) => (load.get(membership.userId) ?? 0) < input.capPerReviewer
+	);
+	if (underCap.length === 0) return 'pool_exhausted';
+	// Somebody was free, allowed and under the cap, and the seat is still empty:
+	// `updateAssignment` answered `invalid` or `recused`, so they stopped being an
+	// eligible reviewer between the snapshot and the write. Neither the cap nor
+	// the size of the committee explains it, and saying either would mislead.
+	return 'not_eligible';
 }
 
 function recordUnfilledSeats(
@@ -840,7 +877,7 @@ function recordUnfilledSeats(
 	remaining: number,
 	acc: DistributeAcc
 ) {
-	const reason = classifyUnfilled(input, active, recusedIds);
+	const reason = classifyUnfilled(input, active, recusedIds, acc.load);
 	for (let i = 0; i < remaining; i++) {
 		acc.skippedItems.push({ submissionId: input.submissionId, reason });
 	}
@@ -944,7 +981,6 @@ async function runDistribute(tx: Tx, args: RunDistributeArgs): Promise<BulkAssig
 	const acc: DistributeAcc = {
 		created: 0,
 		already: 0,
-		skipped: 0,
 		recused: 0,
 		skippedItems: [],
 		load: args.snapshot.load

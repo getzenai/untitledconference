@@ -182,7 +182,25 @@ describe('describeBulkAssign', () => {
 				skipped: 2,
 				skippedItems: [{ reason: 'empty_committee' }, { reason: 'empty_committee' }]
 			})
-		).toBe('2 assignments skipped: 2 empty committee.');
+		).toBe('2 assignments skipped: 2 with no reviewer in this round.');
+	});
+
+	it('sends a committee too small somewhere other than the cap', () => {
+		// The two live in one message often enough — one seat had nobody left to
+		// ask, the other had people and no room. Two different things to go and do,
+		// so they must not read as one (#384).
+		expect(
+			describeBulkAssign({
+				created: 0,
+				already: 0,
+				skipped: 3,
+				skippedItems: [
+					{ reason: 'committee_too_small' },
+					{ reason: 'committee_too_small' },
+					{ reason: 'pool_exhausted' }
+				]
+			})
+		).toBe('3 assignments skipped: 2 with no one left to ask, 1 over the cap.');
 	});
 
 	it('names recusals bulk left alone so the organizer sees the override that did not happen', () => {

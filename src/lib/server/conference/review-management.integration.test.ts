@@ -662,6 +662,49 @@ describe('ABS-06 assignment at scale', () => {
 		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
 	});
 
+	it('names a committee too small for N apart from a cap that nobody reached', async () => {
+		// Two reviewers, three reviews wanted, cap 10 — the live case behind #384.
+		// Both sit down, the third seat has nobody left to ask, and the cap never
+		// came into it: reporting "over the cap" would send the organizer to raise
+		// a number that is not in the way.
+		const [talkId] = await insertTalks(['Too few people']);
+		const result = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 3,
+			capPerReviewer: 10,
+			reviewerUserIds: [CONFERENCE_REVIEWER, ROUND_REVIEWER]
+		});
+
+		expect(result.created).toBe(2);
+		expect(result.skipped).toBe(1);
+		expect(result.skipped).toBe(result.skippedItems.length);
+		expect(result.skippedItems).toEqual([{ submissionId: talkId, reason: 'committee_too_small' }]);
+
+		await db.delete(reviewTable).where(eq(reviewTable.submissionId, talkId));
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+	});
+
+	it('keeps the cap reason for the one case that is really the cap', async () => {
+		// Same committee of two, but one seat each is all they may hold. The first
+		// talk fills both; on the second everybody is free of the paper and barred
+		// by the cap alone — the reason that #384 left `pool_exhausted` to mean.
+		const talkIds = await insertTalks(['Cap first', 'Cap second']);
+		const result = await autoDistributeReviews(conference.id, talkIds, roundId, {
+			reviewsPerSubmission: 2,
+			capPerReviewer: 1,
+			reviewerUserIds: [CONFERENCE_REVIEWER, ROUND_REVIEWER]
+		});
+
+		expect(result.created).toBe(2);
+		expect(result.skipped).toBe(result.skippedItems.length);
+		expect(result.skippedItems).toEqual([
+			{ submissionId: talkIds[1], reason: 'pool_exhausted' },
+			{ submissionId: talkIds[1], reason: 'pool_exhausted' }
+		]);
+
+		await db.delete(reviewTable).where(inArray(reviewTable.submissionId, talkIds));
+		await db.delete(submissionTable).where(inArray(submissionTable.id, talkIds));
+	});
+
 	it('names a track lock when every remaining candidate is barred from the talk', async () => {
 		const [allowedTrack, blockedTrack] = await db
 			.insert(trackTable)

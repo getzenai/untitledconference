@@ -103,18 +103,29 @@ export function describeNotification(result: NotificationResult): string {
 
 const SKIP_REASON_ORDER = [
 	'empty_committee',
+	'committee_too_small',
 	'pool_exhausted',
 	'track_restricted',
 	'speaker_conflict',
+	'not_eligible',
 	'not_in_round',
 	'not_on_conference'
 ] as const;
 
+/**
+ * Each label names the handgrip, because that is the only reason to show a
+ * reason at all. "Over the cap" and "no one left to ask" look alike on the
+ * screen and mean opposite things to do: raise the cap, or invite people.
+ */
 const SKIP_REASON_LABEL: Record<(typeof SKIP_REASON_ORDER)[number], (n: number) => string> = {
-	empty_committee: (n) => `${n} empty committee`,
+	// Covers both readings: no reviewer sits in this round at all, and none of
+	// the reviewers you ticked does.
+	empty_committee: (n) => `${n} with no reviewer in this round`,
+	committee_too_small: (n) => `${n} with no one left to ask`,
 	pool_exhausted: (n) => `${n} over the cap`,
 	track_restricted: (n) => `${n} track-restricted`,
 	speaker_conflict: (n) => `${n} speaker conflict${n === 1 ? '' : 's'}`,
+	not_eligible: (n) => `${n} no longer eligible`,
 	not_in_round: (n) => `${n} not on this round`,
 	not_on_conference: (n) => `${n} not on this conference`
 };
