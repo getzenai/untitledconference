@@ -738,6 +738,27 @@ describe('the round’s window', () => {
 		});
 	});
 
+	/**
+	 * #464: the row said "To do" while every round it could mean was answered or
+	 * shut. A volunteer opening the queue counted 22 jobs and had 9.
+	 */
+	it('lets the round I still owe speak, not the one I have already filed', async () => {
+		// Round 1 is open and filed by me; round 2 opens in a week. Nothing is asked
+		// of me today, and the badge has to say so.
+		await windowIs(null, null);
+		await secondRoundOn(mine, { opensAt: new Date(Date.now() + 7 * DAY) });
+		const now = await conferenceNow();
+		expect(await saveReview(now, ME, mine, answers(), undefined)).toEqual({ ok: true });
+
+		const [row] = (await reviewQueue(now, ME)).filter((r) => r.submissionId === mine);
+		expect(row.window.state).toBe('not_yet_open');
+		expect(row.ownReviewSubmitted).toBe(false);
+
+		// And the form the row links to is that same waiting round — a badge and a
+		// page that disagree send the reviewer to work the server refuses.
+		expect((await reviewerSubmission(now, ME, mine))?.window.state).toBe('not_yet_open');
+	});
+
 	it('lets an open round win over a closed one when I hold the talk in both', async () => {
 		await windowIs(null, new Date(Date.now() - DAY));
 		// A second, still-running round on the same talk: the queue's job is to say

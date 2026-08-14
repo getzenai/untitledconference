@@ -26,12 +26,7 @@ import {
 	type QueueSort,
 	type ReviewVisibility
 } from '$lib/conference/review-visibility';
-import {
-	byRoundWindowPriority,
-	combineRoundWindows,
-	roundWindow,
-	type RoundWindow
-} from '$lib/conference/round-window';
+import { byRoundWindowPriority, roundWindow, type RoundWindow } from '$lib/conference/round-window';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
@@ -408,6 +403,31 @@ function groupAssignments(assignments: Assignment[]): Map<number, Assignment[]> 
 }
 
 /** One submission as the reviewer's queue shows it, across every round they hold it in. */
+/**
+ * Which of a reviewer's rounds on one talk speaks for the row (#464).
+ *
+ * Outstanding before filed, then `byRoundWindowPriority` among equals. The
+ * window rule alone answers "where could work happen"; a reviewer's queue asks
+ * "where is work asked of *me*", and a round I have filed answers no even with
+ * its window wide open.
+ *
+ * Both the queue and `ownReview` sort by this, on rows already in a
+ * deterministic order — `Array.prototype.sort` is stable, so the badge and the
+ * form it links to always land on the same round. A queue that says "To do" and
+ * a page that says "closed" sends a volunteer to work the server will refuse.
+ */
+function bySpeakingRound(
+	a: { status: string; roundOpensAt: Date | null; roundClosesAt: Date | null },
+	b: { status: string; roundOpensAt: Date | null; roundClosesAt: Date | null }
+): number {
+	const filed = (row: { status: string }) => (row.status === 'submitted' ? 1 : 0);
+	if (filed(a) !== filed(b)) return filed(a) - filed(b);
+	return byRoundWindowPriority(
+		roundWindow(a.roundOpensAt, a.roundClosesAt),
+		roundWindow(b.roundOpensAt, b.roundClosesAt)
+	);
+}
+
 function queueRow(
 	mine: Assignment[],
 	on: (PeerReview & { submissionId: number })[],
@@ -419,6 +439,12 @@ function queueRow(
 	const ownSubmitted = mine.every((row) => row.status === 'submitted');
 	const withdrawn = first.submissionStatus === 'withdrawn';
 	const inBoardOrder = [...mine].sort((a, b) => a.roundPosition - b.roundPosition);
+	// Which round speaks for the row (#464). A round I have already filed has no
+	// claim on my evening even while its window is open, so it must not be the one
+	// that paints the badge "To do" — that is the contradiction the queue used to
+	// print inside a single line: `Round 1 (filed) · Round 2` and then "To do",
+	// with round 2 four days away.
+	const speaking = [...inBoardOrder].sort(bySpeakingRound)[0];
 
 	return {
 		submissionId: first.submissionId,
@@ -430,11 +456,12 @@ function queueRow(
 			name: row.roundName,
 			submitted: row.status === 'submitted'
 		})),
-		// Built from the same rows in the same order `ownReview` reads them, so the
-		// window this row advertises is the window of the round the link leads to.
-		window: combineRoundWindows(
-			inBoardOrder.map((row) => roundWindow(row.roundOpensAt, row.roundClosesAt))
-		),
+		// The window of the round the link leads to — `ownReview` sorts by the same
+		// rule, so the badge here and the form there cannot disagree. That was
+		// already the promise; #464 is what it had to be a promise *about*: not
+		// "the most open round I hold this in" but "the round that still wants
+		// something from me".
+		window: roundWindow(speaking.roundOpensAt, speaking.roundClosesAt),
 		reviewsSubmitted: on.filter((r) => r.submitted).length,
 		reviewsAssigned: on.length,
 		score: canSeePeerReviews(mode, ownSubmitted) ? scoresFor(on) : null,
@@ -645,7 +672,15 @@ async function ownReview(
 		.orderBy(asc(reviewRoundTable.position), asc(reviewTable.id));
 
 	const held = rows.map((row) => ({ ...row, window: roundWindow(row.opensAt, row.closesAt) }));
-	const byPriority = [...held].sort((a, b) => byRoundWindowPriority(a.window, b.window));
+	// Same rule as the queue badge (#464): the round that still wants work first,
+	// the window order among equals. Sorting on windows alone would open a filed
+	// round's form while the queue row pointed at the one still waiting.
+	const byPriority = [...held].sort((a, b) =>
+		bySpeakingRound(
+			{ status: a.status, roundOpensAt: a.opensAt, roundClosesAt: a.closesAt },
+			{ status: b.status, roundOpensAt: b.opensAt, roundClosesAt: b.closesAt }
+		)
+	);
 
 	const named = roundId === undefined ? undefined : held.find((row) => row.roundId === roundId);
 	const own = named ?? byPriority[0];
