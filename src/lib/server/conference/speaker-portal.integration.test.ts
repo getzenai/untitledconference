@@ -502,3 +502,72 @@ describe('two requests racing for the same unclaimed profile', () => {
 		}
 	});
 });
+
+/**
+ * Someone else's profile that happens to carry this address.
+ *
+ * The select's second disjunct is `sp.user_id is null and sp.email = u.email`,
+ * and the `is null` is the whole guard: without it the condition reads "mine or
+ * addressed to me", and per #229 an account can put another person's address on
+ * a profile it holds itself. Then the address alone would hand over that
+ * profile's proposals.
+ *
+ * Nothing above this catches that — every fixture there is a profile the
+ * speaker genuinely owns, so both shapes agree. This one disagrees with them:
+ * it goes red the moment the conjunct falls, which is the only reason it is
+ * here.
+ */
+describe('mySubmissions when another account already holds a profile with this address', () => {
+	let orgId = '';
+	let speaker: { id: string; email: string };
+	let impostor: { id: string; email: string };
+
+	beforeAll(async () => {
+		const org = await makeOrg('foreign');
+		orgId = org.organizationId;
+		speaker = await makeUser('foreign-speaker');
+		impostor = await makeUser('foreign-impostor');
+
+		// The impostor's own profile, but with the speaker's address written on it.
+		const [theirs] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: orgId,
+				userId: impostor.id,
+				name: 'Not Priya',
+				sortName: 'Priya, Not',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		await proposalFor(
+			org.conference.id,
+			theirs.id,
+			'The talk that is none of her business',
+			new Date('2027-04-01T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, orgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+		await db.delete(user).where(eq(user.id, impostor.id));
+	});
+
+	it('does not show it to the person whose address is on it', async () => {
+		const titles = (await mySubmissions(speaker.id)).map((s) => s.title);
+
+		expect(titles).not.toContain('The talk that is none of her business');
+	});
+
+	it('leaves the other account’s claim alone', async () => {
+		await mySubmissions(speaker.id);
+
+		const profiles = await db
+			.select({ userId: speakerProfileTable.userId })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.organizationId, orgId));
+
+		expect(profiles).toEqual([{ userId: impostor.id }]);
+	});
+});
