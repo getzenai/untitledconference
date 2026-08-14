@@ -20,6 +20,16 @@ type SetOptions = Parameters<Cookies['set']>[2];
 
 export type ParsedSetCookie = { name: string; value: string; options: SetOptions };
 
+/** Undo the encode Better Auth already applied, so SvelteKit can apply it once. */
+function decodeCookieValue(value: string): string {
+	if (!value.includes('%')) return value;
+	try {
+		return decodeURIComponent(value);
+	} catch {
+		return value;
+	}
+}
+
 /** `null` when the header has no `name=value` pair to begin with. */
 export function parseSetCookie(header: string): ParsedSetCookie | null {
 	const [pair, ...attributes] = header.split(';');
@@ -27,7 +37,11 @@ export function parseSetCookie(header: string): ParsedSetCookie | null {
 	if (separator <= 0) return null;
 
 	const name = pair.slice(0, separator).trim();
-	const value = pair.slice(separator + 1).trim();
+	// Better Auth's signed session is already percent-encoded in the header
+	// (`token.` + standard base64, so `+` `/` `=`). SvelteKit encodes again on
+	// `cookies.set`. Leave this encoded and the browser stores a different token
+	// than the one Better Auth signed — the cookie exists, /home still bounces.
+	const value = decodeCookieValue(pair.slice(separator + 1).trim());
 	if (!name) return null;
 
 	// `path` is required by SvelteKit's `cookies.set`, and "/" is what a header

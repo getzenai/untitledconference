@@ -38,8 +38,12 @@ describe('Signing in before hydration', () => {
 			});
 
 			// The session the POST established is a real one: a protected page opens.
+			// Pathname, not a substring — `/login?returnTo=/home` includes `/home`
+			// and used to make this pass on the bounce it was meant to catch.
+			// cy.request cookies do reach cy.visit (`cy.login` proves that); a
+			// bounce here is the product, not the jar.
 			cy.visit('/home');
-			cy.url().should('include', '/home');
+			cy.location('pathname').should('eq', '/home');
 		});
 	});
 
