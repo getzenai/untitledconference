@@ -27,7 +27,7 @@
 	/** Editing state for an existing criterion's kind (drives conditional fields). */
 	let editKindById = $state<Record<number, CriterionKind>>({});
 
-	const submitting = (kind: FormResetKind) => {
+	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
@@ -50,7 +50,7 @@
 				const raw = formData.get(name);
 				if (typeof raw === 'string' && raw) formData.set(name, new Date(raw).toISOString());
 			}
-			return submitting(kind);
+			return submitting(kind)();
 		};
 
 	/** What the picker reads back: local wall time, no zone suffix. */
@@ -249,7 +249,7 @@
 							</form>
 
 							{#if round.assignments === 0}
-								<form method="POST" action="?/remove" use:enhance={() => submitting('edit')}>
+								<form method="POST" action="?/remove" use:enhance={submitting('edit')}>
 									<input type="hidden" name="id" value={round.id} />
 									<Button type="submit" variant="ghost" disabled={busy}>Remove</Button>
 								</form>
@@ -302,7 +302,7 @@
 											<form
 												method="POST"
 												action="?/updateCriterion"
-												use:enhance={() => submitting('edit')}
+												use:enhance={submitting('edit')}
 												class="space-y-2"
 											>
 												<input type="hidden" name="id" value={criterion.id} />
@@ -405,7 +405,7 @@
 												<form
 													method="POST"
 													action="?/moveCriterion"
-													use:enhance={() => submitting('edit')}
+													use:enhance={submitting('edit')}
 												>
 													<input type="hidden" name="id" value={criterion.id} />
 													<input type="hidden" name="direction" value="up" />
@@ -422,7 +422,7 @@
 												<form
 													method="POST"
 													action="?/moveCriterion"
-													use:enhance={() => submitting('edit')}
+													use:enhance={submitting('edit')}
 												>
 													<input type="hidden" name="id" value={criterion.id} />
 													<input type="hidden" name="direction" value="down" />
@@ -439,7 +439,7 @@
 												<form
 													method="POST"
 													action="?/removeCriterion"
-													use:enhance={() => submitting('edit')}
+													use:enhance={submitting('edit')}
 												>
 													<input type="hidden" name="id" value={criterion.id} />
 													<Button
@@ -468,7 +468,7 @@
 							<form
 								method="POST"
 								action="?/addCriterion"
-								use:enhance={() => submitting('add')}
+								use:enhance={submitting('add')}
 								class="border-border mt-3 space-y-2 rounded-md border border-dashed p-3"
 								data-testid="add-criterion"
 							>

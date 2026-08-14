@@ -548,12 +548,8 @@
 									use:enhance={() => {
 										isCreatingUser = true;
 										createUserError = null;
-										// Store the password value before form submission
-										const submittedPassword = createPassword;
 										return async ({ update }) => {
 											await update(formUpdateOptions('edit'));
-											// Restore the password after update
-											createPassword = submittedPassword;
 											isCreatingUser = false;
 										};
 									}}
