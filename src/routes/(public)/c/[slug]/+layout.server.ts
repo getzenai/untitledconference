@@ -1,7 +1,9 @@
+import { missingConferenceMessage } from '$lib/conference/conference-status';
 import { EMBED_PARAM } from '$lib/conference/embed';
 import { publicConference } from '$lib/conference/public-data';
 import { daysUntil } from '$lib/conference/public-view';
 import { callSummary } from '$lib/server/conference/cfp-submission';
+import { unpublishedConferenceStatus } from '$lib/server/conference/public-conference';
 import { error } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 
@@ -36,7 +38,9 @@ export const load: LayoutServerLoad = async ({ params, url }) => {
 		publicConference(params.slug),
 		callSummary(params.slug)
 	]);
-	if (!conference) error(404, 'No conference with that address');
+	if (!conference) {
+		error(404, missingConferenceMessage(await unpublishedConferenceStatus(params.slug)));
+	}
 
 	// Presentation only (EMB-15): inside somebody else's page, our header and tab
 	// bar are a second site's furniture in their room. Nothing is withheld and

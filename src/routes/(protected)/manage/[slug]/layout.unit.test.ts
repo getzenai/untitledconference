@@ -40,7 +40,7 @@ const layoutSource = readFileSync(
 
 const empty = (() => '') as unknown as import('svelte').Snippet;
 
-const shell = (status: 'draft' | 'published') =>
+const shell = (status: 'draft' | 'published' | 'archived') =>
 	render(Host, {
 		props: {
 			data: {
@@ -101,12 +101,39 @@ describe('draft state in the shell', () => {
 		expect(body).not.toContain('not public yet');
 	});
 
+	/**
+	 * #474: archived wore the draft badge, so the chrome claimed a finished
+	 * conference had never been public.
+	 */
+	it('says archived, not draft, once the conference is archived', () => {
+		const body = shell('archived');
+
+		expect(body).toContain('data-testid="draft-badge"');
+		expect(body).toContain('Archived');
+		expect(body).not.toContain('not public yet');
+	});
+
 	/** The way out to the public site belongs to the shell, on every page. */
 	it('offers the public site from the conference rail', () => {
 		const body = shell('published');
 
 		expect(body).toContain('data-testid="view-public-site"');
 		expect(body).toContain('href="/c/devflow-2028"');
+	});
+
+	/**
+	 * #474: the link pointed at /c/<slug> whatever the status, so on a draft the
+	 * app sent the organizer into its own 404 — which then told them the address
+	 * was wrong.
+	 */
+	it('offers no public-site link while there is no public site', () => {
+		for (const status of ['draft', 'archived'] as const) {
+			const body = shell(status);
+
+			expect(body).not.toContain('href="/c/devflow-2028"');
+			expect(body).toContain('data-testid="public-site-unavailable"');
+			expect(body).toContain('Settings');
+		}
 	});
 });
 

@@ -16,9 +16,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const publicConference = vi.hoisted(() => vi.fn());
 const callSummary = vi.hoisted(() => vi.fn());
+const unpublishedConferenceStatus = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/conference/public-data', () => ({ publicConference }));
 vi.mock('$lib/server/conference/cfp-submission', () => ({ callSummary }));
+vi.mock('$lib/server/conference/public-conference', () => ({ unpublishedConferenceStatus }));
 
 const conference = { id: 'c1', slug: 'devflow-conf-2027', name: 'DevFlow' };
 
@@ -83,10 +85,37 @@ describe('the public layout loader', () => {
 		// What must not change is that the visitor still gets a 404.
 		publicConference.mockResolvedValue(null);
 		callSummary.mockResolvedValue(null);
+		unpublishedConferenceStatus.mockResolvedValue(null);
 
 		await expect(run('no-such-conference')).rejects.toMatchObject({
-			status: 404
+			status: 404,
+			body: { message: 'No conference with that address' }
 		});
+	});
+
+	/**
+	 * #474: an organizer clicking the app's own "View the public site" from a draft
+	 * landed here and was told the address was wrong. It is not — the conference is
+	 * simply not out yet.
+	 */
+	it('says why on a conference that exists but is not published', async () => {
+		publicConference.mockResolvedValue(null);
+		callSummary.mockResolvedValue(null);
+		unpublishedConferenceStatus.mockResolvedValue('draft');
+
+		await expect(run('devflow-conf-2027')).rejects.toMatchObject({
+			status: 404,
+			body: { message: 'This conference has not been published yet' }
+		});
+	});
+
+	it('does not ask the database why on a conference it already found', async () => {
+		publicConference.mockResolvedValue(conference);
+		callSummary.mockResolvedValue(null);
+
+		await run();
+
+		expect(unpublishedConferenceStatus).not.toHaveBeenCalled();
 	});
 
 	it('reads the embed flag off the query string', async () => {

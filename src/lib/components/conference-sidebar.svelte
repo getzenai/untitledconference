@@ -9,12 +9,14 @@
 	 */
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { conferenceDateRange, type ConferenceRail } from '$lib/conference/conference-nav';
+	import { conferenceBadge, publicSiteLink } from '$lib/conference/conference-status';
 	import NavConference from './nav-conference.svelte';
 
 	let { conference }: { conference: ConferenceRail } = $props();
 
 	const base = $derived(`/manage/${conference.slug}`);
-	const published = $derived(conference.status === 'published');
+	const badge = $derived(conferenceBadge(conference.status));
+	const publicSite = $derived(publicSiteLink(conference.status, conference.slug));
 	const dateRange = $derived(conferenceDateRange(conference));
 
 	const draftBadgeClass =
@@ -45,9 +47,14 @@
 				</Sidebar.MenuButton>
 			</Sidebar.MenuItem>
 		</Sidebar.Menu>
-		{#if !published}
-			<a href="{base}/settings" data-testid="draft-badge" class={draftBadgeClass}>
-				Draft — not public yet
+		{#if badge}
+			<a
+				href="{base}/settings"
+				data-testid="draft-badge"
+				title={badge.hint}
+				class={draftBadgeClass}
+			>
+				{badge.label}
 			</a>
 		{/if}
 	</Sidebar.Header>
@@ -57,19 +64,32 @@
 	<Sidebar.Footer>
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>
-				<Sidebar.MenuButton tooltipContent="Public site">
-					{#snippet child({ props })}
-						<a
-							href="/c/{conference.slug}"
-							target="_blank"
-							rel="noopener"
-							data-testid="view-public-site"
-							{...props}
-						>
-							<span>View the public site</span>
-						</a>
-					{/snippet}
-				</Sidebar.MenuButton>
+				{#if publicSite.available}
+					<Sidebar.MenuButton tooltipContent="Public site">
+						{#snippet child({ props })}
+							<a
+								href={publicSite.href}
+								target="_blank"
+								rel="noopener"
+								data-testid="view-public-site"
+								{...props}
+							>
+								<span>{publicSite.label}</span>
+							</a>
+						{/snippet}
+					</Sidebar.MenuButton>
+				{:else}
+					<!-- Not a dead control: the reason names Settings, so the item leads to
+					     the one screen that can make the public site exist. -->
+					<Sidebar.MenuButton tooltipContent={publicSite.reason}>
+						{#snippet child({ props })}
+							<a href="{base}/settings" data-testid="public-site-unavailable" {...props}>
+								<span>{publicSite.label}</span>
+							</a>
+						{/snippet}
+					</Sidebar.MenuButton>
+					<p class="text-muted-foreground px-2 pt-1 text-xs">{publicSite.reason}</p>
+				{/if}
 			</Sidebar.MenuItem>
 		</Sidebar.Menu>
 	</Sidebar.Footer>
