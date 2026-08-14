@@ -15,7 +15,9 @@ import { error } from '@sveltejs/kit';
  */
 const FLAG_ENV_VARS = {
 	/** Example flag shipped with the starter — replace with your own. */
-	exampleFeature: 'FEATURE_EXAMPLE_FEATURE'
+	exampleFeature: 'FEATURE_EXAMPLE_FEATURE',
+	/** In-app reviewer chat (#302). Off in production until the write slice ships. */
+	inAppChat: 'FEATURE_INAPP_CHAT'
 } as const;
 
 export type FeatureFlag = keyof typeof FLAG_ENV_VARS;
@@ -24,7 +26,12 @@ const flagValue = boolWithDefault(false);
 
 /** Whether a single flag is enabled. */
 export function isFeatureEnabled(flag: FeatureFlag): boolean {
-	return flagValue.parse(env[FLAG_ENV_VARS[flag]]);
+	const name = FLAG_ENV_VARS[flag];
+	// `$env/dynamic/private` is the Worker binding. `wrangler.jsonc` `vars`
+	// win over a process export unless we look at the process first — E2E
+	// turns the flag on that way (`scripts/run-e2e.sh`) without rewriting
+	// the production binding.
+	return flagValue.parse(process.env[name] ?? env[name]);
 }
 
 /**

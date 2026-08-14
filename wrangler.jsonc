@@ -123,6 +123,8 @@
 		"OAUTH_ALLOW_DYNAMIC_CLIENT_REGISTRATION": "true",
 		"RESEND_FROM": "Untitled Conference <conference@getzenai.com>",
 		"LOG_LEVEL": "info",
-		"LOG_FORMAT": "human"
+		"LOG_FORMAT": "human",
+		"FEATURE_INAPP_CHAT": "false",
+		"AI_CHAT_MODEL": "openai/gpt-4o-mini"
 	}
 }
