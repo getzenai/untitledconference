@@ -1,4 +1,5 @@
 /** Organizer-side review assignments, reviewer progress, and reminders. */
+import { unassignBlockReason } from '$lib/conference/review-assignment';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -25,6 +26,8 @@ export type AssignmentReviewer = {
 	email: string;
 	status: Review['status'] | null;
 	eligible: boolean;
+	/** From `unassignBlockReason` — the row reads this instead of re-checking status. */
+	unassignBlockReason: string | null;
 };
 
 export type AssignmentRound = {
@@ -139,6 +142,23 @@ function membershipIsEligible(
 	);
 }
 
+function toAssignmentReviewer(
+	userId: string,
+	name: string,
+	email: string,
+	status: Review['status'] | null,
+	eligible: boolean
+): AssignmentReviewer {
+	return {
+		userId,
+		name,
+		email,
+		status,
+		eligible,
+		unassignBlockReason: unassignBlockReason(status)
+	};
+}
+
 function reviewersForRound(
 	round: Round,
 	memberships: Membership[],
@@ -150,23 +170,30 @@ function reviewersForRound(
 	const candidates = new Map<string, AssignmentReviewer>();
 	for (const membership of memberships) {
 		if (!membershipIsEligible(membership, round.id, speakerIds, trackId, restrictions)) continue;
-		candidates.set(membership.userId, {
-			userId: membership.userId,
-			name: membership.name ?? membership.email,
-			email: membership.email,
-			status: assignments.get(membership.userId)?.status ?? null,
-			eligible: true
-		});
+		const existing = assignments.get(membership.userId);
+		candidates.set(
+			membership.userId,
+			toAssignmentReviewer(
+				membership.userId,
+				membership.name ?? membership.email,
+				membership.email,
+				existing?.status ?? null,
+				true
+			)
+		);
 	}
 	for (const assignment of assignments.values()) {
 		if (candidates.has(assignment.userId)) continue;
-		candidates.set(assignment.userId, {
-			userId: assignment.userId,
-			name: assignment.name ?? assignment.email,
-			email: assignment.email,
-			status: assignment.status,
-			eligible: false
-		});
+		candidates.set(
+			assignment.userId,
+			toAssignmentReviewer(
+				assignment.userId,
+				assignment.name ?? assignment.email,
+				assignment.email,
+				assignment.status,
+				false
+			)
+		);
 	}
 	return [...candidates.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -341,17 +368,19 @@ const assignmentKey = (input: AssignmentInput) =>
 	);
 
 async function removeAssignment(tx: Tx, input: AssignmentInput): Promise<AssignmentResult> {
+	// The WHERE is the lock: a concurrent submit must not be deleted. The named
+	// rule decides what a remaining row means.
 	const removed = await tx
 		.delete(reviewTable)
 		.where(and(assignmentKey(input), ne(reviewTable.status, 'submitted')))
 		.returning({ id: reviewTable.id });
 	if (removed.length > 0) return 'unassigned';
-	const [completed] = await tx
-		.select({ id: reviewTable.id })
+	const [remaining] = await tx
+		.select({ status: reviewTable.status })
 		.from(reviewTable)
-		.where(and(assignmentKey(input), eq(reviewTable.status, 'submitted')))
+		.where(assignmentKey(input))
 		.limit(1);
-	return completed ? 'complete' : 'unchanged';
+	return remaining && unassignBlockReason(remaining.status) ? 'complete' : 'unchanged';
 }
 
 async function addAssignment(

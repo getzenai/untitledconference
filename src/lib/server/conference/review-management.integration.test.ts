@@ -1,3 +1,4 @@
+import { unassignBlockReason } from '$lib/conference/review-assignment';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -424,6 +425,12 @@ describe('organizer reviewer assignments', () => {
 		expect(
 			await db.select({ id: reviewTable.id }).from(reviewTable).where(eq(reviewTable.id, review.id))
 		).toEqual([{ id: review.id }]);
+
+		const matrix = await reviewAssignmentMatrix(conference.id, submissionId);
+		const row = matrix
+			.flatMap((round) => round.reviewers)
+			.find((reviewer) => reviewer.userId === CONFERENCE_REVIEWER);
+		expect(row?.unassignBlockReason).toBe(unassignBlockReason('submitted'));
 	});
 });
 
