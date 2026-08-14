@@ -4,7 +4,11 @@ import * as schema from '$lib/server/db/auth-schema';
 import { createLogger } from '$lib/server/logger';
 import { takeInvitationLink } from '$lib/server/services/invitation-link';
 import { invalidatePasswordResetTokensForEmail } from '$lib/server/services/invitation-token';
-import { createSystemInvitation, listAllInvitations } from '$lib/server/services/system-invitation';
+import {
+	createSystemInvitation,
+	listAllInvitations,
+	validateSystemInvitation
+} from '$lib/server/services/system-invitation';
 import { fail } from '@sveltejs/kit';
 import { generateRandomString } from 'better-auth/crypto';
 import { desc, eq } from 'drizzle-orm';
@@ -282,14 +286,32 @@ export const actions: Actions = {
 
 		const formData = await request.formData();
 		const invitationId = formData.get('invitationId') as string;
-		const email = formData.get('email') as string;
 
-		if (!invitationId || !email) {
+		if (!invitationId) {
 			return fail(400, {
 				action: 'regenerateInvitation',
 				error: 'Invalid invitation data'
 			});
 		}
+
+		// The address comes from the invitation, never from the form (#407). The
+		// form used to carry both, and nothing checked that they belonged
+		// together. While this action only sent a mail that was a mail to an
+		// address of the caller's choosing; since #401 it also deletes that
+		// address's live reset tokens, so a wrong `email` destroys a stranger's
+		// password reset. `validateSystemInvitation` also refuses an invitation
+		// that has already been accepted, which is the other thing this button
+		// must not touch.
+		const invitation = await validateSystemInvitation(invitationId);
+
+		if (!invitation) {
+			return fail(400, {
+				action: 'regenerateInvitation',
+				error: 'Invalid invitation data'
+			});
+		}
+
+		const email = invitation.email;
 
 		try {
 			// Replace a leaked link, not a lost one (#401). Drop the previous
