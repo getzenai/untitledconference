@@ -40,7 +40,7 @@ import {
 } from '$lib/server/conference/task-templates';
 import { updateConference } from '$lib/server/conference/update-conference';
 import { setConferenceListing, setConferenceVisibility } from '$lib/server/conference/visibility';
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
@@ -544,5 +544,20 @@ export const actions: Actions = {
 		const problem = await removeSponsorTier(conference.id, id);
 		if (problem) return fail(400, { error: problem, section: 'sponsors' });
 		return { message: 'Sponsor tier removed.', section: 'sponsors' };
+	},
+
+	/**
+	 * E2E only (#462). A real uncaught throw from this action, not an intercepted
+	 * status and not `fail()`. The client must keep the page and the typed values.
+	 *
+	 * Gated by the same flag as `/api/v1/test/*`. Without it this is a 404, so a
+	 * production POST cannot use the route as a crash button.
+	 */
+	e2eForce500: async ({ locals, params }) => {
+		if (process.env.ENABLE_TEST_ENDPOINTS !== 'true') {
+			error(404, 'Not found');
+		}
+		await requireOrganizer(locals.user!.id, params.slug);
+		throw new Error('e2e forced action 500');
 	}
 };
