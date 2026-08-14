@@ -125,7 +125,6 @@ export const systemInvitation = pgTable('system_invitation', {
 	role: text('role')
 		.$defaultFn(() => 'user')
 		.notNull(),
-	resetLink: text('reset_link'),
 	lastGeneratedAt: timestamp('last_generated_at'),
 	acceptedAt: timestamp('accepted_at'),
 	createdAt: timestamp('created_at')

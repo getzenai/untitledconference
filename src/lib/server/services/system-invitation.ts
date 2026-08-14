@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '../db';
 import { systemInvitation, user } from '../db/auth-schema';
+import { normalizeEmail } from './email-address';
 
 export interface CreateSystemInvitationParams {
 	email: string;
@@ -15,13 +16,15 @@ export interface SystemInvitationResponse {
 	email: string;
 	invitedBy: string;
 	role: string;
-	resetLink?: string | null;
 }
 
 export async function createSystemInvitation(
 	params: CreateSystemInvitationParams
 ): Promise<SystemInvitationResponse> {
-	const { email, invitedBy, role = 'user' } = params;
+	const { invitedBy, role = 'user' } = params;
+	// Stored lowercased: `user.email` is, and the invitation link is resolved by
+	// comparing the two (see `email-address.ts`).
+	const email = normalizeEmail(params.email);
 
 	// Check if user already exists
 	const existingUser = await db.select().from(user).where(eq(user.email, email)).limit(1);
@@ -58,7 +61,8 @@ export async function createSystemInvitation(
 	};
 }
 
-export async function markInvitationAsAccepted(email: string): Promise<void> {
+export async function markInvitationAsAccepted(rawEmail: string): Promise<void> {
+	const email = normalizeEmail(rawEmail);
 	await db
 		.update(systemInvitation)
 		.set({
@@ -123,37 +127,4 @@ export async function listAllInvitations() {
 			expiresAt
 		};
 	});
-}
-
-/**
- * Poll the database for an invitation link with timeout
- * @param invitationId - The ID of the invitation to poll for
- * @param maxAttempts - Maximum number of polling attempts (default: 10)
- * @param intervalMs - Milliseconds between attempts (default: 200ms)
- * @returns The reset link if found, null if timeout
- */
-export async function pollForInvitationLink(
-	invitationId: string,
-	maxAttempts = 10,
-	intervalMs = 200
-): Promise<string | null> {
-	for (let i = 0; i < maxAttempts; i++) {
-		const [invitation] = await db
-			.select()
-			.from(systemInvitation)
-			.where(eq(systemInvitation.id, invitationId))
-			.limit(1);
-
-		if (invitation?.resetLink) {
-			// Return the stored link as-is (Better Auth URL)
-			return invitation.resetLink;
-		}
-
-		// Don't wait after the last attempt
-		if (i < maxAttempts - 1) {
-			await new Promise((resolve) => setTimeout(resolve, intervalMs));
-		}
-	}
-
-	return null;
 }

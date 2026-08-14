@@ -1,6 +1,15 @@
 import { auth, firstOrganizationFor, OAUTH_SCOPES } from '$lib/auth';
 import { db } from '$lib/server/db';
-import { member, organization, session, user } from '$lib/server/db/auth-schema';
+import {
+	member,
+	organization,
+	session,
+	systemInvitation,
+	user,
+	verification
+} from '$lib/server/db/auth-schema';
+import { takeInvitationLink } from '$lib/server/services/invitation-link';
+import { resolveInvitationEmail } from '$lib/server/services/invitation-token';
 import { oauthProviderAuthServerMetadata } from '@better-auth/oauth-provider';
 import { desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -406,5 +415,84 @@ describe('session cookieCache', () => {
 
 		const after = await readSession();
 		expect(after).toBeNull();
+	});
+});
+
+/**
+ * The invitation link is handed over in memory (#395).
+ *
+ * The admin screen needs the reset URL Better Auth just generated. It used to
+ * get it by writing the whole URL — live token and all — into
+ * `system_invitation.reset_link` and polling for it, which is what made the
+ * registration page worth attacking. The link is now passed through
+ * `invitation-link.ts` instead, and that only works because Better Auth awaits
+ * `sendResetPassword` inside `requestPasswordReset`. This test is that
+ * assumption: if a future upgrade defers the callback, the handoff comes back
+ * empty here rather than in production.
+ */
+describe('invitation link handoff', () => {
+	const suffix = `invite-link-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	const invitedEmail = `${suffix}@example.test`;
+	const invitedId = `user-${suffix}`;
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			id: invitedId,
+			email: invitedEmail,
+			emailVerified: false,
+			name: 'Invited'
+		});
+	});
+
+	afterAll(async () => {
+		await db.delete(verification).where(eq(verification.value, invitedId));
+		await db.delete(user).where(eq(user.id, invitedId));
+	});
+
+	it('has the link ready as soon as requestPasswordReset resolves', async () => {
+		await auth.api.requestPasswordReset({
+			body: { email: invitedEmail, redirectTo: '/complete-registration' }
+		});
+
+		const link = takeInvitationLink(invitedEmail);
+		expect(link, 'sendResetPassword ran before requestPasswordReset resolved').toBeTruthy();
+		expect(link).toContain('/reset-password/');
+		expect(link).toContain('callbackURL');
+	});
+
+	it('resolves the invited email for the token in that link, and only for it', async () => {
+		await auth.api.requestPasswordReset({
+			body: { email: invitedEmail, redirectTo: '/complete-registration' }
+		});
+		const link = takeInvitationLink(invitedEmail)!;
+		const token = new URL(link).pathname.split('/reset-password/')[1];
+
+		// No invitation row yet: a reset token alone is not an invitation.
+		await expect(resolveInvitationEmail(token)).resolves.toBeNull();
+
+		const invitationId = `inv-${suffix}`;
+		await db.insert(systemInvitation).values({
+			id: invitationId,
+			email: invitedEmail,
+			invitedBy: invitedId,
+			role: 'user',
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+
+		try {
+			await expect(resolveInvitationEmail(token)).resolves.toBe(invitedEmail);
+			await expect(resolveInvitationEmail('%')).resolves.toBeNull();
+		} finally {
+			await db.delete(systemInvitation).where(eq(systemInvitation.id, invitationId));
+		}
+	});
+
+	it('gives the link to one caller only', async () => {
+		await auth.api.requestPasswordReset({
+			body: { email: invitedEmail, redirectTo: '/complete-registration' }
+		});
+		expect(takeInvitationLink(invitedEmail)).toBeTruthy();
+		expect(takeInvitationLink(invitedEmail)).toBeNull();
 	});
 });
