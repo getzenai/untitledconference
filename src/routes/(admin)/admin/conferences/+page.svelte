@@ -28,6 +28,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Front page listings — Admin</title>
+</svelte:head>
+
 <div class="flex flex-col gap-6 p-6">
 	<div>
 		<h1 class="text-2xl font-semibold">Front page listings</h1>

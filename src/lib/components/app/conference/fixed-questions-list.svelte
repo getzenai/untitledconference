@@ -77,12 +77,19 @@
 						-->
 						<form method="POST" action={shown ? '?/hideFixedQuestion' : '?/showFixedQuestion'}>
 							<input type="hidden" name="key" value={question.key} />
+							<!--
+								The visible word is short on purpose — the question it belongs to
+								is the line it sits on. A screen reader reads the button alone,
+								and ten rows of "Remove" name nothing, so the question travels
+								with the button in its accessible name (#475).
+							-->
 							<Button
 								type="submit"
 								variant="ghost"
 								size="sm"
 								class="h-6 px-2 text-xs"
 								disabled={busy}
+								aria-label={shown ? `Remove “${question.label}”` : `Add back “${question.label}”`}
 							>
 								{shown ? 'Remove' : 'Add back'}
 							</Button>
