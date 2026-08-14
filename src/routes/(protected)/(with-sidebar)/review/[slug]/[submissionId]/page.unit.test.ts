@@ -120,6 +120,22 @@ describe('reviewer recusal', () => {
 		expect(page('submitted')).not.toContain('Recuse myself');
 	});
 
+	/**
+	 * The confirm step itself is not assertable here and the E2E spec carries it
+	 * (#463): a closed `AlertDialog` renders nothing on the server, so any markup
+	 * this test could look for would be markup that proves nothing about whether
+	 * the dialog actually gates the submit. What SSR *can* promise is that the
+	 * button still posts — the dialog is a courtesy to the reviewer, not the
+	 * guard, and a browser without JS keeps the old one-click path rather than
+	 * losing the control entirely.
+	 */
+	it('keeps recusal working without JavaScript, dialog or not (#463)', () => {
+		const body = page('assigned');
+
+		expect(body).toContain('formaction="?/recuse"');
+		expect(body).toContain('type="submit"');
+	});
+
 	it('labels a filed review as an update, not a first submit', () => {
 		const filed = page('submitted');
 		expect(filed).toContain('Update review');

@@ -13,9 +13,16 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const raw = url.searchParams.get('sort') as QueueSort;
 	const sort = SORTS.includes(raw) ? raw : 'coverage';
 
+	// Set by the redirect after a recusal (#463), so this page can say what just
+	// happened instead of leaving the reviewer to infer it from a row that changed
+	// shape. `null` when the reviewer simply walked in; an empty string still means
+	// "a recusal landed here", we just could not name the talk.
+	const recused = url.searchParams.get('recused');
+
 	return {
 		queue: await reviewQueue(conference, locals.user!.id, sort),
 		sort,
+		recused,
 		chatEnabled: isFeatureEnabled('inAppChat')
 	};
 };

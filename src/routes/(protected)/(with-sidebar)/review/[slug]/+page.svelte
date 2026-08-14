@@ -20,6 +20,16 @@
 	let { data } = $props();
 
 	const base = $derived(`/review/${data.conference.slug}`);
+	/**
+	 * What just happened, said out loud (#463).
+	 *
+	 * Recusing redirects here, and until now the only evidence was a row that had
+	 * quietly changed shape — the reviewer was left to infer their own action from a
+	 * table. The title travels in the query and the loader hands it over, so the
+	 * sentence can name the talk; an empty one still gets the sentence, because the
+	 * redirect itself is proof the action ran.
+	 */
+	const recusedTitle = $derived(data.recused);
 	// Withdrawn talks are out of the denominator: they ask nothing of this reviewer,
 	// and counting them would make a finished queue read as unfinished forever.
 	const outstanding = $derived(data.queue.filter((row) => !row.withdrawn));
@@ -63,6 +73,21 @@
 		{current.hint}
 	</p>
 </div>
+
+{#if recusedTitle !== null}
+	<p
+		class="border-status-warn/40 bg-status-warn-bg text-status-warn mt-4 rounded-md border px-3 py-2 text-sm"
+		role="status"
+		data-testid="recused-notice"
+	>
+		{#if recusedTitle}
+			You are no longer assigned to “{recusedTitle}”.
+		{:else}
+			You are no longer assigned to that talk.
+		{/if}
+		The organizers have it back and can assign it to someone else — or to you again.
+	</p>
+{/if}
 
 {#if data.queue.length === 0}
 	<EmptyState

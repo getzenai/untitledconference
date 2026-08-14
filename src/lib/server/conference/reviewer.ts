@@ -864,7 +864,12 @@ export async function saveReview(
 }
 
 export type RecuseReviewResult =
-	| { ok: true }
+	/**
+	 * The title travels back so the queue can name what was handed over (#463).
+	 * `null` only if the row vanished between the two queries — the redirect still
+	 * says something happened, it just cannot say which talk.
+	 */
+	| { ok: true; title: string | null }
 	/** No matching outstanding assignment — wrong id, already submitted, or not theirs. */
 	| { ok: false; reason: 'not_found' }
 	/**
@@ -905,7 +910,9 @@ export async function recuseReview(
 		)
 		.returning({ id: reviewTable.id });
 
-	return recused.length > 0 ? { ok: true } : { ok: false, reason: 'not_found' };
+	return recused.length > 0
+		? { ok: true, title: submission?.title ?? null }
+		: { ok: false, reason: 'not_found' };
 }
 
 type Criterion = { id: number; kind: string; scaleMax: number | null };
