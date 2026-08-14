@@ -82,9 +82,13 @@
 				{#if !onIndex}
 					<div>
 						<h1 class="text-2xl font-semibold tracking-tight">{conference.name}</h1>
-						<p class="text-muted-foreground mt-1 text-sm">
-							{dateRange}{#if conference.venue}<span class="px-1.5">·</span>{conference.venue}{/if}
-						</p>
+						{#if dateRange || conference.venue}
+							<p class="text-muted-foreground mt-1 text-sm">
+								{#if dateRange}{dateRange}{/if}{#if dateRange && conference.venue}<span
+										class="px-1.5">·</span
+									>{/if}{#if conference.venue}{conference.venue}{/if}
+							</p>
+						{/if}
 					</div>
 				{/if}
 				<ModeToggle class="-mr-2" />

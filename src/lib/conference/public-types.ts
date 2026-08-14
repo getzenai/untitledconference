@@ -64,8 +64,13 @@ export type PublicConference = {
 	slug: string;
 	name: string;
 	venue: string | null;
-	startsOn: string;
-	endsOn: string;
+	/**
+	 * Nullable because the column is: a conference can be created, and published,
+	 * before anyone has settled on a date. Anything that renders these has to say
+	 * nothing rather than say "Invalid Date" — or throw (#492).
+	 */
+	startsOn: string | null;
+	endsOn: string | null;
 	days: PublicDay[];
 	rooms: PublicRoom[];
 	tracks: PublicTrack[];
