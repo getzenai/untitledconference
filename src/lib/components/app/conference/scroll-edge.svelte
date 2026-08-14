@@ -15,15 +15,20 @@
 	 * permanent shadow would be the same lie pointing the other way — it would claim
 	 * there is more on a conference with two rooms on a desktop.
 	 *
+	 * An optional sentence sits above the strip and names what is missing. The fade
+	 * is easy to miss in a bright hall; "Scroll sideways for the other rooms" is
+	 * not (#403). The sentence tracks whether the content is wider than the box,
+	 * not how far the visitor has already scrolled — rooms that do not fit stay
+	 * named after the last column is on screen. Leave `label` unset on a tab strip:
+	 * there is no card and no room for a line of prose.
+	 *
 	 * Measured, never guessed from a breakpoint: whether a strip fits depends on how
 	 * many rooms and how long their names are, which no breakpoint knows. A
 	 * ResizeObserver watches the box and its content; `scroll` handles the rest.
 	 *
 	 * Not `scroll-table.svelte`, which solves the neighbouring problem for organizer
-	 * tables: that one puts a sentence above a bordered card ("Scroll sideways for
-	 * the rest of the columns"), which is right for a table in a card and wrong for
-	 * a tab strip in the site header, where there is no card and no room for a line
-	 * of prose.
+	 * tables: that one puts the same kind of sentence above a bordered card. The
+	 * public agenda is borderless, so the sentence lives here and the box stays off.
 	 */
 	import { cn } from '$lib/utils.js';
 	import type { Snippet } from 'svelte';
@@ -32,6 +37,7 @@
 		children,
 		class: className,
 		viewportClass,
+		label,
 		...rest
 	}: {
 		children: Snippet;
@@ -39,11 +45,14 @@
 		class?: string;
 		/** Classes for the element that actually scrolls. */
 		viewportClass?: string;
+		/** What the hint says. Name the rooms when the screen has a better word. */
+		label?: string;
 		[key: string]: unknown;
 	} = $props();
 
 	let viewport = $state<HTMLDivElement | null>(null);
 	let more = $state(false);
+	let overflowing = $state(false);
 
 	// A pixel of slack in both terms: sub-pixel layout rounding puts scrollWidth a
 	// fraction above clientWidth on strips that fit perfectly well, and a browser
@@ -51,7 +60,9 @@
 	const measure = () => {
 		const element = viewport;
 		if (!element) return;
-		more = element.scrollWidth - element.clientWidth - element.scrollLeft > 1;
+		const extra = element.scrollWidth - element.clientWidth;
+		overflowing = extra > 1;
+		more = extra - element.scrollLeft > 1;
 	};
 
 	$effect(() => {
@@ -69,6 +80,12 @@
 		return () => observer.disconnect();
 	});
 </script>
+
+{#if label && overflowing}
+	<p class="text-muted-foreground mb-1.5 text-xs" data-testid="scroll-hint" role="status">
+		{label} <span aria-hidden="true">→</span>
+	</p>
+{/if}
 
 <div class={cn('relative', className)} {...rest}>
 	<div bind:this={viewport} onscroll={measure} class={cn('overflow-x-auto', viewportClass)}>
