@@ -66,6 +66,14 @@ never need the database, something is touching `db` at module scope.
   `main`** — `scripts/db/migrate.mjs` refuses when HEAD is not `origin/main`.
 - `npm run db:baseline` is the one-time step for a database that was built with `db:push`: it
   adopts the existing migrations so `db:migrate` does not try to replay the baseline.
+- **Never hand-write a `when` in `drizzle/meta/_journal.json`.** Drizzle applies a migration only
+  when its `when` is above the highest one already applied, so a made-up timestamp is a trap for
+  every migration after it. `0019_lowercase_invitation_email` was written by hand with a `when` a
+  day in the future (`1786780401577`) and production recorded it; until real time passes that
+  value, a freshly generated migration sorts _below_ it and `scripts/db/migrate.mjs` stops the
+  deploy. If the guard names 0019, bump your own entry above `1786780401577` — the recorded value
+  on production cannot be taken back. A data-only migration still gets its `when` from
+  `db:generate`: generate an empty one and replace the SQL.
 
 ## `test-utils.ts`
 

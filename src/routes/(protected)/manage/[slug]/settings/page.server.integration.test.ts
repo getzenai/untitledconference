@@ -10,6 +10,7 @@
  */
 import { openCall } from '$lib/server/conference/cfp-submission';
 import {
+	listDirectoryConferences,
 	listPublishedConferences,
 	loadPublicConference
 } from '$lib/server/conference/public-conference';
@@ -41,6 +42,20 @@ function visibilityEvent(published: boolean) {
 		params: { slug },
 		locals: { user: { id: organizerId } }
 	} as unknown as Parameters<typeof actions.visibility>[0];
+}
+
+function listingEvent(listed: boolean) {
+	const body = new FormData();
+	body.append('listed', listed ? 'true' : 'false');
+
+	return {
+		request: new Request(`http://localhost/manage/${slug}/settings?/listing`, {
+			method: 'POST',
+			body
+		}),
+		params: { slug },
+		locals: { user: { id: organizerId } }
+	} as unknown as Parameters<typeof actions.listing>[0];
 }
 
 function archiveEvent(confirmSlug: string, userId: string = organizerId) {
@@ -154,7 +169,7 @@ describe('?/visibility', () => {
 		expect((await listPublishedConferences()).some((c) => c.slug === slug)).toBe(false);
 	});
 
-	it('publishing opens the public site, the directory and the call together', async () => {
+	it('publishing opens the public site and the call together', async () => {
 		await actions.visibility(visibilityEvent(true));
 
 		expect(await storedStatus()).toBe('published');
@@ -167,6 +182,35 @@ describe('?/visibility', () => {
 		expect((await openCall(slug))?.conference.slug).toBe(slug);
 
 		expect((await listPublishedConferences()).some((c) => c.slug === slug)).toBe(true);
+	});
+
+	/**
+	 * Publishing does not advertise (#402). The front page used to follow `status`
+	 * alone, which is how a fixture named after a Unix timestamp ended up one click
+	 * from the hero. It now takes a second, separate decision.
+	 */
+	it('leaves the front page alone until someone asks for it', async () => {
+		expect((await listDirectoryConferences()).some((c) => c.slug === slug)).toBe(false);
+
+		await actions.listing(listingEvent(true));
+		expect((await listDirectoryConferences()).some((c) => c.slug === slug)).toBe(true);
+
+		// And off again, without taking the public site or the call with it.
+		await actions.listing(listingEvent(false));
+		expect((await listDirectoryConferences()).some((c) => c.slug === slug)).toBe(false);
+		expect(await loadPublicConference(slug)).not.toBeNull();
+		expect((await openCall(slug))?.conference.slug).toBe(slug);
+	});
+
+	it('refuses to advertise a draft, and leaves it unlisted', async () => {
+		await actions.visibility(visibilityEvent(false));
+
+		const result = await actions.listing(listingEvent(true));
+
+		expect(result).toMatchObject({ section: 'visibility' });
+		expect((await listDirectoryConferences()).some((c) => c.slug === slug)).toBe(false);
+
+		await actions.visibility(visibilityEvent(true));
 	});
 
 	it('goes back to draft and takes all three away again', async () => {

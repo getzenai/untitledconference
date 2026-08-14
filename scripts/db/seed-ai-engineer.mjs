@@ -93,7 +93,10 @@ async function importConference(conf) {
 		venue,
 		starts_on: startsOn,
 		ends_on: endsOn,
-		status: 'published'
+		status: 'published',
+		// The showcase conferences are what the front page is for (#402): published
+		// says the site exists, listed says the directory names it.
+		listed_publicly: true
 	})} RETURNING id`;
 	const conferenceId = conference.id;
 

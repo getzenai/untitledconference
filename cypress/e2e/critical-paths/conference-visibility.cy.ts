@@ -61,4 +61,59 @@ describe('Publishing a conference', () => {
 		cy.get('[data-testid="visibility-state"]', { timeout: 20000 }).should('contain.text', 'Draft');
 		publicSiteStatus().should('eq', 404);
 	});
+
+	/**
+	 * Publishing and advertising used to be one switch, and the front page paid
+	 * for it: a fixture called `grok-juror-1786581216747` sat one click from the
+	 * hero, on the one surface whose job is "this product is real" (#402).
+	 *
+	 * The integration test proves the loaders answer differently. What it cannot
+	 * prove is that an organizer can reach the second switch at all — the same
+	 * gap that let `conference.status` ship with no writer but the seed script.
+	 */
+	// `?home=0`: the organizer is signed in, and `/` sends a signed-in user to
+	// /home (#237). Without the bypass this spec would assert against the wrong
+	// page and pass for the wrong reason — the link is missing from /home too.
+	const visitFrontPage = () => cy.visit('/?home=0');
+	const directoryEntry = () => cy.get('body').find(`a[href="/c/${slug}"]`);
+
+	it('leaves a freshly published conference off the front page until someone says so', () => {
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="settings-visibility"] [data-testid="visibility-submit"]')
+			.should('contain.text', 'Publish')
+			.click();
+		cy.get('[data-testid="visibility-state"]', { timeout: 20000 }).should('contain.text', 'Live');
+
+		// Live, reachable, and deliberately not advertised.
+		publicSiteStatus().should('eq', 200);
+		visitFrontPage();
+		directoryEntry().should('not.exist');
+
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="listing-submit"]')
+			.should('contain.text', 'Show on the front page')
+			.click();
+		cy.get('[data-testid="listing-state"]', { timeout: 20000 }).should('contain.text', 'Listed');
+
+		visitFrontPage();
+		directoryEntry().should('exist');
+
+		// And back off. Unlisting is not unpublishing: the link keeps working, which
+		// is the whole reason the two switches are separate.
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="listing-submit"]')
+			.should('contain.text', 'Remove from the front page')
+			.click();
+		cy.get('[data-testid="listing-state"]', { timeout: 20000 }).should(
+			'contain.text',
+			'Not in the'
+		);
+
+		visitFrontPage();
+		directoryEntry().should('not.exist');
+		publicSiteStatus().should('eq', 200);
+	});
 });

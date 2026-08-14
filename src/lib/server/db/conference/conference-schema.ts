@@ -9,6 +9,7 @@
  */
 import { relations } from 'drizzle-orm';
 import {
+	boolean,
 	date,
 	integer,
 	pgEnum,
@@ -100,6 +101,23 @@ export const conferenceTable = pgTable(
 		 * it was.
 		 */
 		statusBeforeArchive: conferenceStatus('status_before_archive'),
+		/**
+		 * Whether the front-door directory names this conference (#402).
+		 *
+		 * Published and listed are two different questions, and until now one column
+		 * answered both: `/` showed every conference with `status = 'published'`, so a
+		 * test conference an agent published put its timestamp of a name next to the
+		 * real ones on the page whose entire job is "this product is real".
+		 *
+		 * Off by default, so a new conference is published *to the people holding its
+		 * link* and joins the directory only when someone says so. Existing published
+		 * conferences were backfilled to `true` (migration 0020) — the flag is meant to
+		 * change what happens next, not to empty the front door on the day it ships.
+		 *
+		 * Unlisting never hides the conference itself: `/c/<slug>`, the call for papers
+		 * and the agenda all keep filtering on `status` alone.
+		 */
+		listedPublicly: boolean('listed_publicly').notNull().default(false),
 		/** ABS-07's setting, per conference — see `reviewVisibility`. */
 		reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

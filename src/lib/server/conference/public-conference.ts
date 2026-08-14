@@ -29,7 +29,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, type SQL } from 'drizzle-orm';
 
 /** "Thursday, 17 September" — the day-tab label the agenda and itinerary show. */
 function dayLabel(date: string): string {
@@ -359,17 +359,44 @@ export type PublicConferenceSummary = {
 /**
  * Every conference whose organizer has published it, soonest first.
  *
- * This exists because `/` was a dead end for anyone without an account: it
+ * "Published" is the answer to one question only: does `/c/<slug>` exist. Every
+ * caller that means "what may a speaker submit to" or "what is live" wants this
+ * one. The front-door directory wants `listDirectoryConferences` instead — see
+ * there for why the two came apart (#402).
+ *
+ * `status = 'published'` is the same predicate `loadHeader` applies, and it has to
+ * be: a list containing a draft conference would hand out a link to a page that
+ * 404s.
+ */
+export async function listPublishedConferences(): Promise<PublicConferenceSummary[]> {
+	return selectSummaries(eq(conferenceTable.status, 'published'));
+}
+
+/**
+ * The conferences the front door names (#402).
+ *
+ * Published *and* listed, because being reachable and being advertised are not the
+ * same decision. While one column answered both, `/` showed every conference any
+ * agent had published — a fixture whose name was a Unix timestamp sat one click
+ * from the hero on the page whose entire job is "this product is real".
+ *
+ * Deliberately not the predicate behind the call for papers: unlisting a
+ * conference must not close its CFP. `listOpenCalls` builds on
+ * `listPublishedConferences` for exactly that reason.
+ *
+ * This exists at all because `/` was a dead end for anyone without an account: it
  * redirected to the login form, and no page reachable from there linked a public
  * conference site. The EMB scenarios all start "at the base URL, logged out", so
  * a visitor who cannot get from `/` to `/c/<slug>` cannot reach any of the five
  * public surfaces at all — however well those surfaces work.
- *
- * `status = 'published'` is the same predicate `loadHeader` applies, and it has to
- * be: a directory that lists a draft conference would hand out a link to a page
- * that 404s.
  */
-export async function listPublishedConferences(): Promise<PublicConferenceSummary[]> {
+export async function listDirectoryConferences(): Promise<PublicConferenceSummary[]> {
+	return selectSummaries(
+		and(eq(conferenceTable.status, 'published'), eq(conferenceTable.listedPublicly, true))!
+	);
+}
+
+async function selectSummaries(where: SQL): Promise<PublicConferenceSummary[]> {
 	const rows = await db
 		.select({
 			slug: conferenceTable.slug,
@@ -379,7 +406,7 @@ export async function listPublishedConferences(): Promise<PublicConferenceSummar
 			endsOn: conferenceTable.endsOn
 		})
 		.from(conferenceTable)
-		.where(eq(conferenceTable.status, 'published'))
+		.where(where)
 		.orderBy(asc(conferenceTable.startsOn), asc(conferenceTable.name));
 
 	return rows.map((row) => ({
