@@ -57,14 +57,12 @@ async function proposal(profileId: number | null, status: string, title: string)
 }
 
 beforeAll(async () => {
-	await db
-		.insert(organization)
-		.values({
-			id: organizationId,
-			name: 'Edit Refusal Org',
-			slug: organizationId,
-			createdAt: new Date()
-		});
+	await db.insert(organization).values({
+		id: organizationId,
+		name: 'Edit Refusal Org',
+		slug: organizationId,
+		createdAt: new Date()
+	});
 
 	for (const id of [speakerUserId, strangerUserId]) {
 		await db
