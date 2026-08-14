@@ -154,6 +154,21 @@ describe('the public call for papers', () => {
 		expect(body).not.toContain('Monday 15 February 2027');
 	});
 
+	it('offers the close date as a calendar download next to the sentence (#510)', () => {
+		const body = renderCfp('open', null, null, new Date('2027-02-15T23:59:00Z'));
+
+		expect(body).toContain('href="/c/devflow-conf-2027/cfp.ics"');
+		expect(body).toContain('Add to calendar');
+		expect(body).toContain('data-testid="cfp-deadline-calendar"');
+	});
+
+	it('hides the calendar download once the call has closed', () => {
+		const body = renderCfp('closed', null, null, new Date('2027-02-15T23:59:00Z'));
+
+		expect(body).not.toContain('cfp-deadline-calendar');
+		expect(body).not.toContain('Add to calendar');
+	});
+
 	it('renders the call unchanged when the organizer wrote nothing', () => {
 		const body = renderCfp('open', null);
 
