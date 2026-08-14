@@ -24,6 +24,17 @@ describe('app sidebar starter cleanup', () => {
 		expect(source).toContain('untitledconference');
 	});
 
+	it('is icon-collapsible and pins the account menu in the footer (#410)', () => {
+		expect(source).toContain("collapsible = 'icon'");
+		expect(source).toContain('Sidebar.Footer');
+		expect(source).toContain('NavUser');
+		// Conference destinations ride along in the mobile sheet; desktop has
+		// ConferenceSidebar. One list (`NavConference`), not a second <aside>.
+		expect(source).toContain('NavConference');
+		expect(source).toContain('isConferencePath(page.url.pathname)');
+		expect(source).not.toMatch(/<aside[\s>]/);
+	});
+
 	it('takes the reviewing item from reviewSlug, not a hard-coded /review (#373)', () => {
 		// The module-level list still says /review (the list of many). The
 		// derived items overwrite that when navAccess names exactly one
