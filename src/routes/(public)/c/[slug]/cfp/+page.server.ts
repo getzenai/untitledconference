@@ -68,5 +68,23 @@ export const actions: Actions = {
 		save(locals.user?.id, params.slug, await request.formData(), false, url.pathname),
 
 	submit: async ({ request, params, locals, url }) =>
-		save(locals.user?.id, params.slug, await request.formData(), true, url.pathname)
+		save(locals.user?.id, params.slug, await request.formData(), true, url.pathname),
+
+	/**
+	 * E2E only (#482). A real uncaught throw from this action, not an intercepted
+	 * status and not `fail()`. The public call is the worst instance in the app:
+	 * a stranger's abstract has no draft and no way back, so the client must keep
+	 * the page and the typed values.
+	 *
+	 * Gated by the same flag as `/api/v1/test/*`. Without it this is a 404, so a
+	 * production POST cannot use the route as a crash button. A session is
+	 * required too — the real submit already is, and this must not be easier.
+	 */
+	e2eForce500: async ({ locals }) => {
+		if (process.env.ENABLE_TEST_ENDPOINTS !== 'true') {
+			error(404, 'Not found');
+		}
+		if (!locals.user) error(404, 'Not found');
+		throw new Error('e2e forced action 500');
+	}
 };
