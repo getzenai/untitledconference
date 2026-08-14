@@ -5,6 +5,7 @@ import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dispatchQueuedEmails } from './email-dispatcher';
+import { setTestMailTransport, testMailDeliveries } from './test-mail-transport';
 
 const suffix = `mail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -43,6 +44,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+	setTestMailTransport(false);
 	await db.delete(emailLogTable).where(eq(emailLogTable.conferenceId, conferenceId));
 });
 
@@ -123,5 +125,27 @@ describe('dispatchQueuedEmails', () => {
 				{ id: selected.id, status: 'sent' }
 			])
 		);
+	});
+
+	it('drains through the recording fake when it is armed, and leaves the outbox queued when it is not (#489)', async () => {
+		const row = await queuedMail();
+
+		expect(await dispatchQueuedEmails({ conferenceId })).toMatchObject({
+			sent: 0,
+			disabled: true
+		});
+		const [stillQueued] = await db.select().from(emailLogTable).where(eq(emailLogTable.id, row.id));
+		expect(stillQueued.status).toBe('queued');
+
+		expect(setTestMailTransport(true)).toBe(true);
+		const result = await dispatchQueuedEmails({ conferenceId });
+
+		expect(result).toEqual({ sent: 1, failed: 0, remaining: 0, disabled: false });
+		expect(testMailDeliveries()).toEqual([
+			expect.objectContaining({ id: row.id, toEmail: `${suffix}@example.com` })
+		]);
+		const [stored] = await db.select().from(emailLogTable).where(eq(emailLogTable.id, row.id));
+		expect(stored.status).toBe('sent');
+		expect(stored.sentAt).toBeInstanceOf(Date);
 	});
 });

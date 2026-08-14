@@ -10,6 +10,7 @@ import { db } from '$lib/server/db';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { serverEnv } from '$lib/server/env';
 import { and, asc, count, eq, inArray, type SQL } from 'drizzle-orm';
+import { isTestMailTransportArmed, testMailTransport } from './test-mail-transport';
 
 export type DeliverableEmail = {
 	id: number;
@@ -84,10 +85,14 @@ function resendConfig(): ResendConfig | null {
 
 /** Known before anyone clicks Send queued — a disabled button is not a lock. */
 export function mailDeliveryConfigured(): boolean {
-	return resendConfig() !== null;
+	// The E2E fake is a configured transport that cannot leave the machine (#489).
+	// Check it first so a real key never wins while the suite has the fake armed.
+	return isTestMailTransportArmed() || resendConfig() !== null;
 }
 
 function configuredTransport(): EmailTransport | null {
+	const test = testMailTransport();
+	if (test) return test;
 	const config = resendConfig();
 	return config ? (email) => deliverViaResend(email, config) : null;
 }
