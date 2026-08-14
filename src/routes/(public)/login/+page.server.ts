@@ -19,15 +19,11 @@
  * this form unlimited ones: a brute-force path opened by the fix for a status code.
  */
 import { auth } from '$lib/auth';
+import { safeReturnTo } from '$lib/safe-return-to';
 import { applySetCookies } from '$lib/server/set-cookie';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { loginSchema } from './schema';
-
-/** Only our own paths, and never protocol-relative — the same rule the page applies. */
-function safeReturnTo(raw: string | null): string {
-	return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/home';
-}
 
 /** What Better Auth puts in a failed response body. */
 type AuthErrorBody = { message?: string; code?: string };
@@ -56,7 +52,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Enter your email address and password.' });
 		}
 
-		const returnTo = safeReturnTo(url.searchParams.get('returnTo'));
+		const returnTo = safeReturnTo(url.searchParams.get('returnTo'), url.origin);
 
 		// The original headers ride along: the rate limiter reads the client address
 		// off them, and Better Auth checks `Origin` against its trusted list.

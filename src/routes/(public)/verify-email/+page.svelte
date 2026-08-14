@@ -7,6 +7,7 @@
 	import { browser } from '$app/environment';
 	import { Alert, AlertDescription, AlertTitle } from '$lib/components/ui/alert';
 	import { AlertCircle, CheckCircle2, MailCheck } from 'lucide-svelte';
+	import { safeReturnTo } from '$lib/safe-return-to';
 
 	const DEFAULT_RETURN_TO = '/home';
 	let email = '';
@@ -29,9 +30,7 @@
 			if (emailParam) {
 				email = emailParam;
 			}
-			if (returnToParam && returnToParam.startsWith('/') && !returnToParam.startsWith('//')) {
-				returnToTarget = returnToParam;
-			}
+			returnToTarget = safeReturnTo(returnToParam, currentUrl.origin);
 		}
 
 		// Check if user is already logged in and verified
