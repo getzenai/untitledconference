@@ -118,7 +118,14 @@
 		'focus-visible:ring-sidebar-ring mx-2 mb-1 inline-block shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:outline-none';
 </script>
 
-<Sidebar.Root bind:ref {variant} {collapsible} class={className} data-testid="app-sidebar">
+<Sidebar.Root
+	bind:ref
+	{variant}
+	{collapsible}
+	class={className}
+	data-testid="app-sidebar"
+	aria-label="Application"
+>
 	<Sidebar.Header>
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>

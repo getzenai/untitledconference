@@ -25,6 +25,7 @@
 	collapsible="none"
 	class="sticky top-0 hidden min-h-svh md:flex"
 	data-testid="conference-sidebar"
+	aria-label="Conference"
 >
 	<Sidebar.Header>
 		<Sidebar.Menu>

@@ -5,7 +5,6 @@
 	import { initialAppRail, transitAppRail } from '$lib/conference/conference-nav';
 	import type { NavAccess } from '$lib/conference/nav-access';
 	import { consumeGooseWelcome } from '$lib/goose-welcome';
-	import { Toaster } from '$lib/components/ui/sonner';
 	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
@@ -51,7 +50,6 @@
 	});
 </script>
 
-<Toaster richColors closeButton />
 {#if showAppChrome && navAccess}
 	<Sidebar.Provider bind:open>
 		<AppSidebar user={page.data.user} {navAccess} variant="inset" collapsible="icon" />

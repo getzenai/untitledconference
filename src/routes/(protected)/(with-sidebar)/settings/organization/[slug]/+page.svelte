@@ -314,19 +314,6 @@
 									{/if}
 								</Select.Content>
 							</Select.Root>
-							<!-- Hidden native select for testing purposes -->
-							<select
-								class="sr-only"
-								bind:value={inviteRole}
-								disabled={isInviting}
-								aria-label="Role for testing"
-							>
-								<option value="member">Member</option>
-								<option value="admin">Admin</option>
-								{#if currentMember?.role === 'owner'}
-									<option value="owner">Owner</option>
-								{/if}
-							</select>
 							<input type="hidden" name="role" value={inviteRole} />
 						</div>
 						<div class="flex items-end">
