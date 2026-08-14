@@ -10,9 +10,19 @@
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
+	import { withdrawWarning } from '$lib/conference/withdraw-warning';
 
 	let { data, form } = $props();
 
@@ -27,6 +37,9 @@
 	// decision once this participation task has actually been completed.
 	const participationDecision = $derived(task.status === 'done' ? task.participationStatus : null);
 	let busy = $state(false);
+	let confirmWithdraw = $state(false);
+
+	const warning = $derived(withdrawWarning(task.conferenceName, data.acceptedTalks));
 
 	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
@@ -121,8 +134,16 @@
 					>{task.submissionTitle}{/if}
 			</p>
 		</div>
+		<!-- A withdrawal closes this task, so the status used to read "Done" on the
+		     one answer that is emphatically not an achievement (#495). -->
 		<Badge variant={task.status === 'open' ? 'outline' : 'secondary'}>
-			{task.status === 'open' ? 'Open' : task.status === 'submitted' ? 'Handed in' : 'Done'}
+			{participationDecision === 'declined'
+				? 'Withdrawn'
+				: task.status === 'open'
+					? 'Open'
+					: task.status === 'submitted'
+						? 'Handed in'
+						: 'Done'}
 		</Badge>
 	</div>
 
@@ -185,9 +206,29 @@
 					</form>
 				{/if}
 				{#if participationDecision !== 'declined'}
-					<form method="POST" action="?/participation" use:enhance={submitting('edit')}>
+					<form
+						id="withdraw-form"
+						method="POST"
+						action="?/participation"
+						use:enhance={submitting('edit')}
+					>
 						<input type="hidden" name="decision" value="declined" />
-						<Button type="submit" variant="outline" disabled={busy}>I can’t take part</Button>
+						<Button
+							type="submit"
+							variant="outline"
+							disabled={busy}
+							data-testid="withdraw-submit"
+							onclick={(event: MouseEvent) => {
+								// "Yes, I'll be there" needs no guard: it is the state you can undo
+								// from the screen you are standing on, and it costs nobody anything
+								// if it was a misclick. Withdrawing tells the organizers to drop you
+								// from the programme (#495), so it asks first.
+								event.preventDefault();
+								confirmWithdraw = true;
+							}}
+						>
+							I can’t take part
+						</Button>
 					</form>
 				{/if}
 			</div>
@@ -196,6 +237,39 @@
 				<p class="text-status-bad mt-3 text-sm">{form.participationError}</p>
 			{/if}
 		</section>
+
+		<!--
+			The confirm button reaches the form through `form=`, not a click handler:
+			the dialog content is portalled out of the form's subtree, so a plain
+			submit button inside it would post nothing. Without JavaScript the trigger
+			stays an ordinary submit button and the withdrawal still works — the guard
+			is an enhancement, not the mechanism. Same shape as unpublishing a
+			conference, which is the other button in this app that lands somewhere the
+			screen you are on cannot show you.
+		-->
+		<AlertDialog bind:open={confirmWithdraw}>
+			<AlertDialogContent data-testid="withdraw-dialog">
+				<AlertDialogHeader>
+					<AlertDialogTitle>{warning.title}</AlertDialogTitle>
+					<AlertDialogDescription>
+						{warning.consequence}
+						<span class="mt-2 block">{warning.reversal}</span>
+					</AlertDialogDescription>
+				</AlertDialogHeader>
+				<AlertDialogFooter>
+					<AlertDialogCancel data-testid="withdraw-cancel">Keep my place</AlertDialogCancel>
+					<Button
+						type="submit"
+						form="withdraw-form"
+						variant="destructive"
+						disabled={busy}
+						data-testid="withdraw-confirm"
+					>
+						Withdraw me
+					</Button>
+				</AlertDialogFooter>
+			</AlertDialogContent>
+		</AlertDialog>
 	{:else if task.kind === 'action'}
 		{#if profileTask}
 			<section class="border-border bg-muted/30 mt-6 rounded-lg border p-5">

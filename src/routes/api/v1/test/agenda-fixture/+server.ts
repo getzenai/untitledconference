@@ -23,10 +23,12 @@ import { member } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceDayTable,
+	conferenceSpeakerTable,
 	conferenceTable,
 	speakerProfileTable,
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
+import { taskTable } from '$lib/server/db/conference/content-schema';
 import {
 	evaluationPlanTable,
 	reviewRoundTable,
@@ -52,6 +54,16 @@ type FixtureRequest = {
 	 * review work, and would never show under that filter.
 	 */
 	sessionStatus?: 'submitted' | 'in_review' | 'accepted';
+	/**
+	 * Make this user the speaker on every session, and give them the portal
+	 * (#495).
+	 *
+	 * The speaker portal needs a speaker profile bound to an account, a roster
+	 * row, and a participation task. None of the three can be produced through
+	 * the UI: acceptance writes the roster, and the task comes from an
+	 * organizer's template run. Same shortcut, same reason as the days.
+	 */
+	speakerUserId?: string;
 	/**
 	 * Which of those titles already carry a handed-in review (#122).
 	 *
@@ -120,28 +132,62 @@ async function addSession(
 	title: string,
 	index: number,
 	trackId: number | null = null,
-	status: 'submitted' | 'in_review' | 'accepted' = 'accepted'
-): Promise<void> {
+	status: 'submitted' | 'in_review' | 'accepted' = 'accepted',
+	speakerProfileId: number | null = null
+): Promise<{ submissionId: number; speakerProfileId: number }> {
 	const decided = status === 'accepted' ? new Date() : null;
 	const [submission] = await db
 		.insert(submissionTable)
 		.values({ conferenceId, title, status, decidedAt: decided, trackId })
 		.returning();
 
-	const [speaker] = await db
-		.insert(speakerProfileTable)
-		.values({
-			organizationId,
-			name: `Fixture Speaker ${index + 1}`,
-			sortName: `Speaker ${index + 1}`
-		})
-		.returning();
+	// One person can hold several accepted talks, and `speakerUserId` fixtures
+	// depend on that: the withdrawal counts talks per profile, so a profile per
+	// session would make every speaker a one-talk speaker.
+	const profileId =
+		speakerProfileId ??
+		(
+			await db
+				.insert(speakerProfileTable)
+				.values({
+					organizationId,
+					name: `Fixture Speaker ${index + 1}`,
+					sortName: `Speaker ${index + 1}`
+				})
+				.returning()
+		)[0].id;
 
 	await db.insert(submissionSpeakerTable).values({
 		submissionId: submission.id,
-		speakerProfileId: speaker.id,
+		speakerProfileId: profileId,
 		isPrimary: true,
 		position: 0
+	});
+
+	return { submissionId: submission.id, speakerProfileId: profileId };
+}
+
+/**
+ * The roster row and the one task the speaker portal is about (#495).
+ *
+ * `status: 'invited'` is what acceptance writes: the organizer's assumption,
+ * not the speaker's answer. The task title is matched by
+ * `isParticipationTaskTitle`, which is deliberately exact.
+ */
+async function addParticipationTask(
+	conferenceId: number,
+	speakerProfileId: number,
+	submissionId: number
+): Promise<void> {
+	await db
+		.insert(conferenceSpeakerTable)
+		.values({ conferenceId, speakerProfileId, status: 'invited' });
+	await db.insert(taskTable).values({
+		conferenceId,
+		speakerProfileId,
+		submissionId,
+		title: 'Confirm participation',
+		kind: 'action'
 	});
 }
 
@@ -200,6 +246,7 @@ type Fixture = {
 	days: string[];
 	sessions: string[];
 	sessionStatus: 'submitted' | 'in_review' | 'accepted';
+	speakerUserId: string | null;
 	reviewed: string[];
 	blindReview: boolean;
 	tracks: string[];
@@ -216,10 +263,61 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		days: body.days ?? DEFAULT_DAYS,
 		sessions: body.sessions ?? DEFAULT_SESSIONS,
 		sessionStatus: body.sessionStatus ?? 'accepted',
+		speakerUserId: body.speakerUserId ?? null,
 		reviewed: body.reviewed ?? [],
 		blindReview: body.blindReview ?? false,
 		tracks: body.tracks ?? []
 	};
+}
+
+/**
+ * Every session of this fixture, and the speaker portal when one is asked for.
+ *
+ * Its own function rather than a loop in the handler: a fixture endpoint that
+ * grows past the linter's size limits stops being the readable shortcut it is
+ * meant to be.
+ */
+async function addSessions(
+	conferenceId: number,
+	organizationId: string,
+	fixture: Fixture,
+	trackIds: number[]
+): Promise<void> {
+	// One profile for the whole fixture when a speaker is named, so their talks
+	// count as one person's — the withdrawal dialog counts talks per profile.
+	const speakerProfileId = fixture.speakerUserId
+		? (
+				await db
+					.insert(speakerProfileTable)
+					.values({
+						organizationId,
+						userId: fixture.speakerUserId,
+						name: 'Fixture Speaker',
+						sortName: 'Speaker, Fixture'
+					})
+					.returning()
+			)[0].id
+		: null;
+
+	for (const [index, title] of fixture.sessions.entries()) {
+		// Only the first session gets the first track, so a filter that ignores its
+		// parameter and returns everything is distinguishable from one that works.
+		const added = await addSession(
+			conferenceId,
+			organizationId,
+			title,
+			index,
+			index === 0 ? (trackIds[0] ?? null) : null,
+			fixture.sessionStatus,
+			speakerProfileId
+		);
+
+		// One participation answer covers the whole event, so one task on the first
+		// session is the shape the portal really has.
+		if (speakerProfileId && index === 0) {
+			await addParticipationTask(conferenceId, speakerProfileId, added.submissionId);
+		}
+	}
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -253,19 +351,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const trackIds = await addTracks(conference.id, fixture.tracks);
-
-	for (const [index, title] of sessions.entries()) {
-		// Only the first session gets the first track, so a filter that ignores its
-		// parameter and returns everything is distinguishable from one that works.
-		await addSession(
-			conference.id,
-			organizationId,
-			title,
-			index,
-			index === 0 ? (trackIds[0] ?? null) : null,
-			fixture.sessionStatus
-		);
-	}
+	await addSessions(conference.id, organizationId, fixture, trackIds);
 
 	if (fixture.reviewed.length > 0) {
 		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed, fixture.blindReview);

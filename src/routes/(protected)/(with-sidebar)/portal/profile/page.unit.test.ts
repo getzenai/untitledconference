@@ -6,9 +6,14 @@
  * would overwrite both), and the stored links coming back into the boxes they
  * were typed into.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
+
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
 const profile = (over: Partial<Record<string, unknown>> = {}) => ({
 	id: 7,
@@ -108,6 +113,29 @@ describe('the speaker profile page', () => {
 		const withPhoto = draw([profile({ headshotUrl: '/speaker-photo/7?v=1' })]);
 		expect(withPhoto).toContain('action="?/removeHeadshot"');
 		expect(withPhoto).toContain('/speaker-photo/7?v=1');
+	});
+
+	/**
+	 * #495: removing the headshot deleted it on one click, and the circle looks
+	 * the same afterwards — picture and initials fill the same space — so nothing
+	 * on the page could tell a speaker what they had just done. The dialog is a
+	 * client-side control, so what is checked here is the wiring: one named form
+	 * per profile, and the confirm button reaching it from outside its subtree.
+	 */
+	it('guards removing the headshot, per profile', () => {
+		const body = draw([
+			profile({ headshotUrl: '/speaker-photo/7?v=1' }),
+			profile({ id: 8, organizationName: 'Southwind Conf', headshotUrl: '/speaker-photo/8?v=1' })
+		]);
+
+		expect(body).toContain('id="remove-headshot-7"');
+		expect(body).toContain('id="remove-headshot-8"');
+		expect(source).toContain('data-testid="remove-headshot-dialog"');
+		expect(source).toContain('form="remove-headshot-{profile.id}"');
+		expect(source).toContain('confirmRemoveHeadshot = profile.id;');
+		// Uploading a new picture overwrites nothing a speaker cannot redo, so it
+		// stays a single click. Only the delete asks.
+		expect(source.match(/confirmRemoveHeadshot = profile\.id;/g)).toHaveLength(1);
 	});
 
 	it('reports a rejected save against the profile it belongs to', () => {

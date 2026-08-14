@@ -1,7 +1,12 @@
 /** The task detail should lead a speaker to the real work, not just a ticket toggle. */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
+
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
 const task = (over: Partial<Record<string, unknown>> = {}) => ({
 	id: 21,
@@ -23,8 +28,10 @@ const task = (over: Partial<Record<string, unknown>> = {}) => ({
 	...over
 });
 
-const draw = (taskData: ReturnType<typeof task>, files: unknown[] = []) =>
-	render(Page, { props: { data: { task: taskData, files }, form: null } as never }).body;
+const draw = (taskData: ReturnType<typeof task>, files: unknown[] = [], acceptedTalks = 1) =>
+	render(Page, {
+		props: { data: { task: taskData, files, acceptedTalks }, form: null } as never
+	}).body;
 
 describe('speaker task detail', () => {
 	it('sends a profile task to the profile editor and keeps its completion step', () => {
@@ -74,6 +81,43 @@ describe('speaker task detail', () => {
 		expect(declined).not.toContain('Participation declined');
 		expect(declined).not.toContain('I can’t take part');
 		expect(declined).toContain('Yes, I’ll be there');
+	});
+
+	/**
+	 * #495: withdrawing tells the organizers to drop you from the programme, and
+	 * the button for it sat among ordinary task actions that cost nothing. The
+	 * dialog is a client-side control, so what is checked here is the wiring it
+	 * hangs on — the named form it submits, the guard that intercepts the click,
+	 * and that saying yes is not guarded.
+	 */
+	it('guards the withdrawal, and only that direction', () => {
+		expect(source).toContain('id="withdraw-form"');
+		expect(source).toContain('data-testid="withdraw-dialog"');
+		expect(source).toContain('data-testid="withdraw-confirm"');
+		expect(source).toContain('form="withdraw-form"');
+		expect(source).toContain('confirmWithdraw = true;');
+		// One guard, on one button: "Yes, I'll be there" stays a single click.
+		expect(source.match(/confirmWithdraw = true;/g)).toHaveLength(1);
+	});
+
+	it('takes the dialog’s sentences from their one home', () => {
+		// `withdraw-warning.ts` owns the wording and is tested there; what matters
+		// here is that the page reads it rather than growing a second copy.
+		expect(source).toContain('withdrawWarning(task.conferenceName, data.acceptedTalks)');
+		expect(source).toContain('{warning.consequence}');
+	});
+
+	it('calls a withdrawal withdrawn rather than done', () => {
+		const declined = draw(
+			task({ title: 'Confirm participation', status: 'done', participationStatus: 'declined' })
+		);
+		const confirmed = draw(
+			task({ title: 'Confirm participation', status: 'done', participationStatus: 'confirmed' })
+		);
+
+		expect(declined).toContain('Withdrawn');
+		expect(declined).not.toContain('>Done<');
+		expect(confirmed).toContain('Done');
 	});
 
 	it('does not present the organizer’s initial roster assumption as the speaker’s answer', () => {

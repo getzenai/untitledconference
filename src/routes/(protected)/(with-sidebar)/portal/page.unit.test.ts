@@ -86,6 +86,30 @@ describe('speaker portal task list', () => {
 		expect(body).toContain('Thu, 11 Feb');
 	});
 
+	/**
+	 * #495: answering the participation task closes it, so a speaker who has just
+	 * withdrawn used to find that task ticked and counted in "N of M done" — the
+	 * one thing that is emphatically not done, marked done.
+	 */
+	it('shows a withdrawal as withdrawn and keeps it out of the done count', () => {
+		const body = draw([
+			task(10, { status: 'done', participationStatus: 'declined' }),
+			task(11, { status: 'done', title: 'Sign release' })
+		]);
+
+		expect(body).toContain('Withdrawn');
+		// One task is genuinely done; the withdrawal is not the second.
+		expect(body).toContain('1 of 2 done');
+		expect(body.match(/Done —/g)).toHaveLength(1);
+	});
+
+	it('leaves a confirmed participation task counted as done', () => {
+		const body = draw([task(12, { status: 'done', participationStatus: 'confirmed' })]);
+
+		expect(body).not.toContain('Withdrawn');
+		expect(body).toContain('Done —');
+	});
+
 	it('says nothing is waiting when every task is finished', () => {
 		const body = draw([task(9, { status: 'done' })]);
 

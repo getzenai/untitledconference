@@ -10,6 +10,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 
 	let { data } = $props();
 
@@ -23,6 +24,20 @@
 		tasks: Task[];
 		doneCount: number;
 	};
+
+	/**
+	 * A withdrawal is an answer, not an achievement (#495).
+	 *
+	 * Answering the participation task closes it, so a speaker who has just told
+	 * the organizers they cannot come used to find that task ticked and counted
+	 * in "4 of 5 done". The one thing that is emphatically not done was marked
+	 * done. The row says what the answer was; the count leaves it out rather than
+	 * claiming either.
+	 */
+	const withdrawn = (task: Task) =>
+		task.status !== 'open' &&
+		isParticipationTaskTitle(task.title) &&
+		task.participationStatus === 'declined';
 
 	const groupBySession = (tasks: Task[]) => {
 		const groups: TaskGroup[] = [];
@@ -45,7 +60,7 @@
 		}
 
 		for (const group of groups)
-			group.doneCount = group.tasks.filter((t) => t.status !== 'open').length;
+			group.doneCount = group.tasks.filter((t) => t.status !== 'open' && !withdrawn(t)).length;
 
 		return groups;
 	};
@@ -163,7 +178,9 @@
 						<p class="text-muted-foreground mt-0.5 text-sm">{group.conferenceName}</p>
 						<ul class="divide-border mt-2 divide-y border-y">
 							{#each group.tasks as task (task.id)}
-								{@const done = task.status !== 'open'}
+								{@const gone = withdrawn(task)}
+								{@const done = task.status !== 'open' && !gone}
+								{@const closed = done || gone}
 								<li class="flex flex-wrap items-start justify-between gap-3 py-3">
 									<div class="flex items-start gap-2">
 										{#if done}
@@ -174,19 +191,23 @@
 										{/if}
 										<div>
 											<a
-												class="text-sm hover:underline {done
+												class="text-sm hover:underline {closed
 													? 'text-muted-foreground'
 													: 'font-medium'}"
 												href="/portal/tasks/{task.id}"
 											>
 												{task.title}
 											</a>
-											{#if task.instructions && !done}
+											{#if task.instructions && !closed}
 												<p class="text-muted-foreground mt-1 text-sm">{task.instructions}</p>
 											{/if}
 										</div>
 									</div>
-									{#if !done}
+									{#if gone}
+										<!-- Not a tick and not a deadline: the answer itself. This task is
+										     closed and the speaker is not coming (#495). -->
+										<Badge variant="outline" data-testid="task-withdrawn">Withdrawn</Badge>
+									{:else if !done}
 										<span
 											class="text-sm {overdue(task.dueOn)
 												? 'text-status-bad font-medium'

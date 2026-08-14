@@ -8,6 +8,15 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -18,6 +27,9 @@
 	let { data, form } = $props();
 
 	let busy = $state(false);
+	// One dialog is open at a time, and which one is a profile id: a speaker who
+	// has spoken for two organizers has two headshots on this page.
+	let confirmRemoveHeadshot = $state<number | null>(null);
 
 	const submitting = () => {
 		busy = true;
@@ -144,12 +156,71 @@
 					</form>
 
 					{#if profile.headshotUrl}
-						<form method="POST" action="?/removeHeadshot" use:enhance={submitting} class="mt-2">
+						<form
+							id="remove-headshot-{profile.id}"
+							method="POST"
+							action="?/removeHeadshot"
+							use:enhance={submitting}
+							class="mt-2"
+						>
 							<input type="hidden" name="profileId" value={profile.id} />
-							<Button type="submit" variant="ghost" size="sm" disabled={busy}
-								>Remove headshot</Button
+							<Button
+								type="submit"
+								variant="ghost"
+								size="sm"
+								disabled={busy}
+								data-testid="remove-headshot"
+								onclick={(event: MouseEvent) => {
+									// The picture and the initials fill the same circle, so the screen
+									// looks the same before and after (#495). Nothing on this page can
+									// tell you that you just deleted the file, and nothing can put it
+									// back — the only place to say so is before the click.
+									event.preventDefault();
+									confirmRemoveHeadshot = profile.id;
+								}}
 							>
+								Remove headshot
+							</Button>
 						</form>
+
+						<!--
+							The confirm button reaches the form through `form=`: the dialog content
+							is portalled out of the form's subtree, so a submit button inside it
+							would post nothing. Without JavaScript the trigger stays an ordinary
+							submit button and removal still works — the guard is an enhancement,
+							not the mechanism.
+						-->
+						<AlertDialog
+							open={confirmRemoveHeadshot === profile.id}
+							onOpenChange={(open) => {
+								if (!open) confirmRemoveHeadshot = null;
+							}}
+						>
+							<AlertDialogContent data-testid="remove-headshot-dialog">
+								<AlertDialogHeader>
+									<AlertDialogTitle>Remove your headshot?</AlertDialogTitle>
+									<AlertDialogDescription>
+										The picture is deleted{#if data.profiles.length > 1}&nbsp;from your {profile.organizationName}
+											profile{/if}. Your initials take its place on the public programme, and you
+										would have to upload the file again to undo this.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel data-testid="remove-headshot-cancel">
+										Keep it
+									</AlertDialogCancel>
+									<Button
+										type="submit"
+										form="remove-headshot-{profile.id}"
+										variant="destructive"
+										disabled={busy}
+										data-testid="remove-headshot-confirm"
+									>
+										Remove it
+									</Button>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
 					{/if}
 				</div>
 			</div>

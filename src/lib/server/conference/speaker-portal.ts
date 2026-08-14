@@ -18,6 +18,7 @@ import {
 	submissionTable
 } from '$lib/server/db/conference/cfp-schema';
 import {
+	conferenceSpeakerTable,
 	conferenceTable,
 	sessionFormatTable,
 	speakerProfileTable,
@@ -158,6 +159,15 @@ export type PortalTask = {
 	dueOn: Date | null;
 	conference: { slug: string; name: string };
 	submissionTitle: string | null;
+	/**
+	 * This speaker's event-wide answer, for the participation task only.
+	 *
+	 * A withdrawal marks that task `done` — the answer was given — and the list
+	 * used to print it with a tick and count it towards "4 of 5 done" (#495).
+	 * The one thing that is emphatically not done was the loudest thing marked
+	 * done, so the row needs the answer, not just the status.
+	 */
+	participationStatus: string | null;
 };
 
 /**
@@ -179,11 +189,19 @@ export async function myTasks(userId: string): Promise<PortalTask[]> {
 			status: taskTable.status,
 			dueOn: taskTable.dueOn,
 			conference: { slug: conferenceTable.slug, name: conferenceTable.name },
-			submissionTitle: submissionTable.title
+			submissionTitle: submissionTable.title,
+			participationStatus: conferenceSpeakerTable.status
 		})
 		.from(taskTable)
 		.innerJoin(conferenceTable, eq(conferenceTable.id, taskTable.conferenceId))
 		.leftJoin(submissionTable, eq(submissionTable.id, taskTable.submissionId))
+		.leftJoin(
+			conferenceSpeakerTable,
+			and(
+				eq(conferenceSpeakerTable.conferenceId, taskTable.conferenceId),
+				eq(conferenceSpeakerTable.speakerProfileId, taskTable.speakerProfileId)
+			)
+		)
 		.where(inArray(taskTable.speakerProfileId, profileIds))
 		.orderBy(sql`${taskTable.dueOn} asc nulls last`, asc(taskTable.id));
 }
