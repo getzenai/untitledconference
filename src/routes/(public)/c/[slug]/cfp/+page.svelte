@@ -16,6 +16,7 @@
 		writePendingProposal
 	} from '$lib/conference/pending-proposal';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
+	import CallProse from '$lib/components/app/conference/call-prose.svelte';
 	import { proseBlocks } from '$lib/conference/prose';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
@@ -119,17 +120,7 @@
 	-->
 	{#if intro.length > 0 && call.state !== 'closed'}
 		<div class="border-border bg-card mt-4 rounded-lg border p-6">
-			{#each intro as block, i (i)}
-				{#if block.kind === 'paragraph'}
-					<p class="text-muted-foreground text-sm {i > 0 ? 'mt-3' : ''}">{block.text}</p>
-				{:else}
-					<ul class="text-muted-foreground space-y-1.5 text-sm {i > 0 ? 'mt-3' : ''}">
-						{#each block.items as item, j (j)}
-							<li class="flex gap-2"><span aria-hidden="true">·</span><span>{item}</span></li>
-						{/each}
-					</ul>
-				{/if}
-			{/each}
+			<CallProse blocks={intro} />
 		</div>
 	{/if}
 
