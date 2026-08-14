@@ -112,13 +112,9 @@ describe('Editing conference structure', () => {
 			.find('[data-testid^="agenda-open-slot-"]')
 			.click();
 		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
-		cy.contains('[data-testid="agenda-slot-session"] option', 'Fixture Talk A')
-			.should('exist')
-			.then(($option) => {
-				cy.get('[data-testid="agenda-slot-session"]').select(String($option.val()));
-			});
-		cy.get('[data-testid="agenda-slot-editor"] select[name="roomId"]').select('Hall 1');
-		cy.get('[data-testid="agenda-slot-editor"] select[name="startMinutes"]').select('09:00');
+		cy.chooseFromAppSelect('agenda-slot-session', 'Fixture Talk A');
+		cy.chooseFromAppSelect('agenda-slot-room', 'Hall 1');
+		cy.chooseFromAppSelect('agenda-slot-start', '09:00');
 		cy.get('[data-testid="agenda-slot-place"]').click();
 		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 

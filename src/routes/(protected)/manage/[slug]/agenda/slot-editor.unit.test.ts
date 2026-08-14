@@ -1,15 +1,18 @@
 /**
- * The slot editor's room dropdown must offer every room it is handed.
+ * What a server render can still prove about the slot editor (#167).
  *
- * This is half of a contract that used to live in one page test. The half here:
- * given a list of rooms, the editor renders all of them and drops none. The
- * other half — that the *page* hands it the unfiltered list rather than the
- * room-filtered one — cannot be seen from props and is pinned in
- * `cypress/e2e/critical-paths/agenda-slot-editor.cy.ts` with the filter set.
+ * The five dropdowns are app selects now, and a closed app select renders a
+ * trigger and a hidden input — its options do not exist until the listbox
+ * opens. "Offers every room it is handed" is therefore no longer a claim this
+ * file can make; it moved to `agenda-slot-editor.cy.ts`, where the listbox is
+ * real, together with the half that was always there (that the *page* hands
+ * over the unfiltered room list rather than the filtered one).
  *
- * Splitting it this way is deliberate. `<SlotEditor rooms={visibleRooms} />`
- * would keep every assertion in this file green, so a file that claimed both
- * halves would be claiming one it cannot check.
+ * What SSR gained in the same swap is worth more than what it lost. A native
+ * `<select>` with no `selected` option silently posts its first one; an app
+ * select posts nothing unless `value` names a real option. The hidden input is
+ * that value, in the markup, before anybody clicks — so every assertion below
+ * is the guard against a dropdown that looks right and submits empty.
  */
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -76,29 +79,67 @@ function body(props: {
 	}).body;
 }
 
-/** Every `<option>` label inside the rendered `name="roomId"` select. */
-const roomOptions = (html: string) => {
-	const select = /<select[^>]*name="roomId"[^>]*>([\s\S]*?)<\/select>/.exec(html);
-	// Without the select there is nothing to compare, and an empty list would
-	// compare equal to an empty expectation. Fail here instead.
-	if (!select) throw new Error('the editor rendered no roomId select');
+/**
+ * What an app select puts on the wire: the hidden input it renders for `name`.
+ *
+ * Deliberately not the trigger's label. The label is what the organizer reads;
+ * this is what the action receives, and the two only agree when the seeding is
+ * right — which is the thing being tested.
+ */
+const posted = (html: string, name: string) => {
+	const input = new RegExp(`<input[^>]*value="([^"]*)"[^>]*name="${name}"`).exec(html);
+	// An absent input and an empty one both mean "posts nothing", but only one of
+	// them is a wiring mistake. Separate them here rather than in every caller.
+	if (!input) throw new Error(`the editor rendered no hidden input for ${name}`);
 
-	return [...select[1].matchAll(/<option[^>]*>([\s\S]*?)<\/option>/g)].map((o) => o[1].trim());
+	return input[1];
 };
 
 describe('the slot editor', () => {
-	it('offers every room it is given', () => {
+	it('carries the slot the organizer clicked, without anyone touching a dropdown', () => {
+		// Opening the slot in Room 1 at 09:00 and submitting untouched has to put
+		// the session where the organizer clicked. The native element did this by
+		// falling back to its first option; an app select only does it because
+		// `value` says so.
 		const html = body({ rooms });
 
-		expect(roomOptions(html)).toEqual(['Room 1', 'Room 2', 'Room 3', 'Room 4', 'Room 5', 'Room 6']);
+		expect(posted(html, 'roomId')).toBe('1');
+		expect(posted(html, 'startMinutes')).toBe('540');
+		expect(posted(html, 'dayId')).toBe('1');
+		// The tray's first talk, which is what the browser used to pick for us.
+		expect(posted(html, 'placementId')).toBe('1');
 	});
 
-	it('preselects the room the slot belongs to', () => {
-		// Opening the slot in Room 1 and submitting without touching the dropdown
-		// has to put the session where the organizer clicked.
+	it('falls back to the first day when no day tab is active', () => {
+		// `activeDayId` is optional. A native `<select>` shrugged and took its
+		// first option; an app select would show a placeholder and post nothing,
+		// so `?/place` would fail on a form that looked filled in.
+		const html = render(SlotEditor, {
+			props: {
+				target: { roomId: 1, roomName: 'Room 1', startMinutes: 540 },
+				occupant: null,
+				swapWith: [],
+				tray: [waiting(1)],
+				days: [{ id: 4, date: '2027-05-10' }],
+				rooms,
+				slots: [{ minutes: 540, label: '09:00' }],
+				activeDayId: undefined,
+				busy: false,
+				timeLabel,
+				close: () => {},
+				submit: () => async () => {}
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			} as any
+		}).body;
+
+		expect(posted(html, 'dayId')).toBe('4');
+	});
+
+	it('names the room it will place into, so the trigger and the wire agree', () => {
 		const html = body({ rooms });
 
-		expect(html).toMatch(/<option[^>]*value="1"[^>]*selected[^>]*>\s*Room 1/);
+		expect(html).toContain('data-testid="agenda-slot-room"');
+		expect(html).toContain('Room 1');
 	});
 
 	it('offers no way to place onto a taken slot', () => {
@@ -111,25 +152,22 @@ describe('the slot editor', () => {
 		expect(html).not.toContain('name="roomId"');
 	});
 
-	it('offers every swap partner it is given, and posts to ?/swap with both ids', () => {
+	it('posts to ?/swap with both ids, the partner seeded the way the browser used to', () => {
 		const html = body({
 			rooms,
 			occupant: placed(7),
 			swapWith: [candidate(8, 600, 'Room 2'), candidate(9, 660, 'Room 3')]
 		});
 
-		const select = /<select[^>]*name="withPlacementId"[^>]*>([\s\S]*?)<\/select>/.exec(html);
-		if (!select) throw new Error('the editor rendered no withPlacementId select');
-		const options = [...select[1].matchAll(/<option[^>]*value="(\d+)"[^>]*>([\s\S]*?)<\/option>/g)];
-
-		expect(options.map((o) => o[1])).toEqual(['8', '9']);
-		// The label has to say where the partner is, or the two 30-minute talks in
-		// the list are indistinguishable.
-		expect(options[0][2].replace(/\s+/g, ' ').trim()).toBe('Talk 8 (10:00, Room 2)');
-
 		expect(html).toContain('action="?/swap"');
 		// The occupant travels as `placementId`; the action needs both halves.
 		expect(html).toMatch(/name="placementId"[^>]*value="7"/);
+		expect(posted(html, 'withPlacementId')).toBe('8');
+
+		// The label has to say where the partner is, or two 30-minute talks are
+		// indistinguishable. On a closed app select only the picked one is
+		// readable; the full list is counted in the Cypress spec.
+		expect(html.replace(/<!--[^>]*-->/g, '')).toContain('Talk 8 (10:00, Room 2)');
 	});
 
 	it('hides the swap form when the day holds nothing else', () => {

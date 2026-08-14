@@ -123,13 +123,9 @@ describe('Agenda drag and drop', () => {
 			.click();
 		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
 
-		cy.contains('[data-testid="agenda-slot-session"] option', title)
-			.should('exist')
-			.then(($option) => {
-				cy.get('[data-testid="agenda-slot-session"]').select(String($option.val()));
-			});
-		cy.get('[data-testid="agenda-slot-editor"] select[name="roomId"]').select(room);
-		cy.get('[data-testid="agenda-slot-editor"] select[name="startMinutes"]').select(start);
+		cy.chooseFromAppSelect('agenda-slot-session', title);
+		cy.chooseFromAppSelect('agenda-slot-room', room);
+		cy.chooseFromAppSelect('agenda-slot-start', start);
 		cy.get('[data-testid="agenda-slot-place"]').click();
 		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 	};
