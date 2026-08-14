@@ -115,6 +115,29 @@ describe('the proposal form', () => {
 		expect(body('["coSpeakers"]')).not.toContain('Co-presenters');
 	});
 
+	it('shows why a co-presenter without an address is refused (#229 A)', () => {
+		const html = render(ProposalForm, {
+			props: {
+				fields: [],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: true,
+				form: {
+					errors: {
+						coSpeakerEmail:
+							'Every co-presenter needs an email address — it is what tells two people with the same name apart.'
+					},
+					fieldErrors: {}
+				}
+			}
+		}).body;
+
+		expect(html).toContain('Every co-presenter needs an email address');
+		expect(html).toContain('keeps two people with the same name');
+	});
+
 	it('collapses a two-up row to one column when its partner is gone', () => {
 		expect(body(null)).toContain('sm:grid-cols-2');
 		// Sort-as and job title are the partners of name and email; without them
