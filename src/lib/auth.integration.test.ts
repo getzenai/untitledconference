@@ -230,3 +230,181 @@ describe('firstOrganizationFor', () => {
 		});
 	});
 });
+
+/**
+ * cookieCache (#271) keeps the resolved session in a signed cookie. The next
+ * getSession then does not read Postgres — so a change written *behind* that
+ * cookie is invisible until maxAge, unless Better Auth discards or rewrites
+ * the cookie on the path that made the change.
+ *
+ * Each test does the mutation and then reads the session the way
+ * `hooks.server.ts` does (`auth.api.getSession` with the cookies the client
+ * still holds). If Better Auth does not discard the cookie, that is a finding
+ * for the PR, not a prompt to add a workaround.
+ */
+describe('session cookieCache', () => {
+	const suffix = `cookie-cache-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	const password = 'CookieCacheProbe2027!';
+	const email = `${suffix}@example.test`;
+	const orgAId = `org-a-${suffix}`;
+	const orgBId = `org-b-${suffix}`;
+	const jar = new Map<string, string>();
+	let userId = '';
+
+	function absorbCookies(response: Response) {
+		for (const header of response.headers.getSetCookie()) {
+			const [pair] = header.split(';');
+			const separator = pair.indexOf('=');
+			if (separator <= 0) continue;
+			const name = pair.slice(0, separator).trim();
+			const value = pair.slice(separator + 1).trim();
+			const attrs = header.toLowerCase();
+			if (attrs.includes('max-age=0') || attrs.includes('expires=thu, 01 jan 1970')) {
+				jar.delete(name);
+			} else {
+				jar.set(name, value);
+			}
+		}
+	}
+
+	function cookieHeader() {
+		return [...jar.entries()].map(([name, value]) => `${name}=${value}`).join('; ');
+	}
+
+	function hasSessionDataCookie() {
+		return [...jar.keys()].some((name) => name.includes('session_data'));
+	}
+
+	async function readSession() {
+		return auth.api.getSession({ headers: new Headers({ cookie: cookieHeader() }) });
+	}
+
+	beforeAll(async () => {
+		await db.insert(organization).values([
+			{
+				id: orgAId,
+				name: 'Cache Org A',
+				slug: orgAId,
+				createdAt: new Date('2027-01-01T00:00:00.000Z')
+			},
+			{
+				id: orgBId,
+				name: 'Cache Org B',
+				slug: orgBId,
+				createdAt: new Date('2027-06-01T00:00:00.000Z')
+			}
+		]);
+
+		const signUp = await authRequest('/sign-up/email', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email, password, name: 'Cache Probe' })
+		});
+		expect(signUp.status).toBe(200);
+
+		await db.update(user).set({ emailVerified: true, role: 'admin' }).where(eq(user.email, email));
+		const [account] = await db.select({ id: user.id }).from(user).where(eq(user.email, email));
+		userId = account.id;
+
+		await db.insert(member).values([
+			{
+				id: `m-a-${suffix}`,
+				organizationId: orgAId,
+				userId,
+				role: 'owner',
+				createdAt: new Date('2027-01-01T00:00:00.000Z')
+			},
+			{
+				id: `m-b-${suffix}`,
+				organizationId: orgBId,
+				userId,
+				role: 'member',
+				createdAt: new Date('2027-06-01T00:00:00.000Z')
+			}
+		]);
+
+		const signedIn = await authRequest('/sign-in/email', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ email, password })
+		});
+		expect(signedIn.status).toBe(200);
+		absorbCookies(signedIn);
+		expect(hasSessionDataCookie()).toBe(true);
+	});
+
+	afterAll(async () => {
+		if (!userId) return;
+		await db.delete(session).where(eq(session.userId, userId));
+		await db.delete(member).where(eq(member.userId, userId));
+		await db.delete(organization).where(eq(organization.id, orgAId));
+		await db.delete(organization).where(eq(organization.id, orgBId));
+		await db.delete(user).where(eq(user.id, userId));
+	});
+
+	it('sees an organization switch after set-active rewrites the cookie', async () => {
+		const before = await readSession();
+		expect(before?.session.activeOrganizationId).toBe(orgAId);
+
+		const switched = await authRequest('/organization/set-active', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Origin: BASE_URL,
+				cookie: cookieHeader()
+			},
+			body: JSON.stringify({ organizationId: orgBId })
+		});
+		expect(switched.status).toBe(200);
+		absorbCookies(switched);
+
+		const after = await readSession();
+		expect(after?.session.activeOrganizationId).toBe(orgBId);
+
+		// The same field written only in Postgres. Better Auth does not
+		// discard session_data, so the next getSession still reports org B.
+		// Finding for the PR — not a workaround. maxAge is the bound.
+		await db
+			.update(session)
+			.set({ activeOrganizationId: orgAId })
+			.where(eq(session.userId, userId));
+		const behind = await readSession();
+		expect(behind?.session.activeOrganizationId).toBe(orgBId);
+	});
+
+	it('does not see a role revoke written behind the cookie', async () => {
+		const before = await readSession();
+		expect(before?.user.role).toBe('admin');
+
+		await db.update(user).set({ role: 'user' }).where(eq(user.id, userId));
+
+		// Finding: setRole / a raw user.role write never expires session_data.
+		// hooks.server.ts derives locals.isAdmin from this cached user.role,
+		// so a revoked admin stays privileged until maxAge.
+		const after = await readSession();
+		expect(after?.user.role).toBe('admin');
+	});
+
+	it('sees /sign-out expire the cookie; a session-row delete does not', async () => {
+		const before = await readSession();
+		expect(before?.user.id).toBe(userId);
+
+		await db.delete(session).where(eq(session.userId, userId));
+
+		// Finding: cookieCache authenticates without reading the session row.
+		// A sign-out on another device, or a deleted session, stays valid here
+		// until maxAge.
+		const behind = await readSession();
+		expect(behind?.user.id).toBe(userId);
+
+		const signedOut = await authRequest('/sign-out', {
+			method: 'POST',
+			headers: { Origin: BASE_URL, cookie: cookieHeader() }
+		});
+		expect(signedOut.status).toBe(200);
+		absorbCookies(signedOut);
+
+		const after = await readSession();
+		expect(after).toBeNull();
+	});
+});

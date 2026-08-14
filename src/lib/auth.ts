@@ -9,7 +9,11 @@ import { and, asc, count, eq, isNull } from 'drizzle-orm';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { organizationAccessControl, organizationRoles } from './auth/permissions';
 import { buildRateLimitConfig } from './auth/rate-limit-config';
-import { INVITATION_EXPIRY_SECONDS, SESSION_FRESH_AGE_SECONDS } from './constants';
+import {
+	INVITATION_EXPIRY_SECONDS,
+	SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
+	SESSION_FRESH_AGE_SECONDS
+} from './constants';
 import { acceptReviewerInvitation } from './server/conference/reviewer-roster';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
@@ -240,8 +244,17 @@ function createAuth() {
 		// a session created within this window; the UI reads the same constant via
 		// isSessionFresh() to prompt for re-authentication up front instead of
 		// failing the ceremony.
+		//
+		// cookieCache keeps the resolved session in a signed cookie so the one
+		// getSession on the page path (#271) does not cross the Atlantic to
+		// Postgres on every click. maxAge is SESSION_COOKIE_CACHE_MAX_AGE_SECONDS
+		// — Better Auth's 5-minute default, justified there.
 		session: {
-			freshAge: SESSION_FRESH_AGE_SECONDS
+			freshAge: SESSION_FRESH_AGE_SECONDS,
+			cookieCache: {
+				enabled: true,
+				maxAge: SESSION_COOKIE_CACHE_MAX_AGE_SECONDS
+			}
 		},
 
 		emailAndPassword: {
