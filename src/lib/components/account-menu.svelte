@@ -18,6 +18,7 @@
 	import { authClient } from '$lib/auth-client';
 	import * as Avatar from '$lib/components/ui/avatar/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
+	import { clearProposalDrafts } from '$lib/conference/pending-proposal';
 	import BuildingIcon from '@lucide/svelte/icons/building';
 	import HouseIcon from '@lucide/svelte/icons/house';
 	import LogOutIcon from '@lucide/svelte/icons/log-out';
@@ -50,6 +51,11 @@
 						// Drop the analytics identity so the next user on this
 						// browser is not attributed to the one signing out.
 						resetUser();
+						// Same reason, with a name and an email address in it: a
+						// parked CFP draft is this person's, and this browser
+						// stops being theirs here (#505).
+						clearProposalDrafts(localStorage);
+						clearProposalDrafts(sessionStorage);
 						// The svelteKitHandler should clear the session cookie and the
 						// route guards should redirect; this is the explicit path.
 						goto('/login', { replaceState: true });
