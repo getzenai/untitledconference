@@ -214,17 +214,20 @@ export async function conferenceDashboard(
  * The setup steps plus the counts that decide whether this snapshot is still
  * that screen.
  *
- * CFP is open the same way a submitter would see it: a published or closed
- * form whose window includes `at`. The same `published`/`closed` filter as
- * `publishedFormFor` — an older draft must not hide the live form. No form, a
- * draft-only conference, or a closed window is closed.
- *
  * Rooms, tracks and the form are only drawn on the setup screen. Count
  * submissions and speakers first; skip the other three once either exists.
  * Queued or failed mail and open tasks flip the screen too — those counts
  * arrive from the parallel fetches, not here.
  */
 async function setupState(conferenceId: number, at: Date): Promise<DashboardSetup> {
+	const waiting = await paperAndSpeakerCounts(conferenceId);
+	if (waiting.submissions > 0 || waiting.speakers > 0) {
+		return { rooms: 0, tracks: 0, cfpOpen: false, ...waiting };
+	}
+	return { ...(await setupProgress(conferenceId, at)), submissions: 0, speakers: 0 };
+}
+
+async function paperAndSpeakerCounts(conferenceId: number) {
 	const [[submissions], [speakers]] = await Promise.all([
 		db
 			.select({ n: count() })
@@ -235,19 +238,19 @@ async function setupState(conferenceId: number, at: Date): Promise<DashboardSetu
 			.from(conferenceSpeakerTable)
 			.where(eq(conferenceSpeakerTable.conferenceId, conferenceId))
 	]);
+	return {
+		submissions: Number(submissions?.n ?? 0),
+		speakers: Number(speakers?.n ?? 0)
+	};
+}
 
-	const paperCount = Number(submissions?.n ?? 0);
-	const speakerCount = Number(speakers?.n ?? 0);
-	if (paperCount > 0 || speakerCount > 0) {
-		return {
-			rooms: 0,
-			tracks: 0,
-			cfpOpen: false,
-			submissions: paperCount,
-			speakers: speakerCount
-		};
-	}
-
+/**
+ * CFP is open the same way a submitter would see it: a published or closed
+ * form whose window includes `at`. The same `published`/`closed` filter as
+ * `publishedFormFor` — an older draft must not hide the live form. No form, a
+ * draft-only conference, or a closed window is closed.
+ */
+async function setupProgress(conferenceId: number, at: Date) {
 	const [[rooms], [tracks], [form]] = await Promise.all([
 		db.select({ n: count() }).from(roomTable).where(eq(roomTable.conferenceId, conferenceId)),
 		db.select({ n: count() }).from(trackTable).where(eq(trackTable.conferenceId, conferenceId)),
@@ -268,16 +271,12 @@ async function setupState(conferenceId: number, at: Date): Promise<DashboardSetu
 			.limit(1)
 	]);
 
-	const cfpOpen = form
-		? callWindow(form.opensAt, form.closesAt, form.status === 'closed', at) === 'open'
-		: false;
-
 	return {
 		rooms: Number(rooms?.n ?? 0),
 		tracks: Number(tracks?.n ?? 0),
-		cfpOpen,
-		submissions: 0,
-		speakers: 0
+		cfpOpen: form
+			? callWindow(form.opensAt, form.closesAt, form.status === 'closed', at) === 'open'
+			: false
 	};
 }
 
