@@ -23,6 +23,12 @@ import {
 	updateFormat
 } from '$lib/server/conference/config';
 import {
+	addSponsorTier,
+	removeSponsorTier,
+	sponsorTiers,
+	updateSponsorTier
+} from '$lib/server/conference/sponsor-tiers';
+import {
 	addTaskTemplate,
 	applyTemplateToAccepted,
 	deleteTaskTemplate,
@@ -38,10 +44,11 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference, via } = await requireOrganizer(locals.user!.id, params.slug);
-	const [config, templates, pending] = await Promise.all([
+	const [config, templates, pending, tiers] = await Promise.all([
 		conferenceConfig(conference.id),
 		taskTemplates(conference.id),
-		pendingHandouts(conference.id)
+		pendingHandouts(conference.id),
+		sponsorTiers(conference.id)
 	]);
 	// `?setup=1` is the soft landing from "New conference": this is a draft, and
 	// Publish is the switch that makes /c/<slug> exist. Not a forced wizard — a pointer.
@@ -49,7 +56,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// Archiving is an org-wide right, not a per-conference one (`archive-conference.ts`),
 	// and `via: 'org'` is set by exactly the seat check that function repeats. A scoped
 	// organizer sees nothing to press rather than a button that answers "not yours".
-	return { config, templates, pending, setup, canArchive: via === 'org' };
+	return { config, templates, pending, sponsorTiers: tiers, setup, canArchive: via === 'org' };
 };
 
 function text(form: FormData, key: string): string {
@@ -476,5 +483,51 @@ export const actions: Actions = {
 			message: 'Task removed. Tasks speakers already have stay where they are.',
 			section: 'tasks'
 		};
+	},
+
+	/**
+	 * Internal only — the same list the submission-detail select reads (#434).
+	 *
+	 * Name, note and order are one row, so the edit is one submit. A removal is
+	 * refused while a submission still carries the tier: the foreign key would
+	 * otherwise silently clear the marker.
+	 */
+	addSponsorTier: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const result = await addSponsorTier(conference.id, text(form, 'name'), optional(form, 'note'));
+		if (!result.ok) return fail(400, { error: result.problem, section: 'sponsors' });
+		return { message: 'Sponsor tier added.', section: 'sponsors' };
+	},
+
+	updateSponsorTier: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const id = identifier(form);
+		if (id === null) return fail(400, { error: 'Unknown sponsor tier.', section: 'sponsors' });
+
+		const position = Number(text(form, 'position'));
+		const problem = await updateSponsorTier(
+			conference.id,
+			id,
+			text(form, 'name'),
+			optional(form, 'note'),
+			position
+		);
+		if (problem) return fail(400, { error: problem, section: 'sponsors' });
+		return {
+			message: 'Sponsor tier saved. Submissions marked as it keep the marker, under the new name.',
+			section: 'sponsors'
+		};
+	},
+
+	deleteSponsorTier: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = identifier(await request.formData());
+		if (id === null) return fail(400, { error: 'Unknown sponsor tier.', section: 'sponsors' });
+
+		const problem = await removeSponsorTier(conference.id, id);
+		if (problem) return fail(400, { error: problem, section: 'sponsors' });
+		return { message: 'Sponsor tier removed.', section: 'sponsors' };
 	}
 };

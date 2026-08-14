@@ -87,12 +87,14 @@ describe('conference settings config surface', () => {
 		expect(body).toContain('data-testid="settings-rooms"');
 		expect(body).toContain('data-testid="settings-tracks"');
 		expect(body).toContain('data-testid="settings-formats"');
+		expect(body).toContain('data-testid="settings-sponsors"');
 		expect(body).toContain('Main Stage');
 		expect(body).toContain('AI Engineering');
 		expect(body).toContain('Talk');
 		expect(body).toContain('action="?/addRoom"');
 		expect(body).toContain('action="?/addTrack"');
 		expect(body).toContain('action="?/addFormat"');
+		expect(body).toContain('action="?/addSponsorTier"');
 		expect(body).not.toContain('What reviewers see of each other');
 		expect(body).not.toContain('action="?/reviewVisibility"');
 		expect(body).toContain('/manage/test-conf/people');
@@ -562,6 +564,7 @@ describe('editing a room, track or format in place', () => {
 					tracks: [{ id: 22, name: 'AI Engineering', position: 0 }],
 					formats: [{ id: 33, name: 'Talk', minutes: 30, position: 0 }]
 				},
+				sponsorTiers: [{ id: 44, name: 'Gold', note: 'paid keynote', position: 0 }],
 				templates: [],
 				pending: {}
 			} as never,
@@ -576,12 +579,14 @@ describe('editing a room, track or format in place', () => {
 			'?/renameTrack',
 			'?/deleteTrack',
 			'?/updateFormat',
-			'?/deleteFormat'
+			'?/deleteFormat',
+			'?/updateSponsorTier',
+			'?/deleteSponsorTier'
 		]) {
 			expect(body).toContain(`action="${action}"`);
 		}
 
-		for (const id of ['11', '22', '33']) {
+		for (const id of ['11', '22', '33', '44']) {
 			expect(body).toContain(`name="id" value="${id}"`);
 		}
 	});
@@ -591,6 +596,8 @@ describe('editing a room, track or format in place', () => {
 		expect(body).toContain('value="AI Engineering"');
 		expect(body).toContain('value="Talk"');
 		expect(body).toContain('value="30"');
+		expect(body).toContain('value="Gold"');
+		expect(body).toContain('value="paid keynote"');
 	});
 
 	/**
@@ -625,7 +632,7 @@ describe('editing a room, track or format in place', () => {
 });
 
 /**
- * The section nav (#153). Six sections stacked in one column made this the
+ * The section nav (#153). Seven sections stacked in one column made this the
  * longest page in the product: you had to scroll past the rooms to find out
  * that session formats exist at all. The nav is the fix, and the thing that
  * makes it a fix rather than decoration is that every entry points at a section
@@ -650,7 +657,7 @@ describe('settings section nav', () => {
 			}
 		}).body;
 
-	const ANCHORS = ['visibility', 'dates', 'rooms', 'tracks', 'formats', 'tasks'];
+	const ANCHORS = ['visibility', 'dates', 'rooms', 'tracks', 'formats', 'sponsors', 'tasks'];
 
 	it('offers a jump to every section without moving anything off the page', () => {
 		const rendered = body();
@@ -680,6 +687,7 @@ describe('settings section nav', () => {
 			'Rooms',
 			'Tracks',
 			'Session formats',
+			'Sponsor tiers',
 			'Speaker tasks'
 		]) {
 			expect(rendered).toContain(label);

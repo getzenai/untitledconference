@@ -13,6 +13,7 @@ import {
 	type AssignmentResult
 } from '$lib/server/conference/review-management';
 import { ownReviewAccess } from '$lib/server/conference/reviewer';
+import { setSubmissionSponsorTier, sponsorTiers } from '$lib/server/conference/sponsor-tiers';
 import { editSubmissionContent, lastContentEdit } from '$lib/server/conference/submission-content';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -37,22 +38,26 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
 	if (!submission) throw error(404, 'Submission not found');
-	const [notificationStatuses, assignmentRounds, ownReview, contentEdit] = await Promise.all([
-		decisionNotificationStatuses(conference.id, [submission]),
-		reviewAssignmentMatrix(conference.id, submission.id),
-		// An organizer who also holds a reviewer seat writes their review on the
-		// reviewer surface, not here — this only says whether that door is open for
-		// them, and it asks the same two questions that surface would.
-		ownReviewAccess(conference.id, locals.user!.id, submission.id),
-		lastContentEdit(submission.id)
-	]);
+	const [notificationStatuses, assignmentRounds, ownReview, contentEdit, tiers] = await Promise.all(
+		[
+			decisionNotificationStatuses(conference.id, [submission]),
+			reviewAssignmentMatrix(conference.id, submission.id),
+			// An organizer who also holds a reviewer seat writes their review on the
+			// reviewer surface, not here — this only says whether that door is open for
+			// them, and it asks the same two questions that surface would.
+			ownReviewAccess(conference.id, locals.user!.id, submission.id),
+			lastContentEdit(submission.id),
+			sponsorTiers(conference.id)
+		]
+	);
 
 	return {
 		submission,
 		notificationStatus: notificationStatuses[submission.id] ?? null,
 		assignmentRounds,
 		ownReview,
-		contentEdit
+		contentEdit,
+		sponsorTiers: tiers
 	};
 };
 
@@ -174,5 +179,33 @@ export const actions: Actions = {
 		if (!saved) throw error(404, 'Session not found');
 
 		return { recording: parsed.url };
+	},
+
+	/**
+	 * Internal marker. The select is the whole of the write — there is no second
+	 * page, and the list badge is a read of the same column.
+	 *
+	 * Empty / `none` clears. A tier id from another conference is refused rather
+	 * than stored: the id arrives from a form, so the conference check lives here
+	 * the same way `setRecordingUrl` checks the placement.
+	 */
+	sponsor: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+
+		const raw = String((await request.formData()).get('sponsorTierId') ?? '');
+		const tierId = raw === '' || raw === 'none' ? null : Number(raw);
+		if (tierId !== null && (!Number.isInteger(tierId) || tierId <= 0)) {
+			return fail(400, { sponsorError: 'Unknown sponsor tier.' });
+		}
+
+		const result = await setSubmissionSponsorTier(conference.id, submissionId(params.id), tierId);
+		if (!result.ok) {
+			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			return fail(400, { sponsorError: 'That sponsor tier is not on this conference.' });
+		}
+
+		return {
+			sponsorMessage: tierId === null ? 'Sponsor marker cleared.' : 'Sponsor tier saved.'
+		};
 	}
 };

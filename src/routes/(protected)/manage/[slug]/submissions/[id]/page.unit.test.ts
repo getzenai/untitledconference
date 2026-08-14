@@ -29,6 +29,9 @@ type Extras = {
 	form?: ActionData;
 	keyTakeaway?: string | null;
 	audienceLevel?: string | null;
+	sponsorTier?: string | null;
+	sponsorNote?: string | null;
+	sponsorTiers?: { id: number; name: string; note: string | null; position: number }[];
 	speakers?: {
 		id: number;
 		name: string;
@@ -70,8 +73,8 @@ function renderPage(
 					track: null,
 					sessionFormat: null,
 					sessionMinutes: null,
-					sponsorTier: null,
-					sponsorNote: null,
+					sponsorTier: extras.sponsorTier ?? null,
+					sponsorNote: extras.sponsorNote ?? null,
 					speakers: extras.speakers ?? [],
 					answers: [],
 					reviews: [],
@@ -98,7 +101,8 @@ function renderPage(
 								}
 							],
 				ownReview,
-				contentEdit: extras.contentEdit ?? null
+				contentEdit: extras.contentEdit ?? null,
+				sponsorTiers: extras.sponsorTiers ?? []
 			} as PageData,
 			form: (extras.form ?? (notificationResult ? { notificationResult } : null)) as ActionData
 		}
@@ -341,6 +345,44 @@ describe('the organizer talk editor', () => {
 		});
 
 		expect(body).toContain('an organizer');
+	});
+
+	it('offers a sponsor-tier select as an organizer action (#434)', () => {
+		const body = renderPage('submitted', null, null, null, 'one', null, {
+			sponsorTiers: [
+				{ id: 7, name: 'Gold', note: 'paid keynote', position: 0 },
+				{ id: 8, name: 'Silver', note: null, position: 1 }
+			]
+		});
+
+		expect(body).toContain('data-testid="submission-sponsor"');
+		expect(body).toContain('action="?/sponsor"');
+		expect(body).toContain('name="sponsorTierId"');
+		expect(body).toContain('No sponsor');
+		expect(body).toContain('internal only');
+		expect(body).toContain('Reviewers do not see this');
+		expect(body).not.toContain('Add them in Settings');
+	});
+
+	it('starts the select at the stored tier and shows its note', () => {
+		const body = renderPage('submitted', null, null, null, 'one', null, {
+			sponsorTier: 'Gold',
+			sponsorNote: 'paid keynote',
+			sponsorTiers: [{ id: 7, name: 'Gold', note: 'paid keynote', position: 0 }]
+		});
+
+		expect(body).toContain('value="7"');
+		expect(body).toContain('Gold');
+		expect(body).toContain('paid keynote');
+		expect(body).not.toContain('value="none"');
+	});
+
+	it('points at Settings when there is nothing to assign yet', () => {
+		const body = renderPage('submitted');
+
+		expect(body).toContain('data-testid="submission-sponsor"');
+		expect(body).toContain('href="/manage/test-conf/settings#sponsors"');
+		expect(body).not.toContain('action="?/sponsor"');
 	});
 
 	it('warns when a declined talk still has a placement (#9)', () => {
