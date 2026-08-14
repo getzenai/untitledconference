@@ -6,7 +6,9 @@
 	 * lands here and needs to see *their* work — not a starter template that
 	 * asks "where do you want to go?". Empty is a real state with a next step.
 	 */
+	import { formatInstant } from '$lib/conference/deadline';
 	import { reviewQueueHref } from '$lib/conference/nav-access';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -17,6 +19,8 @@
 	}
 
 	let { data }: Props = $props();
+
+	const zone = readerZone();
 
 	const hub = $derived(data.hub);
 
@@ -299,12 +303,16 @@
 									class="border-border hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
 								>
 									<div class="font-medium">{task.title}</div>
+									<!--
+										One expression, not an {#if} block: Svelte trims the whitespace that
+										starts a block, and the line read "DevFlow Conf 2027· due 2 May". The
+										deadline is an instant, so it carries its year and its zone (#498) —
+										"2 May" alone was neither a year nor a clock anyone could act on.
+									-->
 									<div class="text-muted-foreground text-xs">
-										{taskWhere(task)}{#if task.dueOn}
-											· due {new Date(task.dueOn).toLocaleDateString('en-GB', {
-												day: 'numeric',
-												month: 'short'
-											})}{/if}
+										{taskWhere(task)}{task.dueOn
+											? ` · due ${formatInstant(task.dueOn, zone.current)}`
+											: ''}
 									</div>
 								</a>
 							</li>
