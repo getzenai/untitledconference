@@ -131,11 +131,18 @@
 			? 'Places the waiting talk into free slots. Nothing already on the grid moves.'
 			: `Places the ${unscheduled} waiting talks into free slots. Nothing already on the grid moves.`
 	);
-	// Talks, not breaks: the public loader inner-joins the submission, so a
-	// confirmed lunch does not appear on `/c/.../agenda`. Counting every
-	// placement made a board of draft talks plus a confirmed break read as live.
+	// Talks, not breaks. The public loader (`selectPublishedPlacements`) requires
+	// three things: placement confirmed, submission accepted, content approved.
+	// The board carries the first two (`status`, `submissionStatus`). Content
+	// approval is not on the board — it defaults to approved and nobody writes
+	// it — so a count of the two we know is the honest match, not a complete
+	// copy of the query. A declined talk keeps its confirmed slot on purpose
+	// (a human has to resolve it); counting it as live was #497 with the sign
+	// flipped.
 	const placedTalks = $derived(board.placed.filter((p) => p.submissionId !== null));
-	const liveTalks = $derived(placedTalks.filter((p) => p.status === 'confirmed'));
+	const liveTalks = $derived(
+		placedTalks.filter((p) => p.status === 'confirmed' && p.submissionStatus === 'accepted')
+	);
 	const everythingPublished = $derived(
 		placedTalks.length > 0 && liveTalks.length === placedTalks.length
 	);

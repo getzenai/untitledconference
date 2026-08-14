@@ -481,6 +481,24 @@ describe('agenda public state (#497)', () => {
 		expect(body).not.toContain('Unpublish the agenda');
 	});
 
+	it('does not count a declined talk that kept its confirmed slot as live', () => {
+		// The public loader also requires status=accepted. A withdrawn acceptance
+		// leaves the confirmed placement standing, visibly wrong, for a human to
+		// resolve — and the public page then shows nothing for that slot.
+		const declined = talk(1, 'confirmed', { submissionStatus: 'rejected' });
+
+		const alone = renderWith(1, 1, { placed: [declined] });
+		expect(alone).toContain('The public cannot see these slots yet.');
+		expect(alone).toContain('Publish the agenda');
+		expect(alone).not.toContain('Unpublish the agenda');
+		expect(alone).not.toContain('The public agenda shows 1 session.');
+
+		const beside = renderWith(1, 1, { placed: [talk(2, 'confirmed'), declined] });
+		expect(beside).toContain('The public agenda shows 1 of 2 sessions.');
+		expect(beside).toContain('Publish the agenda');
+		expect(beside).not.toContain('Unpublish the agenda');
+	});
+
 	it('fills Publish and outlines Unpublish', () => {
 		const publishButton = (html: string) => {
 			const mark = html.indexOf('data-testid="agenda-publish"');
