@@ -14,10 +14,15 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
+	import { publicSiteLink } from '$lib/conference/conference-status';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 
 	let { data } = $props();
 
 	const s = $derived(data.submission);
+	const zone = readerZone();
+	const site = $derived(publicSiteLink(s.conferenceStatus, s.conferenceSlug));
 
 	// Goose easter egg: `justSubmitted` is a one-shot signal from the submit
 	// action's redirect, not page truth — the banner below still reads off
@@ -42,23 +47,25 @@
 		withdrawn: 'Withdrawn'
 	};
 
-	const stamp = (value: Date | string | null) =>
-		value
-			? new Date(value).toLocaleString('en-GB', {
-					day: 'numeric',
-					month: 'long',
-					year: 'numeric',
-					hour: '2-digit',
-					minute: '2-digit'
-				})
-			: null;
-
 	/**
 	 * One string including its trailing space, rather than two template halves.
 	 * Svelte trims the whitespace either side of `{/if}`, which is why this used to
-	 * render "…at 04:57.A confirmation has gone…".
+	 * render "…at 04:57.A confirmation has gone…". The stamp names the zone (#498)
+	 * so "20:29" is not a local time nobody specified.
 	 */
-	const receivedLine = $derived(stamp(s.submittedAt) ? `Received ${stamp(s.submittedAt)}. ` : '');
+	const receivedLine = $derived(
+		s.submittedAt && formatInstant(s.submittedAt, zone.current)
+			? `Received ${formatInstant(s.submittedAt, zone.current)}. `
+			: ''
+	);
+	const closesLabel = $derived(
+		data.closesAt ? formatInstant(data.closesAt, zone.current) || null : null
+	);
+	const draftCloseLine = $derived(
+		closesLabel
+			? `Nobody has seen it yet. Pick it up where you left off, any time before ${closesLabel}.`
+			: 'Nobody has seen it yet. Pick it up where you left off, any time before the call closes.'
+	);
 
 	const answerValue = (answer: { kind: string; value: string | null }) => {
 		if (answer.value === null || answer.value === '') return '—';
@@ -80,7 +87,11 @@
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
 			<p class="text-muted-foreground mt-1 text-sm">
-				<a class="hover:underline" href="/c/{s.conferenceSlug}">{s.conferenceName}</a>
+				{#if site.available}
+					<a class="hover:underline" href={site.href}>{s.conferenceName}</a>
+				{:else}
+					{s.conferenceName}
+				{/if}
 			</p>
 		</div>
 		<Badge variant={s.status === 'draft' ? 'outline' : 'secondary'}>
@@ -96,8 +107,8 @@
 				emailed again when the organizers decide.
 			</p>
 			<p class="text-muted-foreground mt-2">
-				You can still change it until the call closes — your place and the date above stay as they
-				are.
+				You can still change it until {closesLabel ?? 'the call closes'} — your place and the date above
+				stay as they are.
 			</p>
 			<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
 				Edit this proposal
@@ -106,9 +117,7 @@
 	{:else if s.status === 'draft'}
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">This is still a draft.</p>
-			<p class="text-muted-foreground mt-1">
-				Nobody has seen it yet. Pick it up where you left off, any time before the call closes.
-			</p>
+			<p class="text-muted-foreground mt-1">{draftCloseLine}</p>
 			<Button href="/portal/submissions/{s.id}/edit" size="sm" class="mt-3">
 				Finish this proposal
 			</Button>

@@ -10,9 +10,13 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import { publicSiteLink } from '$lib/conference/conference-status';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 
 	let { data } = $props();
+	const zone = readerZone();
 
 	const open = $derived(data.tasks.filter((t) => t.status === 'open'));
 	const settled = $derived(data.tasks.filter((t) => t.status !== 'open'));
@@ -21,6 +25,8 @@
 		key: string;
 		title: string;
 		conferenceName: string;
+		conferenceSlug: string;
+		conferenceStatus: string;
 		tasks: Task[];
 		doneCount: number;
 	};
@@ -54,6 +60,8 @@
 				key,
 				title: task.submissionTitle ?? 'Event-wide tasks',
 				conferenceName: task.conference.name,
+				conferenceSlug: task.conference.slug,
+				conferenceStatus: task.conference.status,
 				tasks: [task],
 				doneCount: 0
 			});
@@ -101,23 +109,15 @@
 	};
 
 	/**
-	 * The year appears only when it is not this one.
+	 * The same instant the organizers stored, in the reader's zone (#498).
 	 *
-	 * The list is sorted by deadline and spans a CFP, so without it the run reads
-	 * "Tue, 25 Aug" and then "Wed, 14 Apr" — which looks like the sort is broken
-	 * rather than like the next year has begun. Printing the year on every row
-	 * would pay for that with noise on the rows that are actually due soon.
+	 * `due_on` is timestamptz. Printing only the calendar day dropped the time
+	 * and the zone, so "11 Feb" was noon UTC to the template and a different
+	 * evening to a speaker in Auckland — and missing it costs them the slot.
 	 */
 	const dueLabel = (dueOn: Date | string | null) => {
 		if (!dueOn) return 'No deadline';
-		const date = new Date(dueOn);
-		const options: Intl.DateTimeFormatOptions = {
-			weekday: 'short',
-			day: 'numeric',
-			month: 'short'
-		};
-		if (date.getFullYear() !== new Date().getFullYear()) options.year = 'numeric';
-		return date.toLocaleDateString('en-GB', options);
+		return formatInstant(dueOn, zone.current) || 'No deadline';
 	};
 
 	const overdue = (dueOn: Date | string | null) => Boolean(dueOn && new Date(dueOn) < new Date());
@@ -166,6 +166,7 @@
 			     weight — the rows themselves are not made smaller to pay for it. -->
 			<div class="mt-4 space-y-10">
 				{#each groups as group (group.key)}
+					{@const site = publicSiteLink(group.conferenceStatus, group.conferenceSlug)}
 					<section aria-labelledby="task-group-{group.key}">
 						<div class="flex flex-wrap items-baseline justify-between gap-x-3">
 							<h3 id="task-group-{group.key}" class="text-base font-semibold">{group.title}</h3>
@@ -175,7 +176,13 @@
 								>
 							{/if}
 						</div>
-						<p class="text-muted-foreground mt-0.5 text-sm">{group.conferenceName}</p>
+						<p class="text-muted-foreground mt-0.5 text-sm">
+							{#if site.available}
+								<a class="hover:underline" href={site.href}>{group.conferenceName}</a>
+							{:else}
+								{group.conferenceName}
+							{/if}
+						</p>
 						<ul class="divide-border mt-2 divide-y border-y">
 							{#each group.tasks as task (task.id)}
 								{@const gone = withdrawn(task)}
@@ -239,6 +246,7 @@
 		{:else}
 			<ul class="divide-border mt-3 divide-y">
 				{#each data.submissions as submission (submission.id)}
+					{@const site = publicSiteLink(submission.conference.status, submission.conference.slug)}
 					<li class="flex flex-wrap items-start justify-between gap-3 py-3">
 						<div>
 							<a
@@ -248,8 +256,11 @@
 								{submission.title}
 							</a>
 							<p class="text-muted-foreground mt-0.5 text-sm">
-								{submission.conference.name}{#if !submission.isPrimary}<span class="px-1.5">·</span
-									>co-presenting{/if}
+								{#if site.available}
+									<a class="hover:underline" href={site.href}>{submission.conference.name}</a>
+								{:else}
+									{submission.conference.name}
+								{/if}{#if !submission.isPrimary}<span class="px-1.5">·</span>co-presenting{/if}
 							</p>
 						</div>
 						<div class="flex items-center gap-3">
