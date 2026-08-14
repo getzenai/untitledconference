@@ -1,4 +1,5 @@
 import { normalizeRecordingUrl } from '$lib/conference/recording-url';
+import { SUBMITTED_REVIEW_UNASSIGN_REASON } from '$lib/conference/review-assignment';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	decisionNotificationStatuses,
@@ -29,7 +30,6 @@ function submissionId(raw: string): number {
 function assignmentMessage(result: AssignmentResult): string {
 	if (result === 'assigned') return 'Reviewer assigned.';
 	if (result === 'unassigned') return 'Reviewer unassigned.';
-	if (result === 'complete') return 'A submitted review is kept as part of the review record.';
 	return 'The assignment was already up to date.';
 }
 
@@ -111,6 +111,9 @@ export const actions: Actions = {
 		);
 		if (result === 'invalid') {
 			return fail(400, { assignmentMessage: 'That reviewer cannot review this submission.' });
+		}
+		if (result === 'complete') {
+			return fail(400, { assignmentMessage: SUBMITTED_REVIEW_UNASSIGN_REASON });
 		}
 		return { assignmentMessage: assignmentMessage(result) };
 	},

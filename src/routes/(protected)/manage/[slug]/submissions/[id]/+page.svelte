@@ -462,18 +462,27 @@
 												<form method="POST" action="?/assignment">
 													<input type="hidden" name="roundId" value={round.id} />
 													<input type="hidden" name="reviewerUserId" value={reviewer.userId} />
-													{#if reviewer.status === 'submitted'}
-														<span class="text-muted-foreground text-xs">Submitted</span>
-													{:else if reviewer.status && reviewer.status !== 'recused'}
-														<Button
-															type="submit"
-															name="intent"
-															value="unassign"
-															variant="outline"
-															size="sm"
-														>
-															Unassign · {reviewer.status}
-														</Button>
+													{#if reviewer.status && reviewer.status !== 'recused'}
+														<div class="flex flex-col items-end gap-1">
+															<Button
+																type="submit"
+																name="intent"
+																value="unassign"
+																variant="outline"
+																size="sm"
+																disabled={Boolean(reviewer.unassignBlockReason)}
+															>
+																Unassign · {reviewer.status}
+															</Button>
+															{#if reviewer.unassignBlockReason}
+																<p
+																	class="text-muted-foreground max-w-56 text-right text-xs"
+																	data-testid="unassign-block-reason"
+																>
+																	{reviewer.unassignBlockReason}
+																</p>
+															{/if}
+														</div>
 													{:else}
 														<Button
 															type="submit"

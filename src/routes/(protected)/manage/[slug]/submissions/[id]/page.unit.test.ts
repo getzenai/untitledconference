@@ -1,4 +1,5 @@
 /** A single decision is saved before, and independently from, its notification. */
+import { unassignBlockReason } from '$lib/conference/review-assignment';
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -95,7 +96,8 @@ function renderPage(
 											name: 'Riley Reviewer',
 											email: 'riley@example.com',
 											status: reviewerStatus,
-											eligible: true
+											eligible: true,
+											unassignBlockReason: unassignBlockReason(reviewerStatus)
 										}
 									]
 								}
@@ -159,11 +161,27 @@ describe('organizer submission detail decision workflow', () => {
 		expect(body).toContain('value="assign"');
 	});
 
-	it('preserves a submitted review instead of offering destructive unassignment', () => {
+	it('keeps Unassign visible and names why a submitted review cannot be dropped', () => {
 		const body = renderPage('submitted', null, 'submitted');
+		const reason = unassignBlockReason('submitted');
 
-		expect(body).toContain('Submitted');
-		expect(body).not.toContain('value="unassign"');
+		expect(body).toContain('value="unassign"');
+		expect(body).toContain('data-testid="unassign-block-reason"');
+		expect(reason).toBeTruthy();
+		expect(body).toContain(reason);
+		const unassign = body.slice(
+			body.lastIndexOf('<button', body.indexOf('value="unassign"')),
+			body.indexOf('</button>', body.indexOf('value="unassign"'))
+		);
+		expect(unassign).toContain('disabled');
+	});
+
+	it('offers a live Unassign when the server has no block reason', () => {
+		const body = renderPage('submitted', null, 'assigned');
+
+		expect(body).toContain('value="unassign"');
+		expect(body).toContain('Unassign · assigned');
+		expect(body).not.toContain('data-testid="unassign-block-reason"');
 	});
 });
 
