@@ -6,7 +6,8 @@
 	import { enhance } from '$app/forms';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
-	import { Button } from '$lib/components/ui/button';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { contactFiltersHref } from '$lib/conference/contact-filters';
 
@@ -17,6 +18,8 @@
 	);
 
 	let busy = $state(false);
+	let addOpen = $state(false);
+	let importOpen = $state(false);
 
 	const submitting = () => {
 		busy = true;
@@ -65,14 +68,120 @@
 			</p>
 		</div>
 		{#if data.canManage}
-			<Button
-				href="/contacts/pipeline"
-				size="sm"
-				variant="secondary"
-				data-testid="contacts-pipeline-link"
-			>
-				Sourcing pipeline
-			</Button>
+			<div class="flex flex-wrap items-center gap-2">
+				<Button
+					href="/contacts/pipeline"
+					size="sm"
+					variant="secondary"
+					data-testid="contacts-pipeline-link"
+				>
+					Sourcing pipeline
+				</Button>
+
+				<Dialog.Root bind:open={addOpen}>
+					<Dialog.Trigger
+						class={buttonVariants({ size: 'sm', variant: 'secondary' })}
+						data-testid="contacts-add-open"
+					>
+						Add contact
+					</Dialog.Trigger>
+					<Dialog.Content class="sm:max-w-lg" data-testid="contacts-add">
+						<Dialog.Header>
+							<Dialog.Title>Add a contact</Dialog.Title>
+							<Dialog.Description>
+								Creates an org-wide profile. Push them onto an event from their detail page.
+							</Dialog.Description>
+						</Dialog.Header>
+						<form
+							method="POST"
+							action="?/add"
+							use:enhance={submitting}
+							class="grid gap-3 sm:grid-cols-2"
+						>
+							<input type="hidden" name="organizationId" value={data.organizationId ?? ''} />
+							<div>
+								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-name">
+									Name
+								</label>
+								<Input id="add-name" name="name" required data-testid="contacts-add-name" />
+							</div>
+							<div>
+								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-email">
+									Email
+								</label>
+								<Input id="add-email" name="email" type="email" data-testid="contacts-add-email" />
+							</div>
+							<div>
+								<label
+									class="text-muted-foreground mb-1 block text-xs font-medium"
+									for="add-company"
+								>
+									Company
+								</label>
+								<Input id="add-company" name="company" data-testid="contacts-add-company" />
+							</div>
+							<div>
+								<label
+									class="text-muted-foreground mb-1 block text-xs font-medium"
+									for="add-jobTitle"
+								>
+									Job title
+								</label>
+								<Input id="add-jobTitle" name="jobTitle" data-testid="contacts-add-jobtitle" />
+							</div>
+							<div class="sm:col-span-2">
+								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-tags">
+									Tags (comma-separated)
+								</label>
+								<Input
+									id="add-tags"
+									name="tags"
+									placeholder="keynote, vip"
+									data-testid="contacts-add-tags"
+								/>
+							</div>
+							{#if form?.scope === 'add' && form?.error}
+								<p
+									class="border-status-bad text-status-bad rounded-md border px-3 py-2 text-sm sm:col-span-2"
+									role="alert"
+									data-testid="contacts-add-error"
+								>
+									{form.error}
+								</p>
+							{/if}
+							<div class="sm:col-span-2">
+								<Button type="submit" size="sm" disabled={busy} data-testid="contacts-add-submit">
+									Add contact
+								</Button>
+							</div>
+						</form>
+					</Dialog.Content>
+				</Dialog.Root>
+
+				<Dialog.Root bind:open={importOpen}>
+					<Dialog.Trigger
+						class={buttonVariants({ size: 'sm', variant: 'secondary' })}
+						data-testid="contacts-import-open"
+					>
+						Import
+					</Dialog.Trigger>
+					<Dialog.Content class="sm:max-w-lg">
+						<Dialog.Header>
+							<Dialog.Title>Import a list</Dialog.Title>
+							<Dialog.Description>
+								Load contacts from a CSV file or pasted rows; a contact already in the directory
+								with the same email is skipped.
+							</Dialog.Description>
+						</Dialog.Header>
+						<SpeakerImport
+							embedded
+							{busy}
+							enhanceForm={submitting}
+							form={form?.scope === 'import' ? form : null}
+						/>
+					</Dialog.Content>
+				</Dialog.Root>
+			</div>
 		{/if}
 	</div>
 
@@ -86,7 +195,11 @@
 			>.
 		</p>
 	{:else}
-		{#if form?.scope === 'import' || form?.scope === 'segment'}
+		<!-- Add and import answer inside their own dialog, where the click was; a
+			 confirmation behind the overlay is one nobody reads. -->
+		{#if form?.scope === 'add' || form?.scope === 'import'}
+			<!-- rendered in the dialog -->
+		{:else if form?.scope === 'segment'}
 			{#if form?.error}
 				<p
 					class="border-status-bad text-status-bad max-w-2xl rounded-md border px-3 py-2 text-sm"
@@ -95,7 +208,7 @@
 				>
 					{form.error}
 				</p>
-			{:else if form?.message && form.scope === 'segment'}
+			{:else if form?.message}
 				<p
 					class="border-status-good text-status-good max-w-2xl rounded-md border px-3 py-2 text-sm"
 					role="status"
@@ -362,7 +475,7 @@
 					{#if data.contacts.length === 0}
 						<tr>
 							<td colspan="6" class="text-muted-foreground px-3 py-8 text-center text-sm">
-								No contacts match. Add one below, import a CSV, or clear the filters.
+								No contacts match. Add one, import a CSV, or clear the filters.
 							</td>
 						</tr>
 					{:else}
@@ -425,66 +538,5 @@
 				</tbody>
 			</table>
 		</div>
-
-		<!-- Add contact -->
-		<section
-			class="border-border bg-card max-w-3xl rounded-lg border p-4"
-			data-testid="contacts-add"
-		>
-			<h2 class="text-sm font-semibold">Add a contact</h2>
-			<p class="text-muted-foreground mt-0.5 text-xs">
-				Creates an org-wide profile. Push them onto an event from their detail page.
-			</p>
-			<form
-				method="POST"
-				action="?/add"
-				use:enhance={submitting}
-				class="mt-3 grid gap-3 sm:grid-cols-2"
-			>
-				<input type="hidden" name="organizationId" value={data.organizationId ?? ''} />
-				<div>
-					<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-name">
-						Name
-					</label>
-					<Input id="add-name" name="name" required data-testid="contacts-add-name" />
-				</div>
-				<div>
-					<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-email">
-						Email
-					</label>
-					<Input id="add-email" name="email" type="email" data-testid="contacts-add-email" />
-				</div>
-				<div>
-					<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-company">
-						Company
-					</label>
-					<Input id="add-company" name="company" data-testid="contacts-add-company" />
-				</div>
-				<div>
-					<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-jobTitle">
-						Job title
-					</label>
-					<Input id="add-jobTitle" name="jobTitle" data-testid="contacts-add-jobtitle" />
-				</div>
-				<div class="sm:col-span-2">
-					<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-tags">
-						Tags (comma-separated)
-					</label>
-					<Input
-						id="add-tags"
-						name="tags"
-						placeholder="keynote, vip"
-						data-testid="contacts-add-tags"
-					/>
-				</div>
-				<div class="sm:col-span-2">
-					<Button type="submit" size="sm" disabled={busy} data-testid="contacts-add-submit">
-						Add contact
-					</Button>
-				</div>
-			</form>
-		</section>
-
-		<SpeakerImport {busy} enhanceForm={submitting} form={form?.scope === 'import' ? form : null} />
 	{/if}
 </div>

@@ -133,6 +133,19 @@ describe('contacts directory page', () => {
 		expect(body).toContain('/contacts?tag=AI');
 	});
 
+	it('offers add and import as header buttons, not as cards below the table (#419)', () => {
+		const { body } = render(Page, {
+			props: { data: baseData as never, form: null }
+		});
+
+		expect(body).toContain('data-testid="contacts-add-open"');
+		expect(body).toContain('data-testid="contacts-import-open"');
+		// The dialogs render their content on open, so nothing of the two forms
+		// sits in the page below the directory table.
+		expect(body).not.toContain('data-testid="contacts-add-name"');
+		expect(body).not.toContain('data-testid="speakers-import"');
+	});
+
 	it('prompts for an organization when the user cannot manage', () => {
 		const { body } = render(Page, {
 			props: {
