@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
 	conferenceDateRange,
 	conferenceNav,
+	initialAppRail,
 	isConferencePath,
-	isConferenceRail
+	isConferenceRail,
+	transitAppRail
 } from './conference-nav';
 
 describe('conferenceNav', () => {
@@ -62,5 +64,39 @@ describe('isConferenceRail', () => {
 		expect(isConferenceRail({ name: 'DevFlow Conf', slug: 'devflow-2028' })).toBe(true);
 		expect(isConferenceRail(null)).toBe(false);
 		expect(isConferenceRail({ name: 'no slug' })).toBe(false);
+	});
+});
+
+describe('app rail across a conference', () => {
+	it('starts expanded on the app surfaces and collapsed on a conference URL', () => {
+		expect(initialAppRail('/home')).toEqual({
+			open: true,
+			savedOpen: true,
+			inConference: false
+		});
+		expect(initialAppRail('/manage/devflow-2028/dashboard')).toEqual({
+			open: false,
+			savedOpen: true,
+			inConference: true
+		});
+	});
+
+	it('restores the default, not the first-paint collapse, after a deep link', () => {
+		const landed = initialAppRail('/manage/devflow-2028/dashboard');
+		expect(transitAppRail(landed, '/manage').open).toBe(true);
+	});
+
+	it('keeps a user-collapsed rail collapsed through a client-nav trip', () => {
+		const home = { open: false, savedOpen: true, inConference: false };
+		const inside = transitAppRail(home, '/manage/devflow-2028/dashboard');
+		expect(inside.open).toBe(false);
+		expect(transitAppRail(inside, '/manage').open).toBe(false);
+	});
+
+	it('restores a user-expanded rail after a client-nav trip', () => {
+		const home = initialAppRail('/home');
+		const inside = transitAppRail(home, '/manage/devflow-2028/settings');
+		expect(inside.open).toBe(false);
+		expect(transitAppRail(inside, '/manage').open).toBe(true);
 	});
 });

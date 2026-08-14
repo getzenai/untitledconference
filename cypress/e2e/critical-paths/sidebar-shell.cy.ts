@@ -4,7 +4,12 @@
  * The app rail stays mounted when the organizer opens a conference; the
  * conference destinations live on a second rail, not a handwritten aside.
  * Screenshots of both views go on the PR.
+ *
+ * `data-testid="app-sidebar"` lands on the sidebar-container via restProps.
+ * `data-state` sits one level up on the wrapper. Read it there.
  */
+const railState = () => cy.get('[data-testid="app-sidebar"]').parent();
+
 describe('Shared sidebar shell', () => {
 	it('keeps the app rail and adds a conference rail inside a workspace', () => {
 		const stamp = Date.now();
@@ -17,7 +22,7 @@ describe('Shared sidebar shell', () => {
 		cy.visit('/home');
 		cy.waitForHydration();
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');
-		cy.get('[data-testid="app-sidebar"]').should('have.attr', 'data-state', 'expanded');
+		railState().should('have.attr', 'data-state', 'expanded');
 		cy.get('[data-testid="sidebar-home-link"]').should('contain.text', 'untitledconference');
 		cy.get('[data-testid="app-sidebar"] [data-testid="account-menu-trigger"]').should('be.visible');
 		cy.get('[data-testid="conference-sidebar"]').should('not.exist');
@@ -32,7 +37,7 @@ describe('Shared sidebar shell', () => {
 
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');
 		// Icon rail: the app sidebar stayed mounted and collapsed for the second rail.
-		cy.get('[data-testid="app-sidebar"]').should('have.attr', 'data-state', 'collapsed');
+		railState().should('have.attr', 'data-state', 'collapsed');
 		cy.get('[data-testid="conference-sidebar"]').should('be.visible');
 		cy.get('[data-testid="switch-conference"]').should('have.attr', 'href', '/manage');
 		cy.get('[data-testid="conference-nav-dashboard"]').should('be.visible');
@@ -46,8 +51,17 @@ describe('Shared sidebar shell', () => {
 		cy.get('[data-testid="switch-conference"]').click();
 		cy.location('pathname').should('eq', '/manage');
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');
-		cy.get('[data-testid="app-sidebar"]').should('have.attr', 'data-state', 'expanded');
+		railState().should('have.attr', 'data-state', 'expanded');
 		cy.get('[data-testid="conference-sidebar"]').should('not.exist');
 		cy.get('[data-testid="app-sidebar"] [data-testid="account-menu-trigger"]').should('be.visible');
+
+		// Bookmark / reload into the workspace: first paint is collapsed on
+		// purpose. Leaving must restore the default, not that first-paint trick.
+		cy.visit(`/manage/${slug}/dashboard`);
+		cy.waitForHydration();
+		railState().should('have.attr', 'data-state', 'collapsed');
+		cy.get('[data-testid="switch-conference"]').click();
+		cy.location('pathname').should('eq', '/manage');
+		railState().should('have.attr', 'data-state', 'expanded');
 	});
 });

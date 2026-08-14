@@ -2,11 +2,11 @@
 	import { page } from '$app/state';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import { isConferencePath } from '$lib/conference/conference-nav';
+	import { initialAppRail, transitAppRail } from '$lib/conference/conference-nav';
 	import type { NavAccess } from '$lib/conference/nav-access';
 	import { consumeGooseWelcome } from '$lib/goose-welcome';
 	import { Toaster } from '$lib/components/ui/sonner';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	interface Props {
@@ -22,10 +22,22 @@
 		!page.url.pathname.startsWith('/onboarding') && !page.url.pathname.startsWith('/email-verified')
 	);
 
-	// First paint: collapsed already when the request is a conference URL, so
-	// the icon rail does not flash open and then shut. Client navigations are
-	// handled by the conference layout's enter/leave restore.
-	let open = $state(!isConferencePath(page.url.pathname));
+	// First paint of a conference URL is collapsed so the icon rail does not
+	// flash open. That is not a user preference — `savedOpen` stays expanded
+	// until they actually collapse, so "All conferences" after a bookmark does
+	// not leave them staring at icons.
+	const initialRail = initialAppRail(page.url.pathname);
+	let rail = $state(initialRail);
+	let open = $state(initialRail.open);
+
+	$effect.pre(() => {
+		const next = transitAppRail(
+			{ ...untrack(() => rail), open: untrack(() => open) },
+			page.url.pathname
+		);
+		rail = next;
+		open = next.open;
+	});
 
 	const navAccess = $derived((page.data as { navAccess?: NavAccess }).navAccess);
 

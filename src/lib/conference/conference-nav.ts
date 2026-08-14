@@ -55,6 +55,40 @@ export function isConferencePath(pathname: string): boolean {
 	return parts[0] === 'manage' && parts.length >= 2 && parts[1] !== 'new';
 }
 
+/**
+ * Visual state of the icon-collapsible app rail across the conference workspace.
+ *
+ * `savedOpen` is the last preference the user actually chose. First paint of a
+ * conference URL starts collapsed so the icon rail does not flash open — that
+ * is not a preference. Leaving then restores `savedOpen` (default expanded),
+ * not the first-paint trick (#410 / PR review).
+ */
+export type AppRailTransit = {
+	open: boolean;
+	savedOpen: boolean;
+	inConference: boolean;
+};
+
+export function initialAppRail(pathname: string): AppRailTransit {
+	const inConference = isConferencePath(pathname);
+	return {
+		open: !inConference,
+		savedOpen: true,
+		inConference
+	};
+}
+
+export function transitAppRail(prev: AppRailTransit, pathname: string): AppRailTransit {
+	const now = isConferencePath(pathname);
+	if (now && !prev.inConference) {
+		return { open: false, savedOpen: prev.open, inConference: true };
+	}
+	if (!now && prev.inConference) {
+		return { open: prev.savedOpen, savedOpen: prev.savedOpen, inConference: false };
+	}
+	return { ...prev, inConference: now };
+}
+
 export function conferenceDateRange(
 	conference: Pick<ConferenceRail, 'startsOn' | 'endsOn' | 'venue'>
 ): string {
