@@ -57,7 +57,7 @@
 			{#each data.conferences as conference (conference.id)}
 				<li>
 					<a
-						href="/manage/{conference.slug}/submissions"
+						href="/manage/{conference.slug}/dashboard"
 						class="border-border hover:bg-muted/50 focus-visible:ring-ring flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
 					>
 						<div>
