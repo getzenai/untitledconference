@@ -198,7 +198,8 @@
 			<div class="space-y-4">
 				{#each shown as speaker (speaker.speakerProfileId)}
 					{@const isOpen = expanded.has(speaker.speakerProfileId)}
-					{@const outstanding = speaker.open + speaker.waiting}
+					<!-- Same rule as `remindable`: waiting is on the organizer, not the speaker. -->
+					{@const outstanding = speaker.open}
 					<section class="border-border bg-card rounded-lg border">
 						<div class="flex items-start gap-3 pl-4">
 							{#if remindable.has(speaker.speakerProfileId)}

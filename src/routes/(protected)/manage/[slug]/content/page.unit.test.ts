@@ -165,6 +165,42 @@ describe('organizer speaker content cards', () => {
 		expect(body).not.toContain('Open tasks');
 	});
 
+	// #467: the file's own rule (waiting is on the organizer) was kept by the
+	// checkbox and the header, then broken by the row badge adding `waiting` back in.
+	// Priya handed in a photo the organizer already approved — chasing her for it
+	// is the number lying.
+	it('does not count tasks waiting on the organizer as still to do', () => {
+		const priya = speaker(1, {
+			tasks: [
+				task(11, { title: 'Headshot', status: 'done' }),
+				task(12, { title: 'Headshot retake', status: 'submitted' }),
+				task(13, { title: 'Bio', status: 'open' }),
+				task(14, { title: 'Slides', status: 'open' }),
+				task(15, { title: 'Recording release', status: 'submitted' })
+			],
+			open: 2,
+			waiting: 2,
+			done: 1
+		});
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [priya],
+					totals: { speakers: 1, open: 2, waiting: 2, done: 1, overdue: 0 }
+				},
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('2 of 5 tasks to do');
+		expect(body).not.toContain('4 of 5');
+	});
+
 	it('names the talk on each task so two identical rows stay distinguishable', () => {
 		const body = render(ContentTaskList, {
 			props: {
