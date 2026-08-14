@@ -35,9 +35,12 @@ import { conferenceWriteTools } from './conference-write';
 export function conferenceReadTools(ctx: McpContext): AnyMcpToolDefinition[] {
 	return [
 		listMyConferences(ctx),
+		listConferences(ctx),
+		getConference(ctx),
 		listSubmissions(ctx),
 		getSubmission(ctx),
 		getAgenda(ctx),
+		listSessions(ctx),
 		decideSubmissionsTool(ctx)
 	];
 }
@@ -50,6 +53,32 @@ export function registerConferenceTools(server: McpServer, ctx: McpContext): voi
 	registerMcpTools(server, ctx, conferenceTools(ctx));
 }
 
+function conferenceCard(conference: {
+	slug: string;
+	name: string;
+	venue: string | null;
+	startsOn: string | null;
+	endsOn: string | null;
+	status: string;
+}) {
+	return {
+		slug: conference.slug,
+		name: conference.name,
+		venue: conference.venue,
+		startsOn: conference.startsOn,
+		endsOn: conference.endsOn,
+		status: conference.status
+	};
+}
+
+async function organizedConferenceList(ctx: McpContext) {
+	const rows = await organizedConferences(ctx.userId);
+	return {
+		count: rows.length,
+		conferences: rows.map(conferenceCard)
+	};
+}
+
 function listMyConferences(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_my_conferences',
@@ -59,20 +88,34 @@ function listMyConferences(ctx: McpContext): AnyMcpToolDefinition {
 			'Archived conferences are listed too, with status "archived" — they are hidden ' +
 			'from the public, not from their organizers, and restore_conference brings one back.',
 		inputSchema: {},
-		handler: async () => {
-			const rows = await organizedConferences(ctx.userId);
+		handler: () => organizedConferenceList(ctx)
+	};
+}
 
-			return {
-				count: rows.length,
-				conferences: rows.map((conference) => ({
-					slug: conference.slug,
-					name: conference.name,
-					venue: conference.venue,
-					startsOn: conference.startsOn,
-					endsOn: conference.endsOn,
-					status: conference.status
-				}))
-			};
+function listConferences(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'list_conferences',
+		description:
+			'List the conferences the authenticated user organizes, newest first. ' +
+			'Same list as list_my_conferences. A caller who organizes nothing gets an empty list, ' +
+			"never another organization's events.",
+		inputSchema: {},
+		handler: () => organizedConferenceList(ctx)
+	};
+}
+
+function getConference(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'get_conference',
+		description:
+			'Get one conference you organize — name, venue, dates, status. ' +
+			'Unknown slugs and slugs you do not organize are the same answer.',
+		inputSchema: {
+			conferenceSlug: z.string().min(1).describe('Conference slug, from list_conferences.')
+		},
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			return conferenceCard(conference);
 		}
 	};
 }
@@ -209,6 +252,59 @@ function getSubmission(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+async function scheduledProgramme(conferenceSlug: string, ctx: McpContext) {
+	const conference = await organizerConference(conferenceSlug, ctx);
+
+	// Left joins throughout: a break carries its own title and has no
+	// submission, and a plenary has no room because it spans all of them.
+	// Inner joins here would silently drop exactly those rows.
+	const rows = await db
+		.select({
+			id: placementTable.id,
+			kind: placementTable.kind,
+			status: placementTable.status,
+			title: placementTable.title,
+			submissionId: placementTable.submissionId,
+			submissionTitle: submissionTable.title,
+			day: conferenceDayTable.date,
+			room: roomTable.name,
+			startsAt: placementTable.startsAt,
+			endsAt: placementTable.endsAt
+		})
+		.from(placementTable)
+		.leftJoin(submissionTable, eq(submissionTable.id, placementTable.submissionId))
+		.leftJoin(conferenceDayTable, eq(conferenceDayTable.id, placementTable.conferenceDayId))
+		.leftJoin(roomTable, eq(roomTable.id, placementTable.roomId))
+		.where(eq(placementTable.conferenceId, conference.id))
+		.orderBy(asc(placementTable.startsAt), asc(placementTable.id));
+
+	return {
+		conference: { slug: conference.slug, name: conference.name },
+		count: rows.length,
+		placements: rows.map((row) => ({
+			id: row.id,
+			kind: row.kind,
+			status: row.status,
+			// A session takes its title from the proposal; a break brings its own.
+			title: row.submissionTitle ?? row.title,
+			submissionId: row.submissionId,
+			day: row.day,
+			room: row.room,
+			// Not an ISO instant. `slotInstant` stores the conference's own wall
+			// clock as if it were UTC, so `toISOString()` here produced a `Z` the
+			// value never earned: 14:00 in Munich came out as 14:00Z, an hour off
+			// for any client honest enough to parse it (#325). Reading the same
+			// clock back out with `slotMinutes` and handing over day + HH:MM
+			// leaves nothing to misread, and matches what place_talk and
+			// get_agenda_tray already return for the same placement.
+			startMinutes: row.startsAt ? slotMinutes(row.startsAt) : null,
+			start: row.startsAt ? formatClock(slotMinutes(row.startsAt)) : null,
+			endMinutes: row.endsAt ? slotMinutes(row.endsAt) : null,
+			end: row.endsAt ? formatClock(slotMinutes(row.endsAt)) : null
+		}))
+	};
+}
+
 function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_agenda',
@@ -221,58 +317,21 @@ function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
 		inputSchema: {
 			conferenceSlug: z.string().min(1).describe('Conference slug, from list_my_conferences.')
 		},
-		handler: async ({ conferenceSlug }) => {
-			const conference = await organizerConference(conferenceSlug, ctx);
+		handler: ({ conferenceSlug }) => scheduledProgramme(conferenceSlug, ctx)
+	};
+}
 
-			// Left joins throughout: a break carries its own title and has no
-			// submission, and a plenary has no room because it spans all of them.
-			// Inner joins here would silently drop exactly those rows.
-			const rows = await db
-				.select({
-					id: placementTable.id,
-					kind: placementTable.kind,
-					status: placementTable.status,
-					title: placementTable.title,
-					submissionId: placementTable.submissionId,
-					submissionTitle: submissionTable.title,
-					day: conferenceDayTable.date,
-					room: roomTable.name,
-					startsAt: placementTable.startsAt,
-					endsAt: placementTable.endsAt
-				})
-				.from(placementTable)
-				.leftJoin(submissionTable, eq(submissionTable.id, placementTable.submissionId))
-				.leftJoin(conferenceDayTable, eq(conferenceDayTable.id, placementTable.conferenceDayId))
-				.leftJoin(roomTable, eq(roomTable.id, placementTable.roomId))
-				.where(eq(placementTable.conferenceId, conference.id))
-				.orderBy(asc(placementTable.startsAt), asc(placementTable.id));
-
-			return {
-				conference: { slug: conference.slug, name: conference.name },
-				count: rows.length,
-				placements: rows.map((row) => ({
-					id: row.id,
-					kind: row.kind,
-					status: row.status,
-					// A session takes its title from the proposal; a break brings its own.
-					title: row.submissionTitle ?? row.title,
-					submissionId: row.submissionId,
-					day: row.day,
-					room: row.room,
-					// Not an ISO instant. `slotInstant` stores the conference's own wall
-					// clock as if it were UTC, so `toISOString()` here produced a `Z` the
-					// value never earned: 14:00 in Munich came out as 14:00Z, an hour off
-					// for any client honest enough to parse it (#325). Reading the same
-					// clock back out with `slotMinutes` and handing over day + HH:MM
-					// leaves nothing to misread, and matches what place_talk and
-					// get_agenda_tray already return for the same placement.
-					startMinutes: row.startsAt ? slotMinutes(row.startsAt) : null,
-					start: row.startsAt ? formatClock(slotMinutes(row.startsAt)) : null,
-					endMinutes: row.endsAt ? slotMinutes(row.endsAt) : null,
-					end: row.endsAt ? formatClock(slotMinutes(row.endsAt)) : null
-				}))
-			};
-		}
+function listSessions(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'list_sessions',
+		description:
+			'List the scheduled programme of a conference you organize — day, room, start ' +
+			'and session, in start order. Same placements as get_agenda, including tentative ' +
+			'ones the public page hides.',
+		inputSchema: {
+			conferenceSlug: z.string().min(1).describe('Conference slug, from list_conferences.')
+		},
+		handler: ({ conferenceSlug }) => scheduledProgramme(conferenceSlug, ctx)
 	};
 }
 

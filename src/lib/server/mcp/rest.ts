@@ -37,6 +37,7 @@ export type RestRoute = {
  */
 export const REST_ROUTES: RestRoute[] = [
 	{ method: 'GET', pattern: '/conferences', tool: 'list_my_conferences' },
+	{ method: 'GET', pattern: '/conferences/:conferenceSlug', tool: 'get_conference' },
 	{ method: 'POST', pattern: '/conferences', tool: 'create_conference' },
 	{ method: 'PATCH', pattern: '/conferences/:conferenceSlug', tool: 'update_conference' },
 	// DELETE is the archive, not the erase: it is what a REST caller means by

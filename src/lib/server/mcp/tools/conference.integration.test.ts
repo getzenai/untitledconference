@@ -116,6 +116,7 @@ async function seedConference(key: string, organizationId: string): Promise<{ sl
 
 let ownerCtx: McpContext;
 let plainMemberCtx: McpContext;
+let strangerCtx: McpContext;
 let ownConference: { slug: string };
 let otherConference: { slug: string };
 
@@ -132,6 +133,11 @@ beforeAll(async () => {
 	const otherOrg = await seedOrg('other', memberId, 'member');
 	otherConference = await seedConference('other', otherOrg);
 	plainMemberCtx = { userId: memberId, organizationId: otherOrg };
+
+	// A valid token whose owner has no membership anywhere. The default org on
+	// the context is one they do not belong to — list/get must still see nothing.
+	const strangerId = await seedUser('stranger');
+	strangerCtx = { userId: strangerId, organizationId: ownOrg };
 });
 
 afterAll(async () => {
@@ -148,6 +154,81 @@ describe('the conference MCP tools', () => {
 		const slugs = (data!.conferences as { slug: string }[]).map((c) => c.slug);
 		expect(slugs).toContain(ownConference.slug);
 		expect(slugs).not.toContain(otherConference.slug);
+	});
+
+	it('list_conferences is the same list and hides a foreign organization', async () => {
+		const mine = await call(ownerCtx, 'list_conferences');
+		const named = (mine.data!.conferences as { slug: string }[]).map((c) => c.slug);
+		expect(named).toContain(ownConference.slug);
+		expect(named).not.toContain(otherConference.slug);
+
+		const empty = await call(strangerCtx, 'list_conferences');
+		expect(empty.data!.count).toBe(0);
+		expect(empty.data!.conferences).toEqual([]);
+	});
+
+	it('get_conference returns a conference the caller organizes', async () => {
+		const { data } = await call(ownerCtx, 'get_conference', {
+			conferenceSlug: ownConference.slug
+		});
+		expect(data).toMatchObject({
+			slug: ownConference.slug,
+			name: 'Conference own',
+			status: 'draft'
+		});
+	});
+
+	it('get_conference refuses a foreign organization without revealing that it exists', async () => {
+		const missing = await call(ownerCtx, 'get_conference', {
+			conferenceSlug: `definitely-not-a-conference-${suffix}`
+		});
+		const foreign = await call(ownerCtx, 'get_conference', {
+			conferenceSlug: otherConference.slug
+		});
+		const stranger = await call(strangerCtx, 'get_conference', {
+			conferenceSlug: ownConference.slug
+		});
+
+		expect(missing.isError).toBe(true);
+		expect(foreign.isError).toBe(true);
+		expect(stranger.isError).toBe(true);
+		expect(foreign.text.replace(otherConference.slug, 'X')).toBe(
+			missing.text.replace(`definitely-not-a-conference-${suffix}`, 'X')
+		);
+		expect(stranger.text).toContain('that you organize');
+		expect(stranger.text).not.toContain('Secret proposal');
+	});
+
+	it('get_submission refuses a foreign organization conference', async () => {
+		const missing = await call(ownerCtx, 'get_submission', {
+			conferenceSlug: `definitely-not-a-conference-${suffix}`,
+			submissionId: 1
+		});
+		const foreign = await call(ownerCtx, 'get_submission', {
+			conferenceSlug: otherConference.slug,
+			submissionId: 1
+		});
+
+		expect(missing.isError).toBe(true);
+		expect(foreign.isError).toBe(true);
+		expect(foreign.text.replace(otherConference.slug, 'X')).toBe(
+			missing.text.replace(`definitely-not-a-conference-${suffix}`, 'X')
+		);
+	});
+
+	it('list_sessions refuses a foreign organization conference', async () => {
+		const missing = await call(ownerCtx, 'list_sessions', {
+			conferenceSlug: `definitely-not-a-conference-${suffix}`
+		});
+		const foreign = await call(ownerCtx, 'list_sessions', {
+			conferenceSlug: otherConference.slug
+		});
+
+		expect(missing.isError).toBe(true);
+		expect(foreign.isError).toBe(true);
+		expect(foreign.text.replace(otherConference.slug, 'X')).toBe(
+			missing.text.replace(`definitely-not-a-conference-${suffix}`, 'X')
+		);
 	});
 
 	it('returns the proposals of a conference the caller organizes', async () => {
@@ -359,6 +440,11 @@ describe('the conference MCP tools', () => {
 		// reads `startsAt` would keep being an hour out and never learn why.
 		expect(coffee).not.toHaveProperty('startsAt');
 		expect(text).not.toContain('Z"');
+
+		const sessions = await call(ownerCtx, 'list_sessions', {
+			conferenceSlug: ownConference.slug
+		});
+		expect(sessions.data!.placements).toEqual(data!.placements);
 	});
 
 	it('does not return reviewer identities with a proposal', async () => {

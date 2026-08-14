@@ -275,6 +275,7 @@ describe('REST adapter', () => {
 		expect(ids).toEqual(
 			expect.arrayContaining([
 				'list_my_conferences',
+				'get_conference',
 				'create_conference',
 				'decide_submissions',
 				'notify_speakers',

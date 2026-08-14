@@ -19,7 +19,8 @@ export const SERVER_INSTRUCTIONS =
 	'call for proposals, review rounds, decisions, and the scheduled agenda. ' +
 	'Tools act as the authenticated user. ' +
 	'Identity comes from the OAuth access token, so no tool takes a user or organization argument. ' +
-	'Organizers start with list_my_conferences — every other organizer tool takes a slug it returns. ' +
+	'Organizers start with list_my_conferences or list_conferences — every other organizer tool takes a slug it returns. ' +
+	'get_conference loads one. ' +
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
 	'open_cfp then publish_conference so speakers can submit, ' +
 	'create_session_format and create_track so proposals have a length and a track, ' +
@@ -34,7 +35,7 @@ export const SERVER_INSTRUCTIONS =
 	'From a conference: list_submissions for the proposals (filter by status), ' +
 	'get_submission for one proposal in full with its reviews, ' +
 	'list_review_rounds, list_reviewers, list_session_formats, list_tracks, ' +
-	'and get_agenda for the scheduled programme. ' +
+	'and get_agenda or list_sessions for the scheduled programme. ' +
 	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
 	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
 	'unplace_talk back to the tray. A collision is refused with the other talk named. ' +

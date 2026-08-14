@@ -40,6 +40,7 @@ describe('the REST route table', () => {
 
 	it('maps the resource paths the issue names onto the same tools', () => {
 		expect(matchRestRoute('GET', '/conferences')?.route.tool).toBe('list_my_conferences');
+		expect(matchRestRoute('GET', '/conferences/harness')?.route.tool).toBe('get_conference');
 		expect(matchRestRoute('GET', '/conferences/harness/submissions')?.route.tool).toBe(
 			'list_submissions'
 		);
