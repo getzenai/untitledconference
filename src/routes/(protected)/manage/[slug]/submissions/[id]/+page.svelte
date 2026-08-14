@@ -330,7 +330,21 @@
 					{#each s.reviews as review (review.id)}
 						<li class="border-border border-t py-3 first:mt-3">
 							<div class="flex items-baseline justify-between gap-3">
-								<span class="font-medium">{review.reviewerName}</span>
+								<span class="flex flex-wrap items-baseline gap-2">
+									<span class="font-medium" data-testid="review-reviewer-name"
+										>{review.reviewerName}</span
+									>
+									{#if review.anonymized}
+										<!--
+										The organizer sees the name and, next to it, that the round hides it
+										from the other reviewers (#416) — the fact they need when they quote
+										a score in a committee meeting.
+										-->
+										<span class="text-muted-foreground text-xs" data-testid="review-blind-round"
+											>blind to peers</span
+										>
+									{/if}
+								</span>
 								<span class="text-muted-foreground text-sm tabular-nums">
 									{#if review.status === 'submitted'}
 										{formatScore(review.score)}

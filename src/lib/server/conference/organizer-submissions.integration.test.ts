@@ -27,6 +27,7 @@ import {
 	exportSubmissions,
 	listSubmissions,
 	PAGE_SIZE,
+	submissionDetail,
 	submissionTotals
 } from './organizer-submissions';
 import { parseSort, scoreExpression } from './submission-sort';
@@ -668,5 +669,94 @@ describe('ordering by how many reviews are in (#122)', () => {
 		expect(parseSort('reviews-asc')).toBe('reviews-asc');
 		expect(parseSort('reviews-desc')).toBe('reviews-desc');
 		expect(parseSort('reviews')).toBe('newest');
+	});
+});
+
+/**
+ * Who reviewed this, on the organizer's own page (#416).
+ *
+ * A blind round hides the reviewer from their peers. It never hid them from the
+ * organizer — that page lists the same people by name and email in its assignment
+ * block, so replacing the name in the reviews list above it hid nothing and cost
+ * the organizer the link between a score and a person. The rule this pins: the
+ * organizer sees the name, and `anonymized` says the round is blind.
+ */
+describe('reviewer identity on the organizer submission page (#416)', () => {
+	let blindRoundId: number;
+	let blindCriterionId: number;
+
+	beforeAll(async () => {
+		const [plan] = await db
+			.insert(evaluationPlanTable)
+			.values({ conferenceId: conference.id, name: 'Blind plan' })
+			.returning();
+		const [round] = await db
+			.insert(reviewRoundTable)
+			.values({
+				evaluationPlanId: plan.id,
+				name: 'Blind round',
+				position: 0,
+				anonymized: true
+			})
+			.returning();
+		blindRoundId = round.id;
+
+		const [criterion] = await db
+			.insert(scorecardCriterionTable)
+			.values({
+				reviewRoundId: blindRoundId,
+				label: 'Relevance',
+				kind: 'rating',
+				scaleMax: 5,
+				weight: '1'
+			})
+			.returning();
+		blindCriterionId = criterion.id;
+	});
+
+	async function addBlindReview(submissionId: number, reviewerUserId: string, relevance: number) {
+		const [review] = await db
+			.insert(reviewTable)
+			.values({
+				reviewRoundId: blindRoundId,
+				submissionId,
+				reviewerUserId,
+				status: 'submitted',
+				submittedAt: new Date()
+			})
+			.returning();
+
+		await db.insert(reviewScoreTable).values({
+			reviewId: review.id,
+			scorecardCriterionId: blindCriterionId,
+			valueNumber: String(relevance)
+		});
+	}
+
+	it('names the reviewers of a blind round and marks the round as blind', async () => {
+		await addSubmission(conference, 'Blind talk', 1);
+		const submissionId = await idFor('Blind talk');
+		await addBlindReview(submissionId, REVIEWERS[0], 4);
+		await addBlindReview(submissionId, REVIEWERS[1], 2);
+
+		const detail = await submissionDetail(conference.id, submissionId);
+
+		expect(detail?.reviews.map((r) => r.reviewerName).sort()).toEqual(
+			[REVIEWERS[0], REVIEWERS[1]].sort()
+		);
+		// No row is called "Reviewer N" here — that label belongs to the peer surface.
+		expect(detail?.reviews.some((r) => /^Reviewer \d+$/.test(r.reviewerName))).toBe(false);
+		expect(detail?.reviews.every((r) => r.anonymized)).toBe(true);
+	});
+
+	it('leaves an open round exactly as it was: named, and not marked blind', async () => {
+		await addSubmission(conference, 'Open talk', 2);
+		const submissionId = await idFor('Open talk');
+		await addReview(submissionId, REVIEWERS[2], { relevance: 5, depth: 9 });
+
+		const detail = await submissionDetail(conference.id, submissionId);
+
+		expect(detail?.reviews.map((r) => r.reviewerName)).toEqual([REVIEWERS[2]]);
+		expect(detail?.reviews.every((r) => r.anonymized)).toBe(false);
 	});
 });
