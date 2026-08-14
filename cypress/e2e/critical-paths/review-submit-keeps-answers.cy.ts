@@ -36,10 +36,7 @@ describe('Review submit keeps answers', () => {
 			cy.get('[data-testid="add-criterion-submit"]').click();
 			// The saved label lives in an input value, not a text node: cy.contains
 			// does not read input values, so assert on the value itself.
-			cy.get('[data-testid="criterion-row"] input[name="label"]').should(
-				'have.value',
-				'Relevance'
-			);
+			cy.get('[data-testid="criterion-row"] input[name="label"]').should('have.value', 'Relevance');
 			// Add-another still resets: the next label field is empty.
 			cy.get('[data-testid="add-criterion-label"]').should('have.value', '');
 
