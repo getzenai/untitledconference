@@ -13,6 +13,7 @@
 	 * preview.
 	 */
 	import { enhance } from '$app/forms';
+	import { callWindow } from '$lib/conference/call-window';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import {
 		FIELD_KINDS,
@@ -132,19 +133,14 @@
 	];
 
 	/**
-	 * Same windows the public form uses (`callState` in cfp-submission): a published
-	 * form is not "live" when opensAt is still ahead or closesAt has passed. Match
-	 * that here so the banner never claims Live while speakers see closed/not yet open.
+	 * Same window the public form uses (`$lib/conference/call-window`): a published
+	 * form is not "live" when opensAt is still ahead or closesAt has passed. Shared
+	 * so the banner can never claim Live while speakers see closed/not yet open.
 	 */
 	const publicCallWindow = $derived.by(() => {
 		const form = data.form;
 		if (!form || form.status !== 'published') return null;
-		const now = new Date();
-		const opensAt = form.opensAt ? new Date(form.opensAt) : null;
-		const closesAt = form.closesAt ? new Date(form.closesAt) : null;
-		if (opensAt && opensAt > now) return 'not_yet_open' as const;
-		if (closesAt && closesAt <= now) return 'closed' as const;
-		return 'open' as const;
+		return callWindow(form.opensAt, form.closesAt, false, new Date());
 	});
 
 	const YES_NO_OPTIONS = [

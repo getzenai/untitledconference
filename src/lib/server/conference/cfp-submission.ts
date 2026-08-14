@@ -15,6 +15,7 @@
  *  3. **A draft needs only a title** (CFP-07). Everything else is validated on
  *     the way to `submitted`, never on the way to `draft`.
  */
+import { callWindow, type CallWindow } from '$lib/conference/call-window';
 import {
 	asks,
 	fixedQuestionVisibility,
@@ -47,8 +48,14 @@ import { dispatchConferenceEmails } from './email-dispatcher';
 import { listPublishedConferences } from './public-conference';
 import { emailHeldByAnother, refuseStatedAddress, sameAddress } from './speaker-identity';
 
-/** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
-export type CallState = 'open' | 'not_yet_open' | 'closed';
+/**
+ * Why the form is or is not accepting submissions right now (CFP-04, CFP-16).
+ *
+ * The rule itself lives in `$lib/conference/call-window` — the organizer's CFP
+ * banner and the unpublish confirmation (#452) ask the same question and must
+ * not answer it a second way.
+ */
+export type CallState = CallWindow;
 
 export type OpenCall = {
 	conference: {
@@ -81,13 +88,6 @@ export type OpenCall = {
 	 */
 	fixed: FixedQuestionVisibility;
 };
-
-function callState(opensAt: Date | null, closesAt: Date | null, closed: boolean, now: Date) {
-	if (closed) return 'closed' as const;
-	if (opensAt && opensAt > now) return 'not_yet_open' as const;
-	if (closesAt && closesAt <= now) return 'closed' as const;
-	return 'open' as const;
-}
 
 /** The two axes a proposal is filed under. Both drive CFP-02 conditions. */
 async function loadAxes(conferenceId: number) {
@@ -151,7 +151,7 @@ export async function openCall(slug: string, now = new Date()): Promise<OpenCall
 			opensAt: published.form.opensAt,
 			closesAt: published.form.closesAt
 		},
-		state: callState(
+		state: callWindow(
 			published.form.opensAt,
 			published.form.closesAt,
 			published.form.status === 'closed',
@@ -195,7 +195,7 @@ export async function callSummary(
 
 	if (!row) return null;
 	return {
-		state: callState(row.opensAt, row.closesAt, row.status === 'closed', now),
+		state: callWindow(row.opensAt, row.closesAt, row.status === 'closed', now),
 		closesAt: row.closesAt
 	};
 }

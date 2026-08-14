@@ -2,9 +2,14 @@
  * Settings is the home of conference structure (#63): rooms, tracks, formats.
  * Reviewer visibility lives under Team & reviewers, not here.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
+
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
 const conference = {
 	id: 1,
@@ -247,6 +252,24 @@ describe('draft or live', () => {
 		expect(body).toContain('Return to draft');
 		expect(body).toContain('/c/test-conf');
 		expect(body).not.toContain('404');
+	});
+
+	/**
+	 * #452: the damage of Return to draft lands on the public site, which the
+	 * organizer is not looking at. The dialog is a client-side control, so what is
+	 * checked here is the wiring it hangs on — the named form it submits, the guard
+	 * that intercepts the live case, and that Publish is not guarded.
+	 */
+	it('guards the way back out of live, and only that direction', () => {
+		expect(source).toContain('id="visibility-form"');
+		expect(source).toContain('data-testid="unpublish-dialog"');
+		expect(source).toContain('data-testid="unpublish-confirm"');
+		expect(source).toContain('form="visibility-form"');
+		// Publishing returns before the guard: one click, undoable from this screen.
+		expect(source).toContain('if (!published) return;');
+		expect(source).toContain('confirmUnpublish = true;');
+		// The sentence has one home (`unpublish-warning.ts`), not two.
+		expect(source).toContain('unpublishWarning(data.conference.slug');
 	});
 
 	/**

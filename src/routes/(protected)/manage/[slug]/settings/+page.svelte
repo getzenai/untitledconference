@@ -9,6 +9,16 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { MAX_MINUTES } from '$lib/conference/structure-lines';
+	import { unpublishWarning } from '$lib/conference/unpublish-warning';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import DatePicker from '$lib/components/app/date-picker.svelte';
@@ -58,8 +68,10 @@
 	const published = $derived(data.conference.status === 'published');
 	const archived = $derived(data.conference.status === 'archived');
 	const listed = $derived(data.conference.listedPublicly);
+	const warning = $derived(unpublishWarning(data.conference.slug, data.callOpen ?? false));
 
 	let busy = $state(false);
+	let confirmUnpublish = $state(false);
 	let roomsExpanded = $state(false);
 	let tracksExpanded = $state(false);
 	let formatsExpanded = $state(false);
@@ -425,7 +437,7 @@
 						</form>
 					{/if}
 				{:else}
-					<form method="POST" action="?/visibility" use:enhance={submitting}>
+					<form id="visibility-form" method="POST" action="?/visibility" use:enhance={submitting}>
 						<!-- The state we want, not "toggle": a tab left open on the old value would
 				     otherwise flip the conference the wrong way when it is submitted. -->
 						<input type="hidden" name="published" value={published ? 'false' : 'true'} />
@@ -435,6 +447,14 @@
 							variant={published ? 'outline' : 'default'}
 							disabled={busy}
 							data-testid="visibility-submit"
+							onclick={(event: MouseEvent) => {
+								// Publishing needs no guard — it is the state you can undo from the
+								// screen you are standing on. Unpublishing is the one that lands
+								// somewhere else (#452), so it asks first.
+								if (!published) return;
+								event.preventDefault();
+								confirmUnpublish = true;
+							}}
 						>
 							{published ? 'Return to draft' : 'Publish'}
 						</Button>
@@ -1086,3 +1106,45 @@
 		</section>
 	</div>
 </div>
+
+<!--
+	#452: unpublishing is the one control on this page whose damage lands out of
+	sight — the organizer stays here, the public site and the CFP form go dark. The
+	dialog names both, and names the speakers mid-proposal when the call is open.
+	Publishing keeps its single click: it is undoable from this same screen.
+
+	The confirm button reaches the form through `form=`, not through a click
+	handler, because the dialog content is portalled out of the form's subtree.
+	Without JavaScript the trigger stays a plain submit button and the switch still
+	works — the guard is an enhancement, not the mechanism.
+-->
+{#if published}
+	<AlertDialog bind:open={confirmUnpublish}>
+		<AlertDialogContent data-testid="unpublish-dialog">
+			<AlertDialogHeader>
+				<AlertDialogTitle>Take {data.conference.name} offline?</AlertDialogTitle>
+				<AlertDialogDescription>
+					{warning.consequence}
+					<span class="mt-2 block"
+						>Goes dark: <code class="text-foreground">{warning.url}</code></span
+					>
+					{#if warning.inFlight}
+						<span class="text-foreground mt-2 block">{warning.inFlight}</span>
+					{/if}
+				</AlertDialogDescription>
+			</AlertDialogHeader>
+			<AlertDialogFooter>
+				<AlertDialogCancel data-testid="unpublish-cancel">Keep it live</AlertDialogCancel>
+				<Button
+					type="submit"
+					form="visibility-form"
+					variant="destructive"
+					disabled={busy}
+					data-testid="unpublish-confirm"
+				>
+					Return to draft
+				</Button>
+			</AlertDialogFooter>
+		</AlertDialogContent>
+	</AlertDialog>
+{/if}
