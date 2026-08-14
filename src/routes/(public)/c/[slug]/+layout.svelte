@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import CallBanner from '$lib/components/app/conference/call-banner.svelte';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
+	import ScrollEdge from '$lib/components/app/conference/scroll-edge.svelte';
 	import { EMBEDDABLE_SURFACES } from '$lib/conference/embed';
 	import { formatDateRange } from '$lib/conference/public-view';
 
@@ -89,24 +90,30 @@
 				<ModeToggle class="-mr-2" />
 			</div>
 
-			<nav aria-label="Conference sections" class="mx-auto max-w-6xl overflow-x-auto px-6">
-				<ul class="-mb-px flex gap-6 text-sm whitespace-nowrap">
-					{#each surfaces as surface (surface.path)}
-						{@const current = isCurrent(surface.path)}
-						<li>
-							<a
-								href={base + surface.path}
-								aria-current={current ? 'page' : undefined}
-								class="hover:text-foreground -mb-px block border-b-2 py-3 transition-colors {current
-									? 'border-primary text-foreground font-medium'
-									: 'text-muted-foreground border-transparent'}"
-							>
-								{surface.label}
-							</a>
-						</li>
-					{/each}
-				</ul>
-			</nav>
+			<!-- The tab that falls off a 390 px screen is "Call for papers" — the way in
+			     for the person the whole site is trying to attract. The banner above is
+			     a second way there and it has a dismiss button, so once it is gone this
+			     strip is the only one. -->
+			<ScrollEdge class="mx-auto max-w-6xl" data-testid="conference-tabs">
+				<nav aria-label="Conference sections" class="px-6">
+					<ul class="-mb-px flex gap-6 text-sm whitespace-nowrap">
+						{#each surfaces as surface (surface.path)}
+							{@const current = isCurrent(surface.path)}
+							<li>
+								<a
+									href={base + surface.path}
+									aria-current={current ? 'page' : undefined}
+									class="hover:text-foreground -mb-px block border-b-2 py-3 transition-colors {current
+										? 'border-primary text-foreground font-medium'
+										: 'text-muted-foreground border-transparent'}"
+								>
+									{surface.label}
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</nav>
+			</ScrollEdge>
 		</header>
 	{/if}
 

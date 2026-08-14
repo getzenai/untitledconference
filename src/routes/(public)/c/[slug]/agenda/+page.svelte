@@ -3,6 +3,7 @@
 	import SpeakerAvatar from '$lib/components/app/conference/speaker-avatar.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import ScrollEdge from '$lib/components/app/conference/scroll-edge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		buildView,
@@ -215,7 +216,11 @@
 			action={{ href: `/c/${view.conference.slug}`, label: 'Browse all sessions →' }}
 		/>
 	{:else}
-		<div class="overflow-x-auto">
+		<!-- Four rooms are 652 px wide and a phone shows 342 of them. Without an edge
+		     the grid ends flush and reads as the whole programme, which is the worst
+		     kind of wrong: the visitor is not confused, they are confident and mistaken
+		     about how many talks run at 11:00 (#393). -->
+		<ScrollEdge data-testid="agenda-room-grid">
 			<!-- Room headings sit in their own row so the scrollable grid below can
 			     keep one clean row-per-half-hour arithmetic.
 
@@ -314,6 +319,6 @@
 					{/each}
 				</TooltipProvider>
 			</div>
-		</div>
+		</ScrollEdge>
 	{/if}
 {/if}
