@@ -8,7 +8,15 @@
 	let { children } = $props();
 </script>
 
-<Sidebar.Inset>
+<!--
+	`min-w-0` is load-bearing (#470). A flex item defaults to `min-width: auto`,
+	so one wide child — a table with an unbroken 600-character title in it — made
+	this column wider than the viewport, and the *document* scrolled sideways
+	instead of the table. The fixed sidebar then slid out of view and never came
+	back: "Dashboard" read "ashboard". The scroll belongs to the table's own box,
+	which `ScrollTable` already owns.
+-->
+<Sidebar.Inset class="min-w-0">
 	<AppShellHeader />
 	<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
 		{@render children()}

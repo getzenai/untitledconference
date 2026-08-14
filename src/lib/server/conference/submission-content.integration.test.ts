@@ -7,6 +7,7 @@
  * screen cannot enforce them: a submitted talk must keep an abstract, and every
  * accepted edit must leave behind what it replaced.
  */
+import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -169,6 +170,29 @@ describe('editing a talk as the organizer', () => {
 		});
 		expect((await storedContent(id)).title).toBe('Keeps its name');
 		expect(await revisions(id)).toHaveLength(0);
+	});
+
+	/**
+	 * #470: `maxlength` is a courtesy to a browser, not a rule. The 620-character
+	 * title that pushed Status and Notification off the submissions table for all
+	 * thirty rows came in through this function.
+	 */
+	it('refuses a title past the limit, and changes nothing', async () => {
+		const id = await addSubmission(conference, 'Keeps its name');
+
+		const result = await edit(conference.id, id, { title: 'x'.repeat(TALK_TITLE_MAX + 1) });
+
+		expect(result).toMatchObject({ ok: false, reason: 'invalid' });
+		expect((await storedContent(id)).title).toBe('Keeps its name');
+		expect(await revisions(id)).toHaveLength(0);
+	});
+
+	it('takes a title exactly at the limit', async () => {
+		const id = await addSubmission(conference, 'Keeps its name');
+		const title = 'x'.repeat(TALK_TITLE_MAX);
+
+		expect(await edit(conference.id, id, { title })).toEqual({ ok: true, changed: true });
+		expect((await storedContent(id)).title).toBe(title);
 	});
 
 	it('refuses to empty the abstract of a submitted talk', async () => {

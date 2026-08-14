@@ -27,6 +27,7 @@ import {
 	type AnswerContext,
 	type FieldDefinition
 } from '$lib/conference/form-definition';
+import { titleLengthError } from '$lib/conference/proposal-limits';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import {
@@ -289,6 +290,10 @@ function validateForSubmit(
 ) {
 	const errors: Record<string, string> = {};
 	if (!input.title.trim()) errors.title = 'A title is required.';
+	else {
+		const tooLong = titleLengthError(input.title);
+		if (tooLong) errors.title = tooLong;
+	}
 	// A question that is not asked is never required. The abstract is the only
 	// built-in that both is required and can be removed — the other two required
 	// ones identify the speaker and cannot be.
@@ -765,13 +770,13 @@ async function refuseSave(
 		if (Object.keys(errors).length > 0 || Object.keys(fieldErrors).length > 0) {
 			return { ok: false, reason: 'invalid', errors, fieldErrors };
 		}
-	} else if (!input.title.trim()) {
-		return {
-			ok: false,
-			reason: 'invalid',
-			errors: { title: 'A title is required.' },
-			fieldErrors: {}
-		};
+	} else {
+		// A draft is allowed to be unfinished, but not unbounded: a saved draft is
+		// already rendered in the organizer's table (#470).
+		const titleError = !input.title.trim() ? 'A title is required.' : titleLengthError(input.title);
+		if (titleError) {
+			return { ok: false, reason: 'invalid', errors: { title: titleError }, fieldErrors: {} };
+		}
 	}
 
 	if (options.submissionId !== undefined) {

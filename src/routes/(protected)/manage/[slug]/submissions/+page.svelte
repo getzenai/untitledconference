@@ -771,10 +771,17 @@
 										onchange={() => toggle(submission.id)}
 									/>
 								</td>
-								<td class="py-2 pr-4">
+								<!--
+									Capped and truncated (#470). One long title used to set the
+									width of this column for all thirty rows and push Status and
+									Notification off the screen. The full text is one hover or one
+									click away; the other rows are not worth spending for it.
+								-->
+								<td class="max-w-[26rem] py-2 pr-4">
 									<a
 										href="{base}/submissions/{submission.id}"
-										class="focus-visible:ring-ring font-medium hover:underline focus-visible:ring-[3px] focus-visible:outline-none"
+										title={submission.title}
+										class="focus-visible:ring-ring block truncate font-medium hover:underline focus-visible:ring-[3px] focus-visible:outline-none"
 									>
 										{submission.title}
 									</a>

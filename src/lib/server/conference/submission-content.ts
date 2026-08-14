@@ -26,6 +26,7 @@
  * BEFORE it. Someone rewriting another person's words without a trace is the part of
  * this feature that needs a receipt, not the writing itself.
  */
+import { titleLengthError } from '$lib/conference/proposal-limits';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -77,6 +78,11 @@ function rejections(
 	const errors: Record<string, string> = {};
 
 	if (!next.title) errors.title = 'A title is required.';
+	// The organizer's edit box was the way the 620-character title got in (#470).
+	else {
+		const tooLong = titleLengthError(next.title);
+		if (tooLong) errors.title = tooLong;
+	}
 	// Deleting the speaker's abstract, not merely lacking one: a talk that reached
 	// `submitted` through the CFP form always had one, so an empty field there is an
 	// edit that removes it. A talk that somehow has none already is not made worse by

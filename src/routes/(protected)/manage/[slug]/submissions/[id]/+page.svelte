@@ -11,6 +11,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import {
 		describeDecision,
 		describeNotification,
@@ -232,7 +233,13 @@
 				>
 					<div class="space-y-1">
 						<Label for="talk-title">Title</Label>
-						<Input id="talk-title" name="title" value={draft.title} required />
+						<Input
+							id="talk-title"
+							name="title"
+							value={draft.title}
+							required
+							maxlength={TALK_TITLE_MAX}
+						/>
 						{#if form?.contentErrors?.title}
 							<p class="text-status-bad text-sm" role="alert">{form.contentErrors.title}</p>
 						{/if}

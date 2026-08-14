@@ -13,6 +13,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -80,6 +81,7 @@
 		autoSubmit = false
 	}: Props = $props();
 
+	let title = $state(initial.title);
 	let sessionFormatId = $state(initial.sessionFormatId);
 	let trackId = $state(initial.trackId);
 	let answers = $state<Record<number, string>>({ ...initial.answers });
@@ -198,9 +200,21 @@
 				name="title"
 				class="mt-1"
 				required
-				value={initial.title}
+				maxlength={TALK_TITLE_MAX}
+				bind:value={title}
 				aria-invalid={Boolean(form?.errors?.title)}
 			/>
+			<!--
+				The count shows up near the ceiling and not before (#470). A counter on
+				every field from the first keystroke is noise on a title nobody was ever
+				going to make long; a limit you meet without warning is the surprise
+				this is here to prevent.
+			-->
+			{#if title.length > TALK_TITLE_MAX - 40}
+				<span class="text-muted-foreground mt-1 block text-xs" data-testid="title-count">
+					{title.length} / {TALK_TITLE_MAX} characters
+				</span>
+			{/if}
 			{#if form?.errors?.title}
 				<span class="text-status-bad mt-1 block text-xs">{form.errors.title}</span>
 			{/if}
