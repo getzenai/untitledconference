@@ -21,10 +21,13 @@ const conference = {
 };
 
 const emptyDashboard = {
+	mode: 'measure' as const,
+	setup: { rooms: 2, tracks: 2, cfpOpen: true, submissions: 1 },
 	decisions: { undecided: 0, unreviewed: 0, items: [] },
 	scheduling: { accepted: 0, unplaced: 0, tentative: 0, items: [] },
 	tasks: { open: 0, overdue: 0, dueSoon: 0, items: [] },
 	mail: { queued: 0, sent: 0, failed: 0, items: [] },
+	reviews: { assigned: 0, submitted: 0, outstanding: 0, items: [] },
 	inconsistencies: { count: 0, items: [] },
 	submissionsOverTime: []
 };
@@ -541,5 +544,72 @@ describe('mail panel', () => {
 		const body = mailPage({ configured: true, queued: 0, mailMessage: '3 sent' });
 
 		expect(body).toContain('data-testid="mail-panel-copy">3 sent');
+	});
+});
+
+/**
+ * #473. A brand-new conference used to render the same dashboard drained of
+ * numbers. Day one is a different screen; the flip is `dashboardMode`, not a
+ * feeling about how empty the tiles look.
+ */
+describe('day one is a different screen', () => {
+	const layout = {
+		user: { id: 'organizer-1', name: 'Jordan' },
+		speakerProfile: false,
+		impersonating: null,
+		analytics: { apiKey: undefined, host: undefined },
+		conference,
+		mailDeliveryConfigured: true
+	};
+
+	function renderDash(
+		over: Partial<Omit<typeof emptyDashboard, 'mode'>> & { mode?: 'setup' | 'measure' }
+	) {
+		return render(Page, {
+			props: {
+				data: { ...layout, dashboard: { ...emptyDashboard, ...over } } as PageData,
+				form: null
+			}
+		}).body;
+	}
+
+	it('shows the three setup steps when there is nothing to measure', () => {
+		const body = renderDash({
+			mode: 'setup',
+			setup: { rooms: 0, tracks: 0, cfpOpen: false, submissions: 0 }
+		});
+
+		expect(body).toContain('data-testid="dashboard-setup"');
+		expect(body).toContain('Set up this event');
+		expect(body).toContain('0 rooms');
+		expect(body).toContain('0 tracks');
+		expect(body).toContain('Closed');
+		expect(body).toContain('Add rooms');
+		expect(body).not.toContain('data-testid="dashboard-metrics"');
+		expect(body).not.toContain('Nothing is waiting on you right now.');
+		expect(body).not.toContain('Open the submissions table');
+	});
+
+	it('keeps the dashboard once a submission exists', () => {
+		const body = renderDash({
+			mode: 'measure',
+			setup: { rooms: 0, tracks: 0, cfpOpen: false, submissions: 1 }
+		});
+
+		expect(body).toContain('data-testid="dashboard-metrics"');
+		expect(body).not.toContain('data-testid="dashboard-setup"');
+		expect(body).toContain('Open the submissions table');
+	});
+
+	it('names each step from the counts the server sent', () => {
+		const body = renderDash({
+			mode: 'setup',
+			setup: { rooms: 2, tracks: 1, cfpOpen: false, submissions: 0 }
+		});
+
+		expect(body).toContain('2 rooms');
+		expect(body).toContain('1 track');
+		expect(body).toContain('Open the call');
+		expect(body).toContain('Structure is ready');
 	});
 });

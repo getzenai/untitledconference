@@ -39,6 +39,8 @@ const conference = {
 };
 
 const emptyDashboard = {
+	mode: 'measure' as const,
+	setup: { rooms: 2, tracks: 2, cfpOpen: true, submissions: 1 },
 	decisions: { undecided: 0, unreviewed: 0, items: [] },
 	tasks: { open: 0, overdue: 0, dueSoon: 0, items: [] },
 	mail: { queued: 0, sent: 0, failed: 0, items: [] },

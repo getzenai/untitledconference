@@ -5,6 +5,9 @@
 	 * Deliberately not three static role cards. The harness (and a real user)
 	 * lands here and needs to see *their* work — not a starter template that
 	 * asks "where do you want to go?". Empty is a real state with a next step.
+	 *
+	 * New event is the header action (#473). Speaker sourcing stays on the card
+	 * below — it used to be the loudest button on the page and it duplicated it.
 	 */
 	import { formatInstant } from '$lib/conference/deadline';
 	import { reviewQueueHref } from '$lib/conference/nav-access';
@@ -83,7 +86,11 @@
 				<p class="text-muted-foreground mt-1 text-sm">Welcome</p>
 			{/if}
 		</div>
-		{#if hub?.canSourcing}
+		{#if hub?.canCreateEvent}
+			<Button href="/manage/new" variant="act" size="sm" data-testid="home-new-event">
+				New event
+			</Button>
+		{:else if hub?.canSourcing}
 			<Button href="/contacts" variant="outline" size="sm">Speaker sourcing</Button>
 		{/if}
 	</div>
@@ -194,16 +201,6 @@
 							</li>
 						{/each}
 					</ul>
-					{#if hub.canCreateEvent}
-						<p class="mt-3">
-							<a
-								href="/manage/new"
-								class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
-							>
-								New event
-							</a>
-						</p>
-					{/if}
 				{/if}
 			</section>
 		{/snippet}

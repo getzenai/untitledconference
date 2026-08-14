@@ -15,10 +15,20 @@
  *   This runs on every visit to the organizer's landing page; it may not grow a term
  *   with the size of the tables.
  */
+import { callWindow } from '$lib/conference/call-window';
+import { dashboardMode, type DashboardMode } from '$lib/conference/dashboard-mode';
 import { classifyAcceptedTalk, type PlacementSlot } from '$lib/conference/program-states';
 import { db } from '$lib/server/db';
-import { submissionTable, type Submission } from '$lib/server/db/conference/cfp-schema';
-import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import {
+	cfpFormTable,
+	submissionTable,
+	type Submission
+} from '$lib/server/db/conference/cfp-schema';
+import {
+	roomTable,
+	speakerProfileTable,
+	trackTable
+} from '$lib/server/db/conference/conference-schema';
 import { taskTable } from '$lib/server/db/conference/content-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
@@ -115,7 +125,17 @@ export type SubmissionDay = {
 /** How far back the submissions chart looks. */
 export const TIMELINE_DAYS = 30;
 
+export type DashboardSetup = {
+	rooms: number;
+	tracks: number;
+	cfpOpen: boolean;
+	submissions: number;
+};
+
 export type DashboardSnapshot = {
+	/** `setup` while `submissions === 0`; see `dashboardMode`. */
+	mode: DashboardMode;
+	setup: DashboardSetup;
 	decisions: {
 		undecided: number;
 		unreviewed: number;
@@ -157,8 +177,9 @@ export async function conferenceDashboard(
 	conferenceId: number,
 	at: Date = new Date()
 ): Promise<DashboardSnapshot> {
-	const [decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime] =
+	const [setup, decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime] =
 		await Promise.all([
+			setupState(conferenceId, at),
 			decisionQueue(conferenceId),
 			schedulingGap(conferenceId),
 			taskLoad(conferenceId, at),
@@ -168,7 +189,56 @@ export async function conferenceDashboard(
 			submissionTimeline(conferenceId, at)
 		]);
 
-	return { decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime };
+	return {
+		mode: dashboardMode(setup.submissions),
+		setup,
+		decisions,
+		scheduling,
+		tasks,
+		mail,
+		reviews,
+		inconsistencies,
+		submissionsOverTime
+	};
+}
+
+/**
+ * The three setup steps the create form already names, plus the count that
+ * decides whether this snapshot is still that screen.
+ *
+ * CFP is open the same way a submitter would see it: a published form whose
+ * window includes `at`. No form, a draft, or a closed window is closed.
+ */
+async function setupState(conferenceId: number, at: Date): Promise<DashboardSetup> {
+	const [[rooms], [tracks], [submissions], [form]] = await Promise.all([
+		db.select({ n: count() }).from(roomTable).where(eq(roomTable.conferenceId, conferenceId)),
+		db.select({ n: count() }).from(trackTable).where(eq(trackTable.conferenceId, conferenceId)),
+		db
+			.select({ n: count() })
+			.from(submissionTable)
+			.where(eq(submissionTable.conferenceId, conferenceId)),
+		db
+			.select({
+				status: cfpFormTable.status,
+				opensAt: cfpFormTable.opensAt,
+				closesAt: cfpFormTable.closesAt
+			})
+			.from(cfpFormTable)
+			.where(eq(cfpFormTable.conferenceId, conferenceId))
+			.orderBy(asc(cfpFormTable.id))
+			.limit(1)
+	]);
+
+	const cfpOpen = form
+		? callWindow(form.opensAt, form.closesAt, form.status !== 'published', at) === 'open'
+		: false;
+
+	return {
+		rooms: Number(rooms?.n ?? 0),
+		tracks: Number(tracks?.n ?? 0),
+		cfpOpen,
+		submissions: Number(submissions?.n ?? 0)
+	};
 }
 
 /**

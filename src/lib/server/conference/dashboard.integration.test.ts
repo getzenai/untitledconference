@@ -7,14 +7,20 @@
  * Every test therefore seeds a second conference in the same organization and expects
  * to see none of it.
  */
+import { dashboardMode } from '$lib/conference/dashboard-mode';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	cfpFormTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceDayTable,
 	conferenceTable,
 	roomTable,
 	speakerProfileTable,
+	trackTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
@@ -544,5 +550,59 @@ describe('submissions over time', () => {
 
 		// Everything outside the window is dropped rather than piled onto the first day.
 		expect(days.reduce((sum, d) => sum + d.count, 0)).toBe(3);
+	});
+});
+
+/**
+ * #473. The flip is `dashboardMode(submissions)` — not "does this look empty".
+ * A dedicated conference so rooms added by the scheduling tests cannot leak in.
+ */
+describe('day one is a different screen', () => {
+	let bare: Conference;
+	let structured: Conference;
+
+	beforeAll(async () => {
+		[bare] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Bare Conf', slug: `${suffix}-bare` })
+			.returning();
+		[structured] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Structured Conf', slug: `${suffix}-structured` })
+			.returning();
+
+		await db.insert(roomTable).values({ conferenceId: structured.id, name: 'Hall A', position: 0 });
+		await db
+			.insert(trackTable)
+			.values({ conferenceId: structured.id, name: 'Research', position: 0 });
+		await db.insert(cfpFormTable).values({
+			conferenceId: structured.id,
+			title: 'Call for papers',
+			status: 'published'
+		});
+	});
+
+	it('a conference with no rooms, tracks or submissions is the setup screen', async () => {
+		await db.delete(submissionTable).where(eq(submissionTable.conferenceId, bare.id));
+
+		const empty = await conferenceDashboard(bare.id, NOW);
+
+		expect(empty.setup).toEqual({ rooms: 0, tracks: 0, cfpOpen: false, submissions: 0 });
+		expect(empty.mode).toBe('setup');
+		expect(dashboardMode(empty.setup.submissions)).toBe('setup');
+
+		await addSubmission(bare, 'First talk in', 'submitted');
+		const withData = await conferenceDashboard(bare.id, NOW);
+
+		expect(withData.setup.submissions).toBe(1);
+		expect(withData.mode).toBe('measure');
+		expect(dashboardMode(withData.setup.submissions)).toBe('measure');
+	});
+
+	it('rooms, tracks and an open call do not flip the screen by themselves', async () => {
+		const snap = await conferenceDashboard(structured.id, NOW);
+
+		expect(snap.setup).toEqual({ rooms: 1, tracks: 1, cfpOpen: true, submissions: 0 });
+		expect(snap.mode).toBe('setup');
 	});
 });
