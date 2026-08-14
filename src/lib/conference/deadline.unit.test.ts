@@ -73,7 +73,24 @@ describe('callHint', () => {
 		);
 	});
 
+	/**
+	 * Berlin, not UTC, because that is the case the sentence is about — and the
+	 * abbreviation floats with the season (CET in winter, CEST in summer) since
+	 * there is no stored deadline here to pin it to a moment. The claim under test
+	 * is the second half of the sentence, not which of the two labels comes out.
+	 */
 	it('names the zone alone while the field is still empty', () => {
-		expect(callHint(null, 'UTC')).toBe("Times are UTC, your browser's zone");
+		expect(callHint(null, 'Europe/Berlin')).toMatch(/^Times are CES?T, your browser's zone$/);
+	});
+
+	/**
+	 * The server render cannot know where the reader sits, so it must not say it
+	 * does. Before `onMount` every screen is on `SERVER_ZONE`, and an organizer in
+	 * Berlin would otherwise read "Times are UTC, your browser's zone" — false, on
+	 * the one field this module exists to stop lying about.
+	 */
+	it('does not call the fallback zone the reader’s own', () => {
+		expect(callHint(null, 'UTC')).toBe('Times are UTC.');
+		expect(callHint(null, 'UTC')).not.toContain('browser');
 	});
 });
