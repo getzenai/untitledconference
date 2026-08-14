@@ -166,6 +166,37 @@
 	let formEl = $state<HTMLFormElement | undefined>();
 
 	/**
+	 * Built-in fields that can fail, split where the organizer questions sit.
+	 *
+	 * A single walk would put the speaker errors above the questions that
+	 * made the speaker click. Labels are not unique — two copied fields
+	 * share a sentence — so the each-block keys on `selector`, not the text.
+	 */
+	const TALK_ERROR_FIELDS = [
+		['title', '[name="title"]'],
+		['abstract', '[name="abstract"]']
+	] as const;
+	const ABOUT_ERROR_FIELDS = [
+		['speakerName', '[name="speakerName"]'],
+		['speakerEmail', '[name="speakerEmail"]'],
+		['coSpeakerEmail', '[name="co-email"]']
+	] as const;
+
+	type ErrorItem = { message: string; selector: string };
+
+	function collectFixedErrors(
+		errors: Record<string, string>,
+		fields: readonly (readonly [string, string])[]
+	): ErrorItem[] {
+		const items: ErrorItem[] = [];
+		for (const [key, selector] of fields) {
+			const message = errors[key];
+			if (message) items.push({ message, selector });
+		}
+		return items;
+	}
+
+	/**
 	 * What a rejected submit has to say, in the order the form asks it (#493).
 	 *
 	 * The server already names the missing organizer question. The form used to
@@ -175,29 +206,22 @@
 	 * top; the first selector is where focus goes.
 	 */
 	const errorItems = $derived.by(() => {
-		const items: { message: string; selector: string }[] = [];
 		const errors = form?.errors ?? {};
 		const fieldErrors = form?.fieldErrors ?? {};
-		if (errors.title) items.push({ message: errors.title, selector: '[name="title"]' });
-		if (errors.abstract) items.push({ message: errors.abstract, selector: '[name="abstract"]' });
+		const custom: ErrorItem[] = [];
 		for (const field of shown) {
 			const message = fieldErrors[field.id];
 			if (!message) continue;
-			items.push({
+			custom.push({
 				message,
 				selector: `[name="answer:${field.id}"], [data-testid="app-select-answer:${field.id}"]`
 			});
 		}
-		if (errors.speakerName) {
-			items.push({ message: errors.speakerName, selector: '[name="speakerName"]' });
-		}
-		if (errors.speakerEmail) {
-			items.push({ message: errors.speakerEmail, selector: '[name="speakerEmail"]' });
-		}
-		if (errors.coSpeakerEmail) {
-			items.push({ message: errors.coSpeakerEmail, selector: '[name="co-email"]' });
-		}
-		return items;
+		return [
+			...collectFixedErrors(errors, TALK_ERROR_FIELDS),
+			...custom,
+			...collectFixedErrors(errors, ABOUT_ERROR_FIELDS)
+		];
 	});
 
 	let focusedErrors = $state('');
@@ -265,7 +289,7 @@
 		>
 			<p class="text-sm font-medium">This proposal cannot be submitted yet.</p>
 			<ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
-				{#each errorItems as item (item.message)}
+				{#each errorItems as item (item.selector)}
 					<li>{item.message}</li>
 				{/each}
 			</ul>

@@ -211,6 +211,42 @@ describe('the proposal form', () => {
 		expect(html.match(/Have you given this talk before\? is required\./g)?.length).toBe(2);
 	});
 
+	it('lists two required questions that share a label (#493)', () => {
+		const field = (id: number) => ({
+			id,
+			label: 'Anything else?',
+			kind: 'short_text' as const,
+			required: true,
+			position: id,
+			options: null,
+			conditionSource: null,
+			conditionFieldId: null,
+			conditionValue: null
+		});
+		const html = render(ProposalForm, {
+			props: {
+				fields: [field(9), field(10)],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: true,
+				form: {
+					errors: {},
+					fieldErrors: {
+						9: 'Anything else? is required.',
+						10: 'Anything else? is required.'
+					}
+				}
+			}
+		}).body;
+
+		// Keyed on the field, not the sentence: two copied labels used to throw
+		// `each_key_duplicate` here — including in the production build.
+		expect(html).toContain('data-testid="proposal-errors"');
+		expect(html.match(/Anything else\? is required\./g)?.length).toBe(4);
+	});
+
 	it('stays quiet when nothing is wrong', () => {
 		expect(body(null)).not.toContain('data-testid="proposal-errors"');
 		expect(body(null)).not.toContain('cannot be submitted yet');
