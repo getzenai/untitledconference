@@ -3,6 +3,7 @@ import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/auth-schema';
 import { createLogger } from '$lib/server/logger';
 import { takeInvitationLink } from '$lib/server/services/invitation-link';
+import { invalidatePasswordResetTokensForEmail } from '$lib/server/services/invitation-token';
 import { createSystemInvitation, listAllInvitations } from '$lib/server/services/system-invitation';
 import { fail } from '@sveltejs/kit';
 import { generateRandomString } from 'better-auth/crypto';
@@ -291,7 +292,11 @@ export const actions: Actions = {
 		}
 
 		try {
-			// Trigger password reset and poll for link
+			// Replace a leaked link, not a lost one (#401). Drop the previous
+			// reset tokens before Better Auth writes the new row, otherwise
+			// both links complete registration until the old one expires.
+			await invalidatePasswordResetTokensForEmail(email);
+
 			const invitationLink = await triggerInvitationLink(email, request.headers);
 
 			if (!invitationLink) {
@@ -301,7 +306,7 @@ export const actions: Actions = {
 					action: 'regenerateInvitation',
 					success: true,
 					invitationLink: null,
-					message: 'Invitation regenerated. The link will be available shortly.'
+					message: 'Invitation regenerated. The previous link no longer works.'
 				};
 			}
 

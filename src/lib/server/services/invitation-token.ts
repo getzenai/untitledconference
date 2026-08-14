@@ -17,7 +17,7 @@
  */
 import { db } from '$lib/server/db';
 import { systemInvitation, user, verification } from '$lib/server/db/auth-schema';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { normalizeEmail } from './email-address';
 
 /** Better Auth's key prefix for password-reset tokens. */
@@ -66,4 +66,50 @@ export async function resolveInvitationEmail(
 		.limit(1);
 
 	return invitation ? row.email : null;
+}
+
+/**
+ * Drop every live password-reset token for this user.
+ *
+ * Better Auth keeps each `reset-password:<token>` row until its own
+ * `expiresAt`. Regenerating an invitation therefore used to leave the
+ * previous link working — fine if the mail was lost, wrong if the link
+ * leaked. The regenerate button means the second thing (#401): the old
+ * token has to die before the new one is minted.
+ *
+ * Only `reset-password:` rows. Email-verification and anything else that
+ * happens to store this user id as `value` stay. The prefix is matched
+ * in process, not with SQL LIKE: this file exists because a user-supplied
+ * LIKE pattern on this table was an oracle.
+ */
+export async function invalidatePasswordResetTokens(userId: string): Promise<void> {
+	const rows = await db
+		.select({ id: verification.id, identifier: verification.identifier })
+		.from(verification)
+		.where(eq(verification.value, userId));
+
+	const ids = rows
+		.filter((row) => row.identifier.startsWith(RESET_TOKEN_PREFIX))
+		.map((row) => row.id);
+
+	if (ids.length === 0) return;
+
+	await db.delete(verification).where(inArray(verification.id, ids));
+}
+
+/**
+ * Same as `invalidatePasswordResetTokens`, looked up by the address the
+ * admin form sent. No-op when no user has that email — the caller still
+ * has to create the new token, and Better Auth already treats an unknown
+ * address as a silent success.
+ */
+export async function invalidatePasswordResetTokensForEmail(rawEmail: string): Promise<void> {
+	const [row] = await db
+		.select({ id: user.id })
+		.from(user)
+		.where(eq(user.email, normalizeEmail(rawEmail)))
+		.limit(1);
+
+	if (!row) return;
+	await invalidatePasswordResetTokens(row.id);
 }
