@@ -407,3 +407,138 @@ describe('auto-place hint (#231)', () => {
 		expect(body).not.toContain('Nothing already on the grid moves.');
 	});
 });
+
+/**
+ * #497 — the organizer's publish state has to match what `/c/.../agenda` serves.
+ *
+ * A mixed board (some confirmed, some tentative) used to look like a draft:
+ * the only sentence was "Publish the agenda", while the public page already
+ * showed the confirmed talks. Unpublish was the same filled button as Publish,
+ * so once the programme was live the loudest control took it down. And a
+ * declined talk kept the published green.
+ */
+describe('agenda public state (#497)', () => {
+	const talk = (
+		id: number,
+		status: BoardSession['status'],
+		over: Partial<BoardSession> = {}
+	): BoardSession => ({
+		placementId: id,
+		submissionId: id,
+		title: `Talk ${id}`,
+		kind: 'session',
+		status,
+		submissionStatus: 'accepted',
+		trackName: null,
+		formatName: 'Talk',
+		minutes: 30,
+		dayId: 1,
+		roomId: 1,
+		startMinutes: 540 + (id - 1) * 30,
+		endMinutes: 570 + (id - 1) * 30,
+		speakers: ['Ada'],
+		...over
+	});
+
+	const breakSlot = (): BoardSession => ({
+		placementId: 90,
+		submissionId: null,
+		title: 'Lunch',
+		kind: 'block',
+		status: 'confirmed',
+		submissionStatus: null,
+		trackName: null,
+		formatName: null,
+		minutes: 60,
+		dayId: 1,
+		roomId: null,
+		startMinutes: 720,
+		endMinutes: 780,
+		speakers: []
+	});
+
+	it('says how many sessions the public can already see, including a mixed board', () => {
+		const mixed = renderWith(1, 1, { placed: [talk(1, 'confirmed'), talk(2, 'tentative')] });
+		expect(mixed).toContain('data-testid="agenda-public-state"');
+		expect(mixed).toContain('The public agenda shows 1 of 2 sessions.');
+		expect(mixed).toContain('Publish the agenda');
+		expect(mixed).not.toContain('Unpublish the agenda');
+
+		const live = renderWith(1, 1, { placed: [talk(1, 'confirmed'), talk(2, 'confirmed')] });
+		expect(live).toContain('The public agenda shows 2 sessions.');
+		expect(live).toContain('Unpublish the agenda');
+
+		const draft = renderWith(1, 1, { placed: [talk(1, 'tentative')] });
+		expect(draft).toContain('The public cannot see these slots yet.');
+		expect(draft).toContain('Publish the agenda');
+	});
+
+	it('does not let a confirmed break pretend the talks are live', () => {
+		const body = renderWith(1, 1, { placed: [talk(1, 'tentative'), breakSlot()] });
+
+		expect(body).toContain('The public cannot see these slots yet.');
+		expect(body).toContain('Publish the agenda');
+		expect(body).not.toContain('Unpublish the agenda');
+	});
+
+	it('fills Publish and outlines Unpublish', () => {
+		const publishButton = (html: string) => {
+			const mark = html.indexOf('data-testid="agenda-publish"');
+			expect(mark).toBeGreaterThan(-1);
+			return html.slice(html.lastIndexOf('<button', mark), mark);
+		};
+
+		const draft = publishButton(renderWith(1, 1, { placed: [talk(1, 'tentative')] }));
+		expect(draft).toContain('bg-primary');
+		expect(draft).not.toContain('bg-background');
+
+		const live = publishButton(renderWith(1, 1, { placed: [talk(1, 'confirmed')] }));
+		expect(live).toContain('bg-background');
+		expect(live).not.toContain('bg-primary');
+	});
+
+	it('names what went live, the way auto-place already names what it placed', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					board: {
+						days: [{ id: 1, date: '2027-05-10', position: 0 }],
+						rooms: [{ id: 1, name: 'Room 1', position: 0 }],
+						tracks: [],
+						formats: [],
+						placed: [talk(1, 'confirmed')],
+						tray: [],
+						conflicts: []
+					},
+					slots: [{ minutes: 540, label: '09:00' }]
+				},
+				form: { published: true, changed: 1 }
+			} as never
+		}).body;
+
+		expect(body).toContain('data-testid="agenda-publish-result"');
+		expect(body).toContain('The public agenda now shows 1 session.');
+	});
+
+	it('does not dress a declined talk in the published green, and does not stack the clock on the label', () => {
+		const body = renderWith(1, 1, {
+			placed: [talk(1, 'confirmed', { submissionStatus: 'rejected', title: 'A declined keynote' })]
+		});
+
+		expect(body).toContain('data-testid="rejected-placement-badge"');
+		expect(body).toContain('Declined');
+		expect(body).toMatch(/data-testid="agenda-placed-session"[^>]*border-status-warn/);
+		expect(body).not.toMatch(/data-testid="agenda-placed-session"[^>]*border-status-good/);
+		// The range used to share the declined line's pixels on a short card.
+		const cardStart = body.indexOf('data-testid="agenda-placed-session"');
+		const cardEnd = body.indexOf('</button>', cardStart);
+		const card = body.slice(cardStart, cardEnd);
+		expect(card).not.toContain('09:00–09:30');
+		expect(card).toContain('Declined');
+	});
+});
