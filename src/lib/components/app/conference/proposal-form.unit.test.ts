@@ -176,6 +176,82 @@ describe('the proposal form', () => {
 		expect(html).toContain('Talk (30 min)');
 	});
 
+	it('names the missing organizer question at the top of the form (#493)', () => {
+		const html = render(ProposalForm, {
+			props: {
+				fields: [
+					{
+						id: 9,
+						label: 'Have you given this talk before?',
+						kind: 'boolean',
+						required: true,
+						position: 0,
+						options: null,
+						conditionSource: null,
+						conditionFieldId: null,
+						conditionValue: null
+					}
+				],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: true,
+				form: {
+					errors: {},
+					fieldErrors: { 9: 'Have you given this talk before? is required.' }
+				}
+			}
+		}).body;
+
+		expect(html).toContain('data-testid="proposal-errors"');
+		expect(html).toContain('This proposal cannot be submitted yet.');
+		expect(html).toContain('Have you given this talk before? is required.');
+		// The same sentence stays on the field — the summary is not a replacement.
+		expect(html.match(/Have you given this talk before\? is required\./g)?.length).toBe(2);
+	});
+
+	it('lists two required questions that share a label (#493)', () => {
+		const field = (id: number) => ({
+			id,
+			label: 'Anything else?',
+			kind: 'short_text' as const,
+			required: true,
+			position: id,
+			options: null,
+			conditionSource: null,
+			conditionFieldId: null,
+			conditionValue: null
+		});
+		const html = render(ProposalForm, {
+			props: {
+				fields: [field(9), field(10)],
+				fixed: fixedQuestionVisibility(null),
+				formats: [],
+				tracks: [],
+				initial: emptyProposal(),
+				signedIn: true,
+				form: {
+					errors: {},
+					fieldErrors: {
+						9: 'Anything else? is required.',
+						10: 'Anything else? is required.'
+					}
+				}
+			}
+		}).body;
+
+		// Keyed on the field, not the sentence: two copied labels used to throw
+		// `each_key_duplicate` here — including in the production build.
+		expect(html).toContain('data-testid="proposal-errors"');
+		expect(html.match(/Anything else\? is required\./g)?.length).toBe(4);
+	});
+
+	it('stays quiet when nothing is wrong', () => {
+		expect(body(null)).not.toContain('data-testid="proposal-errors"');
+		expect(body(null)).not.toContain('cannot be submitted yet');
+	});
+
 	it('keeps a space before the required marker on a custom question', () => {
 		// Svelte trims a text node that opens a block, so `{#if required} *</span>`
 		// used to render as "know?*". A non-breaking space survives the trim.

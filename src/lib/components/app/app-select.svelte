@@ -32,6 +32,7 @@
 		disabled = false,
 		required = false,
 		'aria-label': ariaLabel,
+		'aria-invalid': ariaInvalid,
 		testId,
 		title,
 		onValueChange
@@ -48,6 +49,7 @@
 		disabled?: boolean;
 		required?: boolean;
 		'aria-label'?: string;
+		'aria-invalid'?: boolean;
 		/**
 		 * Overrides the derived `app-select-<name>` hook.
 		 *
@@ -88,6 +90,7 @@
 		{size}
 		{title}
 		aria-label={ariaLabel}
+		aria-invalid={ariaInvalid ? true : undefined}
 		data-testid={testId ?? (name ? `app-select-${name}` : undefined)}
 		class={cn('w-full justify-between font-normal', !label && 'text-muted-foreground', className)}
 	>
