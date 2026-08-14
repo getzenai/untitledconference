@@ -18,7 +18,7 @@ import {
 	submissionTable
 } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { load } from './+page.server';
 
@@ -32,7 +32,7 @@ const draftOnly = new Date('2028-09-09T09:09:00.000Z');
 let conferenceId = 0;
 let submissionId = 0;
 
-type Loaded = { closesAt: Date | null };
+type Loaded = { closesAt: Date | null; callState: string; closedByOrganizer: boolean };
 
 const visit = async (): Promise<Loaded> =>
 	(await load({
@@ -127,5 +127,22 @@ describe('the close instant on a proposal', () => {
 
 		expect(data.closesAt?.toISOString()).toBe(announced.toISOString());
 		expect(data.closesAt?.toISOString()).not.toBe(draftOnly.toISOString());
+		expect(data.callState).toBe('open');
+		expect(data.closedByOrganizer).toBe(false);
+	});
+
+	it('treats a status-closed call as closed even when the date is still ahead (#514)', async () => {
+		await db
+			.update(cfpFormTable)
+			.set({ status: 'closed' })
+			.where(
+				and(eq(cfpFormTable.conferenceId, conferenceId), eq(cfpFormTable.status, 'published'))
+			);
+
+		const data = await visit();
+
+		expect(data.closesAt?.toISOString()).toBe(announced.toISOString());
+		expect(data.callState).toBe('closed');
+		expect(data.closedByOrganizer).toBe(true);
 	});
 });

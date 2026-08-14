@@ -1,3 +1,4 @@
+import { callWindow, type CallWindow } from '$lib/conference/call-window';
 import { mySubmission } from '$lib/server/conference/speaker-portal';
 import { db } from '$lib/server/db';
 import { cfpFormTable } from '$lib/server/db/conference/cfp-schema';
@@ -17,16 +18,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const submission = await mySubmission(locals.user.id, id);
 	if (!submission) error(404, 'No such proposal');
 
-	// The close instant lives on the call, not the proposal. Speakers used to
-	// be told only "before the call closes" — the date sat exclusively on the
-	// editor (#498). Read it here so a draft names the moment without a second
-	// trip through `/edit`.
-	//
 	// Same row `openCall` / `publishedFormFor` resolve: announced (`published`
 	// or `closed`), oldest first. A draft is the organizer's next call and must
 	// not name a date nobody announced — precise and wrong is worse than vague.
 	const [call] = await db
-		.select({ closesAt: cfpFormTable.closesAt })
+		.select({
+			status: cfpFormTable.status,
+			opensAt: cfpFormTable.opensAt,
+			closesAt: cfpFormTable.closesAt
+		})
 		.from(cfpFormTable)
 		.where(
 			and(
@@ -37,5 +37,20 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.orderBy(asc(cfpFormTable.id))
 		.limit(1);
 
-	return { submission, closesAt: call?.closesAt ?? null };
+	// The same question the edit loader asks (`openCall` then `state !== 'open'`).
+	// A date in the future is not enough: the organizer can close by status
+	// while `closes_at` still sits ahead, and `/edit` then sends the speaker
+	// straight back here (#514). No announced form, or a conference that is
+	// no longer public, is the same answer — not editable.
+	const callState: CallWindow =
+		submission.conferenceStatus === 'published' && call
+			? callWindow(call.opensAt, call.closesAt, call.status === 'closed', new Date())
+			: 'closed';
+
+	return {
+		submission,
+		closesAt: call?.closesAt ?? null,
+		callState,
+		closedByOrganizer: call?.status === 'closed'
+	};
 };

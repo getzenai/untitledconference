@@ -30,9 +30,20 @@ const submission = (over: Partial<Record<string, unknown>> = {}) => ({
 	...over
 });
 
-const draw = (over: Partial<Record<string, unknown>> = {}, closesAt: Date | null = null) =>
+const draw = (
+	over: Partial<Record<string, unknown>> = {},
+	closesAt: Date | null = null,
+	call: { callState?: 'open' | 'not_yet_open' | 'closed'; closedByOrganizer?: boolean } = {}
+) =>
 	render(Page, {
-		props: { data: { submission: submission(over), closesAt } } as never
+		props: {
+			data: {
+				submission: submission(over),
+				closesAt,
+				callState: call.callState ?? 'open',
+				closedByOrganizer: call.closedByOrganizer ?? false
+			}
+		} as never
 	}).body;
 
 describe('speaker submission detail', () => {
@@ -78,6 +89,26 @@ describe('speaker submission detail', () => {
 
 		expect(body).toContain(`/portal/submissions/${submission().id}/edit`);
 		expect(body).not.toContain('Editing closed');
+	});
+
+	it('does not promise an edit the loader would bounce (#514)', () => {
+		const closed = draw({ status: 'in_review' }, new Date('2027-02-15T23:59:00.000Z'), {
+			callState: 'closed',
+			closedByOrganizer: true
+		});
+
+		expect(closed).toContain('The organizers have closed this call.');
+		expect(closed).toContain('Editing closed');
+		expect(closed).not.toContain('until 15 Feb 2027');
+		expect(closed).not.toContain(`/portal/submissions/${submission().id}/edit`);
+
+		const early = draw({ status: 'draft' }, new Date('2027-02-15T23:59:00.000Z'), {
+			callState: 'not_yet_open'
+		});
+		expect(early).toContain('The call is not open yet.');
+		expect(early).toContain('Editing closed');
+		expect(early).not.toContain(`/portal/submissions/${submission().id}/edit`);
+		expect(early).not.toContain('any time before 15 Feb 2027');
 	});
 
 	it('names the close instant and the receipt zone (#498)', () => {
