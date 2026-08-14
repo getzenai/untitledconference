@@ -26,10 +26,24 @@ export function toCalendarDate(value: string | null | undefined): CalendarDate |
 	return new CalendarDate(year, month, day);
 }
 
-const formatter = new DateFormatter('en-US', { dateStyle: 'medium' });
+/**
+ * Day-first and 24-hour, matching `formatInstant` (#468).
+ *
+ * The picker trigger and the status line beneath it show the same timestamp, so
+ * they cannot each pick a locale: `/manage/:conf/rounds` printed "Aug 9, 2026,
+ * 5:23 PM" in the input and "9 Aug 2026, 17:23" four inches below it. This is
+ * the shape both use now. No zone is named here on purpose — the picker holds
+ * wall time the organizer typed, not an instant, and `formatInstant` is what
+ * renders the stored moment beside it.
+ */
+const formatter = new DateFormatter('en-GB', {
+	day: 'numeric',
+	month: 'short',
+	year: 'numeric'
+});
 
 /**
- * The label on the trigger — "May 12, 2027" — or an empty string.
+ * The label on the trigger — "12 May 2027" — or an empty string.
  *
  * `toDate` is given the local zone so that the day formatted is the day
  * selected; a fixed zone would move the label across midnight for anyone not
@@ -73,10 +87,14 @@ export function joinDayTime(day: string, time: string): string {
 	return `${day}T${time}`;
 }
 
-const clock = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' });
+const clock = new Intl.DateTimeFormat('en-GB', {
+	hour: '2-digit',
+	minute: '2-digit',
+	hour12: false
+});
 
 /**
- * The label on the trigger — "May 12, 2027, 9:00 AM" — or an empty string.
+ * The label on the trigger — "12 May 2027, 09:00" — or an empty string.
  *
  * The clock is formatted from a fixed reference day so that the hour shown is
  * the hour typed; only the calendar half needs the local zone.

@@ -33,7 +33,7 @@ describe('what the date picker posts', () => {
 	});
 
 	it('shows the day in words and the placeholder when there is none', () => {
-		expect(html({ name: 'startsOn', value: '2027-05-12' })).toContain('May 12, 2027');
+		expect(html({ name: 'startsOn', value: '2027-05-12' })).toContain('12 May 2027');
 		expect(html({ name: 'startsOn', value: '', placeholder: 'Pick a date' })).toContain(
 			'Pick a date'
 		);

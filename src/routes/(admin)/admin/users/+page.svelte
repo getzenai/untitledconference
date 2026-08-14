@@ -875,7 +875,11 @@
 									{/if}
 								</TableCell>
 								<TableCell>
-									{new Date(user.createdAt).toLocaleDateString()}
+									{new Date(user.createdAt).toLocaleDateString('en-GB', {
+										day: 'numeric',
+										month: 'short',
+										year: 'numeric'
+									})}
 								</TableCell>
 								<TableCell class="text-right">
 									{#if user.id !== currentUser?.id}
@@ -986,10 +990,18 @@
 										</div>
 									</TableCell>
 									<TableCell>
-										{new Date(invitation.expiresAt).toLocaleDateString()}
+										{new Date(invitation.expiresAt).toLocaleDateString('en-GB', {
+											day: 'numeric',
+											month: 'short',
+											year: 'numeric'
+										})}
 									</TableCell>
 									<TableCell>
-										{new Date(invitation.createdAt).toLocaleDateString()}
+										{new Date(invitation.createdAt).toLocaleDateString('en-GB', {
+											day: 'numeric',
+											month: 'short',
+											year: 'numeric'
+										})}
 									</TableCell>
 									<TableCell>
 										<div class="flex items-center gap-2">

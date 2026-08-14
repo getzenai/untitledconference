@@ -14,6 +14,8 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { callWindow } from '$lib/conference/call-window';
+	import { formatInstant, zoneLabel } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import {
@@ -143,6 +145,21 @@
 		if (!form || form.status !== 'published') return null;
 		return callWindow(form.opensAt, form.closesAt, false, new Date());
 	});
+
+	/**
+	 * The zone the pickers above are typing in, and the stored instant read back
+	 * in it (#468).
+	 *
+	 * `DateTimePicker` posts wall time and `saveSettings` converts it with the
+	 * browser's offset, so the organizer has always been typing in their own
+	 * zone — the screen just never said which, and the speaker's page said a
+	 * different day. The line under each picker is that missing sentence.
+	 */
+	const zone = readerZone();
+	const deadlineHint = (value: Date | string | null) =>
+		value
+			? `${formatInstant(value, zone.current)} — speakers see this moment on their own clock`
+			: `Times are ${zoneLabel(zone.current)}, your browser's zone`;
 
 	const YES_NO_OPTIONS = [
 		{ value: '', label: '—' },
@@ -353,6 +370,7 @@
 								placeholder="No opening date"
 								class="mt-1"
 							/>
+							<span class="mt-1 block">{deadlineHint(data.form.opensAt)}</span>
 						</div>
 						<div class="text-muted-foreground text-xs">
 							<label for="cfp-closes-at">Closes — after this, submissions and edits lock</label>
@@ -363,6 +381,7 @@
 								placeholder="No closing date"
 								class="mt-1"
 							/>
+							<span class="mt-1 block">{deadlineHint(data.form.closesAt)}</span>
 						</div>
 						<label class="text-muted-foreground text-xs sm:col-span-2">
 							What submitters should know before they start

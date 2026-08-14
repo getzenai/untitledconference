@@ -42,9 +42,7 @@ describe('what the datetime picker posts', () => {
 	});
 
 	it('shows the moment in words and the placeholder when there is none', () => {
-		expect(html({ name: 'closesAt', value: '2027-02-15T23:59' })).toContain(
-			'Feb 15, 2027, 11:59 PM'
-		);
+		expect(html({ name: 'closesAt', value: '2027-02-15T23:59' })).toContain('15 Feb 2027, 23:59');
 		expect(html({ name: 'closesAt', placeholder: 'No closing date' })).toContain('No closing date');
 	});
 });
@@ -70,8 +68,11 @@ describe('the moment a stored value stands for', () => {
 	});
 
 	it('reads back the hour that was typed, not the hour a zone shifts it to', () => {
-		expect(formatDayTime('2027-02-15T00:30')).toBe('Feb 15, 2027, 12:30 AM');
-		expect(formatDayTime('2027-02-15')).toBe('Feb 15, 2027');
+		// Day-first and 24-hour, the shape `formatInstant` prints beneath the
+		// picker (#468): the same timestamp used to read "Aug 9, 2026, 5:23 PM" in
+		// the trigger and "9 Aug 2026, 17:23" in the status line below it.
+		expect(formatDayTime('2027-02-15T00:30')).toBe('15 Feb 2027, 00:30');
+		expect(formatDayTime('2027-02-15')).toBe('15 Feb 2027');
 		expect(formatDayTime('')).toBe('');
 	});
 });

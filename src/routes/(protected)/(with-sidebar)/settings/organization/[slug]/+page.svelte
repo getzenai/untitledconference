@@ -475,7 +475,10 @@
 									</Badge>
 								</TableCell>
 								<TableCell>
-									{new Date(invitation.expiresAt as string | number | Date).toLocaleDateString()}
+									{new Date(invitation.expiresAt as string | number | Date).toLocaleDateString(
+										'en-GB',
+										{ day: 'numeric', month: 'short', year: 'numeric' }
+									)}
 								</TableCell>
 								<TableCell class="text-right">
 									<div class="flex items-center justify-end gap-2">
