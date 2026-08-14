@@ -1,0 +1,1 @@
+ALTER TABLE "system_invitation" DROP COLUMN "reset_link";

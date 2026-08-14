@@ -15,7 +15,6 @@ export interface SystemInvitationResponse {
 	email: string;
 	invitedBy: string;
 	role: string;
-	resetLink?: string | null;
 }
 
 export async function createSystemInvitation(
@@ -123,37 +122,4 @@ export async function listAllInvitations() {
 			expiresAt
 		};
 	});
-}
-
-/**
- * Poll the database for an invitation link with timeout
- * @param invitationId - The ID of the invitation to poll for
- * @param maxAttempts - Maximum number of polling attempts (default: 10)
- * @param intervalMs - Milliseconds between attempts (default: 200ms)
- * @returns The reset link if found, null if timeout
- */
-export async function pollForInvitationLink(
-	invitationId: string,
-	maxAttempts = 10,
-	intervalMs = 200
-): Promise<string | null> {
-	for (let i = 0; i < maxAttempts; i++) {
-		const [invitation] = await db
-			.select()
-			.from(systemInvitation)
-			.where(eq(systemInvitation.id, invitationId))
-			.limit(1);
-
-		if (invitation?.resetLink) {
-			// Return the stored link as-is (Better Auth URL)
-			return invitation.resetLink;
-		}
-
-		// Don't wait after the last attempt
-		if (i < maxAttempts - 1) {
-			await new Promise((resolve) => setTimeout(resolve, intervalMs));
-		}
-	}
-
-	return null;
 }

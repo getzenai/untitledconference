@@ -1,7 +1,5 @@
-import { db } from '$lib/server/db';
-import * as schema from '$lib/server/db/auth-schema';
 import { createLogger } from '$lib/server/logger';
-import { like } from 'drizzle-orm';
+import { resolveInvitationEmail } from '$lib/server/services/invitation-token';
 import { superValidate } from 'sveltekit-superforms';
 import { zod4 } from 'sveltekit-superforms/adapters';
 import type { PageServerLoad } from './$types';
@@ -22,36 +20,23 @@ export const load: PageServerLoad = async ({ url }) => {
 	// Pre-fill the token in the form
 	(form.data as { token?: string }).token = token;
 
-	// Validate the token and get the email
+	// The email is only known to a caller who already holds the exact token.
+	// See `resolveInvitationEmail` for why this is not a search.
 	let email = '';
 	let isValidToken = false;
 
 	if (token) {
 		try {
-			// Find the invitation by token in the resetLink path
-			// The URL format is: /api/auth/reset-password/{token}?callbackURL=...
-			const invitations = await db
-				.select()
-				.from(schema.systemInvitation)
-				.where(like(schema.systemInvitation.resetLink, `%/reset-password/${token}?%`))
-				.limit(1);
-
-			if (invitations.length > 0) {
-				email = invitations[0].email;
+			const resolved = await resolveInvitationEmail(token);
+			if (resolved) {
+				email = resolved;
 				isValidToken = true;
-				logger.info('Valid invitation token found', {
-					email,
-					tokenPrefix: token.substring(0, 8) + '...'
-				});
+				logger.info('Valid invitation token found', { email });
 			} else {
-				logger.warn('Invalid or expired invitation token', {
-					tokenPrefix: token.substring(0, 8) + '...'
-				});
+				logger.warn('Invalid or expired invitation token');
 			}
 		} catch (error) {
-			logger.error('Error validating invitation token', error as Error, {
-				tokenPrefix: token.substring(0, 8) + '...'
-			});
+			logger.error('Error validating invitation token', error as Error);
 		}
 	}
 

@@ -2,11 +2,8 @@ import { auth } from '$lib/auth';
 import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/auth-schema';
 import { createLogger } from '$lib/server/logger';
-import {
-	createSystemInvitation,
-	listAllInvitations,
-	pollForInvitationLink
-} from '$lib/server/services/system-invitation';
+import { takeInvitationLink } from '$lib/server/services/invitation-link';
+import { createSystemInvitation, listAllInvitations } from '$lib/server/services/system-invitation';
 import { fail } from '@sveltejs/kit';
 import { generateRandomString } from 'better-auth/crypto';
 import { desc, eq } from 'drizzle-orm';
@@ -14,9 +11,16 @@ import type { Actions, PageServerLoad } from './$types';
 
 const logger = createLogger('AdminUsers');
 
-// Helper function to trigger password reset and poll for link
-async function triggerInvitationLink(email: string, invitationId: string, headers: Headers) {
-	// Trigger password reset with invitation-specific callback
+/**
+ * Generate an invitation link and take it back.
+ *
+ * `requestPasswordReset` awaits `sendResetPassword`, which hands the URL to
+ * `captureInvitationLink` — so by the time this resolves the link is waiting
+ * in memory. Null means the callback did not run (a fork that configured
+ * `advanced.backgroundTasks`), and the caller says so rather than showing a
+ * link it does not have.
+ */
+async function triggerInvitationLink(email: string, headers: Headers) {
 	await auth.api.requestPasswordReset({
 		body: {
 			email,
@@ -25,14 +29,7 @@ async function triggerInvitationLink(email: string, invitationId: string, header
 		headers
 	});
 
-	// Poll for the link (max 6 seconds)
-	const invitationLink = await pollForInvitationLink(
-		invitationId,
-		30, // max attempts
-		200 // 200ms between attempts
-	);
-
-	return invitationLink;
+	return takeInvitationLink(email);
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -109,7 +106,7 @@ export const actions: Actions = {
 
 		try {
 			// 1. Create invitation record
-			const invitation = await createSystemInvitation({
+			await createSystemInvitation({
 				email,
 				invitedBy: locals.user.id,
 				role: role || 'user'
@@ -128,7 +125,7 @@ export const actions: Actions = {
 			});
 
 			// 3. Trigger password reset and poll for link
-			const invitationLink = await triggerInvitationLink(email, invitation.id, request.headers);
+			const invitationLink = await triggerInvitationLink(email, request.headers);
 
 			if (!invitationLink) {
 				// Link generation is still in progress, but the invitation was created successfully
@@ -295,7 +292,7 @@ export const actions: Actions = {
 
 		try {
 			// Trigger password reset and poll for link
-			const invitationLink = await triggerInvitationLink(email, invitationId, request.headers);
+			const invitationLink = await triggerInvitationLink(email, request.headers);
 
 			if (!invitationLink) {
 				// Link generation is still in progress

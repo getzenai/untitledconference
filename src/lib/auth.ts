@@ -24,6 +24,7 @@ import {
 	generateVerificationEmailContent,
 	sendEmail
 } from './server/services/email-service';
+import { captureInvitationLink } from './server/services/invitation-link';
 import { markInvitationAsAccepted } from './server/services/system-invitation';
 
 const logger = createLogger('Auth');
@@ -37,20 +38,25 @@ function isInvitation(url: string): boolean {
 }
 
 /**
- * Stores invitation reset link in database
+ * Hands a freshly generated invitation link to the admin action that asked for
+ * it, and records that it was generated.
+ *
+ * The link carries a live reset token, so it is passed in memory (see
+ * `invitation-link.ts`) and never written to a column. The row keeps only the
+ * timestamp the invitations list shows.
  */
-async function storeInvitationResetLink(email: string, url: string) {
+async function handOffInvitationLink(email: string, url: string) {
+	captureInvitationLink(email, url);
 	await db
 		.update(schema.systemInvitation)
 		.set({
-			resetLink: url,
 			lastGeneratedAt: new Date(),
 			updatedAt: new Date()
 		})
 		.where(
 			and(eq(schema.systemInvitation.email, email), isNull(schema.systemInvitation.acceptedAt))
 		);
-	logger.info('Invitation link stored', { email });
+	logger.info('Invitation link generated', { email });
 }
 
 /**
@@ -264,7 +270,7 @@ function createAuth() {
 			resetPasswordTokenExpiresIn: INVITATION_EXPIRY_SECONDS,
 			sendResetPassword: async ({ user, url }) => {
 				if (isInvitation(url)) {
-					await storeInvitationResetLink(user.email, url);
+					await handOffInvitationLink(user.email, url);
 				} else {
 					await sendPasswordResetEmail(user.email, url);
 				}
