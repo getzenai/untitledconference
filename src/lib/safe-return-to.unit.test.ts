@@ -23,6 +23,16 @@ describe('safeReturnTo', () => {
 		expect(safeReturnTo('javascript:alert(1)', ORIGIN)).toBe('/home');
 	});
 
+	it('rejects a same-origin URL whose pathname is protocol-relative', () => {
+		// Origin matches; pathname is still `//evil.com`.
+		expect(safeReturnTo(`${ORIGIN}//evil.com`, ORIGIN)).toBe('/home');
+	});
+
+	it('rejects a path whose backslash becomes a slash during resolve', () => {
+		// After URL parsing there is no `\` left to find.
+		expect(safeReturnTo('/./\\evil.com', ORIGIN)).toBe('/home');
+	});
+
 	it('keeps a same-origin path with query and hash', () => {
 		expect(safeReturnTo('/review/example/1?round=2#score', ORIGIN)).toBe(
 			'/review/example/1?round=2#score'
