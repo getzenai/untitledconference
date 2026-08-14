@@ -10,7 +10,8 @@ import {
 	submissionTotals
 } from '$lib/server/conference/organizer-submissions';
 import {
-	assignReviewerToSubmissions,
+	assignReviewersToSubmissions,
+	autoDistributeReviews,
 	conferenceAssignmentTargets
 } from '$lib/server/conference/review-management';
 import { parseSort } from '$lib/server/conference/submission-sort';
@@ -98,35 +99,68 @@ export const actions: Actions = {
 	/**
 	 * Bulk reviewer assignment on the selection (ABS-06).
 	 *
-	 * Same selection as decide/notify; round + reviewer come from the bulk bar.
-	 * Existing rows stay put; ineligible pairs are skipped with a count rather than
-	 * aborting the batch.
+	 * Same selection as decide/notify; round + one or more reviewers come from
+	 * the bulk bar. Existing rows stay put; ineligible pairs are skipped with a
+	 * count rather than aborting the batch.
 	 */
 	assign: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const form = await request.formData();
 		const ids = selectedIds(form);
 		const roundId = Number(form.get('roundId'));
-		const reviewerUserId = form.get('reviewerUserId');
+		const reviewerUserIds = form
+			.getAll('reviewerUserId')
+			.filter((value): value is string => typeof value === 'string' && value !== '');
 
 		if (ids.length === 0) {
 			return fail(400, { message: 'Select at least one submission first.' });
 		}
-		if (
-			!Number.isInteger(roundId) ||
-			roundId <= 0 ||
-			typeof reviewerUserId !== 'string' ||
-			reviewerUserId === ''
-		) {
-			return fail(400, { message: 'Choose a review round and a reviewer.' });
+		if (!Number.isInteger(roundId) || roundId <= 0 || reviewerUserIds.length === 0) {
+			return fail(400, { message: 'Choose a review round and at least one reviewer.' });
 		}
 
-		const assignResult = await assignReviewerToSubmissions(
+		const assignResult = await assignReviewersToSubmissions(
 			conference.id,
 			ids,
 			roundId,
-			reviewerUserId
+			reviewerUserIds
 		);
+		return { assignResult };
+	},
+
+	/**
+	 * Load-balanced fill: each selected submission up to N reviewers, no reviewer
+	 * over the cap. Recusals, speaker conflicts and track allow-lists stay shut.
+	 */
+	distribute: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const form = await request.formData();
+		const ids = selectedIds(form);
+		const roundId = Number(form.get('roundId'));
+		const reviewsPerSubmission = Number(form.get('reviewsPerSubmission'));
+		const capPerReviewer = Number(form.get('capPerReviewer'));
+
+		if (ids.length === 0) {
+			return fail(400, { message: 'Select at least one submission first.' });
+		}
+		if (!Number.isInteger(roundId) || roundId <= 0) {
+			return fail(400, { message: 'Choose a review round.' });
+		}
+		if (
+			!Number.isInteger(reviewsPerSubmission) ||
+			reviewsPerSubmission < 1 ||
+			!Number.isInteger(capPerReviewer) ||
+			capPerReviewer < 1
+		) {
+			return fail(400, {
+				message: 'Set how many reviewers each talk needs, and the cap per reviewer.'
+			});
+		}
+
+		const assignResult = await autoDistributeReviews(conference.id, ids, roundId, {
+			reviewsPerSubmission,
+			capPerReviewer
+		});
 		return { assignResult };
 	}
 };

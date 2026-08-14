@@ -462,7 +462,9 @@ export type AssignSkipReason =
 	| 'not_on_conference'
 	| 'speaker_conflict'
 	| 'not_in_round'
-	| 'track_restricted';
+	| 'track_restricted'
+	/** Auto-distribute: the paper still needed a seat and nobody eligible was under the cap. */
+	| 'pool_exhausted';
 
 export type BulkAssignSkip = {
 	submissionId: number;
@@ -533,8 +535,24 @@ export async function assignReviewerToSubmissions(
 	roundId: number,
 	reviewerUserId: string
 ): Promise<BulkAssignResult> {
+	return assignReviewersToSubmissions(conferenceId, submissionIds, roundId, [reviewerUserId]);
+}
+
+/**
+ * Assign several reviewers to the same selection in one transaction.
+ *
+ * Same rules as the one-reviewer path, applied to every pair. A speaker conflict
+ * on reviewer A does not block reviewer B on that row.
+ */
+export async function assignReviewersToSubmissions(
+	conferenceId: number,
+	submissionIds: number[],
+	roundId: number,
+	reviewerUserIds: string[]
+): Promise<BulkAssignResult> {
 	const ids = [...new Set(submissionIds.filter((id) => Number.isInteger(id) && id > 0))];
-	if (ids.length === 0) return { ...EMPTY_BULK };
+	const reviewers = [...new Set(reviewerUserIds.filter((id) => id !== ''))];
+	if (ids.length === 0 || reviewers.length === 0) return { ...EMPTY_BULK };
 
 	return db.transaction(async (tx) => {
 		let created = 0;
@@ -543,21 +561,203 @@ export async function assignReviewerToSubmissions(
 		let recused = 0;
 		const skippedItems: BulkAssignSkip[] = [];
 
+		for (const reviewerUserId of reviewers) {
+			for (const submissionId of ids) {
+				const input = {
+					conferenceId,
+					submissionId,
+					roundId,
+					reviewerUserId,
+					assigned: true as const
+				};
+				const result = await updateAssignment(tx, input, { restoreRecused: false });
+				if (result === 'assigned') created += 1;
+				else if (result === 'unchanged' || result === 'complete') already += 1;
+				else if (result === 'recused') recused += 1;
+				else {
+					skipped += 1;
+					skippedItems.push({ submissionId, reason: await classifySkip(tx, input) });
+				}
+			}
+		}
+
+		return { created, already, skipped, recused, skippedItems };
+	});
+}
+
+export type DistributeOptions = {
+	/** Target number of active (non-recused) reviewers on each selected submission. */
+	reviewsPerSubmission: number;
+	/** Max active assignments a reviewer may hold in this round after the run. */
+	capPerReviewer: number;
+};
+
+/**
+ * Fill each selected submission up to N reviewers, load-balancing under a cap.
+ *
+ * Recusals, speaker conflicts and track allow-lists are never overridden — the
+ * same gates as bulk assign. Existing active seats count toward N, so a second
+ * run is a no-op on papers that are already full. Reviewers at the cap are
+ * skipped rather than overflowing.
+ */
+export async function autoDistributeReviews(
+	conferenceId: number,
+	submissionIds: number[],
+	roundId: number,
+	options: DistributeOptions
+): Promise<BulkAssignResult> {
+	const ids = [...new Set(submissionIds.filter((id) => Number.isInteger(id) && id > 0))].sort(
+		(a, b) => a - b
+	);
+	const { reviewsPerSubmission, capPerReviewer } = options;
+	if (
+		ids.length === 0 ||
+		!Number.isInteger(reviewsPerSubmission) ||
+		reviewsPerSubmission < 1 ||
+		!Number.isInteger(capPerReviewer) ||
+		capPerReviewer < 1
+	) {
+		return { ...EMPTY_BULK };
+	}
+
+	const memberships = await conferenceReviewerMemberships(conferenceId, [roundId]);
+	const restrictions = await membershipTrackRestrictions(
+		memberships.map((row) => row.membershipId)
+	);
+	const pool = memberships.filter((membership) => belongsToRound(membership, roundId));
+
+	return db.transaction(async (tx) => {
+		const [round] = await tx
+			.select({ id: reviewRoundTable.id })
+			.from(reviewRoundTable)
+			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+			.where(
+				and(eq(reviewRoundTable.id, roundId), eq(evaluationPlanTable.conferenceId, conferenceId))
+			)
+			.limit(1);
+		if (!round) return { ...EMPTY_BULK };
+
+		const submissions = await tx
+			.select({ id: submissionTable.id, trackId: submissionTable.trackId })
+			.from(submissionTable)
+			.where(and(eq(submissionTable.conferenceId, conferenceId), inArray(submissionTable.id, ids)));
+		const onConference = new Map(submissions.map((row) => [row.id, row]));
+
+		const speakerRows = await tx
+			.select({
+				submissionId: submissionSpeakerTable.submissionId,
+				userId: speakerProfileTable.userId
+			})
+			.from(submissionSpeakerTable)
+			.innerJoin(
+				speakerProfileTable,
+				eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+			)
+			.where(inArray(submissionSpeakerTable.submissionId, ids));
+		const speakersBySubmission = new Map<number, Set<string>>();
+		for (const row of speakerRows) {
+			if (!row.userId) continue;
+			const set = speakersBySubmission.get(row.submissionId) ?? new Set();
+			set.add(row.userId);
+			speakersBySubmission.set(row.submissionId, set);
+		}
+
+		const existing = await tx
+			.select({
+				submissionId: reviewTable.submissionId,
+				userId: reviewTable.reviewerUserId,
+				status: reviewTable.status
+			})
+			.from(reviewTable)
+			.where(and(eq(reviewTable.reviewRoundId, roundId), inArray(reviewTable.submissionId, ids)));
+		const existingBySubmission = new Map<number, { userId: string; status: Review['status'] }[]>();
+		for (const row of existing) {
+			const list = existingBySubmission.get(row.submissionId) ?? [];
+			list.push({ userId: row.userId, status: row.status });
+			existingBySubmission.set(row.submissionId, list);
+		}
+
+		const loadRows = await tx
+			.select({
+				userId: reviewTable.reviewerUserId,
+				assigned: count()
+			})
+			.from(reviewTable)
+			.where(and(eq(reviewTable.reviewRoundId, roundId), ne(reviewTable.status, 'recused')))
+			.groupBy(reviewTable.reviewerUserId);
+		const load = new Map<string, number>();
+		for (const row of loadRows) load.set(row.userId, Number(row.assigned));
+
+		let created = 0;
+		let already = 0;
+		let skipped = 0;
+		let recused = 0;
+		const skippedItems: BulkAssignSkip[] = [];
+
 		for (const submissionId of ids) {
-			const input = {
-				conferenceId,
-				submissionId,
-				roundId,
-				reviewerUserId,
-				assigned: true as const
-			};
-			const result = await updateAssignment(tx, input, { restoreRecused: false });
-			if (result === 'assigned') created += 1;
-			else if (result === 'unchanged' || result === 'complete') already += 1;
-			else if (result === 'recused') recused += 1;
-			else {
+			const submission = onConference.get(submissionId);
+			if (!submission) {
 				skipped += 1;
-				skippedItems.push({ submissionId, reason: await classifySkip(tx, input) });
+				skippedItems.push({ submissionId, reason: 'not_on_conference' });
+				continue;
+			}
+
+			const seats = existingBySubmission.get(submissionId) ?? [];
+			const active = new Set(
+				seats.filter((seat) => seat.status !== 'recused').map((seat) => seat.userId)
+			);
+			const recusedIds = new Set(
+				seats.filter((seat) => seat.status === 'recused').map((seat) => seat.userId)
+			);
+			already += Math.min(active.size, reviewsPerSubmission);
+
+			const need = reviewsPerSubmission - active.size;
+			if (need <= 0) continue;
+
+			const speakers = speakersBySubmission.get(submissionId) ?? new Set();
+			const candidates = pool
+				.filter((membership) => {
+					if (active.has(membership.userId) || recusedIds.has(membership.userId)) return false;
+					if (speakers.has(membership.userId)) return false;
+					if (!membershipAllowsTrack(membership.membershipId, submission.trackId, restrictions)) {
+						return false;
+					}
+					return (load.get(membership.userId) ?? 0) < capPerReviewer;
+				})
+				.sort((a, b) => {
+					const loadDelta = (load.get(a.userId) ?? 0) - (load.get(b.userId) ?? 0);
+					return loadDelta !== 0 ? loadDelta : a.userId.localeCompare(b.userId);
+				});
+
+			let filled = 0;
+			for (const membership of candidates) {
+				if (filled >= need) break;
+				const input = {
+					conferenceId,
+					submissionId,
+					roundId,
+					reviewerUserId: membership.userId,
+					assigned: true as const
+				};
+				const result = await updateAssignment(tx, input, { restoreRecused: false });
+				if (result === 'assigned') {
+					created += 1;
+					filled += 1;
+					load.set(membership.userId, (load.get(membership.userId) ?? 0) + 1);
+					active.add(membership.userId);
+				} else if (result === 'unchanged' || result === 'complete') {
+					already += 1;
+					filled += 1;
+					active.add(membership.userId);
+				} else if (result === 'recused') {
+					recused += 1;
+				}
+			}
+
+			const short = need - filled;
+			if (short > 0) {
+				skipped += short;
+				skippedItems.push({ submissionId, reason: 'pool_exhausted' });
 			}
 		}
 

@@ -138,11 +138,14 @@ describe('organizer submission decisions', () => {
 
 		expect(body).toContain('data-testid="bulk-assign"');
 		expect(body).toContain('formaction="?/assign"');
-		expect(body).toContain('Assign reviewer');
+		expect(body).toContain('Assign reviewers');
+		expect(body).toContain('formaction="?/distribute"');
+		expect(body).toContain('Auto-distribute');
 		expect(body).toContain('data-testid="bulk-assign-round"');
-		expect(body).toContain('data-testid="bulk-assign-reviewer"');
+		expect(body).toContain('data-testid="bulk-assign-per-talk"');
+		expect(body).toContain('data-testid="bulk-assign-cap"');
 		expect(body).toContain('name="roundId"');
-		expect(body).toContain('name="reviewerUserId"');
+		// Reviewer checkboxes mount after a round is chosen — the E2E owns that.
 	});
 
 	it('hides bulk assign when the conference has no review rounds yet', () => {

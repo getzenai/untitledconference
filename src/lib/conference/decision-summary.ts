@@ -124,7 +124,7 @@ export function describeBulkAssign(result: {
 		);
 	}
 	if (result.skipped > 0) {
-		parts.push(`${plural(result.skipped, 'submission')} could not be assigned to that reviewer.`);
+		parts.push(`${plural(result.skipped, 'assignment')} skipped.`);
 	}
 	// Empty batch after a mis-click should still read as a completed action.
 	return parts.length > 0 ? parts.join(' ') : 'Nothing to assign.';

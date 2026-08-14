@@ -53,23 +53,28 @@
 	let allowDecision = false;
 	/** Round for bulk assignment; empty until the organizer picks one. */
 	let assignRoundId = $state('');
-	let assignReviewerId = $state('');
+	const assignReviewerIds = new SvelteSet<string>();
+	let reviewsPerSubmission = $state('2');
+	let capPerReviewer = $state('10');
 
 	const assignRoundOptions = $derived(
 		data.assignmentTargets.map((round) => ({ value: String(round.id), label: round.name }))
 	);
-	const assignReviewerOptions = $derived(
-		(
-			data.assignmentTargets.find((round) => String(round.id) === assignRoundId)?.reviewers ?? []
-		).map((reviewer) => ({
-			value: reviewer.userId,
-			label: `${reviewer.name} (${reviewer.email})`
-		}))
+	const assignReviewers = $derived(
+		data.assignmentTargets.find((round) => String(round.id) === assignRoundId)?.reviewers ?? []
 	);
 	const canBulkAssign = $derived(
 		selected.size > 0 &&
 			assignRoundId !== '' &&
-			assignReviewerId !== '' &&
+			assignReviewerIds.size > 0 &&
+			!busy &&
+			data.assignmentTargets.length > 0
+	);
+	const canDistribute = $derived(
+		selected.size > 0 &&
+			assignRoundId !== '' &&
+			Number.parseInt(reviewsPerSubmission, 10) > 0 &&
+			Number.parseInt(capPerReviewer, 10) > 0 &&
 			!busy &&
 			data.assignmentTargets.length > 0
 	);
@@ -498,59 +503,110 @@
 					</Button>
 					{#if data.assignmentTargets.length > 0}
 						<!--
-							Third bulk action (ABS-06): same selection as decide/notify, one
-							reviewer onto every marked row. Round first, then the committee
-							for that round — assignment still validates per submission
-							(speaker / track), so the picker can be conference-wide.
+							ABS-06 part A: same selection as decide/notify. Round first,
+							then any subset of that round's committee. Each pair still
+							validates (speaker / track / recusal); existing seats are
+							counted as skipped, not rewritten.
 						-->
 						<span class="bg-border mx-1 hidden h-5 w-px sm:block" aria-hidden="true"></span>
-						<div class="flex flex-wrap items-center gap-2" data-testid="bulk-assign">
-							<AppSelect
-								name="roundId"
-								size="sm"
-								class="w-40"
-								placeholder="Round"
-								aria-label="Review round for bulk assignment"
-								testId="bulk-assign-round"
-								value={assignRoundId}
-								options={assignRoundOptions}
-								onValueChange={(value) => {
-									assignRoundId = value;
-									// A reviewer from the previous round must not post under
-									// the new one just because their id string still sits in state.
-									assignReviewerId = '';
-								}}
-							/>
-							<!--
-								Remount when the round changes so the previous picker's
-								internal state cannot post a reviewer from the wrong round.
-							-->
-							{#key assignRoundId}
+						<div class="flex min-w-0 flex-col gap-2" data-testid="bulk-assign">
+							<div class="flex flex-wrap items-center gap-2">
 								<AppSelect
-									name="reviewerUserId"
+									name="roundId"
 									size="sm"
-									class="w-56"
-									placeholder="Reviewer"
-									aria-label="Reviewer to assign to selected submissions"
-									testId="bulk-assign-reviewer"
-									value={assignReviewerId}
-									options={assignReviewerOptions}
-									disabled={assignRoundId === '' || assignReviewerOptions.length === 0}
+									class="w-40"
+									placeholder="Round"
+									aria-label="Review round for bulk assignment"
+									testId="bulk-assign-round"
+									value={assignRoundId}
+									options={assignRoundOptions}
 									onValueChange={(value) => {
-										assignReviewerId = value;
+										assignRoundId = value;
+										// A reviewer from the previous round must not post under
+										// the new one just because their id string still sits in state.
+										assignReviewerIds.clear();
 									}}
 								/>
+								<Button
+									type="submit"
+									formaction="?/assign"
+									variant="secondary"
+									size="sm"
+									disabled={!canBulkAssign}
+									data-testid="bulk-assign-submit"
+								>
+									Assign reviewers
+								</Button>
+								<label class="text-muted-foreground flex items-center gap-1 text-sm">
+									<input
+										type="number"
+										name="reviewsPerSubmission"
+										min="1"
+										step="1"
+										class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
+										bind:value={reviewsPerSubmission}
+										data-testid="bulk-assign-per-talk"
+										aria-label="Reviewers per talk"
+									/>
+									each
+								</label>
+								<label class="text-muted-foreground flex items-center gap-1 text-sm">
+									cap
+									<input
+										type="number"
+										name="capPerReviewer"
+										min="1"
+										step="1"
+										class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
+										bind:value={capPerReviewer}
+										data-testid="bulk-assign-cap"
+										aria-label="Cap per reviewer"
+									/>
+								</label>
+								<Button
+									type="submit"
+									formaction="?/distribute"
+									variant="secondary"
+									size="sm"
+									disabled={!canDistribute}
+									data-testid="bulk-distribute-submit"
+								>
+									Auto-distribute
+								</Button>
+							</div>
+							<!--
+								Remount when the round changes so a checked box from the
+								previous committee cannot post under the new roundId.
+							-->
+							{#key assignRoundId}
+								{#if assignRoundId !== '' && assignReviewers.length > 0}
+									<fieldset
+										class="flex flex-wrap items-center gap-x-3 gap-y-1"
+										data-testid="bulk-assign-reviewers"
+									>
+										<legend class="sr-only">Reviewers to assign</legend>
+										{#each assignReviewers as reviewer (reviewer.userId)}
+											<label class="flex items-center gap-1.5 text-sm">
+												<input
+													type="checkbox"
+													name="reviewerUserId"
+													value={reviewer.userId}
+													class="border-input size-4 rounded"
+													checked={assignReviewerIds.has(reviewer.userId)}
+													onchange={(event) => {
+														if (event.currentTarget.checked) {
+															assignReviewerIds.add(reviewer.userId);
+														} else {
+															assignReviewerIds.delete(reviewer.userId);
+														}
+													}}
+												/>
+												<span>{reviewer.name}</span>
+											</label>
+										{/each}
+									</fieldset>
+								{/if}
 							{/key}
-							<Button
-								type="submit"
-								formaction="?/assign"
-								variant="secondary"
-								size="sm"
-								disabled={!canBulkAssign}
-								data-testid="bulk-assign-submit"
-							>
-								Assign reviewer
-							</Button>
 						</div>
 					{/if}
 				</div>
