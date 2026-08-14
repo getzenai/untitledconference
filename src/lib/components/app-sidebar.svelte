@@ -63,7 +63,7 @@
 	import NavUser from './nav-user.svelte';
 	import NavAdmin from './nav-admin.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import { visibleNavItems, type NavAccess } from '$lib/conference/nav-access';
+	import { reviewQueueHref, visibleNavItems, type NavAccess } from '$lib/conference/nav-access';
 	import type { ComponentProps } from 'svelte';
 
 	let {
@@ -79,7 +79,11 @@
 		navAccess: NavAccess;
 	} = $props();
 
-	const navMain = $derived(visibleNavItems(data.navMain, navAccess));
+	const navMain = $derived(
+		visibleNavItems(data.navMain, navAccess).map((item) =>
+			item.gate === 'reviewing' ? { ...item, url: reviewQueueHref(navAccess.reviewSlug) } : item
+		)
+	);
 
 	// Check if user is admin
 	const isAdmin = $derived(user?.role === 'admin');

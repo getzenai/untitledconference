@@ -27,7 +27,12 @@
 import type { NavAccess } from '$lib/conference/nav-access';
 import { db } from '$lib/server/db';
 import { member } from '$lib/server/db/auth-schema';
-import { membershipTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceTable,
+	membershipTable,
+	speakerProfileTable
+} from '$lib/server/db/conference/conference-schema';
+import { evaluationPlanTable, reviewRoundTable } from '$lib/server/db/conference/review-schema';
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 
 /** Better Auth's org-wide roles that imply organizer rights. Mirrors `access.ts`. */
@@ -39,11 +44,13 @@ const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
  * memberships.
  */
 export async function navAccess(userId: string, email: string | null): Promise<NavAccess> {
-	// One `Promise.all`, not three awaits: the driver pipelines concurrent
+	// One `Promise.all`, not a chain of awaits: the driver pipelines concurrent
 	// queries onto the single per-request connection, so this costs one
-	// database roundtrip instead of three — measured on this exact setup
-	// while chasing the public pages' latency.
-	const [[orgSeat], seats, profile] = await Promise.all([
+	// database roundtrip — measured on this exact setup while chasing the
+	// public pages' latency. The two slug lookups ride that same trip; they
+	// name `/review/<slug>` on the sidebar so the common reviewer does not
+	// pay `/review`'s 303 (#373).
+	const [[orgSeat], seats, profile, viaConference, viaRound] = await Promise.all([
 		db
 			.select({ id: member.id })
 			.from(member)
@@ -58,15 +65,41 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 					inArray(membershipTable.role, ['organizer', 'reviewer'])
 				)
 			),
-		hasSpeakerProfile(userId, email)
+		hasSpeakerProfile(userId, email),
+		db
+			.selectDistinct({ slug: conferenceTable.slug })
+			.from(membershipTable)
+			.innerJoin(conferenceTable, eq(conferenceTable.id, membershipTable.scopeId))
+			.where(
+				and(
+					eq(membershipTable.userId, userId),
+					eq(membershipTable.role, 'reviewer'),
+					eq(membershipTable.scopeType, 'conference')
+				)
+			),
+		db
+			.selectDistinct({ slug: conferenceTable.slug })
+			.from(membershipTable)
+			.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, membershipTable.scopeId))
+			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+			.innerJoin(conferenceTable, eq(conferenceTable.id, evaluationPlanTable.conferenceId))
+			.where(
+				and(
+					eq(membershipTable.userId, userId),
+					eq(membershipTable.role, 'reviewer'),
+					eq(membershipTable.scopeType, 'round')
+				)
+			)
 	]);
 
 	const orgWide = Boolean(orgSeat);
+	const slugs = [...new Set([...viaConference, ...viaRound].map((row) => row.slug))];
 
 	return {
 		conferences: orgWide || seats.some((s) => s.role === 'organizer'),
 		contacts: orgWide,
 		reviewing: seats.some((s) => s.role === 'reviewer'),
+		reviewSlug: slugs.length === 1 ? slugs[0] : null,
 		speakerProfile: profile
 	};
 }

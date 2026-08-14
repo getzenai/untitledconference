@@ -15,7 +15,7 @@ import {
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
 import { evaluationPlanTable, reviewRoundTable } from '$lib/server/db/conference/review-schema';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { navAccess } from './nav-access';
 
@@ -161,6 +161,7 @@ describe('navAccess', () => {
 			conferences: false,
 			contacts: false,
 			reviewing: false,
+			reviewSlug: null,
 			speakerProfile: false
 		});
 	});
@@ -170,6 +171,7 @@ describe('navAccess', () => {
 			conferences: true,
 			contacts: true,
 			reviewing: false,
+			reviewSlug: null,
 			speakerProfile: false
 		});
 	});
@@ -189,6 +191,7 @@ describe('navAccess', () => {
 			conferences: true,
 			contacts: false,
 			reviewing: false,
+			reviewSlug: null,
 			speakerProfile: false
 		});
 	});
@@ -214,7 +217,47 @@ describe('navAccess', () => {
 			conferences: false,
 			contacts: false,
 			reviewing: true,
+			reviewSlug: conference.slug,
 			speakerProfile: false
 		});
+	});
+
+	it('does not name a conference when the reviewer sits on two', async () => {
+		// The sidebar would otherwise have to pick one. Two seats keep `/review`,
+		// which is the list — the 303 is only for a list of one (#373).
+		const TWO = `two-${suffix}`;
+		await db.insert(user).values({
+			id: TWO,
+			name: TWO,
+			email: `${TWO}@example.com`,
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+		const [other] = await db
+			.insert(conferenceTable)
+			.values({
+				organizationId,
+				name: 'Other Conf',
+				slug: `other-${suffix}`,
+				startsOn: '2027-09-01'
+			})
+			.returning();
+		await db.insert(membershipTable).values([
+			{ userId: TWO, role: 'reviewer', scopeType: 'round', scopeId: roundId },
+			{ userId: TWO, role: 'reviewer', scopeType: 'conference', scopeId: other.id }
+		]);
+
+		expect(await navAccess(TWO, `${TWO}@example.com`)).toEqual({
+			conferences: false,
+			contacts: false,
+			reviewing: true,
+			reviewSlug: null,
+			speakerProfile: false
+		});
+
+		await db.delete(membershipTable).where(inArray(membershipTable.userId, [TWO]));
+		await db.delete(conferenceTable).where(eq(conferenceTable.id, other.id));
+		await db.delete(user).where(eq(user.id, TWO));
 	});
 });

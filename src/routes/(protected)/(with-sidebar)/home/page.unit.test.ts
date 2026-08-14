@@ -24,6 +24,10 @@ const emptyHub: HomeDashboard = {
 	reviewConferences: []
 };
 
+function queueHref(html: string) {
+	return html.match(/data-testid="home-review-queue-link"[^>]*href="([^"]+)"/)?.[1];
+}
+
 function body(
 	onboarding: null | {
 		pendingInvitationCount: number;
@@ -114,9 +118,34 @@ describe('home hub', () => {
 		expect(html).toContain('Reviews waiting');
 		expect(html).toContain('Shipping faster with agents');
 		expect(html).toContain('href="/review/devflow/42"');
+		// No single conference to name — the queue link stays the list.
+		expect(queueHref(html)).toBe('/review');
 		expect(html).toContain('Your proposals');
 		expect(html).toContain('My draft talk');
 		expect(html).toContain('href="/portal/submissions/7"');
+	});
+
+	it('sends a reviewer with one conference straight to that queue (#373)', () => {
+		const html = body(null, {
+			...emptyHub,
+			canCreateEvent: false,
+			reviewConferences: [
+				{
+					id: 1,
+					organizationId: 'org-1',
+					name: 'DevFlow Summit',
+					slug: 'devflow',
+					status: 'published',
+					startsOn: '2026-09-01',
+					endsOn: '2026-09-02',
+					venue: 'Berlin',
+					createdAt: new Date('2026-01-01'),
+					updatedAt: new Date('2026-01-01')
+				} as never
+			]
+		});
+
+		expect(queueHref(html)).toBe('/review/devflow');
 	});
 
 	it('names the talk on a task row so two confirms at one event are not twins (#243)', () => {

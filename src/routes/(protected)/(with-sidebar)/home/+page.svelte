@@ -6,6 +6,7 @@
 	 * lands here and needs to see *their* work — not a starter template that
 	 * asks "where do you want to go?". Empty is a real state with a next step.
 	 */
+	import { reviewQueueHref } from '$lib/conference/nav-access';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -173,7 +174,10 @@
 				<div class="flex flex-wrap items-baseline justify-between gap-2">
 					<h2 class="text-sm font-semibold tracking-tight">Reviews waiting</h2>
 					<a
-						href="/review"
+						data-testid="home-review-queue-link"
+						href={reviewQueueHref(
+							hub.reviewConferences.length === 1 ? hub.reviewConferences[0].slug : null
+						)}
 						class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
 					>
 						Review queue
