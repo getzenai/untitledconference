@@ -9,7 +9,6 @@
  * is the one view that must show it. Reviewer and public loaders never call these
  * functions.
  */
-import { anonymousReviewerLabels } from '$lib/conference/anonymous-reviewers';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
@@ -505,6 +504,7 @@ function reviewRowsFor(conferenceId: number, submissionId: number) {
 		.select({
 			reviewId: reviewTable.id,
 			reviewerName: user.name,
+			reviewerEmail: user.email,
 			round: reviewRoundTable.name,
 			anonymized: reviewRoundTable.anonymized,
 			status: reviewTable.status,
@@ -557,13 +557,8 @@ function groupReviews(rows: ReviewRow[]) {
 		}
 	}
 
-	// Numbered here rather than at the row, because "Reviewer 1" only means
-	// anything relative to the other reviewers of the same submission.
-	const labels = anonymousReviewerLabels([...byReview.values()]);
-
 	return [...byReview.values()].map((review) => ({
 		...review,
-		reviewerName: labels.get(review.id) ?? review.reviewerName,
 		// The same weighting the table's aggregate uses — a reviewer's own average must
 		// not be computed by a second rule, or the two numbers disagree on one screen.
 		score: submissionScore([{ submitted: review.status === 'submitted', scores: review.scores }])
@@ -573,11 +568,18 @@ function groupReviews(rows: ReviewRow[]) {
 function emptyReview(r: ReviewRow) {
 	return {
 		id: r.reviewId,
-		// ABS-07: the round can hide the reviewer's identity from their peers. The
-		// organizer still needs to know who has and has not answered, so anonymisation
-		// labels the row rather than dropping it.
+		// ABS-07 hides a reviewer from their *peers*, not from the organizer: this page
+		// already lists the same people by name and email in the assignment block below,
+		// so numbering them "Reviewer 1" here hid nothing and only cost the organizer the
+		// link between a score and a person (#416). The flag stays because the organizer
+		// still has to see that the round is blind — it labels the row, it no longer
+		// replaces the name.
 		anonymized: r.anonymized,
-		reviewerName: r.reviewerName ?? 'Reviewer',
+		// An account can carry an empty name — registration does not insist on one —
+		// and a blank line is a worse answer to "who reviewed this" than the address
+		// the assignment block below already prints. The old `?? 'Reviewer'` only
+		// caught null, so the empty string fell through to nothing on screen.
+		reviewerName: r.reviewerName?.trim() || r.reviewerEmail || 'Reviewer',
 		round: r.round,
 		status: r.status,
 		comment: r.comment,

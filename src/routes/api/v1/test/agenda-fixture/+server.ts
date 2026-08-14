@@ -63,6 +63,14 @@ type FixtureRequest = {
 	 */
 	reviewed?: string[];
 	/**
+	 * Whether the round those reviews sit in hides its reviewers from each other.
+	 *
+	 * A blind round is the case where the organizer's page used to print
+	 * "Reviewer 1" beside the same person's name (#416), and it cannot be reached
+	 * through the UI without walking plan → round → scorecard in the spec.
+	 */
+	blindReview?: boolean;
+	/**
 	 * Tracks to create, the first of which is put on the first session.
 	 *
 	 * A filter needs something to filter by AND something to leave out, so one
@@ -148,7 +156,8 @@ async function addSession(
 async function addSubmittedReviews(
 	conferenceId: number,
 	reviewerUserId: string,
-	titles: string[]
+	titles: string[],
+	blind = false
 ): Promise<void> {
 	const [plan] = await db
 		.insert(evaluationPlanTable)
@@ -156,7 +165,12 @@ async function addSubmittedReviews(
 		.returning();
 	const [round] = await db
 		.insert(reviewRoundTable)
-		.values({ evaluationPlanId: plan.id, name: 'Fixture round', position: 0 })
+		.values({
+			evaluationPlanId: plan.id,
+			name: 'Fixture round',
+			position: 0,
+			anonymized: blind
+		})
 		.returning();
 
 	const rows = await db
@@ -187,6 +201,7 @@ type Fixture = {
 	sessions: string[];
 	sessionStatus: 'submitted' | 'in_review' | 'accepted';
 	reviewed: string[];
+	blindReview: boolean;
 	tracks: string[];
 };
 
@@ -202,6 +217,7 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		sessions: body.sessions ?? DEFAULT_SESSIONS,
 		sessionStatus: body.sessionStatus ?? 'accepted',
 		reviewed: body.reviewed ?? [],
+		blindReview: body.blindReview ?? false,
 		tracks: body.tracks ?? []
 	};
 }
@@ -252,7 +268,7 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	if (fixture.reviewed.length > 0) {
-		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed);
+		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed, fixture.blindReview);
 	}
 
 	return json({
