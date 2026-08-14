@@ -11,9 +11,9 @@
 	 * Everything conditional runs through `visibleFields` — the same function the
 	 * organizer's preview and the submit handler use.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
-	import { keepPageOnActionError } from '$lib/forms/keep-page-on-action-error';
 	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -282,7 +282,7 @@
 	 * treats a 500 like a failed navigation, and `+error.svelte` takes the typed
 	 * abstract with it.
 	 */
-	const submitting = keepPageOnActionError(({ formData, cancel }) => {
+	const submitting: SubmitFunction = ({ formData, cancel }) => {
 		// The click said submit. Without a session the POST would redirect to
 		// login and drop the body, so we park the draft and let the page go there.
 		if (!signedIn) {
@@ -304,7 +304,7 @@
 				busy = false;
 			}
 		};
-	});
+	};
 
 	onMount(() => {
 		if (!autoSubmit || !formEl) return;

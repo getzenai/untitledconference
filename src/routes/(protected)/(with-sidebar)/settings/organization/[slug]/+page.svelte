@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formatStoredDay } from '$lib/components/app/date-value';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Button } from '$lib/components/ui/button';

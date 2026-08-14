@@ -11,7 +11,7 @@
 	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
 	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { page as currentPage } from '$app/state';
 	import { bulkToolbarBlockReason, type BulkToolbarFacts } from '$lib/conference/bulk-toolbar';
 	import { formUpdateOptions } from '$lib/conference/form-reset';

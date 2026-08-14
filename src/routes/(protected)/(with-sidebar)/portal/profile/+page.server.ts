@@ -151,5 +151,19 @@ export const actions: Actions = {
 		// The object is left in the bucket. Nothing serves it once the column is
 		// null, and a delete that races a re-upload would take the new photo.
 		return { profileId: id, message: 'Headshot removed.' };
+	},
+
+	/**
+	 * A real action 500, for the browser proof that the page holds (#482).
+	 *
+	 * The suite cannot take the database down, so this throws instead, behind
+	 * `ENABLE_TEST_ENDPOINTS` the same way the call's and settings' do. The form
+	 * and its `use:enhance` are the shipped ones; only the button's `formaction`
+	 * moves.
+	 */
+	e2eForce500: async ({ locals }) => {
+		if (process.env.ENABLE_TEST_ENDPOINTS !== 'true') error(404, 'Not found');
+		if (!locals.user) error(404, 'Not found');
+		throw new Error('e2e forced action 500');
 	}
 };

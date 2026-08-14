@@ -25,7 +25,7 @@
 	 * would double-book rather than trade. Both stay with the editor, which asks
 	 * which of the two you meant.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { tick } from 'svelte';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import { Button } from '$lib/components/ui/button';

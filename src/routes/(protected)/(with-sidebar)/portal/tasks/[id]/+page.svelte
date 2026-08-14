@@ -6,7 +6,7 @@
 	 * re-uploads needs to see that the new file is the one that counts, and that
 	 * the old one did not vanish (CNT-04).
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';

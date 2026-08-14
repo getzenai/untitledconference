@@ -11,9 +11,9 @@
 	 * do not exist, because "there are three opinions you may not read yet" is honest
 	 * and "no reviews" would be a lie.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
+	import type { SubmitFunction } from '@sveltejs/kit';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
-	import { keepPageOnActionError } from '$lib/forms/keep-page-on-action-error';
 	import { formatScore } from '$lib/conference/scoring';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -77,7 +77,7 @@
 	 * review with it. Recuse still cancels first — the wrapper only holds the
 	 * page when a POST actually ran and threw.
 	 */
-	const submitting = keepPageOnActionError(({ submitter, cancel }) => {
+	const submitting: SubmitFunction = ({ submitter, cancel }) => {
 		if (isRecuse(submitter) && !allowRecuse) {
 			cancel();
 			confirmRecuseOpen = true;
@@ -93,7 +93,7 @@
 				busy = false;
 			}
 		};
-	});
+	};
 
 	const inputClass =
 		'border-input bg-background focus-visible:ring-ring rounded-md border px-2 py-1.5 text-sm focus-visible:ring-[3px] focus-visible:outline-none';

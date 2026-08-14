@@ -6,7 +6,7 @@
 	 * moves the task back to open and tells the speaker nothing about what to change,
 	 * which turns one round trip into three.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';

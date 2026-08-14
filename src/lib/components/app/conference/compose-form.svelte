@@ -6,7 +6,7 @@
 	 * Lives in a dialog on the roster page (issue #220): at rest the list is a
 	 * list, and this only appears when an organizer actually wants to write.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 

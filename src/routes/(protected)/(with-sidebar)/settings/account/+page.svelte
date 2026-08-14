@@ -151,6 +151,8 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent>
+			<!-- superforms' own enhance, and `SPA: true` cancels the submit: no server action
+			runs, so there is no action result that could replace the page (#482). -->
 			<form method="POST" use:enhance class="space-y-6">
 				<div class="grid gap-4">
 					<Form.Field {form} name="currentPassword">

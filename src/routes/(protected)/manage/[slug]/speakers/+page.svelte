@@ -6,7 +6,7 @@
 	 * Filters in the URL so a search survives reload and can be pasted. Edits are
 	 * per-row forms rather than a drawer: organizers change one field and move on.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { page as currentPage } from '$app/state';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';

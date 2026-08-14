@@ -8,7 +8,7 @@
 	 * uses them — scaleMax for rating, options for select — so the wrong shape
 	 * never posts.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';

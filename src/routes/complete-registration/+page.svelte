@@ -101,6 +101,8 @@
 	     cancels it, and a form without `method` defaults to GET - which would put
 	     the credentials in the query string, the browser history and every proxy
 	     log on the way. POST to a route without an action fails loudly instead. -->
+	<!-- superforms' own enhance, and `SPA: true` cancels the submit: no server action
+	runs, so there is no action result that could replace the page (#482). -->
 	<form method="POST" use:enhance class="space-y-4">
 		<input type="hidden" name="token" bind:value={$formData.token} />
 

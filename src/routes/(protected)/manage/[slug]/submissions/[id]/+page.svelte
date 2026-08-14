@@ -9,7 +9,7 @@
 	 * The right-hand column carries what only this role may see (sponsor tier, R6)
 	 * and what the button is about to set off (R3).
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import {

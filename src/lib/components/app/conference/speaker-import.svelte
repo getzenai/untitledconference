@@ -11,7 +11,7 @@
 	 * page. A confirmation one screen away from the thing it is about is what makes
 	 * somebody reload to check.
 	 */
-	import { enhance } from '$app/forms';
+	import { enhance } from '$lib/forms/enhance';
 	import { Button } from '$lib/components/ui/button';
 
 	let {
