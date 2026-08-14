@@ -54,9 +54,22 @@ export function canOrganizerSeeAllReviews(): boolean {
 	return true;
 }
 
-export type QueueSort = 'coverage' | 'score' | 'title' | 'track';
+export type QueueSort = 'mine' | 'coverage' | 'score' | 'title' | 'track';
 
 export const QUEUE_SORTS: { value: QueueSort; label: string; hint: string }[] = [
+	/**
+	 * The reviewer's own question, and the default (#465).
+	 *
+	 * "Fewest reviews first" is a coverage view — it answers *what still needs
+	 * somebody*, which is the chair's question. A volunteer with a free evening
+	 * asks *what is mine to do tonight*, and that list has to start with the rows
+	 * they can actually file.
+	 */
+	{
+		value: 'mine',
+		label: 'Mine to do',
+		hint: 'What you can file now, then what you are waiting on.'
+	},
 	{
 		value: 'coverage',
 		label: 'Fewest reviews first',
@@ -88,6 +101,8 @@ export type QueueRow = {
 	/** Null when the viewer may not see the aggregate yet, or nobody has scored. */
 	score: number | null;
 	ownReviewSubmitted: boolean;
+	/** The round that speaks for this row (#464); absent on rows that carry no window. */
+	window?: { state: 'not_yet_open' | 'open' | 'closed' };
 };
 
 /**
@@ -109,6 +124,19 @@ export function sortQueue<T extends QueueRow>(rows: T[], sort: QueueSort): T[] {
 		if (!bt) return -1;
 		return at.localeCompare(bt) || byTitle(a, b);
 	};
+
+	if (sort === 'mine') {
+		// Three bands: file it tonight, come back for it, done. Inside a band the
+		// least-covered talk first — the one nobody has looked at needs an opinion
+		// more than the one with three.
+		const band = (row: T) => {
+			if (row.ownReviewSubmitted) return 2;
+			return row.window && row.window.state !== 'open' ? 1 : 0;
+		};
+		return [...rows].sort(
+			(a, b) => band(a) - band(b) || a.reviewsSubmitted - b.reviewsSubmitted || byTitle(a, b)
+		);
+	}
 
 	if (sort === 'score') {
 		return [...rows].sort((a, b) => {

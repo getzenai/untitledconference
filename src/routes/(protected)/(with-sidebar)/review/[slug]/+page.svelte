@@ -163,7 +163,16 @@
 					{@render sortable('Track', 'track', 'alphabetical by track', 'ascending')}
 					{@render sortable('Reviews', 'coverage', 'fewest reviews first', 'ascending')}
 					{@render sortable('Score', 'score', 'highest score first', 'descending')}
-					<th class="py-2 pr-4 font-medium">Mine</th>
+					<!-- The reviewer's own column is a sort like the others now (#465): the
+					     queue opened on "fewest reviews first", which is what the chair
+					     wants to know, and the one column about this person's own work was
+					     the only dead header in the row. -->
+					{@render sortable(
+						'Mine',
+						'mine',
+						'what you can file now, then what you are waiting on',
+						'ascending'
+					)}
 				</tr>
 			</thead>
 			<tbody>

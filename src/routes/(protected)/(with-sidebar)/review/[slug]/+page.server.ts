@@ -3,7 +3,7 @@ import { requireReviewer, reviewQueue } from '$lib/server/conference/reviewer';
 import { isFeatureEnabled } from '$lib/server/feature-flags';
 import type { PageServerLoad } from './$types';
 
-const SORTS: QueueSort[] = ['coverage', 'score', 'title', 'track'];
+const SORTS: QueueSort[] = ['mine', 'coverage', 'score', 'title', 'track'];
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireReviewer(locals.user!.id, params.slug);
@@ -11,7 +11,9 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// The sort lives in the URL: a reviewer sending a colleague "the ones nobody has
 	// looked at" should be able to send the link they are looking at.
 	const raw = url.searchParams.get('sort') as QueueSort;
-	const sort = SORTS.includes(raw) ? raw : 'coverage';
+	// `mine` by default (#465): the queue is the reviewer's to-do list before it is
+	// anybody's coverage report, and it used to open on the chair's question.
+	const sort = SORTS.includes(raw) ? raw : 'mine';
 
 	// Set by the redirect after a recusal (#463), so this page can say what just
 	// happened instead of leaving the reviewer to infer it from a row that changed
