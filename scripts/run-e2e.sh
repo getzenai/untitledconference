@@ -36,11 +36,14 @@ export DATABASE_URL="$TEST_DATABASE_URL"
 # cannot silently receive the Cypress traffic. There is a small race between
 # releasing this probe socket and starting Vite; --strictPort below turns that
 # race into a loud failure instead of falling through to a foreign server.
-E2E_PORT="${E2E_PORT:-$(node --input-type=module -e '
+# FORCE_COLOR (the TUI sets it) paints `console.log(number)` yellow. That
+# leaked into the URL once and made wait-on look for a host that does not
+# exist. Write the port as plain bytes and mute color on this one process.
+E2E_PORT="${E2E_PORT:-$(FORCE_COLOR=0 NO_COLOR=1 node --input-type=module -e '
     import net from "node:net";
     const server = net.createServer();
     server.listen(0, "127.0.0.1", () => {
-        console.log(server.address().port);
+        process.stdout.write(String(server.address().port));
         server.close();
     });
 ')}"
@@ -64,6 +67,9 @@ export SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=false
 # A developer may have loaded the production-shaped Resend variables before
 # starting this script. E2E mail addresses are invented and the outbox state is
 # what the specs assert, so a test run must never cross the real provider boundary.
+# Keep these unset: the point is that a real key can never be present. The
+# configured-but-deaf path (#489) is a recording fake behind ENABLE_TEST_ENDPOINTS,
+# armed per spec through /api/v1/test/mail-transport — not a real key.
 unset RESEND_API_KEY
 unset RESEND_FROM
 export AI_PROVIDER="${AI_PROVIDER:-mock}"
