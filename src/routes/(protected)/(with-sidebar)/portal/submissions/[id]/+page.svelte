@@ -61,10 +61,20 @@
 	const closesLabel = $derived(
 		data.closesAt ? formatInstant(data.closesAt, zone.current) || null : null
 	);
+	const callOpen = $derived(data.callState === 'open');
+	const editClosedReason = $derived(
+		data.callState === 'not_yet_open'
+			? 'The call is not open yet.'
+			: data.closedByOrganizer
+				? 'The organizers have closed this call.'
+				: 'This call has closed.'
+	);
 	const draftCloseLine = $derived(
-		closesLabel
-			? `Nobody has seen it yet. Pick it up where you left off, any time before ${closesLabel}.`
-			: 'Nobody has seen it yet. Pick it up where you left off, any time before the call closes.'
+		!callOpen
+			? `Nobody has seen it yet. ${editClosedReason}`
+			: closesLabel
+				? `Nobody has seen it yet. Pick it up where you left off, any time before ${closesLabel}.`
+				: 'Nobody has seen it yet. Pick it up where you left off, any time before the call closes.'
 	);
 
 	const answerValue = (answer: { kind: string; value: string | null }) => {
@@ -107,20 +117,34 @@
 				emailed again when the organizers decide.
 			</p>
 			<p class="text-muted-foreground mt-2">
-				You can still change it until {closesLabel ?? 'the call closes'} — your place and the date above
-				stay as they are.
+				{#if callOpen}
+					You can still change it until {closesLabel ?? 'the call closes'} — your place and the date above
+					stay as they are.
+				{:else}
+					{editClosedReason} The text stays as it is.
+				{/if}
 			</p>
-			<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
-				Edit this proposal
-			</Button>
+			{#if callOpen}
+				<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
+					Edit this proposal
+				</Button>
+			{:else}
+				<Button size="sm" variant="outline" class="mt-3" disabled data-testid="edit-closed">
+					Editing closed
+				</Button>
+			{/if}
 		</div>
 	{:else if s.status === 'draft'}
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">This is still a draft.</p>
 			<p class="text-muted-foreground mt-1">{draftCloseLine}</p>
-			<Button href="/portal/submissions/{s.id}/edit" size="sm" class="mt-3">
-				Finish this proposal
-			</Button>
+			{#if callOpen}
+				<Button href="/portal/submissions/{s.id}/edit" size="sm" class="mt-3">
+					Finish this proposal
+				</Button>
+			{:else}
+				<Button size="sm" class="mt-3" disabled data-testid="edit-closed">Editing closed</Button>
+			{/if}
 		</div>
 	{:else if s.status === 'accepted'}
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
