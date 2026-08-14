@@ -52,11 +52,25 @@ describe('Publishing a conference', () => {
 		cy.get('[data-testid="visibility-state"]', { timeout: 20000 }).should('contain.text', 'Live');
 		publicSiteStatus().should('eq', 200);
 
-		// Back down again. An organizer who published by accident has to be able to
-		// undo it, and the 404 returning is what proves the switch is a switch.
+		// Back down again — but not on one click any more (#452). Taking a live
+		// conference offline breaks the public site and the CFP form, neither of
+		// which the organizer is looking at, so it asks first.
 		cy.get('[data-testid="settings-visibility"] [data-testid="visibility-submit"]')
 			.should('contain.text', 'Return to draft')
 			.click();
+
+		cy.get('[data-testid="unpublish-dialog"]').should('be.visible');
+		cy.get('[data-testid="unpublish-dialog"]').should('contain.text', `/c/${slug}`);
+		cy.get('[data-testid="unpublish-cancel"]').click();
+
+		// Backing out is not a slow unpublish: the conference is still live.
+		cy.get('[data-testid="visibility-state"]').should('contain.text', 'Live');
+		publicSiteStatus().should('eq', 200);
+
+		// And through the dialog it really goes down. The 404 returning is what
+		// proves the switch is still a switch.
+		cy.get('[data-testid="settings-visibility"] [data-testid="visibility-submit"]').click();
+		cy.get('[data-testid="unpublish-confirm"]').click();
 
 		cy.get('[data-testid="visibility-state"]', { timeout: 20000 }).should('contain.text', 'Draft');
 		publicSiteStatus().should('eq', 404);

@@ -10,6 +10,7 @@ import { MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
 import { addedMessage } from '$lib/conference/structure-lines';
 import { requireOrganizer } from '$lib/server/conference/access';
 import { archiveConference, restoreConference } from '$lib/server/conference/archive-conference';
+import { callSummary } from '$lib/server/conference/cfp-submission';
 import {
 	addFormats,
 	addRooms,
@@ -44,11 +45,17 @@ import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference, via } = await requireOrganizer(locals.user!.id, params.slug);
-	const [config, templates, pending, tiers] = await Promise.all([
+	const [config, templates, pending, tiers, call] = await Promise.all([
 		conferenceConfig(conference.id),
 		taskTemplates(conference.id),
 		pendingHandouts(conference.id),
-		sponsorTiers(conference.id)
+		sponsorTiers(conference.id),
+		// #452: Return to draft is the one control here whose damage lands somewhere
+		// the organizer cannot see. Whether speakers are mid-submission right now is
+		// the part of that sentence only the server knows, so the page is told before
+		// it has to ask the question. `callSummary` already answers exactly this, for
+		// a published conference, which is the only state the dialog appears in.
+		callSummary(params.slug)
 	]);
 	// `?setup=1` is the soft landing from "New conference": this is a draft, and
 	// Publish is the switch that makes /c/<slug> exist. Not a forced wizard — a pointer.
@@ -56,7 +63,15 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// Archiving is an org-wide right, not a per-conference one (`archive-conference.ts`),
 	// and `via: 'org'` is set by exactly the seat check that function repeats. A scoped
 	// organizer sees nothing to press rather than a button that answers "not yours".
-	return { config, templates, pending, sponsorTiers: tiers, setup, canArchive: via === 'org' };
+	return {
+		config,
+		templates,
+		pending,
+		sponsorTiers: tiers,
+		setup,
+		canArchive: via === 'org',
+		callOpen: call?.state === 'open'
+	};
 };
 
 function text(form: FormData, key: string): string {
