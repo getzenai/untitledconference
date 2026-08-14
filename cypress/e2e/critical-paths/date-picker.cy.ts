@@ -44,13 +44,13 @@ describe('Picking conference dates', () => {
 	it('stores the day that was clicked, and shows it again after a reload', () => {
 		openSettings();
 
-		trigger('startsOn').should('contain.text', 'May 10, 2028').click();
+		trigger('startsOn').should('contain.text', '10 May 2028').click();
 
 		// Earlier than the current start, so the days holding the range stay
 		// inside it and the action has nothing to refuse.
 		cy.get('[data-bits-day][data-value="2028-05-08"]').click();
 
-		trigger('startsOn').should('contain.text', 'May 8, 2028');
+		trigger('startsOn').should('contain.text', '8 May 2028');
 		cy.get('[data-testid="settings-dates"] input[name="startsOn"]').should(
 			'have.value',
 			'2028-05-08'
@@ -61,7 +61,7 @@ describe('Picking conference dates', () => {
 
 		cy.reload();
 		cy.waitForHydration();
-		trigger('startsOn').should('contain.text', 'May 8, 2028');
+		trigger('startsOn').should('contain.text', '8 May 2028');
 		cy.get('[data-testid="settings-dates"] input[name="startsOn"]').should(
 			'have.value',
 			'2028-05-08'

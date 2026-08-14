@@ -2,7 +2,7 @@ import type { ComponentProps } from 'svelte';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import DatePicker from './date-picker.svelte';
-import { formatDay, toCalendarDate } from './date-value';
+import { formatDay, formatStoredDay, toCalendarDate } from './date-value';
 
 /**
  * The date field the organizer sees (#124), and the one the server reads.
@@ -33,7 +33,7 @@ describe('what the date picker posts', () => {
 	});
 
 	it('shows the day in words and the placeholder when there is none', () => {
-		expect(html({ name: 'startsOn', value: '2027-05-12' })).toContain('May 12, 2027');
+		expect(html({ name: 'startsOn', value: '2027-05-12' })).toContain('12 May 2027');
 		expect(html({ name: 'startsOn', value: '', placeholder: 'Pick a date' })).toContain(
 			'Pick a date'
 		);
@@ -69,5 +69,26 @@ describe('the day a stored value stands for', () => {
 		expect(toCalendarDate('')).toBeUndefined();
 		expect(toCalendarDate(null)).toBeUndefined();
 		expect(formatDay('2027-02-31')).toBe('');
+	});
+});
+
+/**
+ * The administration dates — created, expires (#468).
+ *
+ * Not deadlines: no zone is named, because nothing hangs on the hour. What is
+ * worth pinning is that the day-first shape does not depend on the machine the
+ * browser happens to run on, which is exactly what `/admin/users` got wrong.
+ */
+describe('formatStoredDay', () => {
+	it("is day-first regardless of the reader's locale", () => {
+		expect(formatStoredDay('2026-05-01T09:30:00.000Z')).toBe('1 May 2026');
+		expect(formatStoredDay(new Date('2026-05-01T09:30:00.000Z'))).toBe('1 May 2026');
+	});
+
+	it('is nothing rather than "Invalid Date" when the value is not one', () => {
+		expect(formatStoredDay(null)).toBe('');
+		expect(formatStoredDay(undefined)).toBe('');
+		expect(formatStoredDay('')).toBe('');
+		expect(formatStoredDay('not a date')).toBe('');
 	});
 });

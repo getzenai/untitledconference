@@ -13,6 +13,8 @@
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
 	import { optionsToText, type CriterionKind } from '$lib/conference/scorecard-criterion';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { ROUND_WINDOW_TONES } from '$lib/conference/round-window';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -61,14 +63,15 @@
 		return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 	};
 
-	const stamp = (value: Date | string) =>
-		new Date(value).toLocaleString('en-GB', {
-			day: 'numeric',
-			month: 'short',
-			year: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit'
-		});
+	/**
+	 * The same formatter the CFP screens and the public call use (#468), so the
+	 * status line under a picker cannot print the picker's own value in a second
+	 * shape — this row used to read "Aug 9, 2026, 5:23 PM" in the input and
+	 * "9 Aug 2026, 17:23" four inches below it, one timestamp, two formats, and
+	 * no zone on either.
+	 */
+	const zone = readerZone();
+	const stamp = (value: Date | string) => formatInstant(value, zone.current);
 
 	/** The window in one phrase, so a saved date is visible without opening a picker. */
 	const window_ = (opensAt: Date | null, closesAt: Date | null) => {

@@ -14,6 +14,8 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { callWindow } from '$lib/conference/call-window';
+	import { callHint } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import {
@@ -143,6 +145,10 @@
 		if (!form || form.status !== 'published') return null;
 		return callWindow(form.opensAt, form.closesAt, false, new Date());
 	});
+
+	/** The sentence under each picker: which clock this field is on (#468). */
+	const zone = readerZone();
+	const deadlineHint = (value: Date | string | null) => callHint(value, zone.current);
 
 	const YES_NO_OPTIONS = [
 		{ value: '', label: '—' },
@@ -353,6 +359,7 @@
 								placeholder="No opening date"
 								class="mt-1"
 							/>
+							<span class="mt-1 block">{deadlineHint(data.form.opensAt)}</span>
 						</div>
 						<div class="text-muted-foreground text-xs">
 							<label for="cfp-closes-at">Closes — after this, submissions and edits lock</label>
@@ -363,6 +370,7 @@
 								placeholder="No closing date"
 								class="mt-1"
 							/>
+							<span class="mt-1 block">{deadlineHint(data.form.closesAt)}</span>
 						</div>
 						<label class="text-muted-foreground text-xs sm:col-span-2">
 							What submitters should know before they start

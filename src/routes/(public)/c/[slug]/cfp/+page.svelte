@@ -10,7 +10,8 @@
 	import { consumePendingProposal, writePendingProposal } from '$lib/conference/pending-proposal';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import { proseBlocks } from '$lib/conference/prose';
-	import { formatDayLong, isoDay } from '$lib/conference/public-view';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
@@ -38,8 +39,17 @@
 		void goto(signInHref);
 	}
 
+	/**
+	 * The deadline as a moment, not a day (#468).
+	 *
+	 * This page used to print the UTC *day* and drop the time, so a call closing
+	 * at 23:59Z told a speaker "Monday 15 February" while the organizer's own
+	 * screen said Feb 16, 00:59. Same instant, different day, no zone on either
+	 * side. Now both read the same function, and the zone is part of the text.
+	 */
+	const zone = readerZone();
 	const closesLabel = $derived(
-		call.form.closesAt ? formatDayLong(isoDay(call.form.closesAt)) : null
+		call.form.closesAt ? formatInstant(call.form.closesAt, zone.current) : null
 	);
 </script>
 
@@ -56,7 +66,7 @@
 		rather than beneath it.
 	-->
 	{#if closesLabel && call.state === 'open'}
-		<p class="text-muted-foreground mt-1 text-sm">Proposals close on {closesLabel}.</p>
+		<p class="text-muted-foreground mt-1 text-sm">Proposals close {closesLabel}.</p>
 	{/if}
 
 	<!--

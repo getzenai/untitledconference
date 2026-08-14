@@ -8,13 +8,23 @@
 	 * second one must not offer "save as draft", which would quietly withdraw it.
 	 */
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
-	import { formatDayLong, isoDay } from '$lib/conference/public-view';
+	import { formatInstant } from '$lib/conference/deadline';
+	import { readerZone } from '$lib/conference/reader-zone.svelte';
 
 	let { data, form } = $props();
 
 	const call = $derived(data.call);
+	/**
+	 * The moment the edit window shuts, in the reader's zone (#468).
+	 *
+	 * This line is the last thing a submitter reads before typing, and it used to
+	 * name the UTC *day* with no time at all — so a call closing 23:59Z said
+	 * "closes Monday 15 February" to someone in Berlin whose window in fact ended
+	 * at 00:59 on the 16th. Same function and same shape as the public call page.
+	 */
+	const zone = readerZone();
 	const closesLabel = $derived(
-		call.form.closesAt ? formatDayLong(isoDay(call.form.closesAt)) : null
+		call.form.closesAt ? formatInstant(call.form.closesAt, zone.current) : null
 	);
 	const isDraft = $derived(data.status === 'draft');
 </script>

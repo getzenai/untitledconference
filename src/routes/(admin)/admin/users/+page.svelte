@@ -54,6 +54,7 @@
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { formatStoredDay } from '$lib/components/app/date-value';
 	import type { PageData, ActionData } from './$types';
 	import { INVITATION_EXPIRY_SECONDS } from '$lib/constants';
 	import { generateRandomPassword } from '$lib/utils/password';
@@ -875,7 +876,7 @@
 									{/if}
 								</TableCell>
 								<TableCell>
-									{new Date(user.createdAt).toLocaleDateString()}
+									{formatStoredDay(user.createdAt)}
 								</TableCell>
 								<TableCell class="text-right">
 									{#if user.id !== currentUser?.id}
@@ -986,10 +987,10 @@
 										</div>
 									</TableCell>
 									<TableCell>
-										{new Date(invitation.expiresAt).toLocaleDateString()}
+										{formatStoredDay(invitation.expiresAt)}
 									</TableCell>
 									<TableCell>
-										{new Date(invitation.createdAt).toLocaleDateString()}
+										{formatStoredDay(invitation.createdAt)}
 									</TableCell>
 									<TableCell>
 										<div class="flex items-center gap-2">
