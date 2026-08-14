@@ -27,10 +27,11 @@ const flagValue = boolWithDefault(false);
 /** Whether a single flag is enabled. */
 export function isFeatureEnabled(flag: FeatureFlag): boolean {
 	const name = FLAG_ENV_VARS[flag];
-	// `$env/dynamic/private` is the Worker binding. Local preview and E2E
-	// also export the same name on `process.env` (see `scripts/run-e2e.sh`);
-	// a binding that was never declared would otherwise swallow that export.
-	return flagValue.parse(env[name] ?? process.env[name]);
+	// `$env/dynamic/private` is the Worker binding. `wrangler.jsonc` `vars`
+	// win over a process export unless we look at the process first — E2E
+	// turns the flag on that way (`scripts/run-e2e.sh`) without rewriting
+	// the production binding.
+	return flagValue.parse(process.env[name] ?? env[name]);
 }
 
 /**

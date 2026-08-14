@@ -195,7 +195,9 @@ export default defineConfig({
 
 			config.env = {
 				...config.env,
-				TEST_DATABASE_URL: connectionString
+				TEST_DATABASE_URL: connectionString,
+				FEATURE_INAPP_CHAT:
+					process.env.CYPRESS_FEATURE_INAPP_CHAT ?? process.env.FEATURE_INAPP_CHAT ?? 'false'
 			};
 
 			return config;

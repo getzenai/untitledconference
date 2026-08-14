@@ -69,10 +69,19 @@ unset RESEND_FROM
 export AI_PROVIDER="${AI_PROVIDER:-mock}"
 export LOG_LEVEL="${LOG_LEVEL:-warn}"
 export NODE_ENV=test
+# Reviewer-chat spec reads CYPRESS_FEATURE_INAPP_CHAT instead of guessing
+# from the DOM. Default off so CI ships the panel dark. Turn both on:
+#   FEATURE_INAPP_CHAT=true ./scripts/run-e2e.sh --spec cypress/e2e/critical-paths/reviewer-chat.cy.ts
+export FEATURE_INAPP_CHAT="${FEATURE_INAPP_CHAT:-false}"
+export CYPRESS_FEATURE_INAPP_CHAT="$FEATURE_INAPP_CHAT"
+if [ "$FEATURE_INAPP_CHAT" = "true" ] || [ "$FEATURE_INAPP_CHAT" = "1" ]; then
+    export AI_CHAT_MODEL="${AI_CHAT_MODEL:-mock}"
+fi
 
 echo "=== E2E environment ==="
 echo "Database: ${TEST_DATABASE_URL//:*@/:***@}"
 echo "Base URL: $BETTER_AUTH_URL"
+echo "FEATURE_INAPP_CHAT: $FEATURE_INAPP_CHAT"
 echo ""
 
 echo "=== Pushing database schema ==="

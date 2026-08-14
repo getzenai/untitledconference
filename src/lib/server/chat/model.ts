@@ -73,7 +73,11 @@ export function createMockChatModel(): LanguageModel {
 
 export function createChatModel(): LanguageModel {
 	const { AI_CHAT_MODEL, AI_GATEWAY_API_KEY, AI_GATEWAY_BASE_URL } = serverEnv();
-	if (AI_CHAT_MODEL === 'mock') return createMockChatModel();
+	// Process export first: wrangler.jsonc pins a production model id, and
+	// `AI_CHAT_MODEL=mock` from `scripts/run-e2e.sh` has to win for the
+	// flag-on Cypress path.
+	const modelId = process.env.AI_CHAT_MODEL || AI_CHAT_MODEL;
+	if (modelId === 'mock') return createMockChatModel();
 	if (!AI_GATEWAY_API_KEY || !AI_GATEWAY_BASE_URL) {
 		throw new ChatModelNotConfiguredError();
 	}
@@ -81,5 +85,5 @@ export function createChatModel(): LanguageModel {
 		apiKey: AI_GATEWAY_API_KEY,
 		baseURL: AI_GATEWAY_BASE_URL
 	});
-	return openai.chat(AI_CHAT_MODEL);
+	return openai.chat(modelId);
 }

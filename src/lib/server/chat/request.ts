@@ -28,6 +28,14 @@ export type ReviewerChatEvent = {
 	request: Request;
 };
 
+/** Plain text — the AI SDK surfaces `response.text()` as `chat.error`. */
+function chatError(status: number, message: string): Response {
+	return new Response(message, {
+		status,
+		headers: { 'content-type': 'text/plain; charset=utf-8' }
+	});
+}
+
 function mcpContextFromLocals(locals: App.Locals): McpContext {
 	const userId = locals.user?.id;
 	if (!userId) {
@@ -76,7 +84,7 @@ export async function handleReviewerChatRequest(
 
 	const user = event.locals.user;
 	if (!user) {
-		return Response.json({ error: 'Unauthorized' }, { status: 401 });
+		return chatError(401, 'Unauthorized');
 	}
 
 	let conference: { name: string; slug: string };
@@ -85,7 +93,7 @@ export async function handleReviewerChatRequest(
 		conference = { name: resolved.conference.name, slug: resolved.conference.slug };
 	} catch (err) {
 		if (isHttpError(err)) {
-			return Response.json({ error: err.body.message }, { status: err.status });
+			return chatError(err.status, String(err.body.message));
 		}
 		throw err;
 	}
@@ -94,10 +102,10 @@ export async function handleReviewerChatRequest(
 	try {
 		body = (await event.request.json()) as { messages?: UIMessage[] };
 	} catch {
-		return Response.json({ error: 'Expected a JSON body with messages.' }, { status: 400 });
+		return chatError(400, 'Expected a JSON body with messages.');
 	}
 	if (!Array.isArray(body.messages)) {
-		return Response.json({ error: 'Expected a JSON body with messages.' }, { status: 400 });
+		return chatError(400, 'Expected a JSON body with messages.');
 	}
 
 	try {
@@ -109,7 +117,7 @@ export async function handleReviewerChatRequest(
 		});
 	} catch (err) {
 		if (err instanceof ChatModelNotConfiguredError) {
-			return Response.json({ error: err.message }, { status: 503 });
+			return chatError(503, err.message);
 		}
 		throw err;
 	}

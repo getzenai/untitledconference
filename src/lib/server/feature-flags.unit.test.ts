@@ -52,4 +52,10 @@ describe('feature flags', () => {
 		mockEnv.FEATURE_INAPP_CHAT = 'true';
 		expect(isFeatureEnabled('inAppChat')).toBe(true);
 	});
+
+	it('lets the process environment override a false binding', () => {
+		mockEnv.FEATURE_INAPP_CHAT = 'false';
+		process.env.FEATURE_INAPP_CHAT = 'true';
+		expect(isFeatureEnabled('inAppChat')).toBe(true);
+	});
 });

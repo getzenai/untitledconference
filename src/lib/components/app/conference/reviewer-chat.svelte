@@ -12,6 +12,7 @@
 	import SendIcon from '@lucide/svelte/icons/send';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import { chatErrorMessage } from './reviewer-chat-error';
 
 	let { slug }: { slug: string } = $props();
 
@@ -26,10 +27,12 @@
 		});
 	});
 
+	const pending = $derived(chat?.status === 'submitted' || chat?.status === 'streaming');
+
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		const text = input.trim();
-		if (!text || !chat) return;
+		if (!text || !chat || pending) return;
 		input = '';
 		void chat.sendMessage({ text });
 	}
@@ -69,17 +72,30 @@
 				</li>
 			{/each}
 		{/if}
+		{#if pending}
+			<li class="text-muted-foreground text-sm" data-testid="chat-pending">Looking that up…</li>
+		{/if}
 	</ul>
+
+	{#if chat?.error}
+		<p
+			class="border-status-bad text-status-bad mt-3 rounded-md border px-3 py-2 text-sm"
+			role="alert"
+			data-testid="chat-error"
+		>
+			{chatErrorMessage(chat.error)}
+		</p>
+	{/if}
 
 	<form class="mt-4 flex gap-2" onsubmit={handleSubmit}>
 		<Input
 			bind:value={input}
 			placeholder="Which reviews do I still have open?"
 			autocomplete="off"
-			disabled={!chat}
+			disabled={!chat || pending}
 			data-testid="reviewer-chat-input"
 		/>
-		<Button type="submit" size="icon" disabled={!chat} aria-label="Send">
+		<Button type="submit" size="icon" disabled={!chat || pending} aria-label="Send">
 			<SendIcon />
 		</Button>
 	</form>
