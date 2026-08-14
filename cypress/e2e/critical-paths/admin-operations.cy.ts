@@ -58,7 +58,20 @@ describe('Admin Operations - Critical Path', () => {
 		cy.clearCookies();
 		cy.visit('/admin/users');
 		cy.url({ timeout: 20000 }).should('include', '/login');
-		cy.url().should('include', 'returnTo=/admin/users');
+		// The path, not the spelling — `returnTo=/admin/users` is the substring
+		// that passed on the unencoded form and fails the moment the path is encoded.
+		cy.location('search').should((search) => {
+			expect(new URLSearchParams(search).get('returnTo')).to.eq('/admin/users');
+		});
+	});
+
+	it('keeps a query on the admin URL through the login redirect', () => {
+		cy.clearCookies();
+		cy.visit('/admin/users?page=2');
+		cy.url({ timeout: 20000 }).should('include', '/login');
+		cy.location('search').should((search) => {
+			expect(new URLSearchParams(search).get('returnTo')).to.eq('/admin/users?page=2');
+		});
 	});
 
 	// Documents the admin workflow that is still unimplemented in the app.
