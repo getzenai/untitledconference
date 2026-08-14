@@ -66,6 +66,10 @@
 		onSignIn?: (draft: ProposalDraft) => void;
 		/** After login restored a draft: send it. The button they clicked said submit. */
 		autoSubmit?: boolean;
+		/** Page owns storage (#494). Withheld until restore so the empty paint cannot wipe it. */
+		onDraftChange?: (draft: ProposalDraft) => void;
+		/** A save that landed. The parked copy can go. */
+		onCommitted?: () => void;
 	};
 
 	let {
@@ -79,7 +83,9 @@
 		submitLabel = 'Submit proposal',
 		allowDraft = true,
 		onSignIn,
-		autoSubmit = false
+		autoSubmit = false,
+		onDraftChange,
+		onCommitted
 	}: Props = $props();
 
 	let title = $state(initial.title);
@@ -247,6 +253,28 @@
 		});
 	});
 
+	// Withheld until restore: an empty first paint must not wipe the parked draft.
+	$effect(() => {
+		onDraftChange?.({
+			title,
+			abstract,
+			keyTakeaway,
+			audienceLevel,
+			sessionFormatId,
+			trackId,
+			answers: { ...answers },
+			speaker: {
+				name: speakerName,
+				sortName,
+				email: speakerEmail,
+				jobTitle: speakerJobTitle,
+				company: speakerCompany,
+				bio: speakerBio
+			},
+			coSpeakers: coSpeakers.map(({ name, email, roleLabel }) => ({ name, email, roleLabel }))
+		});
+	});
+
 	/**
 	 * A thrown action must not replace this page (#482).
 	 *
@@ -265,8 +293,12 @@
 		busy = true;
 		// `finally`, not the success path: a network failure would otherwise leave
 		// every button disabled with no way back except a reload.
-		return async ({ update }) => {
+		return async ({ update, result }) => {
 			try {
+				// Clear before `update()` navigates away on a redirect.
+				if (result.type === 'redirect' || result.type === 'success') {
+					onCommitted?.();
+				}
 				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;

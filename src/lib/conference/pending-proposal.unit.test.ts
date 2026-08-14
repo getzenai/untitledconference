@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+	autosavedProposalKey,
+	clearAutosavedProposal,
 	consumePendingProposal,
 	draftFromFormData,
+	isTypedProposal,
 	parsePendingProposal,
 	pendingProposalKey,
+	readAutosavedProposal,
+	writeAutosavedProposal,
 	writePendingProposal
 } from './pending-proposal';
 import { emptyProposal } from './proposal-draft';
@@ -80,5 +85,32 @@ describe('pending proposal storage', () => {
 		expect(storage.getItem(pendingProposalKey('other'))).toBeNull();
 		expect(consumePendingProposal(storage, 'devflow')).toEqual(draft);
 		expect(consumePendingProposal(storage, 'devflow')).toBeNull();
+	});
+});
+
+describe('autosaved proposal storage', () => {
+	const draft = {
+		...emptyProposal(),
+		title: 'Batching without tears',
+		abstract: 'How we stopped copying the queue.'
+	};
+
+	it('is still there after a read — coming back twice must not empty the form', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', draft);
+
+		expect(storage.getItem(autosavedProposalKey('other'))).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow')).toEqual(draft);
+		expect(readAutosavedProposal(storage, 'devflow')).toEqual(draft);
+	});
+
+	it('is gone after a real save, and an empty form is not a draft', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', draft);
+		clearAutosavedProposal(storage, 'devflow');
+
+		expect(readAutosavedProposal(storage, 'devflow')).toBeNull();
+		expect(isTypedProposal(emptyProposal())).toBe(false);
+		expect(isTypedProposal(draft)).toBe(true);
 	});
 });
