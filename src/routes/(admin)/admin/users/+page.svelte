@@ -463,6 +463,10 @@
 	);
 </script>
 
+<svelte:head>
+	<title>Users — Admin</title>
+</svelte:head>
+
 <div class="container mx-auto max-w-7xl py-8">
 	<div class="mb-8">
 		<h1 class="flex items-center gap-2 text-3xl font-bold">

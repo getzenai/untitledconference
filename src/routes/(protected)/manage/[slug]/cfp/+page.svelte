@@ -444,7 +444,19 @@ We want talks that show the work — **the migration that failed first**, the nu
 												formats={data.formats}
 												tracks={data.tracks}
 											/>
-											<Button type="submit" size="sm" disabled={busy}>Save field</Button>
+											<!--
+												Every open field repeats the same four words. The row it
+												belongs to is on screen and absent from the accessible
+												name, so each button carries its field (#475).
+											-->
+											<Button
+												type="submit"
+												size="sm"
+												disabled={busy}
+												aria-label={`Save “${field.label}”`}
+											>
+												Save field
+											</Button>
 										</form>
 
 										<div class="flex flex-wrap gap-2">
@@ -456,6 +468,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 													variant="outline"
 													size="sm"
 													disabled={busy || index === 0}
+													aria-label={`Move “${field.label}” up`}
 												>
 													Move up
 												</Button>
@@ -468,13 +481,20 @@ We want talks that show the work — **the migration that failed first**, the nu
 													variant="outline"
 													size="sm"
 													disabled={busy || index === fields.length - 1}
+													aria-label={`Move “${field.label}” down`}
 												>
 													Move down
 												</Button>
 											</form>
 											<form method="POST" action="?/deleteField" use:enhance={submitting('edit')}>
 												<input type="hidden" name="id" value={field.id} />
-												<Button type="submit" variant="outline" size="sm" disabled={busy}>
+												<Button
+													type="submit"
+													variant="outline"
+													size="sm"
+													disabled={busy}
+													aria-label={`Remove “${field.label}”`}
+												>
 													Remove
 												</Button>
 											</form>
@@ -537,6 +557,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 								<Textarea
 									rows={2}
 									class="mt-1"
+									aria-label={field.label}
 									oninput={(e) => (previewAnswers[field.id] = e.currentTarget.value)}
 								/>
 							{:else if field.kind === 'select'}
@@ -556,7 +577,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 									onValueChange={(value) => (previewAnswers[field.id] = value)}
 								/>
 							{:else if field.kind === 'file'}
-								<input type="file" disabled class="mt-1 w-full text-sm" />
+								<input type="file" disabled aria-label={field.label} class="mt-1 w-full text-sm" />
 							{:else}
 								<Input
 									class="mt-1"
