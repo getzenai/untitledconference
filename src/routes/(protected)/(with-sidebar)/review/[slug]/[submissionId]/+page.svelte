@@ -13,6 +13,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { keepPageOnActionError } from '$lib/forms/keep-page-on-action-error';
 	import { formatScore } from '$lib/conference/scoring';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -70,13 +71,13 @@
 		reviewForm?.requestSubmit(button);
 	};
 
-	const submitting = ({
-		submitter,
-		cancel
-	}: {
-		submitter: HTMLElement | null;
-		cancel: () => void;
-	}) => {
+	/**
+	 * A thrown action must not replace this page (#482). Same wrapper as the
+	 * proposal form: a 500 that lands on `+error.svelte` takes the written
+	 * review with it. Recuse still cancels first — the wrapper only holds the
+	 * page when a POST actually ran and threw.
+	 */
+	const submitting = keepPageOnActionError(({ submitter, cancel }) => {
 		if (isRecuse(submitter) && !allowRecuse) {
 			cancel();
 			confirmRecuseOpen = true;
@@ -85,14 +86,14 @@
 		// The confirm click re-submits the same button; that one goes through.
 		allowRecuse = false;
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({ update }) => {
 			try {
 				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;
 			}
 		};
-	};
+	});
 
 	const inputClass =
 		'border-input bg-background focus-visible:ring-ring rounded-md border px-2 py-1.5 text-sm focus-visible:ring-[3px] focus-visible:outline-none';
