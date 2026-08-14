@@ -8,6 +8,7 @@
 	 * so form posts can keep their own save feedback without a tab-state machine.
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { MAX_MINUTES } from '$lib/conference/structure-lines';
 	import { unpublishWarning } from '$lib/conference/unpublish-warning';
 	import {
@@ -147,9 +148,20 @@
 
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
+			} finally {
+				busy = false;
+			}
+		};
+	};
+
+	const submittingAdd = () => {
+		busy = true;
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+			try {
+				await update(formUpdateOptions('add'));
 			} finally {
 				busy = false;
 			}
@@ -179,10 +191,10 @@
 				update
 			}: {
 				result: { type: string };
-				update: () => Promise<void>;
+				update: (opts?: { reset?: boolean }) => Promise<void>;
 			}) => {
 				try {
-					await update();
+					await update(formUpdateOptions('add'));
 					if (result.type === 'success') {
 						expand();
 						formElement.querySelector('textarea')?.focus();
@@ -882,7 +894,12 @@
 				})}
 			{/if}
 
-			<form method="POST" action="?/addSponsorTier" use:enhance={submitting} class="mt-3 space-y-2">
+			<form
+				method="POST"
+				action="?/addSponsorTier"
+				use:enhance={submittingAdd}
+				class="mt-3 space-y-2"
+			>
 				<div class="flex flex-wrap items-end gap-2">
 					<label class="min-w-[10rem] flex-1 text-xs">
 						<span class="text-muted-foreground">Name</span>

@@ -14,6 +14,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { callWindow } from '$lib/conference/call-window';
+	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import {
 		FIELD_KINDS,
@@ -46,11 +47,11 @@
 - Travel is covered for accepted speakers.
 - You can edit until the call closes.`;
 
-	const submitting = () => {
+	const submitting = (kind: FormResetKind) => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
@@ -73,7 +74,7 @@
 			const raw = formData.get(name);
 			if (typeof raw === 'string' && raw) formData.set(name, new Date(raw).toISOString());
 		}
-		return submitting();
+		return submitting('edit');
 	};
 
 	const fields = $derived(data.fields as unknown as FieldDefinition[]);
@@ -191,7 +192,12 @@
 			title="No call for papers yet"
 			description="Create it and it already asks for a title, an abstract and who the speaker is — you add the questions you want on top of those. Nothing is public until you publish it."
 		>
-			<form method="POST" action="?/createForm" use:enhance={submitting} class="mt-3 flex gap-2">
+			<form
+				method="POST"
+				action="?/createForm"
+				use:enhance={() => submitting('add')}
+				class="mt-3 flex gap-2"
+			>
 				<Input
 					name="title"
 					value="{data.conference.name} — Call for papers"
@@ -223,7 +229,12 @@
 						for the public site to appear
 					{/if}.
 				</p>
-				<form method="POST" action="?/publishForm" use:enhance={submitting} class="mt-3">
+				<form
+					method="POST"
+					action="?/publishForm"
+					use:enhance={() => submitting('edit')}
+					class="mt-3"
+				>
 					<Button type="submit" size="sm" disabled={busy} data-testid="cfp-publish">
 						Publish call for papers
 					</Button>
@@ -275,7 +286,7 @@
 							{/if}
 						</p>
 					</div>
-					<form method="POST" action="?/closeForm" use:enhance={submitting}>
+					<form method="POST" action="?/closeForm" use:enhance={() => submitting('edit')}>
 						<Button
 							type="submit"
 							variant="outline"
@@ -302,7 +313,7 @@
 							publish again.
 						</p>
 					</div>
-					<form method="POST" action="?/publishForm" use:enhance={submitting}>
+					<form method="POST" action="?/publishForm" use:enhance={() => submitting('edit')}>
 						<Button type="submit" size="sm" disabled={busy} data-testid="cfp-publish">
 							Re-open call
 						</Button>
@@ -417,7 +428,7 @@
 										<form
 											method="POST"
 											action="?/updateField"
-											use:enhance={submitting}
+											use:enhance={() => submitting('edit')}
 											class="space-y-2"
 										>
 											<input type="hidden" name="id" value={field.id} />
@@ -431,7 +442,11 @@
 										</form>
 
 										<div class="flex flex-wrap gap-2">
-											<form method="POST" action="?/moveField" use:enhance={submitting}>
+											<form
+												method="POST"
+												action="?/moveField"
+												use:enhance={() => submitting('edit')}
+											>
 												<input type="hidden" name="id" value={field.id} />
 												<input type="hidden" name="direction" value="up" />
 												<Button
@@ -443,7 +458,11 @@
 													Move up
 												</Button>
 											</form>
-											<form method="POST" action="?/moveField" use:enhance={submitting}>
+											<form
+												method="POST"
+												action="?/moveField"
+												use:enhance={() => submitting('edit')}
+											>
 												<input type="hidden" name="id" value={field.id} />
 												<input type="hidden" name="direction" value="down" />
 												<Button
@@ -455,7 +474,11 @@
 													Move down
 												</Button>
 											</form>
-											<form method="POST" action="?/deleteField" use:enhance={submitting}>
+											<form
+												method="POST"
+												action="?/deleteField"
+												use:enhance={() => submitting('edit')}
+											>
 												<input type="hidden" name="id" value={field.id} />
 												<Button type="submit" variant="outline" size="sm" disabled={busy}>
 													Remove
@@ -471,7 +494,7 @@
 					<form
 						method="POST"
 						action="?/addField"
-						use:enhance={submitting}
+						use:enhance={() => submitting('add')}
 						class="border-border mt-4 space-y-2 border-t pt-4"
 					>
 						<h3 class="text-sm font-medium">Add a field</h3>

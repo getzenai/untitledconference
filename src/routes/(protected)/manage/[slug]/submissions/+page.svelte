@@ -14,6 +14,7 @@
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
 	import { bulkToolbarBlockReason, type BulkToolbarFacts } from '$lib/conference/bulk-toolbar';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import {
 		describeBulkAssign,
 		describeDecision,
@@ -459,7 +460,7 @@
 				// leave every button disabled with no way back except a reload.
 				return async ({ update }) => {
 					try {
-						await update();
+						await update(formUpdateOptions('edit'));
 					} finally {
 						busy = false;
 					}

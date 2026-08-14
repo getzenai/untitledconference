@@ -7,6 +7,7 @@
 	 * which turns one round trip into three.
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -20,9 +21,9 @@
 
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;
 			}

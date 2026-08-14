@@ -6,6 +6,7 @@
 	 * roster is still to come; this is the right place for the mode already.
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { REVIEW_VISIBILITY_MODES } from '$lib/conference/review-visibility';
 	import { Button } from '$lib/components/ui/button';
 
@@ -13,11 +14,11 @@
 
 	let busy = $state(false);
 
-	const submitting = () => {
+	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
@@ -73,7 +74,12 @@
 			never sent to the browser.
 		</p>
 
-		<form method="POST" action="?/reviewVisibility" use:enhance={submitting} class="mt-3 space-y-3">
+		<form
+			method="POST"
+			action="?/reviewVisibility"
+			use:enhance={submitting('edit')}
+			class="mt-3 space-y-3"
+		>
 			{#each REVIEW_VISIBILITY_MODES as mode (mode.value)}
 				<label class="border-border flex items-start gap-3 rounded-md border p-3 text-sm">
 					<input
@@ -104,7 +110,12 @@
 			they accept it.
 		</p>
 
-		<form method="POST" action="?/addReviewer" use:enhance={submitting} class="mt-3 flex gap-2">
+		<form
+			method="POST"
+			action="?/addReviewer"
+			use:enhance={submitting('add')}
+			class="mt-3 flex gap-2"
+		>
 			<input
 				name="email"
 				type="email"
@@ -152,7 +163,7 @@
 								</p>
 							</div>
 							{#if person.conferenceManaged}
-								<form method="POST" action="?/removeReviewer" use:enhance={submitting}>
+								<form method="POST" action="?/removeReviewer" use:enhance={submitting('edit')}>
 									<input type="hidden" name="membershipId" value={person.membershipId} />
 									<Button type="submit" variant="ghost" size="sm" disabled={busy}>Remove</Button>
 								</form>
@@ -163,7 +174,7 @@
 							<form
 								method="POST"
 								action="?/updateTracks"
-								use:enhance={submitting}
+								use:enhance={submitting('edit')}
 								class="border-border mt-3 border-t pt-3"
 							>
 								<input type="hidden" name="membershipId" value={person.membershipId} />

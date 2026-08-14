@@ -13,6 +13,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { CONFERENCE_CREATE_FIELDS, createFormBlockReason } from '$lib/conference/create-form';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { slugify } from '$lib/conference/slug';
 
 	let { data, form } = $props();
@@ -43,9 +44,9 @@
 
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;
 			}

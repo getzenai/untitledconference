@@ -10,6 +10,7 @@
 	 * and what the button is about to set off (R3).
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import {
 		describeDecision,
 		describeNotification,
@@ -156,7 +157,7 @@
 				// leave every button disabled with no way back except a reload.
 				return async ({ update }) => {
 					try {
-						await update();
+						await update(formUpdateOptions('edit'));
 					} finally {
 						busy = false;
 					}
@@ -221,7 +222,7 @@
 						busy = true;
 						return async ({ update, result }) => {
 							try {
-								await update();
+								await update(formUpdateOptions('edit'));
 								if (result.type === 'success') editing = false;
 							} finally {
 								busy = false;
@@ -587,7 +588,7 @@
 						busy = true;
 						return async ({ update }) => {
 							try {
-								await update();
+								await update(formUpdateOptions('edit'));
 							} finally {
 								busy = false;
 							}
@@ -663,7 +664,7 @@
 						busy = true;
 						return async ({ update }) => {
 							try {
-								await update();
+								await update(formUpdateOptions('edit'));
 							} finally {
 								busy = false;
 							}
@@ -694,7 +695,7 @@
 						busy = true;
 						return async ({ update }) => {
 							try {
-								await update();
+								await update(formUpdateOptions('edit'));
 							} finally {
 								busy = false;
 							}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Button } from '$lib/components/ui/button';
 	import {
 		Card,
@@ -23,8 +24,8 @@
 
 	function submitHandler() {
 		submitting = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
-			await update();
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+			await update(formUpdateOptions('edit'));
 			submitting = false;
 		};
 	}

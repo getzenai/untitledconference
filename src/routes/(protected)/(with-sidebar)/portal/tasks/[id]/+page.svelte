@@ -7,6 +7,7 @@
 	 * the old one did not vanish (CNT-04).
 	 */
 	import { enhance } from '$app/forms';
+	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -27,11 +28,11 @@
 	const participationDecision = $derived(task.status === 'done' ? task.participationStatus : null);
 	let busy = $state(false);
 
-	const submitting = () => {
+	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
-		return async ({ update }: { update: () => Promise<void> }) => {
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
-				await update();
+				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
@@ -178,13 +179,13 @@
 
 			<div class="mt-4 flex flex-wrap gap-3">
 				{#if participationDecision !== 'confirmed'}
-					<form method="POST" action="?/participation" use:enhance={submitting}>
+					<form method="POST" action="?/participation" use:enhance={submitting('edit')}>
 						<input type="hidden" name="decision" value="confirmed" />
 						<Button type="submit" disabled={busy}>Yes, I’ll be there</Button>
 					</form>
 				{/if}
 				{#if participationDecision !== 'declined'}
-					<form method="POST" action="?/participation" use:enhance={submitting}>
+					<form method="POST" action="?/participation" use:enhance={submitting('edit')}>
 						<input type="hidden" name="decision" value="declined" />
 						<Button type="submit" variant="outline" disabled={busy}>I can’t take part</Button>
 					</form>
@@ -208,7 +209,7 @@
 				</p>
 			</section>
 		{/if}
-		<form method="POST" action="?/toggle" use:enhance={submitting} class="mt-6">
+		<form method="POST" action="?/toggle" use:enhance={submitting('edit')} class="mt-6">
 			<input type="hidden" name="done" value={task.status === 'done' ? 'false' : 'true'} />
 			<Button
 				type="submit"
@@ -235,7 +236,7 @@
 				method="POST"
 				action="?/upload"
 				enctype="multipart/form-data"
-				use:enhance={submitting}
+				use:enhance={submitting('add')}
 				class="mt-3 flex flex-wrap items-center gap-3"
 			>
 				<input
@@ -302,7 +303,7 @@
 							</ul>
 						{/if}
 
-						<form method="POST" action="?/comment" use:enhance={submitting} class="mt-3">
+						<form method="POST" action="?/comment" use:enhance={submitting('add')} class="mt-3">
 							<input type="hidden" name="deliverableId" value={file.id} />
 							<Textarea
 								name="body"

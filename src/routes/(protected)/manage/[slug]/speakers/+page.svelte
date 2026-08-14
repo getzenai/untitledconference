@@ -8,6 +8,7 @@
 	 */
 	import { enhance } from '$app/forms';
 	import { page as currentPage } from '$app/state';
+	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
@@ -62,18 +63,18 @@
 		if (form instanceof HTMLFormElement) form.requestSubmit();
 	};
 
-	const submitting = (onSuccess?: () => void) => {
+	const submitting = (kind: FormResetKind, onSuccess?: () => void) => {
 		return (_input: unknown) => {
 			busy = true;
 			return async ({
 				update,
 				result
 			}: {
-				update: () => Promise<void>;
+				update: (opts?: { reset?: boolean }) => Promise<void>;
 				result: { type: string };
 			}) => {
 				try {
-					await update();
+					await update(formUpdateOptions(kind));
 					if (result.type === 'success') {
 						editingId = null;
 						onSuccess?.();
@@ -138,7 +139,7 @@
 						filters={data.filters}
 						{busy}
 						{form}
-						enhanceForm={submitting(() => (composeOpen = false))}
+						enhanceForm={submitting('add', () => (composeOpen = false))}
 					/>
 				</Dialog.Content>
 			</Dialog.Root>
@@ -161,7 +162,7 @@
 						{statusOptions}
 						{busy}
 						{form}
-						enhanceForm={submitting(() => (addOpen = false))}
+						enhanceForm={submitting('add', () => (addOpen = false))}
 					/>
 				</Dialog.Content>
 			</Dialog.Root>
@@ -181,7 +182,7 @@
 							are skipped.
 						</Dialog.Description>
 					</Dialog.Header>
-					<SpeakerImport embedded {busy} enhanceForm={submitting()} {form} />
+					<SpeakerImport embedded {busy} enhanceForm={submitting('add')} {form} />
 				</Dialog.Content>
 			</Dialog.Root>
 		</div>
@@ -319,7 +320,7 @@
 									id="speaker-status-{speaker.speakerProfileId}"
 									method="POST"
 									action="?/setStatus"
-									use:enhance={submitting()}
+									use:enhance={submitting('edit')}
 									class="flex flex-wrap items-center gap-2"
 									data-testid="speaker-status-form"
 								>
@@ -358,7 +359,7 @@
 									<form
 										method="POST"
 										action="?/updateProfile"
-										use:enhance={submitting()}
+										use:enhance={submitting('edit')}
 										class="grid max-w-3xl gap-3 sm:grid-cols-2"
 										data-testid="speaker-edit-form"
 									>
