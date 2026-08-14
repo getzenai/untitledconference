@@ -1,21 +1,29 @@
 /**
- * The filled-in proposal a signed-out visitor wrote, parked for the sign-in
- * round trip (#236).
+ * Two parked copies of a filled-in proposal, different lifetimes.
  *
- * "Sign in to submit" used to be a GET. The fields lived only in the form, so
- * login brought them back to an empty page and a silent loss. Cookies cannot
- * hold an abstract; anonymous drafts need a user id. sessionStorage is already
- * how this app parks same-tab state (`goose-welcome`, `pendingInvitation`).
+ * The pending draft is the signed-out visitor's sign-in round trip (#236):
+ * written on "Sign in to submit", consumed once on the way back so it cannot
+ * become a second auto-submit. sessionStorage, because that trip is same-tab.
+ *
+ * The autosaved draft is the sentence on the call (#494): "Drafts are saved."
+ * Written as they type, read (not consumed) when they come back, cleared when
+ * a save actually lands. localStorage, not sessionStorage — closing the tab
+ * is exactly the thing the sentence said they could do.
  *
  * Storage is passed in, not read from the global, so the parse/consume rules
  * can be tested without a browser.
  */
 import { emptyProposal, type ProposalDraft } from './proposal-draft';
 
-const PREFIX = 'cfp-pending-proposal:';
+const PENDING_PREFIX = 'cfp-pending-proposal:';
+const AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
 
 export function pendingProposalKey(slug: string): string {
-	return `${PREFIX}${slug}`;
+	return `${PENDING_PREFIX}${slug}`;
+}
+
+export function autosavedProposalKey(slug: string): string {
+	return `${AUTOSAVE_PREFIX}${slug}`;
 }
 
 function text(value: FormDataEntryValue | null): string {
@@ -130,16 +138,18 @@ function draftFromUnknown(row: Record<string, unknown>): ProposalDraft {
 	};
 }
 
+/** Title, abstract or name — anything less is not a draft, it is an empty form. */
+export function isTypedProposal(draft: ProposalDraft): boolean {
+	return Boolean(draft.title.trim() || draft.abstract.trim() || draft.speaker.name.trim());
+}
+
 /** Reject junk so a leftover string cannot become an auto-submit. */
 export function parsePendingProposal(raw: string): ProposalDraft | null {
 	try {
 		const data: unknown = JSON.parse(raw);
 		if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
 		const draft = draftFromUnknown(data as Record<string, unknown>);
-		if (!draft.title.trim() && !draft.speaker.name.trim() && !draft.abstract.trim()) {
-			return null;
-		}
-		return draft;
+		return isTypedProposal(draft) ? draft : null;
 	} catch {
 		return null;
 	}
@@ -162,4 +172,26 @@ export function consumePendingProposal(
 	storage.removeItem(key);
 	if (raw == null) return null;
 	return parsePendingProposal(raw);
+}
+
+export function writeAutosavedProposal(
+	storage: Pick<Storage, 'setItem'>,
+	slug: string,
+	draft: ProposalDraft
+): void {
+	storage.setItem(autosavedProposalKey(slug), JSON.stringify(draft));
+}
+
+/** Read without removing — coming back a second time must still find it. */
+export function readAutosavedProposal(
+	storage: Pick<Storage, 'getItem'>,
+	slug: string
+): ProposalDraft | null {
+	const raw = storage.getItem(autosavedProposalKey(slug));
+	if (raw == null) return null;
+	return parsePendingProposal(raw);
+}
+
+export function clearAutosavedProposal(storage: Pick<Storage, 'removeItem'>, slug: string): void {
+	storage.removeItem(autosavedProposalKey(slug));
 }

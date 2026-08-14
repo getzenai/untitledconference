@@ -7,7 +7,14 @@
 	 */
 	import { goto } from '$app/navigation';
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
-	import { consumePendingProposal, writePendingProposal } from '$lib/conference/pending-proposal';
+	import {
+		clearAutosavedProposal,
+		consumePendingProposal,
+		isTypedProposal,
+		readAutosavedProposal,
+		writeAutosavedProposal,
+		writePendingProposal
+	} from '$lib/conference/pending-proposal';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import { proseBlocks } from '$lib/conference/prose';
 	import { formatInstant } from '$lib/conference/deadline';
@@ -23,16 +30,50 @@
 
 	/**
 	 * Filled in after hydrate so SSR and the first client render stay identical.
-	 * A pending draft consumed here is the one "Sign in to submit" parked.
+	 *
+	 * Two sources, one field. The pending draft is the sign-in handoff and is
+	 * consumed; the autosaved draft is the typed work and is only read. Mixing
+	 * them would auto-submit an incomplete form the next time a signed-in
+	 * speaker walked back in (#494).
 	 */
 	let restored = $state<ProposalDraft | null>(null);
+	let fromPending = $state(false);
+	let listening = $state(false);
 
 	onMount(() => {
-		const draft = consumePendingProposal(sessionStorage, data.call.conference.slug);
-		if (draft && !data.existing) restored = draft;
+		const slug = data.call.conference.slug;
+		if (data.existing) {
+			// A server copy is the truth. A leftover local one would come back
+			// if this proposal were later withdrawn.
+			clearAutosavedProposal(localStorage, slug);
+			listening = true;
+			return;
+		}
+		const pending = consumePendingProposal(sessionStorage, slug);
+		if (pending) {
+			restored = pending;
+			fromPending = true;
+		} else {
+			restored = readAutosavedProposal(localStorage, slug);
+		}
+		listening = true;
 	});
 
-	const resume = $derived(Boolean(signedIn && restored && !data.existing));
+	const resume = $derived(Boolean(signedIn && fromPending && restored && !data.existing));
+
+	function persistDraft(draft: ProposalDraft) {
+		const slug = data.call.conference.slug;
+		if (data.existing) return;
+		if (!isTypedProposal(draft)) {
+			clearAutosavedProposal(localStorage, slug);
+			return;
+		}
+		writeAutosavedProposal(localStorage, slug, draft);
+	}
+
+	function clearDraft() {
+		clearAutosavedProposal(localStorage, data.call.conference.slug);
+	}
 
 	function stashAndSignIn(draft: ProposalDraft) {
 		writePendingProposal(sessionStorage, data.call.conference.slug, draft);
@@ -152,6 +193,8 @@
 				{signedIn}
 				onSignIn={stashAndSignIn}
 				autoSubmit={resume}
+				onDraftChange={listening ? persistDraft : undefined}
+				onCommitted={clearDraft}
 			/>
 		{/key}
 	{/if}
