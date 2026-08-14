@@ -115,24 +115,21 @@
 	 * decide forty talks. It lives in the page — not `window.confirm` —
 	 * so a Playwright agent can press the same button a human does.
 	 * Notify and assign stay one-click: they do not change the programme.
+	 *
+	 * The gate lives inside `use:enhance` and uses its own `cancel()`. An
+	 * `onsubmit` handler calling `preventDefault()` looked right and was not:
+	 * both listeners hang on the same form, `preventDefault` does not stop the
+	 * one registered after it, and `enhance` never asks whether the event was
+	 * already cancelled — so the decision went out while the dialog was still
+	 * asking, and "Cancel" cancelled nothing (#409).
 	 */
-	const confirmDecision = (event: SubmitEvent) => {
-		const submitter = event.submitter;
-		if (!(submitter instanceof HTMLButtonElement) || submitter.name !== 'decision') return;
-		if (allowDecision) {
-			allowDecision = false;
-			return;
-		}
-		if (
-			submitter.value !== 'accepted' &&
-			submitter.value !== 'rejected' &&
-			submitter.value !== 'waitlisted'
-		) {
-			return;
-		}
-		event.preventDefault();
-		pendingDecision = submitter.value;
-		confirmOpen = true;
+	const decisionToConfirm = (submitter: HTMLElement | null): BulkDecision | null => {
+		if (!(submitter instanceof HTMLButtonElement) || submitter.name !== 'decision') return null;
+		return submitter.value === 'accepted' ||
+			submitter.value === 'rejected' ||
+			submitter.value === 'waitlisted'
+			? submitter.value
+			: null;
 	};
 
 	const confirmPendingDecision = () => {
@@ -421,8 +418,16 @@
 			data-testid="bulk-decide"
 			data-confirm-decision
 			data-confirm="dialog"
-			onsubmit={confirmDecision}
-			use:enhance={() => {
+			use:enhance={({ submitter, cancel }) => {
+				const decision = decisionToConfirm(submitter);
+				if (decision && !allowDecision) {
+					cancel();
+					pendingDecision = decision;
+					confirmOpen = true;
+					return;
+				}
+				// The confirm click re-submits the same button; that one goes through.
+				allowDecision = false;
 				busy = true;
 				// `finally`, not a trailing line: a dropped connection would otherwise
 				// leave every button disabled with no way back except a reload.
