@@ -287,6 +287,10 @@
 	onpointercancel={drag.cancel}
 	onkeydown={(e) => {
 		if (e.key !== 'Escape') return;
+		// An open app-select listbox eats Escape on document and marks it handled.
+		// A native <select> swallowed the key outright; without this guard closing
+		// the room list would close the whole slot editor behind it.
+		if (e.defaultPrevented) return;
 		if (drag.dragging) drag.cancel();
 		else closeSlot();
 	}}

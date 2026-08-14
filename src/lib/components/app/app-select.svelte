@@ -33,6 +33,7 @@
 		required = false,
 		'aria-label': ariaLabel,
 		testId,
+		title,
 		onValueChange
 	}: {
 		/** The form field name. Omitted for a control that is only shown, never posted. */
@@ -56,6 +57,13 @@
 		 * broke.
 		 */
 		testId?: string;
+		/**
+		 * Native tooltip on the trigger. The one caller that needs it is a control
+		 * disabled for a reason the organizer cannot otherwise see (a criterion
+		 * with scores hanging off it), and a disabled control with no explanation
+		 * is the version of this that reads as a bug.
+		 */
+		title?: string;
 		onValueChange?: (value: string) => void;
 	} = $props();
 
@@ -78,6 +86,7 @@
 	<Select.Trigger
 		{id}
 		{size}
+		{title}
 		aria-label={ariaLabel}
 		data-testid={testId ?? (name ? `app-select-${name}` : undefined)}
 		class={cn('w-full justify-between font-normal', !label && 'text-muted-foreground', className)}

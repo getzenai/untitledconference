@@ -35,6 +35,8 @@ declare global {
 			setActiveOrganization(name?: string): Chainable<string>;
 			/** Wait until Svelte has hydrated the page before interacting with it. */
 			waitForHydration(): Chainable<void>;
+			/** Pick an option from an app select (the shadcn dropdown), by its testid. */
+			chooseFromAppSelect(testId: string, option: string | RegExp): Chainable<void>;
 		}
 	}
 }
@@ -160,6 +162,33 @@ Cypress.Commands.add('logout', () => {
 	cy.get('[data-testid="app-sidebar"] [data-sidebar="footer"] button').first().click();
 	cy.get('[data-testid="nav-user-logout"]').should('be.visible').click();
 	cy.url({ timeout: 20000 }).should('include', '/login');
+});
+
+/**
+ * The replacement for `.select()` (#167).
+ *
+ * `.select()` needs a native `<select>`; an app select is a button plus a
+ * listbox portalled to the end of `<body>`, so the option is not inside the
+ * control's own subtree and no scoped `cy.get` will find it. Three specs grew
+ * their own copy of this two-liner, which is why it lives here now.
+ *
+ * The trigger is scrolled to before it is clicked, and clicked without `force`.
+ * That is not politeness — `force` skips the scroll, and bits-ui anchors the
+ * listbox to the trigger's box, so a control below the fold gets a listbox
+ * positioned off-screen: open in the DOM, never `:visible`, and the failure
+ * reads as "the dropdown does not work" when the page had simply not moved.
+ * Waiting for the previous listbox to leave (last line) is what makes the
+ * unforced click safe when several picks follow each other in one form.
+ */
+Cypress.Commands.add('chooseFromAppSelect', (testId: string, option: string | RegExp) => {
+	cy.get(`[data-testid="${testId}"]`).first().scrollIntoView().click();
+	// Scoped to the open listbox: two selects on one screen can offer the same
+	// label ("Hall 1" as a filter and as the editor's room), and an unscoped
+	// `[role="option"]` would take whichever rendered first.
+	cy.get('[role="listbox"]:visible').within(() => {
+		cy.contains('[role="option"]', option).click();
+	});
+	cy.get('[role="listbox"]').should('not.exist');
 });
 
 export {};

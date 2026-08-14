@@ -108,13 +108,26 @@ describe('Agenda slot editor', () => {
 
 		// The point of the whole spec: the grid shows one room, the editor offers
 		// all six. A view filter must not make a destination unreachable.
-		cy.get('[data-testid="agenda-slot-editor"] select[name="roomId"] option').should(
-			'have.length',
-			ROOM_FILTER_FROM
-		);
-		cy.get('[data-testid="agenda-slot-editor"] select[name="roomId"]').within(() => {
-			for (const name of names) cy.contains('option', name).should('exist');
+		//
+		// Since #167 the room control is an app select, so the list only exists
+		// once the listbox is open — which is also the only state in which the
+		// claim means anything to an organizer.
+		cy.get('[data-testid="agenda-slot-room"]').scrollIntoView().click();
+		cy.get('[role="listbox"]:visible').within(() => {
+			cy.get('[role="option"]').should('have.length', ROOM_FILTER_FROM);
+			for (const name of names) cy.contains('[role="option"]', name).should('exist');
 		});
+		// Escape closes the list, not the dialog behind it. The native <select>
+		// swallowed the key; an app select only marks it handled, and the agenda's
+		// own window handler used to close the whole editor on top of it — an
+		// organizer dismissing the room list would have lost their unsaved slot.
+		cy.get('body').type('{esc}');
+		cy.get('[role="listbox"]').should('not.exist');
+		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
+
+		// And with the list closed, Escape still means "close the editor".
+		cy.get('body').type('{esc}');
+		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 	});
 
 	it('narrows the grid to several rooms at once via the multi-select', () => {
@@ -207,12 +220,23 @@ describe('Agenda slot editor', () => {
 		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
 
 		// The list the *page* builds, which the component test cannot see: the other
-		// session on this day, and not the one already in the slot.
-		cy.get('[data-testid="agenda-slot-swap-with"] option').should('have.length', 1);
-		cy.get('[data-testid="agenda-slot-swap-with"] option')
-			.should('contain', 'Fixture Talk B')
-			.and('contain', 'Hall 2');
+		// session on this day, and not the one already in the slot. Since #167 that
+		// list only exists while the listbox is open, so the check opens it —
+		// closing again afterwards, because the portalled listbox would otherwise
+		// sit over the button the next line clicks. Closed by toggling the trigger,
+		// not by Escape: Escape reaches the dialog behind it and shuts the whole
+		// slot editor.
+		cy.get('[data-testid="agenda-slot-swap-with"]').scrollIntoView().click();
+		cy.get('[role="listbox"]:visible').within(() => {
+			cy.get('[role="option"]').should('have.length', 1);
+			cy.get('[role="option"]').should('contain', 'Fixture Talk B').and('contain', 'Hall 2');
+		});
+		cy.get('[data-testid="agenda-slot-swap-with"]').click();
+		cy.get('[role="listbox"]').should('not.exist');
 
+		// Submitted without touching the control: the seeded value is what the
+		// native element used to post on its own, and losing it would make this
+		// button a no-op.
 		cy.get('[data-testid="agenda-slot-swap"]').click();
 		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 
@@ -234,16 +258,12 @@ describe('Agenda slot editor', () => {
 			.click();
 		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
 
-		// The option reads "Fixture Talk A (30 min)", so an exact-text select would
-		// pin the session length as well as the title. Match the option on its
-		// title and submit its value instead.
-		cy.contains('[data-testid="agenda-slot-session"] option', title)
-			.should('exist')
-			.then(($option) => {
-				cy.get('[data-testid="agenda-slot-session"]').select(String($option.val()));
-			});
-		cy.get('[data-testid="agenda-slot-editor"] select[name="roomId"]').select(room);
-		cy.get('[data-testid="agenda-slot-editor"] select[name="startMinutes"]').select(start);
+		// The option reads "Fixture Talk A (30 min)", so an exact-text match would
+		// pin the session length as well as the title. `cy.contains` matches on a
+		// substring, which is the looser claim this wants.
+		cy.chooseFromAppSelect('agenda-slot-session', title);
+		cy.chooseFromAppSelect('agenda-slot-room', room);
+		cy.chooseFromAppSelect('agenda-slot-start', start);
 		cy.get('[data-testid="agenda-slot-place"]').click();
 
 		// The dialog closes on a successful write; waiting for that keeps the next

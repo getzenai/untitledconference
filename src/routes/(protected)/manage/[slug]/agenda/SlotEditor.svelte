@@ -20,6 +20,7 @@
 	 * agenda spec with the room filter actually set.
 	 */
 	import { enhance } from '$app/forms';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 
 	/**
@@ -84,6 +85,43 @@
 		close,
 		submit
 	}: Props = $props();
+
+	/**
+	 * The five option lists (#167).
+	 *
+	 * Values are strings because a form field is a string either way — the native
+	 * `<option value={4}>` posted "4" too. What changes is that an app select
+	 * shows a placeholder when `value` matches no option, where the browser
+	 * silently fell back to the first one. Every `value` below therefore names a
+	 * real member of its list, and `activeDayId` gets the fallback the browser
+	 * used to supply.
+	 */
+	const swapWithOptions = $derived(
+		swapWith.map((candidate) => ({
+			value: String(candidate.placementId),
+			label: `${candidate.title} (${timeLabel(candidate.startMinutes)}, ${candidate.roomName})`
+		}))
+	);
+
+	const sessionOptions = $derived(
+		tray.map((item) => ({
+			value: String(item.placementId),
+			label: `${item.title} (${item.minutes} min)`
+		}))
+	);
+
+	const dayOptions = $derived(days.map((d) => ({ value: String(d.id), label: d.date.slice(5) })));
+
+	/** What the browser picked when no `<option>` carried `selected`. */
+	const selectedDayId = $derived(
+		days.some((d) => d.id === activeDayId) ? activeDayId : days[0]?.id
+	);
+
+	const slotOptions = $derived(
+		slots.map((slot) => ({ value: String(slot.minutes), label: slot.label }))
+	);
+
+	const roomOptions = $derived(rooms.map((r) => ({ value: String(r.id), label: r.name })));
 </script>
 
 <!--
@@ -127,21 +165,23 @@
 			{#if swapWith.length > 0}
 				<form method="POST" action="?/swap" use:enhance={submit} class="mt-4 space-y-3">
 					<input type="hidden" name="placementId" value={occupant.placementId} />
-					<label class="block text-sm">
+					<div class="block text-sm">
 						<span class="text-muted-foreground text-xs">Swap with</span>
-						<select
+						<!-- Seeded with the first candidate, because that is what the native
+						     element posted: a `<select required>` with no empty option always
+						     has a value. An app select starts empty unless told otherwise, so
+						     leaving `value` off would turn "Trade places" into a submit that
+						     posts nothing. -->
+						<AppSelect
 							name="withPlacementId"
 							required
-							data-testid="agenda-slot-swap-with"
-							class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-						>
-							{#each swapWith as candidate (candidate.placementId)}
-								<option value={candidate.placementId}>
-									{candidate.title} ({timeLabel(candidate.startMinutes)}, {candidate.roomName})
-								</option>
-							{/each}
-						</select>
-					</label>
+							testId="agenda-slot-swap-with"
+							aria-label="Swap with"
+							class="mt-1"
+							value={String(swapWith[0].placementId)}
+							options={swapWithOptions}
+						/>
+					</div>
 					<Button type="submit" disabled={busy} data-testid="agenda-slot-swap">Trade places</Button>
 				</form>
 			{/if}
@@ -183,61 +223,63 @@
 			</p>
 		{:else}
 			<form method="POST" action="?/place" use:enhance={submit} class="mt-4 space-y-3">
-				<label class="block text-sm">
+				<div class="block text-sm">
 					<span class="text-muted-foreground text-xs">Session</span>
-					<select
+					<!-- Same seeding rule as "Swap with": the native element posted the
+					     first tray item without anyone picking it. -->
+					<AppSelect
 						name="placementId"
 						required
-						data-testid="agenda-slot-session"
-						class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-					>
-						{#each tray as item (item.placementId)}
-							<option value={item.placementId}>{item.title} ({item.minutes} min)</option>
-						{/each}
-					</select>
-				</label>
+						testId="agenda-slot-session"
+						aria-label="Session"
+						class="mt-1"
+						value={String(tray[0].placementId)}
+						options={sessionOptions}
+					/>
+				</div>
 
 				<div class="grid grid-cols-3 gap-2">
-					<label class="block text-sm">
+					<div class="block text-sm">
 						<span class="text-muted-foreground text-xs">Day</span>
-						<select
+						<AppSelect
 							name="dayId"
-							class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-						>
-							{#each days as d (d.id)}
-								<option value={d.id} selected={d.id === activeDayId}>{d.date.slice(5)}</option>
-							{/each}
-						</select>
-					</label>
-					<label class="block text-sm">
+							size="sm"
+							testId="agenda-slot-day"
+							aria-label="Day"
+							class="mt-1"
+							value={selectedDayId === undefined ? '' : String(selectedDayId)}
+							options={dayOptions}
+						/>
+					</div>
+					<div class="block text-sm">
 						<span class="text-muted-foreground text-xs">Start</span>
-						<select
+						<AppSelect
 							name="startMinutes"
-							class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-						>
-							{#each slots as slot (slot.minutes)}
-								<option value={slot.minutes} selected={slot.minutes === target.startMinutes}>
-									{slot.label}
-								</option>
-							{/each}
-						</select>
-					</label>
+							size="sm"
+							testId="agenda-slot-start"
+							aria-label="Start"
+							class="mt-1"
+							value={String(target.startMinutes)}
+							options={slotOptions}
+						/>
+					</div>
 					<!--
 						Whatever `rooms` holds is rendered as-is. The caller decides the
 						list, and the caller's job is to pass the unfiltered one — a view
 						filter must never make a destination unreachable.
 					-->
-					<label class="block text-sm">
+					<div class="block text-sm">
 						<span class="text-muted-foreground text-xs">Room</span>
-						<select
+						<AppSelect
 							name="roomId"
-							class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-						>
-							{#each rooms as r (r.id)}
-								<option value={r.id} selected={r.id === target.roomId}>{r.name}</option>
-							{/each}
-						</select>
-					</label>
+							size="sm"
+							testId="agenda-slot-room"
+							aria-label="Room"
+							class="mt-1"
+							value={String(target.roomId)}
+							options={roomOptions}
+						/>
+					</div>
 				</div>
 
 				<Button type="submit" disabled={busy} data-testid="agenda-slot-place">

@@ -9,6 +9,7 @@
 	 * never posts.
 	 */
 	import { enhance } from '$app/forms';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
 	import { optionsToText, type CriterionKind } from '$lib/conference/scorecard-criterion';
 	import { ROUND_WINDOW_TONES } from '$lib/conference/round-window';
@@ -81,6 +82,12 @@
 
 	const kindLabel = (kind: CriterionKind) =>
 		kind === 'rating' ? 'Rating' : kind === 'select' ? 'Select' : 'Text';
+
+	/** The three kinds, in the order the native `<option>` list had them. */
+	const KIND_OPTIONS = (['rating', 'select', 'text'] as const).map((kind) => ({
+		value: kind,
+		label: kindLabel(kind)
+	}));
 
 	const addKind = (roundId: number): CriterionKind => addKindByRound[roundId] ?? 'rating';
 
@@ -314,25 +321,24 @@
 															class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm"
 														/>
 													</label>
-													<label class="w-28">
+													<div class="w-28">
 														<span class="text-muted-foreground text-xs font-medium">Type</span>
-														<select
+														<AppSelect
 															name={locked ? undefined : 'kind'}
-															class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm disabled:opacity-60"
+															class="mt-0.5"
+															size="sm"
 															value={shownKind}
+															options={KIND_OPTIONS}
 															disabled={locked}
 															title={locked ? scoresHangTitle(criterion.scoreCount) : undefined}
-															data-testid="criterion-kind"
-															onchange={(e) => {
+															aria-label="Criterion type"
+															testId="criterion-kind"
+															onValueChange={(next) => {
 																if (locked) return;
-																editKindById[criterion.id] = e.currentTarget.value as CriterionKind;
+																editKindById[criterion.id] = next as CriterionKind;
 															}}
-														>
-															<option value="rating">Rating</option>
-															<option value="select">Select</option>
-															<option value="text">Text</option>
-														</select>
-													</label>
+														/>
+													</div>
 													<label class="w-20">
 														<span class="text-muted-foreground text-xs font-medium">Weight</span>
 														<input
@@ -465,22 +471,21 @@
 											data-testid="add-criterion-label"
 										/>
 									</label>
-									<label class="w-28">
+									<div class="w-28">
 										<span class="text-muted-foreground text-xs font-medium">Type</span>
-										<select
+										<AppSelect
 											name="kind"
-											class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm"
-											data-testid="add-criterion-kind"
+											class="mt-0.5"
+											size="sm"
+											testId="add-criterion-kind"
+											aria-label="Criterion type"
 											value={addKind(round.id)}
-											onchange={(e) => {
-												addKindByRound[round.id] = e.currentTarget.value as CriterionKind;
+											options={KIND_OPTIONS}
+											onValueChange={(next) => {
+												addKindByRound[round.id] = next as CriterionKind;
 											}}
-										>
-											<option value="rating">Rating</option>
-											<option value="select">Select</option>
-											<option value="text">Text</option>
-										</select>
-									</label>
+										/>
+									</div>
 									<label class="w-20">
 										<span class="text-muted-foreground text-xs font-medium">Weight</span>
 										<input
