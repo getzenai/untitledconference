@@ -23,4 +23,11 @@ describe('app sidebar starter cleanup', () => {
 		expect(source).toContain('href="/home"');
 		expect(source).toContain('untitledconference');
 	});
+
+	it('takes the reviewing item from reviewSlug, not a hard-coded /review (#373)', () => {
+		// The module-level list still says /review (the list of many). The
+		// derived items overwrite that when navAccess names exactly one
+		// conference, so the common reviewer never hits the 303.
+		expect(source).toContain('reviewQueueHref(navAccess.reviewSlug)');
+	});
 });

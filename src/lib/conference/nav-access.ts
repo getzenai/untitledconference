@@ -36,6 +36,13 @@ export type NavAccess = {
 	/** `/review`. True with a reviewer membership on any conference or round. */
 	reviewing: boolean;
 	/**
+	 * The conference to open when there is exactly one. The sidebar and the
+	 * home "Review queue" link go straight there so a reviewer does not pay
+	 * `/review`'s 303 on the common path (#373). Null when there is no seat,
+	 * or more than one conference — then the URL stays `/review`.
+	 */
+	reviewSlug: string | null;
+	/**
 	 * `/portal/profile`, as the "Your speaker profile" entry in the account menu
 	 * (#248) rather than a sidebar destination. True when a speaker profile
 	 * exists for this account — claimed, or still unclaimed but matching the
@@ -47,7 +54,17 @@ export type NavAccess = {
 };
 
 /** A destination that is only shown when its flag is set; no flag means always shown. */
-export type NavGate = keyof NavAccess;
+export type NavGate = {
+	[K in keyof NavAccess]: NavAccess[K] extends boolean ? K : never;
+}[keyof NavAccess];
+
+/**
+ * Where Reviewing goes. One conference is a click that buys nothing — the
+ * same reason `/review` 303s — but naming it on the link skips that render.
+ */
+export function reviewQueueHref(slug: string | null): string {
+	return slug ? `/review/${slug}` : '/review';
+}
 
 /**
  * Keeps the items whose gate is open, in the order they were given.

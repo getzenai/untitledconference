@@ -67,7 +67,13 @@ function page(
 			data: {
 				user: { id: 'reviewer-1', name: 'Riley' },
 				// Shell data (#239); this page renders inside the sidebar layout.
-				navAccess: { conferences: false, contacts: false, reviewing: true, speakerProfile: false },
+				navAccess: {
+					conferences: false,
+					contacts: false,
+					reviewing: true,
+					reviewSlug: 'test-conf',
+					speakerProfile: false
+				},
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,

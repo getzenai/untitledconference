@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { visibleNavItems, type NavAccess, type NavGate } from './nav-access';
+import { reviewQueueHref, visibleNavItems, type NavAccess, type NavGate } from './nav-access';
 
 /** The sidebar's real list, reduced to what the filter looks at. */
 const ITEMS = [
@@ -14,6 +14,7 @@ const NOBODY: NavAccess = {
 	conferences: false,
 	contacts: false,
 	reviewing: false,
+	reviewSlug: null,
 	speakerProfile: false
 };
 
@@ -58,5 +59,17 @@ describe('sidebar destinations by relation', () => {
 		// Speaking has no gate on purpose: anyone may submit a proposal.
 		const ungated: { title: string; gate?: NavGate }[] = [{ title: 'Speaking' }];
 		expect(visibleNavItems(ungated, NOBODY)).toHaveLength(1);
+	});
+});
+
+describe('reviewQueueHref', () => {
+	it('names the conference when there is exactly one', () => {
+		// A list of one is a click that buys nothing. Naming it on the link
+		// skips `/review`'s 303, which is a full second render (#373).
+		expect(reviewQueueHref('devflow-conf-2027')).toBe('/review/devflow-conf-2027');
+	});
+
+	it('keeps the list URL when there is no single conference to name', () => {
+		expect(reviewQueueHref(null)).toBe('/review');
 	});
 });
