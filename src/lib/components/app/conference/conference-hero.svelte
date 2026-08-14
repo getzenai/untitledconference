@@ -23,7 +23,8 @@
 		callIsOpen
 	}: {
 		view: ConferenceView;
-		dateRange: string;
+		/** Null while the conference has no dates — the line comes off entirely. */
+		dateRange: string | null;
 		callIsOpen: boolean;
 	} = $props();
 
@@ -61,16 +62,22 @@
 			{conference.name}
 		</h1>
 
-		<p class="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-			<span class="flex items-center gap-2">
-				<CalendarIcon class="size-4 shrink-0" aria-hidden="true" />{dateRange}
-			</span>
-			{#if conference.venue}
-				<span class="flex items-center gap-2">
-					<MapPinIcon class="size-4 shrink-0" aria-hidden="true" />{conference.venue}
-				</span>
-			{/if}
-		</p>
+		<!-- The whole line goes when neither half has anything to say: an empty
+		     paragraph under the title reads as a loading state that never ends. -->
+		{#if dateRange || conference.venue}
+			<p class="text-muted-foreground mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+				{#if dateRange}
+					<span class="flex items-center gap-2">
+						<CalendarIcon class="size-4 shrink-0" aria-hidden="true" />{dateRange}
+					</span>
+				{/if}
+				{#if conference.venue}
+					<span class="flex items-center gap-2">
+						<MapPinIcon class="size-4 shrink-0" aria-hidden="true" />{conference.venue}
+					</span>
+				{/if}
+			</p>
+		{/if}
 
 		<div class="mt-8 flex flex-wrap gap-3">
 			<Button href={`${base}/agenda`}>See the agenda</Button>

@@ -13,7 +13,7 @@
 	import LandingHeader from '$lib/components/landing-header.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { formatDayLong } from '$lib/conference/public-view';
+	import { formatDateRange } from '$lib/conference/public-view';
 	import { REPO_URL } from '$lib/constants';
 
 	let { data } = $props();
@@ -26,12 +26,6 @@
 	 * app, and the product page is out of reach again.
 	 */
 	const selfHref = $derived(data.user ? '/?home=0' : '/');
-
-	const dateRange = (startsOn: string, endsOn: string) => {
-		if (!startsOn) return null;
-		if (!endsOn || endsOn === startsOn) return formatDayLong(startsOn);
-		return `${formatDayLong(startsOn)} – ${formatDayLong(endsOn)}`;
-	};
 </script>
 
 <svelte:head>
@@ -444,7 +438,7 @@
 				{:else}
 					<ul class="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{#each data.conferences as conference (conference.slug)}
-							{@const dates = dateRange(conference.startsOn, conference.endsOn)}
+							{@const dates = formatDateRange(conference)}
 							<li>
 								<a
 									href="/c/{conference.slug}"

@@ -6,7 +6,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { PublicConference } from './public-types';
-import { buildView, daysUntil, firstScheduledDayIndex, formatDayLong, isoDay } from './public-view';
+import {
+	buildView,
+	daysUntil,
+	firstScheduledDayIndex,
+	formatDateRange,
+	formatDayLong,
+	isoDay
+} from './public-view';
 
 describe('isoDay', () => {
 	it('keeps the year, which the obvious wrong version does not', () => {
@@ -111,5 +118,34 @@ describe('firstScheduledDayIndex', () => {
 	it('stays on the first day when nothing is scheduled', () => {
 		const view = buildView(conference(['d1', 'd2'], null));
 		expect(firstScheduledDayIndex(view)).toBe(0);
+	});
+});
+
+/**
+ * A conference may be published before anyone has settled on a date (#492).
+ *
+ * The column is nullable, the type used to claim otherwise, and the loader
+ * papered over it with `?? ''` — so this formatter reached `new Date('')` and
+ * threw a RangeError on the header of every inner page. The whole public site
+ * answered 500 while the organizer view said "Published".
+ */
+describe('formatDateRange', () => {
+	it('says nothing at all when there is no start date', () => {
+		expect(formatDateRange({ startsOn: null, endsOn: null })).toBeNull();
+	});
+
+	it('names the start day rather than throw when only the end date is missing', () => {
+		expect(formatDateRange({ startsOn: '2027-06-02', endsOn: null })).toBe(
+			'Wednesday, 2 June 2027'
+		);
+	});
+
+	it('names one day for a one-day conference and both ends otherwise', () => {
+		expect(formatDateRange({ startsOn: '2027-06-02', endsOn: '2027-06-02' })).toBe(
+			'Wednesday, 2 June 2027'
+		);
+		expect(formatDateRange({ startsOn: '2027-06-02', endsOn: '2027-06-04' })).toBe(
+			'Wednesday, 2 June 2027 – Friday, 4 June 2027'
+		);
 	});
 });

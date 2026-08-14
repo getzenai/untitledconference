@@ -103,11 +103,22 @@ export function daysUntil(at: Date | null, now = new Date()): number | null {
  * Lives here because two surfaces render it — the header on every inner page and
  * the hero on the index — and a conference whose dates read differently on two
  * pages of its own site is the drift EMB-16 grades.
+ *
+ * Null when there is no start date. A conference may be published before its
+ * dates are fixed, and `formatDayLong(null)` is not a blank line but a thrown
+ * RangeError on the header of every inner page — which took whole public sites
+ * down (#492). The caller renders nothing instead; a missing date line is a
+ * conference that has not announced dates, which is the truth.
  */
-export const formatDateRange = (conference: { startsOn: string; endsOn: string }) =>
-	conference.startsOn === conference.endsOn
-		? formatDayLong(conference.startsOn)
-		: `${formatDayLong(conference.startsOn)} – ${formatDayLong(conference.endsOn)}`;
+export const formatDateRange = (conference: {
+	startsOn: string | null;
+	endsOn: string | null;
+}): string | null => {
+	if (!conference.startsOn) return null;
+	if (!conference.endsOn || conference.endsOn === conference.startsOn)
+		return formatDayLong(conference.startsOn);
+	return `${formatDayLong(conference.startsOn)} – ${formatDayLong(conference.endsOn)}`;
+};
 
 /** "Thu 17 Sep, 10:00 – 10:30" — the full stamp EMB-08 and EMB-09 ask for. */
 export const formatFullStamp = (session: { startsAt: string; endsAt: string }) => {

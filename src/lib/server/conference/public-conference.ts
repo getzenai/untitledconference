@@ -271,8 +271,8 @@ export async function loadPublicConference(slug: string): Promise<PublicConferen
 		slug: conference.slug,
 		name: conference.name,
 		venue: conference.venue,
-		startsOn: conference.startsOn ?? '',
-		endsOn: conference.endsOn ?? '',
+		startsOn: conference.startsOn,
+		endsOn: conference.endsOn,
 		...taxonomy,
 		...assembleProgramme(placements, speakerRows)
 	};
@@ -375,8 +375,9 @@ export type PublicConferenceSummary = {
 	slug: string;
 	name: string;
 	venue: string | null;
-	startsOn: string;
-	endsOn: string;
+	/** Null when the organizer has not fixed dates yet — see PublicConference. */
+	startsOn: string | null;
+	endsOn: string | null;
 };
 
 /**
@@ -436,7 +437,7 @@ async function selectSummaries(where: SQL): Promise<PublicConferenceSummary[]> {
 		slug: row.slug,
 		name: row.name,
 		venue: row.venue,
-		startsOn: row.startsOn ?? '',
-		endsOn: row.endsOn ?? ''
+		startsOn: row.startsOn,
+		endsOn: row.endsOn
 	}));
 }
