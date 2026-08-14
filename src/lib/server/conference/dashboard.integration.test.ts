@@ -17,6 +17,7 @@ import {
 } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceDayTable,
+	conferenceSpeakerTable,
 	conferenceTable,
 	roomTable,
 	speakerProfileTable,
@@ -554,8 +555,9 @@ describe('submissions over time', () => {
 });
 
 /**
- * #473. The flip is `dashboardMode(submissions)` — not "does this look empty".
- * A dedicated conference so rooms added by the scheduling tests cannot leak in.
+ * #473. The flip is `dashboardMode` on anything waiting — not "does this look
+ * empty" and not "has a submission arrived". A dedicated conference so rooms
+ * added by the scheduling tests cannot leak in.
  */
 describe('day one is a different screen', () => {
 	let bare: Conference;
@@ -587,22 +589,162 @@ describe('day one is a different screen', () => {
 
 		const empty = await conferenceDashboard(bare.id, NOW);
 
-		expect(empty.setup).toEqual({ rooms: 0, tracks: 0, cfpOpen: false, submissions: 0 });
+		expect(empty.setup).toEqual({
+			rooms: 0,
+			tracks: 0,
+			cfpOpen: false,
+			submissions: 0,
+			speakers: 0
+		});
 		expect(empty.mode).toBe('setup');
-		expect(dashboardMode(empty.setup.submissions)).toBe('setup');
+		expect(
+			dashboardMode({
+				submissions: empty.setup.submissions,
+				speakers: empty.setup.speakers,
+				queuedMail: empty.mail.queued,
+				failedMail: empty.mail.failed,
+				tasks: empty.tasks.open
+			})
+		).toBe('setup');
 
 		await addSubmission(bare, 'First talk in', 'submitted');
 		const withData = await conferenceDashboard(bare.id, NOW);
 
 		expect(withData.setup.submissions).toBe(1);
 		expect(withData.mode).toBe('measure');
-		expect(dashboardMode(withData.setup.submissions)).toBe('measure');
+		expect(
+			dashboardMode({
+				submissions: withData.setup.submissions,
+				speakers: withData.setup.speakers,
+				queuedMail: withData.mail.queued,
+				failedMail: withData.mail.failed,
+				tasks: withData.tasks.open
+			})
+		).toBe('measure');
 	});
 
 	it('rooms, tracks and an open call do not flip the screen by themselves', async () => {
 		const snap = await conferenceDashboard(structured.id, NOW);
 
-		expect(snap.setup).toEqual({ rooms: 1, tracks: 1, cfpOpen: true, submissions: 0 });
+		expect(snap.setup).toEqual({
+			rooms: 1,
+			tracks: 1,
+			cfpOpen: true,
+			submissions: 0,
+			speakers: 0
+		});
 		expect(snap.mode).toBe('setup');
+	});
+
+	it('a speaker with no submission is already the dashboard', async () => {
+		const [sourced] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Sourced Conf', slug: `${suffix}-sourced` })
+			.returning();
+
+		await db.insert(conferenceSpeakerTable).values({
+			conferenceId: sourced.id,
+			speakerProfileId,
+			status: 'confirmed'
+		});
+
+		const snap = await conferenceDashboard(sourced.id, NOW);
+
+		expect(snap.setup.submissions).toBe(0);
+		expect(snap.setup.speakers).toBe(1);
+		expect(snap.mode).toBe('measure');
+	});
+
+	it('queued or failed mail without a submission is already the dashboard', async () => {
+		const [mailed] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Mailed Conf', slug: `${suffix}-mailed` })
+			.returning();
+
+		await db.insert(emailLogTable).values({
+			conferenceId: mailed.id,
+			toEmail: `queued-${suffix}@example.com`,
+			template: 'speaker_bulk',
+			subject: 'You are on the programme',
+			status: 'queued'
+		});
+
+		const queued = await conferenceDashboard(mailed.id, NOW);
+		expect(queued.setup.submissions).toBe(0);
+		expect(queued.mail.queued).toBe(1);
+		expect(queued.mode).toBe('measure');
+
+		await db.delete(emailLogTable).where(eq(emailLogTable.conferenceId, mailed.id));
+		await db.insert(emailLogTable).values({
+			conferenceId: mailed.id,
+			toEmail: `failed-${suffix}@example.com`,
+			template: 'speaker_bulk',
+			subject: 'You are on the programme',
+			status: 'failed',
+			error: 'bounce'
+		});
+
+		const failed = await conferenceDashboard(mailed.id, NOW);
+		expect(failed.mail.failed).toBe(1);
+		expect(failed.mode).toBe('measure');
+	});
+
+	it('an open task without a submission is already the dashboard', async () => {
+		const [tasked] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Tasked Conf', slug: `${suffix}-tasked` })
+			.returning();
+
+		await db.insert(taskTable).values({
+			conferenceId: tasked.id,
+			speakerProfileId,
+			title: 'Upload slides'
+		});
+
+		const snap = await conferenceDashboard(tasked.id, NOW);
+
+		expect(snap.setup.submissions).toBe(0);
+		expect(snap.tasks.open).toBe(1);
+		expect(snap.mode).toBe('measure');
+	});
+
+	it('an older draft does not hide a published open call', async () => {
+		const [shadowed] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Shadowed Conf', slug: `${suffix}-shadowed` })
+			.returning();
+
+		await db.insert(cfpFormTable).values({
+			conferenceId: shadowed.id,
+			title: 'Leftover draft',
+			status: 'draft'
+		});
+		await db.insert(cfpFormTable).values({
+			conferenceId: shadowed.id,
+			title: 'Live call',
+			status: 'published'
+		});
+
+		const snap = await conferenceDashboard(shadowed.id, NOW);
+
+		expect(snap.setup.cfpOpen).toBe(true);
+		expect(snap.mode).toBe('setup');
+	});
+
+	it('a draft-only form is closed, the same way a submitter sees it', async () => {
+		const [draftOnly] = await db
+			.insert(conferenceTable)
+			.values({ organizationId, name: 'Draft-only Conf', slug: `${suffix}-draft-only` })
+			.returning();
+
+		await db.insert(cfpFormTable).values({
+			conferenceId: draftOnly.id,
+			title: 'Not announced',
+			status: 'draft'
+		});
+
+		const snap = await conferenceDashboard(draftOnly.id, NOW);
+
+		expect(snap.setup.cfpOpen).toBe(false);
 	});
 });

@@ -2,9 +2,10 @@
 	/**
 	 * The organizer's landing surface (journey 2, step 10).
 	 *
-	 * Day one is a different screen, not an emptier one (#473). Until a submission
-	 * exists there is nothing to measure, so this is the three setup steps the
-	 * create form already named. The first submission flips to the queues below.
+	 * Day one is a different screen, not an emptier one (#473). Until something
+	 * is waiting there is nothing to measure, so this is the three setup steps
+	 * the create form already named. A submission, a speaker, queued or failed
+	 * mail, or an open task flips to the queues below.
 	 *
 	 * The submissions table shows what exists; this shows what is stuck. Everything on
 	 * screen is a queue with a real count and a way in — no vanity totals, no chart
@@ -27,6 +28,7 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
+	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { nextSetupStep } from '$lib/conference/dashboard-mode';
 	import {
 		dashboardSchedulingEmpty,
@@ -54,25 +56,24 @@
 	const d = $derived(data.dashboard);
 	const settingUp = $derived(d.mode === 'setup');
 	const setupNext = $derived(settingUp ? nextSetupStep(d.setup) : 'ready');
+	const publicSite = $derived(publicSiteLink(data.conference.status, data.conference.slug));
 
 	const setupHeadline = $derived(
 		setupNext === 'rooms'
-			? 'Add rooms, then tracks, then open the call.'
-			: setupNext === 'tracks'
-				? 'Rooms are in. Add tracks, then open the call.'
-				: setupNext === 'cfp'
-					? 'Structure is ready. Open the call when you are.'
-					: 'Share the call. The first submission turns this into a dashboard.'
+			? 'Add rooms, then open the call.'
+			: setupNext === 'cfp'
+				? 'Structure is ready. Open the call when you are.'
+				: 'Share the call. The first submission turns this into a dashboard.'
 	);
 
 	const setupAction = $derived(
 		setupNext === 'rooms'
 			? { href: `${base}/settings#rooms`, label: 'Add rooms' }
-			: setupNext === 'tracks'
-				? { href: `${base}/settings#tracks`, label: 'Add tracks' }
-				: setupNext === 'cfp'
-					? { href: `${base}/cfp`, label: 'Open the call' }
-					: { href: `${base}/cfp`, label: 'Share the call' }
+			: setupNext === 'cfp'
+				? { href: `${base}/cfp`, label: 'Open the call' }
+				: publicSite.available
+					? { href: publicSite.href, label: 'Share the call' }
+					: { href: `${base}/settings`, label: 'Publish the event' }
 	);
 
 	const stamp = (value: Date | string | null) =>

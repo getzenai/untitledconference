@@ -25,6 +25,7 @@ import {
 	type Submission
 } from '$lib/server/db/conference/cfp-schema';
 import {
+	conferenceSpeakerTable,
 	roomTable,
 	speakerProfileTable,
 	trackTable
@@ -130,10 +131,11 @@ export type DashboardSetup = {
 	tracks: number;
 	cfpOpen: boolean;
 	submissions: number;
+	speakers: number;
 };
 
 export type DashboardSnapshot = {
-	/** `setup` while `submissions === 0`; see `dashboardMode`. */
+	/** `setup` while nothing is waiting; see `dashboardMode`. */
 	mode: DashboardMode;
 	setup: DashboardSetup;
 	decisions: {
@@ -190,7 +192,13 @@ export async function conferenceDashboard(
 		]);
 
 	return {
-		mode: dashboardMode(setup.submissions),
+		mode: dashboardMode({
+			submissions: setup.submissions,
+			speakers: setup.speakers,
+			queuedMail: mail.queued,
+			failedMail: mail.failed,
+			tasks: tasks.open
+		}),
 		setup,
 		decisions,
 		scheduling,
@@ -203,20 +211,46 @@ export async function conferenceDashboard(
 }
 
 /**
- * The three setup steps the create form already names, plus the count that
- * decides whether this snapshot is still that screen.
+ * The setup steps plus the counts that decide whether this snapshot is still
+ * that screen.
  *
- * CFP is open the same way a submitter would see it: a published form whose
- * window includes `at`. No form, a draft, or a closed window is closed.
+ * CFP is open the same way a submitter would see it: a published or closed
+ * form whose window includes `at`. The same `published`/`closed` filter as
+ * `publishedFormFor` — an older draft must not hide the live form. No form, a
+ * draft-only conference, or a closed window is closed.
+ *
+ * Rooms, tracks and the form are only drawn on the setup screen. Count
+ * submissions and speakers first; skip the other three once either exists.
+ * Queued or failed mail and open tasks flip the screen too — those counts
+ * arrive from the parallel fetches, not here.
  */
 async function setupState(conferenceId: number, at: Date): Promise<DashboardSetup> {
-	const [[rooms], [tracks], [submissions], [form]] = await Promise.all([
-		db.select({ n: count() }).from(roomTable).where(eq(roomTable.conferenceId, conferenceId)),
-		db.select({ n: count() }).from(trackTable).where(eq(trackTable.conferenceId, conferenceId)),
+	const [[submissions], [speakers]] = await Promise.all([
 		db
 			.select({ n: count() })
 			.from(submissionTable)
 			.where(eq(submissionTable.conferenceId, conferenceId)),
+		db
+			.select({ n: count() })
+			.from(conferenceSpeakerTable)
+			.where(eq(conferenceSpeakerTable.conferenceId, conferenceId))
+	]);
+
+	const paperCount = Number(submissions?.n ?? 0);
+	const speakerCount = Number(speakers?.n ?? 0);
+	if (paperCount > 0 || speakerCount > 0) {
+		return {
+			rooms: 0,
+			tracks: 0,
+			cfpOpen: false,
+			submissions: paperCount,
+			speakers: speakerCount
+		};
+	}
+
+	const [[rooms], [tracks], [form]] = await Promise.all([
+		db.select({ n: count() }).from(roomTable).where(eq(roomTable.conferenceId, conferenceId)),
+		db.select({ n: count() }).from(trackTable).where(eq(trackTable.conferenceId, conferenceId)),
 		db
 			.select({
 				status: cfpFormTable.status,
@@ -224,20 +258,26 @@ async function setupState(conferenceId: number, at: Date): Promise<DashboardSetu
 				closesAt: cfpFormTable.closesAt
 			})
 			.from(cfpFormTable)
-			.where(eq(cfpFormTable.conferenceId, conferenceId))
+			.where(
+				and(
+					eq(cfpFormTable.conferenceId, conferenceId),
+					inArray(cfpFormTable.status, ['published', 'closed'])
+				)
+			)
 			.orderBy(asc(cfpFormTable.id))
 			.limit(1)
 	]);
 
 	const cfpOpen = form
-		? callWindow(form.opensAt, form.closesAt, form.status !== 'published', at) === 'open'
+		? callWindow(form.opensAt, form.closesAt, form.status === 'closed', at) === 'open'
 		: false;
 
 	return {
 		rooms: Number(rooms?.n ?? 0),
 		tracks: Number(tracks?.n ?? 0),
 		cfpOpen,
-		submissions: Number(submissions?.n ?? 0)
+		submissions: 0,
+		speakers: 0
 	};
 }
 

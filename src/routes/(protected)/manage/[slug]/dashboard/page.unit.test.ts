@@ -12,7 +12,7 @@ const conference = {
 	startsOn: null,
 	endsOn: null,
 	cfpIntro: null,
-	status: 'published' as const,
+	status: 'published' as 'draft' | 'published' | 'archived',
 	statusBeforeArchive: null,
 	listedPublicly: false,
 	reviewVisibility: 'open' as const,
@@ -22,7 +22,7 @@ const conference = {
 
 const emptyDashboard = {
 	mode: 'measure' as const,
-	setup: { rooms: 2, tracks: 2, cfpOpen: true, submissions: 1 },
+	setup: { rooms: 2, tracks: 2, cfpOpen: true, submissions: 1, speakers: 0 },
 	decisions: { undecided: 0, unreviewed: 0, items: [] },
 	scheduling: { accepted: 0, unplaced: 0, tentative: 0, items: [] },
 	tasks: { open: 0, overdue: 0, dueSoon: 0, items: [] },
@@ -563,11 +563,16 @@ describe('day one is a different screen', () => {
 	};
 
 	function renderDash(
-		over: Partial<Omit<typeof emptyDashboard, 'mode'>> & { mode?: 'setup' | 'measure' }
+		over: Partial<Omit<typeof emptyDashboard, 'mode'>> & { mode?: 'setup' | 'measure' },
+		conferenceOver: Partial<typeof conference> = {}
 	) {
 		return render(Page, {
 			props: {
-				data: { ...layout, dashboard: { ...emptyDashboard, ...over } } as PageData,
+				data: {
+					...layout,
+					conference: { ...conference, ...conferenceOver },
+					dashboard: { ...emptyDashboard, ...over }
+				} as PageData,
 				form: null
 			}
 		}).body;
@@ -576,7 +581,7 @@ describe('day one is a different screen', () => {
 	it('shows the three setup steps when there is nothing to measure', () => {
 		const body = renderDash({
 			mode: 'setup',
-			setup: { rooms: 0, tracks: 0, cfpOpen: false, submissions: 0 }
+			setup: { rooms: 0, tracks: 0, cfpOpen: false, submissions: 0, speakers: 0 }
 		});
 
 		expect(body).toContain('data-testid="dashboard-setup"');
@@ -590,10 +595,10 @@ describe('day one is a different screen', () => {
 		expect(body).not.toContain('Open the submissions table');
 	});
 
-	it('keeps the dashboard once a submission exists', () => {
+	it('keeps the dashboard once something is waiting', () => {
 		const body = renderDash({
 			mode: 'measure',
-			setup: { rooms: 0, tracks: 0, cfpOpen: false, submissions: 1 }
+			setup: { rooms: 0, tracks: 0, cfpOpen: false, submissions: 0, speakers: 1 }
 		});
 
 		expect(body).toContain('data-testid="dashboard-metrics"');
@@ -604,12 +609,47 @@ describe('day one is a different screen', () => {
 	it('names each step from the counts the server sent', () => {
 		const body = renderDash({
 			mode: 'setup',
-			setup: { rooms: 2, tracks: 1, cfpOpen: false, submissions: 0 }
+			setup: { rooms: 2, tracks: 1, cfpOpen: false, submissions: 0, speakers: 0 }
 		});
 
 		expect(body).toContain('2 rooms');
 		expect(body).toContain('1 track');
 		expect(body).toContain('Open the call');
 		expect(body).toContain('Structure is ready');
+	});
+
+	it('does not treat missing tracks as the next required step', () => {
+		const body = renderDash({
+			mode: 'setup',
+			setup: { rooms: 2, tracks: 0, cfpOpen: false, submissions: 0, speakers: 0 }
+		});
+
+		expect(body).toContain('Structure is ready');
+		expect(body).toContain('Open the call');
+		expect(body).not.toContain('Rooms are in. Add tracks');
+	});
+
+	it('shares the public site, not the editor, when the call is open', () => {
+		const body = renderDash({
+			mode: 'setup',
+			setup: { rooms: 1, tracks: 0, cfpOpen: true, submissions: 0, speakers: 0 }
+		});
+
+		expect(body).toContain('Share the call');
+		expect(body).toContain('href="/c/test-conf"');
+	});
+
+	it('asks to publish when there is no public site to share', () => {
+		const body = renderDash(
+			{
+				mode: 'setup',
+				setup: { rooms: 1, tracks: 0, cfpOpen: true, submissions: 0, speakers: 0 }
+			},
+			{ status: 'draft' }
+		);
+
+		expect(body).toContain('Publish the event');
+		expect(body).toContain('href="/manage/test-conf/settings"');
+		expect(body).not.toContain('href="/c/test-conf"');
 	});
 });
