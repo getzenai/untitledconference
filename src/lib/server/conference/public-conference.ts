@@ -74,6 +74,29 @@ async function loadHeader(slug: string) {
 	return conference ?? null;
 }
 
+/**
+ * Why `/c/<slug>` has nothing to show (#474).
+ *
+ * Only ever called after `loadPublicConference` has already missed, so it costs
+ * one query on the 404 path and nothing on a real page. It exists because the
+ * miss has three causes and the page told all three the same untrue thing — "No
+ * conference with that address" — including to the organizer who arrived by
+ * clicking our own link from their own draft.
+ *
+ * It does confirm to a stranger that a slug is taken by an unpublished
+ * conference. That is the price of the sentence being true, and the row itself
+ * stays unreadable: nothing but the status leaves this function.
+ */
+export async function unpublishedConferenceStatus(slug: string): Promise<string | null> {
+	const [row] = await db
+		.select({ status: conferenceTable.status })
+		.from(conferenceTable)
+		.where(eq(conferenceTable.slug, slug))
+		.limit(1);
+
+	return row?.status ?? null;
+}
+
 /** Days, rooms, tracks and formats — the axes every surface filters and groups by. */
 async function loadTaxonomy(conferenceId: number) {
 	const [days, rooms, tracks, formats] = await Promise.all([

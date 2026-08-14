@@ -65,6 +65,7 @@
 		isConferenceRail,
 		type ConferenceRail
 	} from '$lib/conference/conference-nav';
+	import { conferenceBadge, publicSiteLink } from '$lib/conference/conference-status';
 	import { reviewQueueHref, visibleNavItems, type NavAccess } from '$lib/conference/nav-access';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import type { ComponentProps } from 'svelte';
@@ -113,6 +114,10 @@
 	});
 
 	const conferenceDates = $derived(conference ? conferenceDateRange(conference) : '');
+	const conferenceBadgeState = $derived(conference ? conferenceBadge(conference.status) : null);
+	const mobilePublicSite = $derived(
+		conference ? publicSiteLink(conference.status, conference.slug) : null
+	);
 
 	const draftBadgeClass =
 		'focus-visible:ring-sidebar-ring mx-2 mb-1 inline-block shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium tracking-wide uppercase text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:outline-none';
@@ -155,25 +160,37 @@
 					{/if}
 					· All conferences
 				</a>
-				{#if conference.status !== 'published'}
+				{#if conferenceBadgeState}
 					<a
 						href="/manage/{conference.slug}/settings"
 						data-testid="draft-badge-mobile"
+						title={conferenceBadgeState.hint}
 						class={draftBadgeClass}
 					>
-						Draft
+						{conferenceBadgeState.short}
 					</a>
 				{/if}
 				<NavConference {conference} />
-				<a
-					href="/c/{conference.slug}"
-					target="_blank"
-					rel="noopener"
-					data-testid="view-public-site-mobile"
-					class="text-muted-foreground hover:text-foreground mx-2 mt-1 block text-xs underline underline-offset-4"
-				>
-					Public site
-				</a>
+				{#if mobilePublicSite?.available}
+					<a
+						href={mobilePublicSite.href}
+						target="_blank"
+						rel="noopener"
+						data-testid="view-public-site-mobile"
+						class="text-muted-foreground hover:text-foreground mx-2 mt-1 block text-xs underline underline-offset-4"
+					>
+						Public site
+					</a>
+				{:else if mobilePublicSite}
+					<a
+						href="/manage/{conference.slug}/settings"
+						data-testid="public-site-unavailable-mobile"
+						title={mobilePublicSite.reason}
+						class="text-muted-foreground hover:text-foreground mx-2 mt-1 block text-xs underline underline-offset-4"
+					>
+						{mobilePublicSite.label}
+					</a>
+				{/if}
 			</div>
 		{/if}
 		{#if isAdmin}
