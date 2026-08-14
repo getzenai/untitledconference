@@ -489,14 +489,36 @@ describe('agenda public state (#497)', () => {
 
 		const alone = renderWith(1, 1, { placed: [declined] });
 		expect(alone).toContain('The public cannot see these slots yet.');
-		expect(alone).toContain('Publish the agenda');
-		expect(alone).not.toContain('Unpublish the agenda');
 		expect(alone).not.toContain('The public agenda shows 1 session.');
 
 		const beside = renderWith(1, 1, { placed: [talk(2, 'confirmed'), declined] });
 		expect(beside).toContain('The public agenda shows 1 of 2 sessions.');
-		expect(beside).toContain('Publish the agenda');
-		expect(beside).not.toContain('Unpublish the agenda');
+	});
+
+	/**
+	 * The button is not the sentence.
+	 *
+	 * `?/publish` toggles placement status and knows nothing about acceptance, so
+	 * reading the label off the live count took Unpublish away for as long as a
+	 * declined talk sat in a confirmed slot — with the public still being served
+	 * the rest. The label follows what the action owns; the sentence keeps saying
+	 * what the public sees, including the "1 of 2" no two-state button can carry.
+	 */
+	it('still offers Unpublish while a declined talk holds a confirmed slot', () => {
+		const declined = talk(1, 'confirmed', { submissionStatus: 'rejected' });
+
+		const alone = renderWith(1, 1, { placed: [declined] });
+		expect(alone).toContain('Unpublish the agenda');
+		expect(alone).toContain('The public cannot see these slots yet.');
+
+		const beside = renderWith(1, 1, { placed: [talk(2, 'confirmed'), declined] });
+		expect(beside).toContain('Unpublish the agenda');
+		expect(beside).toContain('The public agenda shows 1 of 2 sessions.');
+
+		// A tentative talk beside it still has publishing left to do.
+		const half = renderWith(1, 1, { placed: [talk(2, 'tentative'), declined] });
+		expect(half).toContain('Publish the agenda');
+		expect(half).not.toContain('Unpublish the agenda');
 	});
 
 	it('fills Publish and outlines Unpublish', () => {
