@@ -19,7 +19,7 @@ export const load: LayoutServerLoad = async ({ url, locals }) => {
 		// If user is not logged in (i.e., locals.user is not set by the auth hook),
 		// redirect to login page with return URL.
 		logger.info('No user found, redirecting to login from:', url.pathname);
-		throw redirect(303, `/login?returnTo=${url.pathname}`);
+		throw redirect(303, `/login?returnTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
 	logger.debug('User authenticated, allowing access to:', url.pathname);
