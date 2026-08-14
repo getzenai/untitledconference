@@ -9,7 +9,7 @@
  * demo seed, and each `describe` owns its organization so profile identity in one
  * cannot decide the outcome of another.
  */
-import { db } from '$lib/server/db';
+import { db, withRequestScopedDb } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import {
 	cfpFormTable,
@@ -329,5 +329,245 @@ describe('mySubmissions and myTasks for a co-speaker', () => {
 	it('still shows the submitter their own talk', async () => {
 		const titles = (await mySubmissions(submitter.id)).map((s) => s.title);
 		expect(titles).toContain('The two-person talk');
+	});
+});
+
+/**
+ * The read that claims must also return what it just claimed.
+ *
+ * `ownProfileIds` does both in one statement, and a statement does not see its
+ * own CTE's write: the select half runs against the snapshot the update started
+ * from, so a profile claimed by this very call is invisible to it. The `union`
+ * with the update's `returning` is what closes that.
+ *
+ * The co-speaker fixture above already fails if the union goes (checked, by
+ * removing it). This one covers the case that fixture cannot: a speaker holding
+ * a claimed profile *and* an unclaimed one, where the select half comes back
+ * non-empty and a wrong answer therefore still looks like an answer.
+ *
+ * Production reaches it the moment someone with a profile of their own is named
+ * as a co-speaker by a second organizer.
+ */
+describe('mySubmissions when one profile is already claimed and another is not', () => {
+	let ownOrgId = '';
+	let invitedOrgId = '';
+	let speaker: { id: string; email: string };
+
+	beforeAll(async () => {
+		const own = await makeOrg('mixed-own');
+		const invited = await makeOrg('mixed-invited');
+		ownOrgId = own.organizationId;
+		invitedOrgId = invited.organizationId;
+		speaker = await makeUser('mixed');
+
+		const [claimed] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: ownOrgId,
+				userId: speaker.id,
+				name: 'Priya Raman',
+				sortName: 'Raman, Priya',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		// The other organizer's roster: same address, no account attached yet.
+		const [unclaimed] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: invitedOrgId,
+				name: 'Priya Raman',
+				sortName: 'Raman, Priya',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		await proposalFor(
+			own.conference.id,
+			claimed.id,
+			'The talk she proposed herself',
+			new Date('2027-02-01T09:00:00.000Z')
+		);
+		await proposalFor(
+			invited.conference.id,
+			unclaimed.id,
+			'The talk she was invited to',
+			new Date('2027-02-02T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, ownOrgId));
+		await db.delete(organization).where(eq(organization.id, invitedOrgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+	});
+
+	it('shows both on the first read, not only from the second one on', async () => {
+		const titles = (await mySubmissions(speaker.id)).map((s) => s.title);
+
+		expect(titles).toContain('The talk she proposed herself');
+		expect(titles).toContain('The talk she was invited to');
+	});
+
+	it('leaves the claim in place, so a second read is not a second write', async () => {
+		await mySubmissions(speaker.id);
+
+		const profiles = await db
+			.select({ userId: speakerProfileTable.userId })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.organizationId, invitedOrgId));
+
+		expect(profiles).toEqual([{ userId: speaker.id }]);
+	});
+});
+
+/**
+ * Two requests racing for the same unclaimed profile.
+ *
+ * Not `/portal`'s own `Promise.all`: `db` is `max: 1`, and one backend runs one
+ * statement at a time, so those two are serial however they are dispatched —
+ * the second starts on a snapshot that already contains the first's claim.
+ * Measured, not assumed: this test passes against both query shapes when both
+ * calls share a connection.
+ *
+ * Two *requests* is the real case — two tabs, two Workers, two connections,
+ * one person's first visit. Both start on a snapshot where the profile is
+ * unclaimed; one claims it, and the other's `update` matches nothing, because
+ * READ COMMITTED re-checks `user_id is null` against the row the winner
+ * committed. The loser is left with an empty `returning` and a select still
+ * sitting on the pre-claim snapshot.
+ *
+ * So an answer built from `returning` is an answer about who won a lock. This
+ * test fails against that shape and passes against the one that states the
+ * membership in its own `where`.
+ */
+describe('two requests racing for the same unclaimed profile', () => {
+	let orgId = '';
+	let speaker: { id: string; email: string };
+
+	beforeAll(async () => {
+		const org = await makeOrg('race');
+		orgId = org.organizationId;
+		speaker = await makeUser('race');
+
+		const [profile] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: orgId,
+				name: 'Nadia Okafor',
+				sortName: 'Okafor, Nadia',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		await proposalFor(
+			org.conference.id,
+			profile.id,
+			'The talk nobody has claimed yet',
+			new Date('2027-03-01T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, orgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+	});
+
+	it('shows the proposal to both, not only to whichever one won the claim', async () => {
+		// One scope per call is one connection per call — the same thing two
+		// requests get, and the only way to put two of these statements on two
+		// snapshots at once.
+		const asOneRequest = () =>
+			withRequestScopedDb(
+				() => mySubmissions(speaker.id),
+				(closing) => void closing
+			);
+
+		// Whether the two statements actually overlap is up to the scheduler, so
+		// one pair is a coin toss: against the `union` shape a single pair caught
+		// the defect roughly one run in three. Eight independent races, each from
+		// an unclaimed profile, turn that into a test that fails when the defect
+		// is there — and it stays deterministic in the other direction, because a
+		// correct answer does not depend on the timing at all.
+		for (let round = 0; round < 8; round++) {
+			await db
+				.update(speakerProfileTable)
+				.set({ userId: null })
+				.where(eq(speakerProfileTable.organizationId, orgId));
+
+			const [first, second] = await Promise.all([asOneRequest(), asOneRequest()]);
+
+			expect(first.map((s) => s.title)).toContain('The talk nobody has claimed yet');
+			expect(second.map((s) => s.title)).toContain('The talk nobody has claimed yet');
+		}
+	});
+});
+
+/**
+ * Someone else's profile that happens to carry this address.
+ *
+ * The select's second disjunct is `sp.user_id is null and sp.email = u.email`,
+ * and the `is null` is the whole guard: without it the condition reads "mine or
+ * addressed to me", and per #229 an account can put another person's address on
+ * a profile it holds itself. Then the address alone would hand over that
+ * profile's proposals.
+ *
+ * Nothing above this catches that — every fixture there is a profile the
+ * speaker genuinely owns, so both shapes agree. This one disagrees with them:
+ * it goes red the moment the conjunct falls, which is the only reason it is
+ * here.
+ */
+describe('mySubmissions when another account already holds a profile with this address', () => {
+	let orgId = '';
+	let speaker: { id: string; email: string };
+	let impostor: { id: string; email: string };
+
+	beforeAll(async () => {
+		const org = await makeOrg('foreign');
+		orgId = org.organizationId;
+		speaker = await makeUser('foreign-speaker');
+		impostor = await makeUser('foreign-impostor');
+
+		// The impostor's own profile, but with the speaker's address written on it.
+		const [theirs] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: orgId,
+				userId: impostor.id,
+				name: 'Not Priya',
+				sortName: 'Priya, Not',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		await proposalFor(
+			org.conference.id,
+			theirs.id,
+			'The talk that is none of her business',
+			new Date('2027-04-01T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, orgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+		await db.delete(user).where(eq(user.id, impostor.id));
+	});
+
+	it('does not show it to the person whose address is on it', async () => {
+		const titles = (await mySubmissions(speaker.id)).map((s) => s.title);
+
+		expect(titles).not.toContain('The talk that is none of her business');
+	});
+
+	it('leaves the other account’s claim alone', async () => {
+		await mySubmissions(speaker.id);
+
+		const profiles = await db
+			.select({ userId: speakerProfileTable.userId })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.organizationId, orgId));
+
+		expect(profiles).toEqual([{ userId: impostor.id }]);
 	});
 });

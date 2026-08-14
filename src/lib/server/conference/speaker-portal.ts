@@ -46,31 +46,68 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
  * The address compared is the account's, so the claim is only as strong as the
  * deployment's signup check — see `upsertOwnProfile`, which makes the same trade
  * on the write side.
+ *
+ * The account's address is read in the same statement rather than fetched first.
+ * Every query on this deployment is a round trip to another region, so a lookup
+ * whose only consumer is the next statement's `where` is a round trip the page
+ * pays and nobody reads. Postgres compares the addresses; we do not need to see
+ * them. An account with no address matches nothing — `= null` is never true —
+ * which is the same no-op the explicit guard used to perform.
  */
 export async function claimProfilesForAccount(userId: string): Promise<void> {
-	const [account] = await db
-		.select({ email: user.email })
-		.from(user)
-		.where(eq(user.id, userId))
-		.limit(1);
-
-	if (!account?.email) return;
-
 	await db
 		.update(speakerProfileTable)
 		.set({ userId })
-		.where(and(eq(speakerProfileTable.email, account.email), isNull(speakerProfileTable.userId)));
+		.where(
+			and(
+				isNull(speakerProfileTable.userId),
+				eq(
+					speakerProfileTable.email,
+					sql`(select ${user.email} from ${user} where ${user.id} = ${userId})`
+				)
+			)
+		);
 }
 
-/** The profile ids this user speaks under, across every organization. */
+/**
+ * The profile ids this user speaks under, across every organization.
+ *
+ * Claim and read are one statement, and that is the point: as two statements
+ * the read has to wait for the write, and the page pays both round trips in
+ * series.
+ *
+ * The select does not read the claim's `returning`, and must not. A statement
+ * runs on one snapshot, so the claim is invisible to it either way — but
+ * `union`ing the `returning` makes the answer depend on *who won a concurrent
+ * claim*. `/portal` fires two of these at once (`Promise.all`), and the loser's
+ * `update` matches nothing while its select still sits on the pre-claim
+ * snapshot: an empty `returning` unioned with a select that cannot see the
+ * other call's commit either, and the profile vanishes from one of the two
+ * lists on the first paint.
+ *
+ * So the select states the membership itself, on its own snapshot: a profile is
+ * this person's if it already carries their id, or if it is unclaimed and
+ * carries their address — which is exactly the set the claim converts from the
+ * second form to the first. Both racers describe the same set, whoever wins the
+ * write. The rows are the same rows; only the `user_id` column differs, and the
+ * ids do not.
+ */
 async function ownProfileIds(userId: string): Promise<number[]> {
-	await claimProfilesForAccount(userId);
+	const rows = await db.execute<{ id: number }>(sql`
+		with claimed as (
+			update ${speakerProfileTable} as sp
+			set user_id = u.id
+			from ${user} as u
+			where u.id = ${userId} and sp.user_id is null and sp.email = u.email
+			returning sp.id
+		)
+		select sp.id
+		from ${speakerProfileTable} as sp, ${user} as u
+		where u.id = ${userId}
+			and (sp.user_id = u.id or (sp.user_id is null and sp.email = u.email))
+	`);
 
-	const rows = await db
-		.select({ id: speakerProfileTable.id })
-		.from(speakerProfileTable)
-		.where(eq(speakerProfileTable.userId, userId));
-	return rows.map((r) => r.id);
+	return [...rows].map((r) => r.id);
 }
 
 export type PortalSubmission = {
