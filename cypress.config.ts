@@ -60,6 +60,18 @@ export default defineConfig({
 
 			on('task', {
 				/**
+				 * Print one line to the terminal running the suite.
+				 *
+				 * `cy.log` writes into the browser's command log, which a headless run
+				 * throws away; an axe violation is only useful if the CSS selector it
+				 * points at survives into the CI output.
+				 */
+				log(message: string) {
+					console.log(message);
+					return null;
+				},
+
+				/**
 				 * Delete every user whose email starts with the E2E prefix. Sessions,
 				 * accounts, memberships and example objects cascade.
 				 * Replaces e2e/db.ts cleanupTestUsers() + e2e/global.teardown.ts.

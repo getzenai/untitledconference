@@ -113,12 +113,22 @@
 			</div>
 			<div class="min-w-0 flex-1">
 				<div class="relative h-48">
+					<!--
+						Presentational, not `role="img"`. A picture cannot contain a control:
+						the slider below is focusable, and an image with something focusable
+						inside it is announced as one thing and operated as another (axe
+						`nested-interactive`, #456). `aria-hidden` is not the way out either —
+						it would hide a control the keyboard can still reach.
+
+						Nothing is lost by making it a picture with no name. The summary this
+						label carried is in the figcaption, every value is in the table below
+						it, and the slider says the same sentence to whoever lands on it.
+					-->
 					<svg
 						viewBox="0 0 {PLOT} {PLOT}"
 						preserveAspectRatio="none"
 						class="block h-48 w-full"
-						role="img"
-						aria-label="Submissions per day over the last {days.length} days, {total} in total"
+						role="presentation"
 					>
 						<!-- Solid hairlines a step off the surface: a grid is orientation, not data. -->
 						{#each ticks as tick, ti (ti)}
@@ -172,7 +182,7 @@
 							fill="transparent"
 							tabindex="0"
 							role="slider"
-							aria-label="Submissions per day, use the arrow keys to step through the days"
+							aria-label="Submissions per day over the last {days.length} days, {total} in total — use the arrow keys to step through the days"
 							aria-valuemin={0}
 							aria-valuemax={days.length - 1}
 							aria-valuenow={active ?? days.length - 1}
