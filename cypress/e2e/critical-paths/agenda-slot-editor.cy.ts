@@ -117,8 +117,17 @@ describe('Agenda slot editor', () => {
 			cy.get('[role="option"]').should('have.length', ROOM_FILTER_FROM);
 			for (const name of names) cy.contains('[role="option"]', name).should('exist');
 		});
-		cy.get('[data-testid="agenda-slot-room"]').click();
+		// Escape closes the list, not the dialog behind it. The native <select>
+		// swallowed the key; an app select only marks it handled, and the agenda's
+		// own window handler used to close the whole editor on top of it — an
+		// organizer dismissing the room list would have lost their unsaved slot.
+		cy.get('body').type('{esc}');
 		cy.get('[role="listbox"]').should('not.exist');
+		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
+
+		// And with the list closed, Escape still means "close the editor".
+		cy.get('body').type('{esc}');
+		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 	});
 
 	it('narrows the grid to several rooms at once via the multi-select', () => {

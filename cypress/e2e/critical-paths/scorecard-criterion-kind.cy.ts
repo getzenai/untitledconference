@@ -39,12 +39,10 @@ describe('The scorecard criterion type', () => {
 
 		cy.get('form[action="?/add"] input[name="name"]').type('Screening');
 		cy.get('form[action="?/add"] button[type="submit"]').click();
+		// The round form is `use:enhance`, so no document is replaced here — the
+		// criterion form appears in the page that already hydrated above, and its
+		// app selects are live as soon as it renders.
 		cy.get('[data-testid="add-criterion"]').should('exist');
-		// The round form is a plain POST, so this is a fresh document: the markup
-		// is there before the JavaScript is, and an app select is inert until it
-		// hydrates. Without this the trigger click lands on a button that has no
-		// listbox behind it yet.
-		cy.waitForHydration();
 
 		// Rating is the default, and its scale is what the organizer sees first.
 		cy.get('[data-testid="add-criterion-scale-max"]').should('exist');
