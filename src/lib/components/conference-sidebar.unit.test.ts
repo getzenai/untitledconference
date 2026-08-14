@@ -12,6 +12,7 @@ describe('conference sidebar', () => {
 	it('is a shadcn Sidebar.Root, not a second handwritten aside', () => {
 		expect(source).toContain('Sidebar.Root');
 		expect(source).toContain('collapsible="none"');
+		expect(source).toContain('min-h-svh');
 		expect(source).toContain('data-testid="conference-sidebar"');
 		expect(source).toContain('NavConference');
 		expect(source).toContain('data-testid="switch-conference"');

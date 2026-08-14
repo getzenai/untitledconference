@@ -17,6 +17,7 @@ describe('Shared sidebar shell', () => {
 		cy.visit('/home');
 		cy.waitForHydration();
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');
+		cy.get('[data-testid="app-sidebar"]').should('have.attr', 'data-state', 'expanded');
 		cy.get('[data-testid="sidebar-home-link"]').should('contain.text', 'untitledconference');
 		cy.get('[data-testid="app-sidebar"] [data-testid="account-menu-trigger"]').should('be.visible');
 		cy.get('[data-testid="conference-sidebar"]').should('not.exist');
@@ -30,6 +31,8 @@ describe('Shared sidebar shell', () => {
 		cy.location('pathname', { timeout: 20000 }).should('include', `/manage/${slug}/`);
 
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');
+		// Icon rail: the app sidebar stayed mounted and collapsed for the second rail.
+		cy.get('[data-testid="app-sidebar"]').should('have.attr', 'data-state', 'collapsed');
 		cy.get('[data-testid="conference-sidebar"]').should('be.visible');
 		cy.get('[data-testid="switch-conference"]').should('have.attr', 'href', '/manage');
 		cy.get('[data-testid="conference-nav-dashboard"]').should('be.visible');
@@ -43,6 +46,7 @@ describe('Shared sidebar shell', () => {
 		cy.get('[data-testid="switch-conference"]').click();
 		cy.location('pathname').should('eq', '/manage');
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');
+		cy.get('[data-testid="app-sidebar"]').should('have.attr', 'data-state', 'expanded');
 		cy.get('[data-testid="conference-sidebar"]').should('not.exist');
 		cy.get('[data-testid="app-sidebar"] [data-testid="account-menu-trigger"]').should('be.visible');
 	});

@@ -39,6 +39,8 @@ describe('isConferencePath', () => {
 		expect(isConferencePath('/manage/new')).toBe(false);
 		expect(isConferencePath('/home')).toBe(false);
 		expect(isConferencePath('/contacts')).toBe(false);
+		// Review pages carry a `conference` payload; they are not this workspace.
+		expect(isConferencePath('/review/devflow-2028')).toBe(false);
 	});
 });
 
