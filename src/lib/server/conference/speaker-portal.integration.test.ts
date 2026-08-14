@@ -331,3 +331,92 @@ describe('mySubmissions and myTasks for a co-speaker', () => {
 		expect(titles).toContain('The two-person talk');
 	});
 });
+
+/**
+ * The read that claims must also return what it just claimed.
+ *
+ * `ownProfileIds` does both in one statement, and a statement does not see its
+ * own CTE's write: the select half runs against the snapshot the update started
+ * from, so a profile claimed by this very call is invisible to it. The `union`
+ * with the update's `returning` is what closes that.
+ *
+ * The co-speaker fixture above already fails if the union goes (checked, by
+ * removing it). This one covers the case that fixture cannot: a speaker holding
+ * a claimed profile *and* an unclaimed one, where the select half comes back
+ * non-empty and a wrong answer therefore still looks like an answer.
+ *
+ * Production reaches it the moment someone with a profile of their own is named
+ * as a co-speaker by a second organizer.
+ */
+describe('mySubmissions when one profile is already claimed and another is not', () => {
+	let ownOrgId = '';
+	let invitedOrgId = '';
+	let speaker: { id: string; email: string };
+
+	beforeAll(async () => {
+		const own = await makeOrg('mixed-own');
+		const invited = await makeOrg('mixed-invited');
+		ownOrgId = own.organizationId;
+		invitedOrgId = invited.organizationId;
+		speaker = await makeUser('mixed');
+
+		const [claimed] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: ownOrgId,
+				userId: speaker.id,
+				name: 'Priya Raman',
+				sortName: 'Raman, Priya',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		// The other organizer's roster: same address, no account attached yet.
+		const [unclaimed] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: invitedOrgId,
+				name: 'Priya Raman',
+				sortName: 'Raman, Priya',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		await proposalFor(
+			own.conference.id,
+			claimed.id,
+			'The talk she proposed herself',
+			new Date('2027-02-01T09:00:00.000Z')
+		);
+		await proposalFor(
+			invited.conference.id,
+			unclaimed.id,
+			'The talk she was invited to',
+			new Date('2027-02-02T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, ownOrgId));
+		await db.delete(organization).where(eq(organization.id, invitedOrgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+	});
+
+	it('shows both on the first read, not only from the second one on', async () => {
+		const titles = (await mySubmissions(speaker.id)).map((s) => s.title);
+
+		expect(titles).toContain('The talk she proposed herself');
+		expect(titles).toContain('The talk she was invited to');
+	});
+
+	it('leaves the claim in place, so a second read is not a second write', async () => {
+		await mySubmissions(speaker.id);
+
+		const profiles = await db
+			.select({ userId: speakerProfileTable.userId })
+			.from(speakerProfileTable)
+			.where(eq(speakerProfileTable.organizationId, invitedOrgId));
+
+		expect(profiles).toEqual([{ userId: speaker.id }]);
+	});
+});

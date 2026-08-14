@@ -46,31 +46,54 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
  * The address compared is the account's, so the claim is only as strong as the
  * deployment's signup check — see `upsertOwnProfile`, which makes the same trade
  * on the write side.
+ *
+ * The account's address is read in the same statement rather than fetched first.
+ * Every query on this deployment is a round trip to another region, so a lookup
+ * whose only consumer is the next statement's `where` is a round trip the page
+ * pays and nobody reads. Postgres compares the addresses; we do not need to see
+ * them. An account with no address matches nothing — `= null` is never true —
+ * which is the same no-op the explicit guard used to perform.
  */
 export async function claimProfilesForAccount(userId: string): Promise<void> {
-	const [account] = await db
-		.select({ email: user.email })
-		.from(user)
-		.where(eq(user.id, userId))
-		.limit(1);
-
-	if (!account?.email) return;
-
 	await db
 		.update(speakerProfileTable)
 		.set({ userId })
-		.where(and(eq(speakerProfileTable.email, account.email), isNull(speakerProfileTable.userId)));
+		.where(
+			and(
+				isNull(speakerProfileTable.userId),
+				eq(
+					speakerProfileTable.email,
+					sql`(select ${user.email} from ${user} where ${user.id} = ${userId})`
+				)
+			)
+		);
 }
 
-/** The profile ids this user speaks under, across every organization. */
+/**
+ * The profile ids this user speaks under, across every organization.
+ *
+ * Claim and read are one statement, and that is the point: the read has to see
+ * what the claim just wrote, so as two statements they cannot be pipelined and
+ * the page waits out both round trips in series. `union` rather than a second
+ * read of the table because a statement does not see its own CTE's write — the
+ * select runs against the snapshot the update started from, so the rows
+ * `claimed` returns are exactly the ones it would otherwise miss.
+ */
 async function ownProfileIds(userId: string): Promise<number[]> {
-	await claimProfilesForAccount(userId);
+	const rows = await db.execute<{ id: number }>(sql`
+		with claimed as (
+			update ${speakerProfileTable} as sp
+			set user_id = u.id
+			from ${user} as u
+			where u.id = ${userId} and sp.user_id is null and sp.email = u.email
+			returning sp.id
+		)
+		select id from ${speakerProfileTable} where user_id = ${userId}
+		union
+		select id from claimed
+	`);
 
-	const rows = await db
-		.select({ id: speakerProfileTable.id })
-		.from(speakerProfileTable)
-		.where(eq(speakerProfileTable.userId, userId));
-	return rows.map((r) => r.id);
+	return [...rows].map((r) => r.id);
 }
 
 export type PortalSubmission = {
