@@ -145,6 +145,7 @@ describe('organizer submission decisions', () => {
 		expect(body).toContain('data-testid="bulk-assign-per-talk"');
 		expect(body).toContain('data-testid="bulk-assign-cap"');
 		expect(body).toContain('name="roundId"');
+		expect(body).toContain('whole committee');
 		// Reviewer checkboxes mount after a round is chosen — the E2E owns that.
 	});
 

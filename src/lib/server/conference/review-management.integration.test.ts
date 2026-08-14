@@ -592,6 +592,72 @@ describe('ABS-06 assignment at scale', () => {
 		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
 		await db.delete(trackTable).where(inArray(trackTable.id, [allowedTrack.id, blockedTrack.id]));
 	});
+
+	it('counts a dual-scoped reviewer once when filling N', async () => {
+		const [talkId] = await insertTalks(['Dual seat']);
+		await db.insert(membershipTable).values({
+			userId: CONFERENCE_REVIEWER,
+			role: 'reviewer',
+			scopeType: 'round',
+			scopeId: roundId
+		});
+
+		const result = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 2,
+			capPerReviewer: 10
+		});
+		// Without user-dedup this reports created=1, already=1 and leaves one seat empty.
+		expect(result.created).toBe(2);
+		expect(result.already).toBe(0);
+		const assigned = (await reviewAssignmentMatrix(conference.id, talkId))[0].reviewers
+			.filter((reviewer) => reviewer.status === 'assigned')
+			.map((reviewer) => reviewer.userId);
+		expect(assigned).toHaveLength(2);
+		expect(assigned).toContain(CONFERENCE_REVIEWER);
+
+		await db
+			.delete(membershipTable)
+			.where(
+				and(
+					eq(membershipTable.userId, CONFERENCE_REVIEWER),
+					eq(membershipTable.scopeType, 'round'),
+					eq(membershipTable.scopeId, roundId)
+				)
+			);
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+	});
+
+	it('auto-distributes only among the reviewers the organizer checked', async () => {
+		const talkIds = await insertTalks(['P1', 'P2']);
+		const result = await autoDistributeReviews(conference.id, talkIds, roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10,
+			reviewerUserIds: [ROUND_REVIEWER]
+		});
+		expect(result.created).toBe(2);
+		for (const talkId of talkIds) {
+			const assigned = (await reviewAssignmentMatrix(conference.id, talkId))[0].reviewers.find(
+				(reviewer) => reviewer.status === 'assigned'
+			)?.userId;
+			expect(assigned).toBe(ROUND_REVIEWER);
+		}
+		await db.delete(submissionTable).where(inArray(submissionTable.id, talkIds));
+	});
+
+	it('is a no-op when every selected talk already has N reviewers', async () => {
+		const [talkId] = await insertTalks(['Full']);
+		const first = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10
+		});
+		expect(first.created).toBe(1);
+		const again = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10
+		});
+		expect(again).toMatchObject({ created: 0, already: 1, skipped: 0 });
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+	});
 });
 
 describe('reviewer progress and reminders', () => {

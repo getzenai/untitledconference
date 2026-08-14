@@ -139,6 +139,9 @@ export const actions: Actions = {
 		const roundId = Number(form.get('roundId'));
 		const reviewsPerSubmission = Number(form.get('reviewsPerSubmission'));
 		const capPerReviewer = Number(form.get('capPerReviewer'));
+		const reviewerUserIds = form
+			.getAll('reviewerUserId')
+			.filter((value): value is string => typeof value === 'string' && value !== '');
 
 		if (ids.length === 0) {
 			return fail(400, { message: 'Select at least one submission first.' });
@@ -159,7 +162,8 @@ export const actions: Actions = {
 
 		const assignResult = await autoDistributeReviews(conference.id, ids, roundId, {
 			reviewsPerSubmission,
-			capPerReviewer
+			capPerReviewer,
+			reviewerUserIds
 		});
 		return { assignResult };
 	}

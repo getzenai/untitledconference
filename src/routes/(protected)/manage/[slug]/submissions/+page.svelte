@@ -574,6 +574,10 @@
 									Auto-distribute
 								</Button>
 							</div>
+							<p class="text-muted-foreground text-xs">
+								Auto-distribute fills from the checked reviewers, or the whole committee if none are
+								checked.
+							</p>
 							<!--
 								Remount when the round changes so a checked box from the
 								previous committee cannot post under the new roundId.
@@ -584,7 +588,7 @@
 										class="flex flex-wrap items-center gap-x-3 gap-y-1"
 										data-testid="bulk-assign-reviewers"
 									>
-										<legend class="sr-only">Reviewers to assign</legend>
+										<legend class="sr-only">Reviewers to assign or auto-distribute among</legend>
 										{#each assignReviewers as reviewer (reviewer.userId)}
 											<label class="flex items-center gap-1.5 text-sm">
 												<input
