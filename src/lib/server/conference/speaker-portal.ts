@@ -72,12 +72,25 @@ export async function claimProfilesForAccount(userId: string): Promise<void> {
 /**
  * The profile ids this user speaks under, across every organization.
  *
- * Claim and read are one statement, and that is the point: the read has to see
- * what the claim just wrote, so as two statements they cannot be pipelined and
- * the page waits out both round trips in series. `union` rather than a second
- * read of the table because a statement does not see its own CTE's write — the
- * select runs against the snapshot the update started from, so the rows
- * `claimed` returns are exactly the ones it would otherwise miss.
+ * Claim and read are one statement, and that is the point: as two statements
+ * the read has to wait for the write, and the page pays both round trips in
+ * series.
+ *
+ * The select does not read the claim's `returning`, and must not. A statement
+ * runs on one snapshot, so the claim is invisible to it either way — but
+ * `union`ing the `returning` makes the answer depend on *who won a concurrent
+ * claim*. `/portal` fires two of these at once (`Promise.all`), and the loser's
+ * `update` matches nothing while its select still sits on the pre-claim
+ * snapshot: an empty `returning` unioned with a select that cannot see the
+ * other call's commit either, and the profile vanishes from one of the two
+ * lists on the first paint.
+ *
+ * So the select states the membership itself, on its own snapshot: a profile is
+ * this person's if it already carries their id, or if it is unclaimed and
+ * carries their address — which is exactly the set the claim converts from the
+ * second form to the first. Both racers describe the same set, whoever wins the
+ * write. The rows are the same rows; only the `user_id` column differs, and the
+ * ids do not.
  */
 async function ownProfileIds(userId: string): Promise<number[]> {
 	const rows = await db.execute<{ id: number }>(sql`
@@ -88,9 +101,10 @@ async function ownProfileIds(userId: string): Promise<number[]> {
 			where u.id = ${userId} and sp.user_id is null and sp.email = u.email
 			returning sp.id
 		)
-		select id from ${speakerProfileTable} where user_id = ${userId}
-		union
-		select id from claimed
+		select sp.id
+		from ${speakerProfileTable} as sp, ${user} as u
+		where u.id = ${userId}
+			and (sp.user_id = u.id or (sp.user_id is null and sp.email = u.email))
 	`);
 
 	return [...rows].map((r) => r.id);

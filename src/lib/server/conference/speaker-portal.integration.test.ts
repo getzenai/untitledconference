@@ -9,7 +9,7 @@
  * demo seed, and each `describe` owns its organization so profile identity in one
  * cannot decide the outcome of another.
  */
-import { db } from '$lib/server/db';
+import { db, withRequestScopedDb } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import {
 	cfpFormTable,
@@ -418,5 +418,87 @@ describe('mySubmissions when one profile is already claimed and another is not',
 			.where(eq(speakerProfileTable.organizationId, invitedOrgId));
 
 		expect(profiles).toEqual([{ userId: speaker.id }]);
+	});
+});
+
+/**
+ * Two requests racing for the same unclaimed profile.
+ *
+ * Not `/portal`'s own `Promise.all`: `db` is `max: 1`, and one backend runs one
+ * statement at a time, so those two are serial however they are dispatched —
+ * the second starts on a snapshot that already contains the first's claim.
+ * Measured, not assumed: this test passes against both query shapes when both
+ * calls share a connection.
+ *
+ * Two *requests* is the real case — two tabs, two Workers, two connections,
+ * one person's first visit. Both start on a snapshot where the profile is
+ * unclaimed; one claims it, and the other's `update` matches nothing, because
+ * READ COMMITTED re-checks `user_id is null` against the row the winner
+ * committed. The loser is left with an empty `returning` and a select still
+ * sitting on the pre-claim snapshot.
+ *
+ * So an answer built from `returning` is an answer about who won a lock. This
+ * test fails against that shape and passes against the one that states the
+ * membership in its own `where`.
+ */
+describe('two requests racing for the same unclaimed profile', () => {
+	let orgId = '';
+	let speaker: { id: string; email: string };
+
+	beforeAll(async () => {
+		const org = await makeOrg('race');
+		orgId = org.organizationId;
+		speaker = await makeUser('race');
+
+		const [profile] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId: orgId,
+				name: 'Nadia Okafor',
+				sortName: 'Okafor, Nadia',
+				email: speaker.email
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		await proposalFor(
+			org.conference.id,
+			profile.id,
+			'The talk nobody has claimed yet',
+			new Date('2027-03-01T09:00:00.000Z')
+		);
+	});
+
+	afterAll(async () => {
+		await db.delete(organization).where(eq(organization.id, orgId));
+		await db.delete(user).where(eq(user.id, speaker.id));
+	});
+
+	it('shows the proposal to both, not only to whichever one won the claim', async () => {
+		// One scope per call is one connection per call — the same thing two
+		// requests get, and the only way to put two of these statements on two
+		// snapshots at once.
+		const asOneRequest = () =>
+			withRequestScopedDb(
+				() => mySubmissions(speaker.id),
+				(closing) => void closing
+			);
+
+		// Whether the two statements actually overlap is up to the scheduler, so
+		// one pair is a coin toss: against the `union` shape a single pair caught
+		// the defect roughly one run in three. Eight independent races, each from
+		// an unclaimed profile, turn that into a test that fails when the defect
+		// is there — and it stays deterministic in the other direction, because a
+		// correct answer does not depend on the timing at all.
+		for (let round = 0; round < 8; round++) {
+			await db
+				.update(speakerProfileTable)
+				.set({ userId: null })
+				.where(eq(speakerProfileTable.organizationId, orgId));
+
+			const [first, second] = await Promise.all([asOneRequest(), asOneRequest()]);
+
+			expect(first.map((s) => s.title)).toContain('The talk nobody has claimed yet');
+			expect(second.map((s) => s.title)).toContain('The talk nobody has claimed yet');
+		}
 	});
 });
