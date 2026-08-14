@@ -48,6 +48,11 @@
 				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
+				// A landed withdrawal takes the dialog with it, because the question and
+				// the button live in the same `{#if}` as the answer. A *refused* one does
+				// not, and the error it wants to show sits under the overlay — so the
+				// question closes when the round trip ends, not only when it succeeds.
+				confirmWithdraw = false;
 			}
 		};
 	};
@@ -230,6 +235,45 @@
 							I can’t take part
 						</Button>
 					</form>
+
+					<!--
+						The confirm button reaches the form through `form=`, not a click handler:
+						the dialog content is portalled out of the form's subtree, so a plain
+						submit button inside it would post nothing. Without JavaScript the trigger
+						stays an ordinary submit button and the withdrawal still works — the guard
+						is an enhancement, not the mechanism. Same shape as unpublishing a
+						conference, which is the other button in this app that lands somewhere the
+						screen you are on cannot show you.
+
+						It lives inside the same `{#if}` as the form it submits, so the answer
+						landing takes the question away with it. Outside, the speaker reads
+						"You told the organizers you cannot take part" *underneath* a dialog
+						still asking whether they want to — with "Keep my place" offered after
+						the place is gone.
+					-->
+					<AlertDialog bind:open={confirmWithdraw}>
+						<AlertDialogContent data-testid="withdraw-dialog">
+							<AlertDialogHeader>
+								<AlertDialogTitle>{warning.title}</AlertDialogTitle>
+								<AlertDialogDescription>
+									{warning.consequence}
+									<span class="mt-2 block">{warning.reversal}</span>
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel data-testid="withdraw-cancel">Keep my place</AlertDialogCancel>
+								<Button
+									type="submit"
+									form="withdraw-form"
+									variant="destructive"
+									disabled={busy}
+									data-testid="withdraw-confirm"
+								>
+									Withdraw me
+								</Button>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
 				{/if}
 			</div>
 
@@ -237,39 +281,6 @@
 				<p class="text-status-bad mt-3 text-sm">{form.participationError}</p>
 			{/if}
 		</section>
-
-		<!--
-			The confirm button reaches the form through `form=`, not a click handler:
-			the dialog content is portalled out of the form's subtree, so a plain
-			submit button inside it would post nothing. Without JavaScript the trigger
-			stays an ordinary submit button and the withdrawal still works — the guard
-			is an enhancement, not the mechanism. Same shape as unpublishing a
-			conference, which is the other button in this app that lands somewhere the
-			screen you are on cannot show you.
-		-->
-		<AlertDialog bind:open={confirmWithdraw}>
-			<AlertDialogContent data-testid="withdraw-dialog">
-				<AlertDialogHeader>
-					<AlertDialogTitle>{warning.title}</AlertDialogTitle>
-					<AlertDialogDescription>
-						{warning.consequence}
-						<span class="mt-2 block">{warning.reversal}</span>
-					</AlertDialogDescription>
-				</AlertDialogHeader>
-				<AlertDialogFooter>
-					<AlertDialogCancel data-testid="withdraw-cancel">Keep my place</AlertDialogCancel>
-					<Button
-						type="submit"
-						form="withdraw-form"
-						variant="destructive"
-						disabled={busy}
-						data-testid="withdraw-confirm"
-					>
-						Withdraw me
-					</Button>
-				</AlertDialogFooter>
-			</AlertDialogContent>
-		</AlertDialog>
 	{:else if task.kind === 'action'}
 		{#if profileTask}
 			<section class="border-border bg-muted/30 mt-6 rounded-lg border p-5">

@@ -38,6 +38,10 @@
 				await update(formUpdateOptions('edit'));
 			} finally {
 				busy = false;
+				// A removed headshot takes its dialog with it — the block is inside
+				// `{#if profile.headshotUrl}`. A refused removal does not, and the
+				// question would stand over the answer.
+				confirmRemoveHeadshot = null;
 			}
 		};
 	};

@@ -68,6 +68,11 @@ describe('Telling the organizers you cannot take part', () => {
 		);
 		cy.contains('button', 'Yes, I’ll be there').should('exist');
 
+		// The question goes away with the answer. Left standing, the speaker reads
+		// "you cannot take part" underneath a dialog still asking whether they want
+		// to, and is offered "Keep my place" after the place is gone.
+		cy.get('[data-testid="withdraw-dialog"]').should('not.exist');
+
 		// The task board used to call this Done and count it towards "N of M done".
 		cy.visit('/portal');
 		cy.waitForHydration();
