@@ -119,6 +119,19 @@
 			<p class="text-muted-foreground mt-1">
 				Anything else the organizers need from you appears under Your tasks in the speaker portal.
 			</p>
+			<!--
+				Acceptance is the moment the speaker cares most about the words — they are
+				about to be printed on the programme. The Edit button used to vanish
+				without a sentence, which reads as a bug (#496). It stays, disabled, with
+				the reason beside it, because "you may not" is an answer and silence is not.
+			-->
+			<p class="text-muted-foreground mt-3">
+				The text is now fixed: the organizers accepted these words, and the programme is built from
+				them. If the title or the abstract needs to change, ask the organizers.
+			</p>
+			<Button size="sm" variant="outline" class="mt-3" disabled data-testid="edit-closed">
+				Editing closed
+			</Button>
 		</div>
 	{:else if s.status === 'rejected'}
 		<div class="border-status-bad/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
