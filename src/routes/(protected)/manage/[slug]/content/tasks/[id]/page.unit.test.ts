@@ -24,6 +24,7 @@ const conference = {
 	endsOn: null,
 	cfpIntro: null,
 	statusBeforeArchive: null,
+	listedPublicly: false,
 	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
@@ -95,6 +96,7 @@ describe('organizer task file comments', () => {
 						endsOn: null,
 						cfpIntro: null,
 						statusBeforeArchive: null,
+						listedPublicly: false,
 						reviewVisibility: 'open',
 						createdAt: new Date('2027-01-01T00:00:00Z'),
 						updatedAt: new Date('2027-01-01T00:00:00Z')
@@ -148,6 +150,7 @@ describe('organizer task file comments', () => {
 						endsOn: null,
 						cfpIntro: null,
 						statusBeforeArchive: null,
+						listedPublicly: false,
 						reviewVisibility: 'open',
 						createdAt: new Date('2027-01-01T00:00:00Z'),
 						updatedAt: new Date('2027-01-01T00:00:00Z')

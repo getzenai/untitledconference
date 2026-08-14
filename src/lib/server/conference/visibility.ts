@@ -54,3 +54,45 @@ export async function setConferenceVisibility(
 
 	return { changed: true, status: next };
 }
+
+export type ListingTarget = Pick<Conference, 'id' | 'status' | 'listedPublicly'>;
+
+export type ListingResult =
+	| { changed: boolean; listed: boolean }
+	| { changed: false; listed: boolean; blocked: 'draft' | 'archived' };
+
+/**
+ * Whether the front-door directory names this conference (#402).
+ *
+ * Separate from `setConferenceVisibility` because it answers a separate question:
+ * publishing decides whether `/c/<slug>` exists at all, listing decides whether a
+ * visitor who has never heard of the conference is shown it. One column answered
+ * both, and the front page ended up advertising our test conferences.
+ *
+ * Only a published conference can be listed. Not because the directory would break
+ * — it filters on both — but because "listed" on a draft is a promise the page does
+ * not keep: nothing appears, and there is nothing on the screen to say why. The flag
+ * survives a return to draft, so publishing again puts the conference back where it
+ * was rather than quietly dropping it out of a directory it had been in for months.
+ */
+export async function setConferenceListing(
+	conference: ListingTarget,
+	listed: boolean
+): Promise<ListingResult> {
+	if (conference.status !== 'published' && listed) {
+		return {
+			changed: false,
+			listed: conference.listedPublicly,
+			blocked: conference.status === 'archived' ? 'archived' : 'draft'
+		};
+	}
+
+	if (conference.listedPublicly === listed) return { changed: false, listed };
+
+	await db
+		.update(conferenceTable)
+		.set({ listedPublicly: listed })
+		.where(eq(conferenceTable.id, conference.id));
+
+	return { changed: true, listed };
+}

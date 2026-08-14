@@ -55,6 +55,7 @@
 	const config = $derived(data.config);
 	const published = $derived(data.conference.status === 'published');
 	const archived = $derived(data.conference.status === 'archived');
+	const listed = $derived(data.conference.listedPublicly);
 
 	let busy = $state(false);
 	let roomsExpanded = $state(false);
@@ -461,6 +462,31 @@
 					While it is a draft, <code>/c/{data.conference.slug}</code> and the public submission form answer
 					404.
 				</p>
+			{/if}
+
+			<!-- Published and listed are two questions (#402). The front page is the one
+			     surface a visitor reaches without a link, so what it names is a decision,
+			     not a side effect of publishing. -->
+			{#if published}
+				<div class="border-border mt-3 flex flex-wrap items-center gap-3 border-t pt-3">
+					<form method="POST" action="?/listing" use:enhance={submitting}>
+						<input type="hidden" name="listed" value={listed ? 'false' : 'true'} />
+						<Button
+							type="submit"
+							size="sm"
+							variant="outline"
+							disabled={busy}
+							data-testid="listing-submit"
+						>
+							{listed ? 'Remove from the front page' : 'Show on the front page'}
+						</Button>
+					</form>
+					<p class="text-muted-foreground text-xs" data-testid="listing-state">
+						{listed
+							? 'Listed in the public directory on the front page.'
+							: 'Not in the public directory — reachable only through its own link.'}
+					</p>
+				</div>
 			{/if}
 
 			<div class="mt-3">

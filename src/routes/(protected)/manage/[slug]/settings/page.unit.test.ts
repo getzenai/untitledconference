@@ -16,6 +16,7 @@ const conference = {
 	startsOn: null,
 	endsOn: null,
 	cfpIntro: null,
+	listedPublicly: true,
 	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
@@ -212,7 +213,7 @@ describe('conference date range', () => {
  * front-door directory and the public CFP form all filter out.
  */
 describe('draft or live', () => {
-	const renderVisibility = (status: 'draft' | 'published') =>
+	const renderVisibility = (status: 'draft' | 'published', listedPublicly = true) =>
 		render(Page, {
 			props: {
 				data: {
@@ -220,7 +221,7 @@ describe('draft or live', () => {
 					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
-					conference: { ...conference, status },
+					conference: { ...conference, status, listedPublicly },
 					config: { rooms: [], tracks: [], formats: [] },
 					templates: [],
 					pending: {}
@@ -244,6 +245,30 @@ describe('draft or live', () => {
 		expect(body).toContain('Return to draft');
 		expect(body).toContain('/c/test-conf');
 		expect(body).not.toContain('404');
+	});
+
+	/**
+	 * Published and listed are two questions (#402): a conference reachable at its
+	 * own address is not automatically one the front page advertises. The switch
+	 * appears only once there is something to advertise.
+	 */
+	it('offers to advertise a live conference, and says which state it is in', () => {
+		const listed = renderVisibility('published', true);
+		const unlisted = renderVisibility('published', false);
+
+		expect(listed).toContain('action="?/listing"');
+		expect(listed).toContain('Remove from the front page');
+		expect(listed).toContain('Listed in the public directory');
+
+		expect(unlisted).toContain('Show on the front page');
+		expect(unlisted).toContain('reachable only through its own link');
+	});
+
+	it('does not offer the front page to a draft nobody can reach yet', () => {
+		const body = renderVisibility('draft');
+
+		expect(body).not.toContain('action="?/listing"');
+		expect(body).not.toContain('front page');
 	});
 
 	/**

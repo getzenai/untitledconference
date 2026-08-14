@@ -32,7 +32,7 @@ import {
 	type TemplateInput
 } from '$lib/server/conference/task-templates';
 import { updateConference } from '$lib/server/conference/update-conference';
-import { setConferenceVisibility } from '$lib/server/conference/visibility';
+import { setConferenceListing, setConferenceVisibility } from '$lib/server/conference/visibility';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -149,6 +149,43 @@ export const actions: Actions = {
 			message: wantsPublished
 				? `Published. /c/${conference.slug} is live and the call for papers can take submissions.`
 				: 'Back to draft. The public site and the public submission form answer 404 again.',
+			section: 'visibility'
+		};
+	},
+
+	/**
+	 * Listed or not — whether the front page names this conference (#402).
+	 *
+	 * A second switch rather than a consequence of Publish, because a visitor
+	 * arriving at the base URL and a speaker following a link are different people.
+	 * See `setConferenceListing` for why a draft cannot be listed.
+	 */
+	listing: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const wantsListed = text(await request.formData(), 'listed') === 'true';
+		const result = await setConferenceListing(conference, wantsListed);
+
+		if ('blocked' in result) {
+			return {
+				message:
+					result.blocked === 'archived'
+						? 'An archived conference is in no list. Restore it first.'
+						: 'Publish it first — a draft has nothing for the directory to link to.',
+				section: 'visibility'
+			};
+		}
+
+		if (!result.changed) {
+			return {
+				message: wantsListed ? 'Already listed.' : 'Already unlisted.',
+				section: 'visibility'
+			};
+		}
+
+		return {
+			message: wantsListed
+				? 'Listed. Visitors who arrive at the front page now see this conference.'
+				: `Unlisted. The front page no longer names it — /c/${conference.slug} stays live for everyone holding the link.`,
 			section: 'visibility'
 		};
 	},

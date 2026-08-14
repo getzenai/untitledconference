@@ -1,5 +1,5 @@
 import {
-	listPublishedConferences,
+	listDirectoryConferences,
 	loadPublicConference,
 	type PublicConferenceSummary
 } from '$lib/server/conference/public-conference';
@@ -45,5 +45,5 @@ export type { PublicConferenceSummary };
  * the base URL — including a judge.
  */
 export async function publicConferenceDirectory(): Promise<PublicConferenceSummary[]> {
-	return listPublishedConferences();
+	return listDirectoryConferences();
 }

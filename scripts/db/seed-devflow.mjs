@@ -664,7 +664,9 @@ async function main() {
 		ends_on: '2027-05-14',
 		cfp_intro:
 			'DevFlow Conf brings together the people who build and run developer platforms. We are looking for practical talks with something at stake — what you tried, what broke, and what you would do differently.',
-		status: 'published'
+		status: 'published',
+		// See #402: the directory is a separate decision from publishing.
+		listed_publicly: true
 	})} RETURNING id`;
 	const conferenceId = conference.id;
 

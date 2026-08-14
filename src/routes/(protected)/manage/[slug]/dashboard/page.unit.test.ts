@@ -14,6 +14,7 @@ const conference = {
 	cfpIntro: null,
 	status: 'published' as const,
 	statusBeforeArchive: null,
+	listedPublicly: false,
 	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
