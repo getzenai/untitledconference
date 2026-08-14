@@ -461,7 +461,6 @@
 			return true;
 		})
 	);
-
 </script>
 
 <div class="container mx-auto max-w-7xl py-8">

@@ -80,7 +80,7 @@ describe('the day a stored value stands for', () => {
  * browser happens to run on, which is exactly what `/admin/users` got wrong.
  */
 describe('formatStoredDay', () => {
-	it('is day-first regardless of the reader\'s locale', () => {
+	it("is day-first regardless of the reader's locale", () => {
 		expect(formatStoredDay('2026-05-01T09:30:00.000Z')).toBe('1 May 2026');
 		expect(formatStoredDay(new Date('2026-05-01T09:30:00.000Z'))).toBe('1 May 2026');
 	});
