@@ -14,7 +14,7 @@
 import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
-import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceSpeakerTable,
 	conferenceTable,
@@ -27,7 +27,7 @@ import {
 	taskTable
 } from '$lib/server/db/conference/content-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, desc, eq, inArray, max } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, max } from 'drizzle-orm';
 
 /** One task of this user's, with the conference it belongs to. Null if not theirs. */
 export async function ownTask(userId: string, taskId: number) {
@@ -308,6 +308,33 @@ async function completeParticipationTasks(tx: Tx, conferenceId: number, speakerP
 		.update(taskTable)
 		.set({ status: 'done', completedAt: new Date() })
 		.where(inArray(taskTable.id, ids));
+}
+
+/**
+ * How many accepted talks one participation answer covers (#495).
+ *
+ * The answer is stored on `conference_speaker`, so it applies to the whole
+ * event, not to the talk whose task happens to be open. A speaker about to
+ * withdraw is entitled to read that number before they click — "this withdraws
+ * you from two accepted talks" is a different decision from "from this one".
+ */
+export async function acceptedTalkCount(
+	conferenceId: number,
+	speakerProfileId: number
+): Promise<number> {
+	const [row] = await db
+		.select({ total: count() })
+		.from(submissionTable)
+		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
+		.where(
+			and(
+				eq(submissionTable.conferenceId, conferenceId),
+				eq(submissionSpeakerTable.speakerProfileId, speakerProfileId),
+				eq(submissionTable.status, 'accepted')
+			)
+		);
+
+	return row?.total ?? 0;
 }
 
 /**

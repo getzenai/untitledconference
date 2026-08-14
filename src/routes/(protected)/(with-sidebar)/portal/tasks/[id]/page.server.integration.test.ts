@@ -11,9 +11,10 @@
  * "refused" has to mean the bytes never left: a rejection after the put leaves
  * an object nothing points at.
  */
+import { myTasks } from '$lib/server/conference/speaker-portal';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceSpeakerTable,
 	conferenceTable,
@@ -30,6 +31,7 @@ const suffix = `upload-guard-${Date.now()}-${Math.random().toString(36).slice(2,
 const organizationId = `org-${suffix}`;
 const speakerUserId = `speaker-${suffix}`;
 
+let conferenceId = 0;
 let fileTaskId = 0;
 let actionTaskId = 0;
 let speakerProfileId = 0;
@@ -152,6 +154,7 @@ beforeAll(async () => {
 		})
 		.returning();
 
+	conferenceId = conference.id;
 	fileTaskId = fileTask.id;
 	actionTaskId = actionTask.id;
 	speakerProfileId = profile.id;
@@ -253,5 +256,68 @@ describe('?/participation', () => {
 
 		expect(membership.status).toBe('confirmed');
 		expect(task.status).toBe('done');
+	});
+
+	/**
+	 * The number the withdrawal dialog puts in front of the speaker (#495).
+	 *
+	 * "This withdraws you from two accepted talks" is a different decision from
+	 * "from this one", and the answer is stored per conference, so the count
+	 * cannot come from the task's own submission. Only a participation task pays
+	 * for the query.
+	 */
+	it('counts this speaker’s accepted talks for the withdrawal dialog', async () => {
+		const accepted = await db
+			.insert(submissionTable)
+			.values([
+				{ conferenceId, title: 'Shipping without the wait', status: 'accepted' as const },
+				{ conferenceId, title: 'A second accepted talk', status: 'accepted' as const }
+			])
+			.returning();
+		await db.insert(submissionSpeakerTable).values(
+			accepted.map((row) => ({
+				submissionId: row.id,
+				speakerProfileId,
+				isPrimary: true,
+				position: 0
+			}))
+		);
+		// Proposed, not accepted: it is not part of what a withdrawal costs.
+		const [pending] = await db
+			.insert(submissionTable)
+			.values({ conferenceId, title: 'Still under review', status: 'submitted' })
+			.returning();
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: pending.id,
+			speakerProfileId,
+			isPrimary: true,
+			position: 0
+		});
+
+		const participation = await load({
+			params: { id: String(actionTaskId) },
+			locals: { user: { id: speakerUserId } }
+		} as never);
+		expect(participation?.acceptedTalks).toBe(2);
+
+		// A file request never draws the dialog, so it never runs the count.
+		const upload = await load({
+			params: { id: String(fileTaskId) },
+			locals: { user: { id: speakerUserId } }
+		} as never);
+		expect(upload?.acceptedTalks).toBe(0);
+	});
+
+	/**
+	 * A withdrawal is an answer, not an achievement (#495). The task list needs
+	 * the answer to stop printing a tick next to it and counting it as done.
+	 */
+	it('carries the withdrawal into the portal task list', async () => {
+		await actions.participation(participationEvent(actionTaskId, 'declined'));
+
+		const tasks = await myTasks(speakerUserId);
+		const participation = tasks.find((row) => row.id === actionTaskId);
+
+		expect(participation).toMatchObject({ status: 'done', participationStatus: 'declined' });
 	});
 });

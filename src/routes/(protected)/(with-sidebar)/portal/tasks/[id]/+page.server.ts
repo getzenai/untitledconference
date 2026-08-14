@@ -2,9 +2,11 @@
  * One task in the speaker portal: what is being asked, what has been handed in,
  * and the conversation about it (SPK-07/08, CNT-03/04/05).
  */
+import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 import { REJECTION_MESSAGES, rejectUpload } from '$lib/conference/upload-limits';
 import { objectKey, safeFilename, uploadsBucket } from '$lib/server/conference/deliverable-storage';
 import {
+	acceptedTalkCount,
 	addFileComment,
 	nextVersion,
 	ownTask,
@@ -30,7 +32,17 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const task = await ownTask(locals.user.id, taskId(params.id));
 	if (!task) error(404, 'No such task');
 
-	return { task, files: await taskFiles(task.id) };
+	// Only the withdrawal dialog reads this, so only a participation task pays
+	// for the count.
+	const participation = task.kind === 'action' && isParticipationTaskTitle(task.title);
+
+	return {
+		task,
+		files: await taskFiles(task.id),
+		acceptedTalks: participation
+			? await acceptedTalkCount(task.conferenceId, task.speakerProfileId)
+			: 0
+	};
 };
 
 /** Postgres 23505 on the (task, version) index, wrapped by Drizzle. */
