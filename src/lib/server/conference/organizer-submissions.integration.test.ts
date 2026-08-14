@@ -13,7 +13,14 @@ import { formatScore, submissionScore } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { conferenceTable, type Conference } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceDayTable,
+	conferenceTable,
+	roomTable,
+	sessionFormatTable,
+	type Conference
+} from '$lib/server/db/conference/conference-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import {
 	evaluationPlanTable,
 	reviewRoundTable,
@@ -82,8 +89,11 @@ describe('the submissions table, page by page', () => {
 		const total = PAGE_SIZE + 7;
 		for (let i = 0; i < total; i++) await addSubmission(conference, `Talk ${i}`, i);
 
-		const first = await listSubmissions(conference.id, {}, 1);
-		const second = await listSubmissions(conference.id, {}, 2);
+		// `includeDrafts` explicitly: since #412 the default view leaves drafts out,
+		// and this test is about the paging order of rows with no `submittedAt` —
+		// which drafts are the only source of.
+		const first = await listSubmissions(conference.id, { includeDrafts: true }, 1);
+		const second = await listSubmissions(conference.id, { includeDrafts: true }, 2);
 
 		expect(first.rows).toHaveLength(PAGE_SIZE);
 		expect(second.rows).toHaveLength(7);
@@ -141,8 +151,11 @@ describe('the submissions table, page by page', () => {
 		}));
 		await db.insert(submissionTable).values(values);
 
-		const first = await listSubmissions(conference.id, {}, 1);
-		const second = await listSubmissions(conference.id, {}, 2);
+		// `includeDrafts` explicitly: since #412 the default view leaves drafts out,
+		// and this test is about the paging order of rows with no `submittedAt` —
+		// which drafts are the only source of.
+		const first = await listSubmissions(conference.id, { includeDrafts: true }, 1);
+		const second = await listSubmissions(conference.id, { includeDrafts: true }, 2);
 		const titles = [...first.rows, ...second.rows].map((r) => r.title);
 
 		expect(new Set(titles).size).toBe(values.length);
@@ -784,5 +797,182 @@ describe('reviewer identity on the organizer submission page (#416)', () => {
 
 		expect(detail?.reviews.map((r) => r.reviewerName)).toEqual([REVIEWERS[2]]);
 		expect(detail?.reviews.every((r) => r.anonymized)).toBe(false);
+	});
+});
+
+/**
+ * Drafts and the programme (#412), Fabian's two asks about this table.
+ *
+ * Both are about the same misreading: the organizer's table said more than it knew.
+ * It listed proposals nobody had handed in, and it had no answer at all to "is this
+ * one in the programme yet" — the question between accepting a talk and printing a
+ * schedule.
+ */
+describe('drafts and agenda status (#412)', () => {
+	let day: number;
+	let room: number;
+	let format: number;
+
+	beforeAll(async () => {
+		const [conferenceDay] = await db
+			.insert(conferenceDayTable)
+			.values({ conferenceId: conference.id, date: '2027-03-01' })
+			.returning();
+		day = conferenceDay.id;
+
+		const [hall] = await db
+			.insert(roomTable)
+			.values({ conferenceId: conference.id, name: 'Hall 1' })
+			.returning();
+		room = hall.id;
+
+		const [talk] = await db
+			.insert(sessionFormatTable)
+			.values({ conferenceId: conference.id, name: 'Talk', minutes: 30 })
+			.returning();
+		format = talk.id;
+	});
+
+	beforeEach(async () => {
+		await db.delete(placementTable).where(eq(placementTable.conferenceId, conference.id));
+	});
+
+	/** Two handed-in talks — one on the grid, one still in the tray — and one draft. */
+	async function pile() {
+		await addSubmission(conference, 'Placed talk', 1);
+		await addSubmission(conference, 'Waiting talk', 2);
+		await db.insert(submissionTable).values({
+			conferenceId: conference.id,
+			title: 'Draft talk',
+			status: 'draft',
+			sessionFormatId: format
+		});
+
+		await db.insert(placementTable).values([
+			{
+				conferenceId: conference.id,
+				kind: 'session',
+				status: 'confirmed',
+				submissionId: await idFor('Placed talk'),
+				conferenceDayId: day,
+				roomId: room,
+				startsAt: new Date('2027-03-01T14:30:00Z'),
+				endsAt: new Date('2027-03-01T15:00:00Z')
+			},
+			// Accepting a talk puts it in the tray: a placement row with no time on
+			// it. This is the row that makes "has a placement" the wrong question.
+			{
+				conferenceId: conference.id,
+				kind: 'session',
+				status: 'tentative',
+				submissionId: await idFor('Waiting talk')
+			}
+		]);
+	}
+
+	const titlesOf = async (filters: Parameters<typeof listSubmissions>[1] = {}) =>
+		(await listSubmissions(conference.id, filters, 1, 'title-asc')).rows.map((r) => r.title);
+
+	it('leaves drafts out of the default view and brings them back on request', async () => {
+		await pile();
+
+		expect(await titlesOf()).toEqual(['Placed talk', 'Waiting talk']);
+		expect(await titlesOf({ includeDrafts: true })).toEqual([
+			'Draft talk',
+			'Placed talk',
+			'Waiting talk'
+		]);
+	});
+
+	/**
+	 * The count under the filter is a separate query from the rows. A default that
+	 * only reached the rows would print "3 match the filter" over two of them.
+	 */
+	it('counts what it shows', async () => {
+		await pile();
+
+		expect((await listSubmissions(conference.id, {})).matching).toBe(2);
+		expect((await listSubmissions(conference.id, { includeDrafts: true })).matching).toBe(3);
+	});
+
+	/**
+	 * A link someone pasted before this changed still shows what it promised.
+	 * Otherwise `?status=draft` would render an empty table under a checked box,
+	 * which reads as data loss rather than as a default.
+	 */
+	it('treats an explicit draft status as asking for drafts', async () => {
+		await pile();
+
+		expect(await titlesOf({ status: ['draft'] })).toEqual(['Draft talk']);
+	});
+
+	it('tells a placed talk from one that is still waiting for a slot', async () => {
+		await pile();
+
+		const rows = (await listSubmissions(conference.id, {}, 1, 'title-asc')).rows;
+		const placed = rows.find((r) => r.title === 'Placed talk')!;
+		const waiting = rows.find((r) => r.title === 'Waiting talk')!;
+
+		expect(placed.agenda).toMatchObject({
+			day: '2027-03-01',
+			room: 'Hall 1',
+			confirmed: true
+		});
+		expect(placed.agenda!.startsAt.toISOString()).toBe('2027-03-01T14:30:00.000Z');
+		// A tray row is a placement without a time, and that is not being in the
+		// programme — the whole point of the column.
+		expect(waiting.agenda).toBeNull();
+	});
+
+	it('filters by agenda status, and the two halves add up to the whole', async () => {
+		await pile();
+
+		expect(await titlesOf({ agenda: 'scheduled' })).toEqual(['Placed talk']);
+		expect(await titlesOf({ agenda: 'unscheduled' })).toEqual(['Waiting talk']);
+	});
+
+	/**
+	 * A tentative talk may be parked on several slots at once — that is what the
+	 * tentative state is for. The column still has to give one answer, and the
+	 * published one is the answer that matters.
+	 */
+	it('shows the confirmed slot when a talk is parked on more than one', async () => {
+		await addSubmission(conference, 'Busy talk', 1);
+		const id = await idFor('Busy talk');
+		await db.insert(placementTable).values([
+			{
+				conferenceId: conference.id,
+				kind: 'session',
+				status: 'tentative',
+				submissionId: id,
+				conferenceDayId: day,
+				roomId: room,
+				startsAt: new Date('2027-03-01T09:00:00Z')
+			},
+			{
+				conferenceId: conference.id,
+				kind: 'session',
+				status: 'confirmed',
+				submissionId: id,
+				conferenceDayId: day,
+				roomId: room,
+				startsAt: new Date('2027-03-01T16:00:00Z')
+			}
+		]);
+
+		const [row] = (await listSubmissions(conference.id, {}, 1, 'title-asc')).rows;
+		expect(row.agenda!.confirmed).toBe(true);
+		expect(row.agenda!.startsAt.toISOString()).toBe('2027-03-01T16:00:00.000Z');
+	});
+
+	/** The file is the view: same rule, or a committee gets a different pile. */
+	it('exports the filtered set, drafts and all only when asked', async () => {
+		await pile();
+
+		expect((await exportSubmissions(conference.id, {})).rows.map((r) => r.title).sort()).toEqual([
+			'Placed talk',
+			'Waiting talk'
+		]);
+		expect((await exportSubmissions(conference.id, { includeDrafts: true })).rows.length).toBe(3);
 	});
 });

@@ -19,6 +19,9 @@
 		describeNotification,
 		notificationTone
 	} from '$lib/conference/decision-summary';
+	import { formatDayShort, formatTime, isoDay } from '$lib/conference/public-view';
+	// Type only — erased at build, so the server module never reaches the browser.
+	import type { AgendaSlot } from '$lib/server/conference/organizer-submissions';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
@@ -151,9 +154,26 @@
 			data.filters.trackId ||
 			data.filters.sessionFormatId ||
 			data.filters.status?.length ||
-			data.filters.needsReview
+			data.filters.needsReview ||
+			data.filters.agenda ||
+			data.filters.includeDrafts
 		)
 	);
+
+	/**
+	 * Where the talk sits on the grid, in one line (#412).
+	 *
+	 * Day, room and time in that order, and only the parts that exist — a slot on a
+	 * conference with one room and one day would otherwise read as two em dashes and
+	 * a clock. "Not scheduled" covers both no placement at all and one still waiting
+	 * in the tray: neither is in the programme, which is the question this column
+	 * answers.
+	 */
+	const agendaLine = (slot: AgendaSlot | null) => {
+		if (!slot) return 'Not scheduled';
+		const day = slot.day ?? isoDay(slot.startsAt);
+		return [formatDayShort(day), slot.room, formatTime(slot.startsAt)].filter(Boolean).join(' · ');
+	};
 
 	const DECIDED: string[] = ['accepted', 'rejected', 'waitlisted', 'withdrawn'];
 	const NOTIFIABLE: string[] = ['accepted', 'rejected', 'waitlisted'];
@@ -403,11 +423,21 @@
 	{/if}
 
 	{#if data.submissions.length === 0}
+		<!-- Three empty tables, not two (#412). Since drafts are out by default, a
+		     conference whose only proposals are drafts would otherwise be told
+		     "No submissions yet" while the header beside it counts them — the one
+		     way an inverted default turns into a support question. -->
 		<EmptyState
-			title={filtered ? 'No submission matches these filters' : 'No submissions yet'}
+			title={filtered
+				? 'No submission matches these filters'
+				: data.counts.total > 0
+					? 'Nothing handed in yet'
+					: 'No submissions yet'}
 			description={filtered
 				? 'Widen the filters, or clear them to see the whole pile again.'
-				: 'Nothing has come in through the call for papers. Share the link and the table fills itself.'}
+				: data.counts.total > 0
+					? 'Every proposal so far is still a draft on its speaker’s desk. Tick “Include drafts” to look at them.'
+					: 'Nothing has come in through the call for papers. Share the link and the table fills itself.'}
 			action={{ href: `/c/${data.conference.slug}`, label: 'Open the public conference page' }}
 		/>
 	{:else}
@@ -686,6 +716,7 @@
 							<th class="py-2 pr-4 font-medium">Speaker</th>
 							<th class="py-2 pr-4 font-medium">Track</th>
 							<th class="py-2 pr-4 font-medium">Format</th>
+							<th class="py-2 pr-4 font-medium">Agenda</th>
 							<th class="py-2 pr-4 font-medium">Sponsor</th>
 							{@render sortable('Score', score, scoreHint, 'sort-by-score')}
 							{@render sortable('Reviews', reviews, reviewsHint, 'sort-by-reviews')}
@@ -718,6 +749,22 @@
 								<td class="text-muted-foreground py-2 pr-4">{speakerLine(submission.speakers)}</td>
 								<td class="text-muted-foreground py-2 pr-4">{submission.track ?? '—'}</td>
 								<td class="text-muted-foreground py-2 pr-4">{submission.sessionFormat ?? '—'}</td>
+								<!-- Tentative is said out loud: a slot that is only pencilled in is
+								     not yet a promise to the speaker. -->
+								<td
+									class="py-2 pr-4 whitespace-nowrap {submission.agenda
+										? 'text-foreground'
+										: 'text-muted-foreground'}"
+									data-testid="agenda-cell"
+								>
+									{agendaLine(
+										submission.agenda
+									)}{#if submission.agenda && !submission.agenda.confirmed}<span
+											class="text-muted-foreground"
+										>
+											· tentative</span
+										>{/if}
+								</td>
 								<td class="py-2 pr-4">
 									{#if submission.sponsorTier}
 										<!-- R6: internal. The reviewer's view and every public surface load

@@ -57,6 +57,20 @@ export const formatTime = (at: string | Date) => HHMM.format(new Date(at));
 export const isoDay = (value: Date | string) =>
 	(value instanceof Date ? value : new Date(value)).toISOString().slice(0, 10);
 
+/**
+ * The same day, short enough for a table cell (#412).
+ *
+ * "Wed 14 Aug" rather than "Wednesday, 14 August 2027": in a column beside a room
+ * and a time the year is noise, and the weekday is the part an organizer scans by.
+ */
+export const formatDayShort = (iso: string) =>
+	new Intl.DateTimeFormat('en-GB', {
+		weekday: 'short',
+		day: 'numeric',
+		month: 'short',
+		timeZone: 'UTC'
+	}).format(new Date(iso));
+
 export const formatDayLong = (iso: string) =>
 	new Intl.DateTimeFormat('en-GB', {
 		weekday: 'long',

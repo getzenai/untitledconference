@@ -34,7 +34,12 @@ import {
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
 import { and, asc, count, eq, exists, ilike, inArray, or, sql } from 'drizzle-orm';
+import { agendaSlotsFor, programmeWhere, type AgendaSlot } from './submission-agenda';
 import { orderFor, type SubmissionSort } from './submission-sort';
+export type { AgendaSlot };
+
+/** Where a talk stands in the programme — the filter's two answers (#412). */
+export type AgendaFilter = 'scheduled' | 'unscheduled';
 
 export type SubmissionFilters = {
 	q?: string;
@@ -43,6 +48,18 @@ export type SubmissionFilters = {
 	sessionFormatId?: number;
 	/** Only what still has to be reviewed (#122). */
 	needsReview?: boolean;
+	/** In the programme, or still waiting for a slot (#412). */
+	agenda?: AgendaFilter;
+	/**
+	 * Drafts are out unless this says otherwise (#412).
+	 *
+	 * The default is the inversion Fabian asked for: a draft has not been handed
+	 * in, so it is not part of the organizer's pile. The flag lives on the filter
+	 * object rather than in the URL parser alone, because the CSV export and any
+	 * later caller read the same rule from here — a default that only the parser
+	 * knows is one every other caller silently gets wrong.
+	 */
+	includeDrafts?: boolean;
 };
 
 export type SpeakerLine = {
@@ -73,6 +90,8 @@ export type SubmissionRow = SubmissionBase & {
 	score: number | null;
 	reviewsSubmitted: number;
 	reviewsAssigned: number;
+	/** Null when the talk is not on the grid (#412). */
+	agenda: AgendaSlot | null;
 };
 
 /** Everything the filter bar can offer, read from the conference rather than hard-coded. */
@@ -177,7 +196,8 @@ function needsReviewWhere() {
 
 /** The SQL predicate behind the filter bar. */
 function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
-	const where = [eq(submissionTable.conferenceId, conferenceId)];
+	// Drafts and the agenda select bring their own conditions (#412).
+	const where = [eq(submissionTable.conferenceId, conferenceId), ...programmeWhere(filters)];
 
 	if (filters.needsReview) where.push(needsReviewWhere());
 
@@ -304,7 +324,11 @@ async function withSpeakersAndScores(
 	rows: SubmissionBase[]
 ): Promise<SubmissionRow[]> {
 	const ids = rows.map((r) => r.id);
-	const [speakers, reviews] = await Promise.all([speakersFor(ids), reviewsFor(conferenceId, ids)]);
+	const [speakers, reviews, agenda] = await Promise.all([
+		speakersFor(ids),
+		reviewsFor(conferenceId, ids),
+		agendaSlotsFor(ids)
+	]);
 
 	return rows.map((row) => {
 		const rowReviews = reviews.get(row.id) ?? [];
@@ -313,7 +337,8 @@ async function withSpeakersAndScores(
 			speakers: speakers.get(row.id) ?? [],
 			score: submissionScore(rowReviews),
 			reviewsSubmitted: rowReviews.filter((r) => r.submitted).length,
-			reviewsAssigned: rowReviews.length
+			reviewsAssigned: rowReviews.length,
+			agenda: agenda.get(row.id) ?? null
 		};
 	});
 }
