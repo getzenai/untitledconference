@@ -504,6 +504,7 @@ function reviewRowsFor(conferenceId: number, submissionId: number) {
 		.select({
 			reviewId: reviewTable.id,
 			reviewerName: user.name,
+			reviewerEmail: user.email,
 			round: reviewRoundTable.name,
 			anonymized: reviewRoundTable.anonymized,
 			status: reviewTable.status,
@@ -574,7 +575,11 @@ function emptyReview(r: ReviewRow) {
 		// still has to see that the round is blind — it labels the row, it no longer
 		// replaces the name.
 		anonymized: r.anonymized,
-		reviewerName: r.reviewerName ?? 'Reviewer',
+		// An account can carry an empty name — registration does not insist on one —
+		// and a blank line is a worse answer to "who reviewed this" than the address
+		// the assignment block below already prints. The old `?? 'Reviewer'` only
+		// caught null, so the empty string fell through to nothing on screen.
+		reviewerName: r.reviewerName?.trim() || r.reviewerEmail || 'Reviewer',
 		round: r.round,
 		status: r.status,
 		comment: r.comment,

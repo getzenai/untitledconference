@@ -749,6 +749,32 @@ describe('reviewer identity on the organizer submission page (#416)', () => {
 		expect(detail?.reviews.every((r) => r.anonymized)).toBe(true);
 	});
 
+	/**
+	 * Registration does not insist on a name, and a review by an account without
+	 * one used to render a blank line — `?? 'Reviewer'` caught null, not `''`.
+	 * The address is what the assignment block below identifies them by anyway.
+	 */
+	it('falls back to the address when the account has no name', async () => {
+		const nameless = `nameless-${suffix}`;
+		await db.insert(user).values({
+			id: nameless,
+			name: '',
+			email: `${nameless}@example.com`,
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+
+		await addSubmission(conference, 'Nameless talk', 3);
+		const submissionId = await idFor('Nameless talk');
+		await addBlindReview(submissionId, nameless, 3);
+
+		const detail = await submissionDetail(conference.id, submissionId);
+		expect(detail?.reviews.map((r) => r.reviewerName)).toEqual([`${nameless}@example.com`]);
+
+		await db.delete(user).where(eq(user.id, nameless));
+	});
+
 	it('leaves an open round exactly as it was: named, and not marked blind', async () => {
 		await addSubmission(conference, 'Open talk', 2);
 		const submissionId = await idFor('Open talk');
