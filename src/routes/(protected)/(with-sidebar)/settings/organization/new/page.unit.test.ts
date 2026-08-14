@@ -1,6 +1,10 @@
 /**
  * #436: the organization create form greys Create when the name is empty
  * and used to say nothing about it.
+ *
+ * #485: the page shipped no <form>, so Enter in the name field did nothing.
+ * The field and the button have to live in one, and the button has to be
+ * type="submit" — `Button` defaults to type="button".
  */
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -36,5 +40,13 @@ describe('new organization', () => {
 		expect(html).toContain('data-testid="create-block-reason"');
 		expect(html).toContain('Organization Name is required.');
 		expect(html).toMatch(/disabled[^>]*>[\s\S]*Create Organization/);
+	});
+
+	it('is a form, so Enter in the name field creates the organization', () => {
+		const html = body();
+
+		expect(html).toContain('data-testid="create-organization-form"');
+		expect(html).toMatch(/<form[^>]*data-testid="create-organization-form"/);
+		expect(html).toContain('type="submit"');
 	});
 });
