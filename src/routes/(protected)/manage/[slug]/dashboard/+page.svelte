@@ -13,6 +13,15 @@
 	 */
 	import SubmissionsChart from '$lib/components/app/conference/submissions-chart.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { submissionsTrend, TREND_WINDOW } from '$lib/conference/submissions-trend';
 	import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
@@ -82,6 +91,31 @@
 
 	const selected = new SvelteSet<string>();
 	let busy = $state(false);
+
+	/** In-page confirm, gated in `use:enhance` — `preventDefault` does not stop it (#409). */
+	let mailForm: HTMLFormElement | undefined = $state();
+	let mailConfirmOpen = $state(false);
+	let allowMailDispatch = $state(false);
+
+	const mailUnconfigured = 'Mail delivery is not configured.';
+	const mailIdleCopy = 'Queued messages go out when you send them, or with the next dispatch.';
+	const mailBlockReason = $derived(
+		!data.mailDeliveryConfigured
+			? mailUnconfigured
+			: d.mail.queued === 0
+				? 'Nothing is queued.'
+				: null
+	);
+	const mailQueuedPhrase = $derived(
+		d.mail.queued === 1 ? '1 queued message' : `${d.mail.queued} queued messages`
+	);
+
+	const confirmMailDispatch = () => {
+		if (!mailForm) return;
+		allowMailDispatch = true;
+		mailConfirmOpen = false;
+		mailForm.requestSubmit();
+	};
 
 	// A reviewer who dropped off the remindable list — reminded by someone else, or
 	// finished — must not stay selected across the reload that told us so.
@@ -658,9 +692,44 @@
 			{/if}
 		{/snippet}
 		{#snippet mailFooter()}
-			<form method="POST" action="?/dispatchMail" class="flex items-center justify-between gap-2">
-				<span>{form?.mailMessage ?? 'Queued messages are delivered through Resend.'}</span>
-				<Button type="submit" size="sm" variant="outline" disabled={d.mail.queued === 0}>
+			<form
+				bind:this={mailForm}
+				method="POST"
+				action="?/dispatchMail"
+				class="flex items-center justify-between gap-2"
+				data-testid="dispatch-mail"
+				use:enhance={({ cancel }) => {
+					if (mailBlockReason || busy) {
+						cancel();
+						return;
+					}
+					if (!allowMailDispatch) {
+						cancel();
+						mailConfirmOpen = true;
+						return;
+					}
+					allowMailDispatch = false;
+					busy = true;
+					return async ({ update }) => {
+						try {
+							await update(formUpdateOptions('edit'));
+						} finally {
+							busy = false;
+						}
+					};
+				}}
+			>
+				<span data-testid="mail-panel-copy">
+					{form?.mailMessage ?? mailBlockReason ?? mailIdleCopy}
+				</span>
+				<Button
+					type="submit"
+					size="sm"
+					variant="outline"
+					data-testid="send-queued"
+					disabled={mailBlockReason !== null || busy}
+					title={mailBlockReason ?? undefined}
+				>
 					Send queued
 				</Button>
 			</form>
@@ -673,3 +742,20 @@
 		)}
 	</div>
 </div>
+
+<AlertDialog bind:open={mailConfirmOpen}>
+	<AlertDialogContent data-testid="dispatch-mail-dialog">
+		<AlertDialogHeader>
+			<AlertDialogTitle>Send {mailQueuedPhrase} now?</AlertDialogTitle>
+			<AlertDialogDescription>
+				They go to the speakers they were written for. This cannot be undone.
+			</AlertDialogDescription>
+		</AlertDialogHeader>
+		<AlertDialogFooter>
+			<AlertDialogCancel data-testid="dispatch-mail-cancel">Cancel</AlertDialogCancel>
+			<Button data-testid="dispatch-mail-confirm" onclick={confirmMailDispatch}>
+				Send {d.mail.queued} queued
+			</Button>
+		</AlertDialogFooter>
+	</AlertDialogContent>
+</AlertDialog>

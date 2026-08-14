@@ -1,6 +1,9 @@
 import { requireOrganizer } from '$lib/server/conference/access';
 import { conferenceDashboard } from '$lib/server/conference/dashboard';
-import { dispatchConferenceEmails } from '$lib/server/conference/email-dispatcher';
+import {
+	dispatchConferenceEmails,
+	mailDeliveryConfigured
+} from '$lib/server/conference/email-dispatcher';
 import {
 	queueReviewReminders,
 	type BulkReminderTally
@@ -11,7 +14,10 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 
-	return { dashboard: await conferenceDashboard(conference.id) };
+	return {
+		dashboard: await conferenceDashboard(conference.id),
+		mailDeliveryConfigured: mailDeliveryConfigured()
+	};
 };
 
 /**
@@ -78,6 +84,9 @@ export const actions: Actions = {
 	},
 	dispatchMail: async ({ locals, params }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		if (!mailDeliveryConfigured()) {
+			return fail(503, { mailMessage: 'Mail delivery is not configured.' });
+		}
 		const result = await dispatchConferenceEmails(conference.id);
 		if (result.disabled) {
 			return fail(503, { mailMessage: 'Mail delivery is not configured.' });

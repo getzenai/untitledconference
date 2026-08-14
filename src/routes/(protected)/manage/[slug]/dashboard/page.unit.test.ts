@@ -62,6 +62,7 @@ function pageWith(items: Reviewer[]) {
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
+				mailDeliveryConfigured: true,
 				dashboard: {
 					...emptyDashboard,
 					reviews: {
@@ -332,6 +333,7 @@ describe('reviewer progress as a comparison', () => {
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
+					mailDeliveryConfigured: true,
 					dashboard: {
 						...emptyDashboard,
 						reviews: {
@@ -474,5 +476,70 @@ describe('queue cards', () => {
 
 		expect(grid).toContain(`title="${longTitle}"`);
 		expect(grid).toContain(`title="${longTitle} · Priya Raman"`);
+	});
+});
+
+/**
+ * The mail panel (#472). Send queued used to fire on the first click and only
+ * reveal an unconfigured transport after the POST. The vendor name answered a
+ * question nobody asked.
+ */
+describe('mail panel', () => {
+	function mailPage(opts: { configured: boolean; queued: number; mailMessage?: string }) {
+		return render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					mailDeliveryConfigured: opts.configured,
+					dashboard: {
+						...emptyDashboard,
+						reviews: { assigned: 0, submitted: 0, outstanding: 0, items: [] },
+						mail: { queued: opts.queued, sent: 0, failed: 0, items: [] }
+					}
+				} as unknown as PageData,
+				form: opts.mailMessage ? { mailMessage: opts.mailMessage } : null
+			}
+		}).body;
+	}
+
+	const sendQueued = (body: string) => {
+		const at = body.indexOf('data-testid="send-queued"');
+		return body.slice(Math.max(0, at - 80), at + 40);
+	};
+
+	it('greys the button and names why when delivery is not configured', () => {
+		const body = mailPage({ configured: false, queued: 4 });
+
+		expect(body).toContain('data-testid="mail-panel-copy">Mail delivery is not configured.');
+		expect(sendQueued(body)).toContain('disabled');
+		expect(body).not.toContain('Resend');
+	});
+
+	it('greys the button when nothing is queued', () => {
+		const body = mailPage({ configured: true, queued: 0 });
+
+		expect(body).toContain('data-testid="mail-panel-copy">Nothing is queued.');
+		expect(sendQueued(body)).toContain('disabled');
+		expect(body).not.toContain('Resend');
+	});
+
+	it('leaves the button live and says when the mail goes out', () => {
+		const body = mailPage({ configured: true, queued: 3 });
+
+		expect(body).toContain(
+			'data-testid="mail-panel-copy">Queued messages go out when you send them, or with the next dispatch.'
+		);
+		expect(sendQueued(body)).not.toContain('disabled');
+		expect(body).not.toContain('Resend');
+	});
+
+	it('shows what the last send actually did', () => {
+		const body = mailPage({ configured: true, queued: 0, mailMessage: '3 sent' });
+
+		expect(body).toContain('data-testid="mail-panel-copy">3 sent');
 	});
 });
