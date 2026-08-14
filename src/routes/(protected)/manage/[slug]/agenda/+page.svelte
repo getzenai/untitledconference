@@ -143,8 +143,20 @@
 	const liveTalks = $derived(
 		placedTalks.filter((p) => p.status === 'confirmed' && p.submissionStatus === 'accepted')
 	);
+	/**
+	 * What the button toggles, which is not what the public sees.
+	 *
+	 * `?/publish` sets every placement to `confirmed` and back to `tentative`; it
+	 * knows nothing about acceptance. Reading the label off `liveTalks` instead
+	 * meant a declined talk in a confirmed slot — the case that keeps its slot on
+	 * purpose, two comments up — made the label read "Publish the agenda" for
+	 * ever, and the way to take the programme down disappeared while the public
+	 * was still being served the other sessions. So the label follows the state
+	 * the action owns, and the sentence above it keeps the public truth, which is
+	 * the one thing a two-state button could never say ("1 of 2").
+	 */
 	const everythingPublished = $derived(
-		placedTalks.length > 0 && liveTalks.length === placedTalks.length
+		placedTalks.length > 0 && placedTalks.every((p) => p.status === 'confirmed')
 	);
 	const publicState = $derived(
 		placedTalks.length === 0
@@ -416,7 +428,10 @@
 		<p class="text-muted-foreground text-sm" data-testid="agenda-publish-result" role="status">
 			{form.published
 				? liveTalks.length === 0
-					? 'Nothing went live — only slotted talks can appear on the public agenda.'
+					? // The slots are confirmed; what keeps them off the public page is the
+						// decision on the talk, and naming the wrong reason sends the
+						// organizer to the grid to look for a placement problem.
+						'Nothing went live — a slot only appears publicly once its talk is accepted.'
 					: `The public agenda now shows ${liveTalks.length} ${liveTalks.length === 1 ? 'session' : 'sessions'}.`
 				: 'Taken off the public agenda. These slots are only visible to you.'}
 		</p>
