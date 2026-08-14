@@ -58,7 +58,19 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	],
 	score: null,
 	reviewsSubmitted: 0,
-	reviewsAssigned: 0
+	reviewsAssigned: 0,
+	// Accepted talks are the ones that can be on the grid, so the fixture puts one
+	// there and leaves the undecided one off it (#412).
+	agenda:
+		status === 'accepted'
+			? {
+					day: '2027-06-01',
+					room: 'Hall 1',
+					startsAt: new Date('2027-06-01T14:30:00Z'),
+					endsAt: new Date('2027-06-01T15:00:00Z'),
+					confirmed: true
+				}
+			: null
 });
 
 const assignmentTargets = [
@@ -343,6 +355,38 @@ describe('the still-to-review filter and the reviews column', () => {
 		// matches".
 		const on = renderPage(null, 'newest', '?needsReview=on', { needsReview: true });
 		expect(on).toContain('name="needsReview" checked');
+		expect(on).toContain('match the filter');
+	});
+
+	/**
+	 * #412. Two changes to the same row of controls, both from Fabian's journey:
+	 * a talk can be accepted and still have no slot, and drafts are not the
+	 * organizer's pile at all.
+	 */
+	it('shows where an accepted talk sits in the programme, and says so when it does not', () => {
+		const body = renderPage();
+
+		expect(body).toContain('data-testid="agenda-cell"');
+		expect(body).toContain('Hall 1');
+		expect(body).toContain('14:30');
+		// The undecided fixture has no placement — the cell has to say that rather
+		// than leave a blank an organizer reads as "nobody has looked yet".
+		expect(body).toContain('Not scheduled');
+	});
+
+	it('filters by agenda status and offers drafts as an opt-in rather than a status box', () => {
+		const body = renderPage();
+
+		expect(body).toContain('name="agenda"');
+		expect(body).toContain('Not scheduled');
+		expect(body).toContain('data-testid="filter-include-drafts"');
+		// The old seventh status box is gone: a draft is not a decision.
+		expect(body).not.toContain('value="draft"');
+		expect(body).not.toContain('name="includeDrafts" checked');
+
+		const on = renderPage(null, 'newest', '?includeDrafts=on', { includeDrafts: true });
+		expect(on).toContain('name="includeDrafts" checked');
+		// And the page knows it is filtered, so "Clear" is there to get back.
 		expect(on).toContain('match the filter');
 	});
 

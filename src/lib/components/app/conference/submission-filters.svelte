@@ -24,6 +24,8 @@
 			trackId?: number;
 			sessionFormatId?: number;
 			needsReview?: boolean;
+			agenda?: 'scheduled' | 'unscheduled';
+			includeDrafts?: boolean;
 		};
 		sort: string;
 		/** Where "Clear" goes — the page owns the URL, this component only links to it. */
@@ -47,19 +49,19 @@
 			filters.trackId ||
 			filters.sessionFormatId ||
 			filters.status?.length ||
-			filters.needsReview
+			filters.needsReview ||
+			filters.agenda ||
+			filters.includeDrafts
 		)
 	);
 
-	const STATUSES = [
-		'draft',
-		'submitted',
-		'in_review',
-		'accepted',
-		'waitlisted',
-		'rejected',
-		'withdrawn'
-	];
+	/**
+	 * No `draft` box any more (#412). Drafts are not a status the organizer picks
+	 * between — they are the pile that is not theirs yet, so they get one checkbox
+	 * of their own that brings them back rather than a seventh box among the
+	 * decisions.
+	 */
+	const STATUSES = ['submitted', 'in_review', 'accepted', 'waitlisted', 'rejected', 'withdrawn'];
 
 	/**
 	 * Apply the filters the moment one of them changes.
@@ -133,6 +135,40 @@
 	/>
 
 	<!--
+		Where a talk stands in the programme (#412). A select rather than a checkbox
+		because the two answers are a pair an organizer switches between — "what still
+		needs a slot" on Monday, "what is already placed" when checking the grid.
+	-->
+	<AppSelect
+		name="agenda"
+		aria-label="Agenda status"
+		class="w-44"
+		value={filters.agenda ?? ''}
+		options={[
+			{ value: '', label: 'Any agenda status' },
+			{ value: 'scheduled', label: 'Scheduled' },
+			{ value: 'unscheduled', label: 'Not scheduled' }
+		]}
+		onValueChange={applyAfterFlush}
+	/>
+
+	<!--
+		Drafts are out unless asked for (#412). The old control had `draft` as a
+		status box, so the organizer's default view was full of proposals nobody had
+		handed in yet — work in progress read as a queue.
+	-->
+	<label class="flex cursor-pointer items-center gap-1.5 pb-1.5 text-sm">
+		<input
+			type="checkbox"
+			name="includeDrafts"
+			checked={filters.includeDrafts}
+			class="border-input accent-primary size-4 rounded"
+			data-testid="filter-include-drafts"
+		/>
+		<span>Include drafts</span>
+	</label>
+
+	<!--
 		The one filter the interview asked for by name (#122): what is left to review.
 
 		The live pipeline — submitted and in review — whether or not a review has
@@ -160,7 +196,7 @@
 		has read as a list since day one; only the control changed.
 	-->
 	<!--
-		Its own row from the start. Seven checkboxes plus a search box and two
+		Its own row from the start. Six checkboxes plus a search box and three
 		selects do not fit on one line at any width an organizer actually uses, and
 		as a flex item the group does not wrap on its own — it just runs off the
 		right edge and takes "rejected" and "withdrawn" with it.

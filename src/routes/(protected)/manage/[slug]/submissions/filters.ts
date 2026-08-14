@@ -16,11 +16,20 @@ export function parseSubmissionFilters(url: URL): SubmissionFilters {
 		return Number.isInteger(value) && value > 0 ? value : undefined;
 	};
 
+	// Anything else in `?agenda=` is no filter at all rather than an error: this is a
+	// URL people paste to each other, and a typo should show the table.
+	const agenda = url.searchParams.get('agenda');
+
 	return {
 		q: url.searchParams.get('q') ?? undefined,
 		status: url.searchParams.getAll('status').filter(Boolean),
 		trackId: number('track'),
 		sessionFormatId: number('format'),
+		agenda: agenda === 'scheduled' || agenda === 'unscheduled' ? agenda : undefined,
+		// Inverted on purpose (#412): a draft has not been handed in, so the default
+		// view leaves it out and this box brings it back. Presence means on, for the
+		// same reason as `needsReview` below.
+		includeDrafts: url.searchParams.has('includeDrafts'),
 		// Present at all means on, whatever the value: this rides in on a checkbox,
 		// which sends `needsReview=on` and sends nothing when it is off. Comparing
 		// against '1' or 'true' would make the box that ships the filter the one

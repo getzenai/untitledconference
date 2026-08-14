@@ -39,10 +39,25 @@ const HEADER = [
 	'speakers',
 	'track',
 	'format',
+	'agenda',
 	'sponsor tier (internal)',
 	'content approval',
 	'submitted at'
 ];
+
+/** "2027-08-14 14:30 Hall 1" when it is placed, empty when it is not (#412). */
+function agendaCell(row: SubmissionRow) {
+	const slot = row.agenda;
+	if (!slot) return '';
+	const stamp = slot.startsAt.toISOString();
+	return [
+		`${stamp.slice(0, 10)} ${stamp.slice(11, 16)}`,
+		slot.room,
+		slot.confirmed ? '' : 'tentative'
+	]
+		.filter(Boolean)
+		.join(' · ');
+}
 
 function line(row: SubmissionRow) {
 	return [
@@ -57,6 +72,10 @@ function line(row: SubmissionRow) {
 		row.speakers.map((s) => s.name).join('; '),
 		row.track,
 		row.sessionFormat,
+		// The screen's answer in one cell, so a committee reading the file knows
+		// which talks still need a slot. ISO date and time for the same reason
+		// `submitted at` is ISO: this column gets sorted.
+		agendaCell(row),
 		row.sponsorTier,
 		row.contentApproval,
 		// ISO, not a locale format: this column gets sorted and filtered, and a
