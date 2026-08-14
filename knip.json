@@ -10,6 +10,8 @@
 		"@tailwindcss/typography",
 		"@types/winston",
 		"autoprefixer",
+		"axe-core",
+		"cypress-axe",
 		"patch-package",
 		"start-server-and-test",
 		"tw-animate-css"

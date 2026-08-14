@@ -35,7 +35,25 @@ describe('submissions over time', () => {
 
 		expect(body).toContain('5 in the last 4 days');
 		expect(body).toContain('busiest day 3');
-		expect(body).toContain('aria-label="Submissions per day over the last 4 days, 5 in total"');
+		expect(body).toContain(
+			'aria-label="Submissions per day over the last 4 days, 5 in total — use the arrow keys to step through the days"'
+		);
+	});
+
+	/**
+	 * The summary sits on the control, not on the picture around it (#456).
+	 *
+	 * A named `role="img"` with a focusable `role="slider"` inside it is announced
+	 * as one thing and operated as another — axe calls it `nested-interactive`, and
+	 * a keyboard reaches a target the reader was never told about. The plot is
+	 * therefore presentational; the figcaption and the table twin carry the numbers.
+	 */
+	it('leaves the plot unnamed and puts the summary on the control', () => {
+		const { body } = render(Chart, { props: { days: days([2, 0, 0, 3]) } });
+
+		expect(body).toContain('role="presentation"');
+		expect(body).not.toContain('role="img"');
+		expect(body.match(/aria-label="Submissions per day/g) ?? []).toHaveLength(1);
 	});
 
 	/** One series: the card heading names it, so a one-swatch legend is noise. */

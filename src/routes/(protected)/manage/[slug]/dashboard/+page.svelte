@@ -214,7 +214,14 @@
 						<a class="font-medium underline underline-offset-4" href="{base}/submissions/{item.id}"
 							>{item.title}</a
 						>
-						<span class="opacity-80">— {item.status.replace(/_/g, ' ')}, {item.detail}.</span>
+						<!--
+							No `opacity-*` on text. Every colour pair in the token file is
+							measured against 4.5:1 when the palette is built, and a wash over
+							the top is invisible to that check: `status-warn` on its own plate
+							is 4.91:1 and 3.46:1 at 80% (#456). The clause is already
+							subordinate — it follows a link and is not bold.
+						-->
+						<span>— {item.status.replace(/_/g, ' ')}, {item.detail}.</span>
 					</li>
 				{/each}
 			</ul>
@@ -306,7 +313,8 @@
 					{/if}
 					<span>
 						{trend.recent} in the last {TREND_WINDOW} days
-						<span class="opacity-80">
+						<!-- Same reason as the leftovers list: no wash over coloured text. -->
+						<span>
 							{trend.direction === 'flat'
 								? 'and'
 								: trend.direction === 'up'
