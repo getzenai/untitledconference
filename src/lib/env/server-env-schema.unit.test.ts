@@ -23,6 +23,8 @@ describe('serverEnvSchema — required fields & defaults', () => {
 			expect(result.data.SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG).toBe(false);
 			expect(result.data.ENABLE_TEST_ENDPOINTS).toBe(false);
 			expect(result.data.FEATURE_EXAMPLE_FEATURE).toBe(false);
+			expect(result.data.FEATURE_INAPP_CHAT).toBe(false);
+			expect(result.data.AI_CHAT_MODEL).toBe('openai/gpt-4o-mini');
 		}
 	});
 

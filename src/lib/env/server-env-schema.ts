@@ -79,6 +79,27 @@ export const serverEnvSchema = z
 		// One `FEATURE_*` variable per flag; see src/lib/server/feature-flags.ts.
 		/** Example flag shipped with the starter — replace with your own. */
 		FEATURE_EXAMPLE_FEATURE: boolWithDefault(false),
+		/** In-app reviewer chat. Off unless explicitly set; production stays off. */
+		FEATURE_INAPP_CHAT: boolWithDefault(false),
+
+		// --- In-app chat (AI Gateway) ------------------------------------------
+		/**
+		 * Cloudflare AI Gateway token. Worker secret (`wrangler secret put`), never
+		 * a `wrangler.jsonc` var. Optional so the flag-off build and stubbed tests
+		 * do not require it.
+		 */
+		AI_GATEWAY_API_KEY: optionalStr(),
+		/**
+		 * Cloudflare AI Gateway OpenAI-compatible base URL
+		 * (`https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/compat`).
+		 * Not a secret.
+		 */
+		AI_GATEWAY_BASE_URL: optionalStr(),
+		/**
+		 * Model id the Gateway should route. `mock` is a local/test stub that
+		 * still runs the real tools. Default is a small OpenAI-compatible model.
+		 */
+		AI_CHAT_MODEL: strWithDefault('openai/gpt-4o-mini'),
 
 		// --- Logging ------------------------------------------------------------
 		/** Minimum log level. */

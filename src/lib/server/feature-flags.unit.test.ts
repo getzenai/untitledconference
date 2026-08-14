@@ -10,6 +10,8 @@ import { ensureFeatureEnabled, isFeatureEnabled } from './feature-flags';
 describe('feature flags', () => {
 	beforeEach(() => {
 		for (const key of Object.keys(mockEnv)) delete mockEnv[key];
+		delete process.env.FEATURE_EXAMPLE_FEATURE;
+		delete process.env.FEATURE_INAPP_CHAT;
 	});
 
 	it('defaults to off when the variable is unset or blank', () => {
@@ -43,5 +45,11 @@ describe('feature flags', () => {
 	it('ensureFeatureEnabled passes once the flag is on', () => {
 		mockEnv.FEATURE_EXAMPLE_FEATURE = 'true';
 		expect(() => ensureFeatureEnabled('exampleFeature')).not.toThrow();
+	});
+
+	it('treats FEATURE_INAPP_CHAT as off until it is explicitly true', () => {
+		expect(isFeatureEnabled('inAppChat')).toBe(false);
+		mockEnv.FEATURE_INAPP_CHAT = 'true';
+		expect(isFeatureEnabled('inAppChat')).toBe(true);
 	});
 });

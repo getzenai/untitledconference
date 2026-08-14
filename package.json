@@ -97,6 +97,8 @@
 		"wrangler": "^4.120.0"
 	},
 	"dependencies": {
+		"@ai-sdk/openai": "^4.0.41",
+		"@ai-sdk/svelte": "^5.0.65",
 		"@better-auth/oauth-provider": "^1.6.26",
 		"@better-auth/passkey": "^1.6.26",
 		"@modelcontextprotocol/sdk": "^1.30.0",
@@ -108,6 +110,7 @@
 		"@zxcvbn-ts/core": "^3.0.4",
 		"@zxcvbn-ts/language-common": "^3.0.4",
 		"@zxcvbn-ts/language-en": "^3.0.2",
+		"ai": "^7.0.65",
 		"better-auth": "^1.6.26",
 		"dompurify": "^3.2.7",
 		"drizzle-orm": "^0.45.1",
