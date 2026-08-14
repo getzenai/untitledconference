@@ -34,14 +34,36 @@ let acceptedId = 0;
 let inReviewId = 0;
 let someoneElsesId = 0;
 
+/** What the form needs from the loader when it does open. */
+type OpenForm = { submissionId: number; status: string; draft: { title: string } };
+
+/** A redirect or an error, as SvelteKit hands it over: by throwing it. */
+type Refusal = { status: number; location?: string; body?: { message: string } };
+
+type SubmissionStatus = typeof submissionTable.$inferInsert.status;
+
 /** The load event the route sees, minus everything this loader does not read. */
-const visit = (id: number, userId: string | null) =>
-	load({
+const visit = async (id: number, userId: string | null): Promise<OpenForm> =>
+	(await load({
 		params: { id: String(id) },
 		locals: userId ? { user: { id: userId } } : {}
-	} as unknown as Parameters<typeof load>[0]);
+	} as unknown as Parameters<typeof load>[0])) as OpenForm;
 
-async function proposal(profileId: number | null, status: string, title: string): Promise<number> {
+/** The same visit, for the cases where opening the form is the failure. */
+async function refusalFrom(id: number, userId: string | null): Promise<Refusal> {
+	try {
+		await visit(id, userId);
+	} catch (thrown) {
+		return thrown as Refusal;
+	}
+	throw new Error(`expected the loader to refuse proposal ${id}, but it opened the form`);
+}
+
+async function proposal(
+	profileId: number | null,
+	status: SubmissionStatus,
+	title: string
+): Promise<number> {
 	const [row] = await db
 		.insert(submissionTable)
 		.values({ conferenceId, title, status })
@@ -123,7 +145,7 @@ afterAll(async () => {
 
 describe('the edit URL for a proposal that cannot be edited', () => {
 	it('sends the speaker to their own accepted talk instead of out of the portal', async () => {
-		const refusal = await visit(acceptedId, speakerUserId).catch((thrown) => thrown);
+		const refusal = await refusalFrom(acceptedId, speakerUserId);
 
 		// SvelteKit throws redirects, so the answer arrives as the thrown value.
 		expect(refusal).toMatchObject({ status: 303, location: `/portal/submissions/${acceptedId}` });
@@ -138,15 +160,15 @@ describe('the edit URL for a proposal that cannot be edited', () => {
 	});
 
 	it('tells a stranger nothing except that there is no such proposal', async () => {
-		const refusal = await visit(someoneElsesId, strangerUserId).catch((thrown) => thrown);
+		const refusal = await refusalFrom(someoneElsesId, strangerUserId);
 
 		// Same answer, same words, for "not yours" and for an id that never existed:
 		// anything else would confirm the proposal is there.
 		expect(refusal.status).toBe(404);
-		expect(refusal.body.message).toBe('No such proposal');
+		expect(refusal.body?.message).toBe('No such proposal');
 
-		const missing = await visit(acceptedId + 100_000, strangerUserId).catch((thrown) => thrown);
+		const missing = await refusalFrom(acceptedId + 100_000, strangerUserId);
 		expect(missing.status).toBe(404);
-		expect(missing.body.message).toBe('No such proposal');
+		expect(missing.body?.message).toBe('No such proposal');
 	});
 });
