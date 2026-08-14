@@ -55,7 +55,9 @@
 		return { error: new Error('Unable to create organization. Please try a different name.') };
 	}
 
-	async function createOrganization() {
+	async function createOrganization(event: SubmitEvent) {
+		event.preventDefault();
+
 		if (submitBlockReason) {
 			createOrgError = submitBlockReason;
 			return;
@@ -99,7 +101,11 @@
 			</CardDescription>
 		</CardHeader>
 		<CardContent>
-			<div class="space-y-4">
+			<!--
+				A real form so Enter in the only field creates the organization (#485).
+				`Button` defaults to type="button", which is why the key used to vanish.
+			-->
+			<form class="space-y-4" onsubmit={createOrganization} data-testid="create-organization-form">
 				<div>
 					<Label for="orgName">
 						Organization Name{#if ORGANIZATION_CREATE_FIELDS.name.required}<span
@@ -125,7 +131,7 @@
 
 				<div class="flex flex-col items-stretch gap-1">
 					<Button
-						onclick={createOrganization}
+						type="submit"
 						disabled={isCreatingOrg || Boolean(submitBlockReason)}
 						class="w-full"
 						aria-describedby={submitBlockReason ? 'create-block-reason' : undefined}
@@ -146,7 +152,7 @@
 						</p>
 					{/if}
 				</div>
-			</div>
+			</form>
 		</CardContent>
 	</Card>
 </div>
