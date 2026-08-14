@@ -74,7 +74,10 @@ export const actions: Actions = {
 			}
 			return fail(400, { message: 'Only an outstanding review can be recused.' });
 		}
-		redirect(303, `/review/${conference.slug}`);
+		// The queue says what just happened, and names the talk if it can (#463).
+		// Without this the only evidence of a recusal was a row that had quietly
+		// changed shape.
+		redirect(303, `/review/${conference.slug}?recused=${encodeURIComponent(recused.title ?? '')}`);
 	},
 
 	save: async ({ locals, params, request }) => {

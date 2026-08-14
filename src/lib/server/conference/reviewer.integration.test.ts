@@ -990,6 +990,26 @@ describe('a withdrawn submission', () => {
 		expect(result).toEqual({ ok: true });
 	});
 
+	it('hands back the title so the queue can name what was recused (#463)', async () => {
+		const [review] = await db
+			.select({ id: reviewTable.id })
+			.from(reviewTable)
+			.where(and(eq(reviewTable.submissionId, mine), eq(reviewTable.reviewerUserId, ME)));
+
+		const conference = await conferenceNow();
+		const result = await recuseReview(conference.id, ME, mine, review.id);
+
+		expect(result.ok).toBe(true);
+		expect(result).toHaveProperty('title');
+		expect((result as { title: string | null }).title).toBeTruthy();
+
+		const [row] = await db
+			.select({ status: reviewTable.status })
+			.from(reviewTable)
+			.where(eq(reviewTable.id, review.id));
+		expect(row.status).toBe('recused');
+	});
+
 	it('refuses recusal so the withdrawn row does not vanish from the queue (#183)', async () => {
 		await db
 			.update(submissionTable)

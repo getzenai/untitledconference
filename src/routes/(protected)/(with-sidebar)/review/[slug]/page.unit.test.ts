@@ -35,7 +35,8 @@ const row = (
 
 function renderQueue(
 	queue: ReturnType<typeof row>[],
-	sort: 'coverage' | 'score' | 'title' | 'track' = 'coverage'
+	sort: 'coverage' | 'score' | 'title' | 'track' = 'coverage',
+	recused: string | null = null
 ) {
 	return render(Page, {
 		props: {
@@ -51,6 +52,7 @@ function renderQueue(
 				},
 				queue,
 				sort,
+				recused,
 				chatEnabled: false
 			} as unknown as PageData
 		}
@@ -259,5 +261,26 @@ describe('the in-app chat', () => {
 
 		expect(body).toContain('data-testid="reviewer-chat"');
 		expect(body).toContain('Review assistant');
+	});
+});
+
+describe('after a recusal (#463)', () => {
+	it('names the talk that was handed back and who has it now', () => {
+		const body = renderQueue([row(1, 'A talk', 0)], 'coverage', 'The one I know too well');
+
+		expect(body).toContain('data-testid="recused-notice"');
+		expect(body).toContain('The one I know too well');
+		expect(body).toContain('The organizers have it back');
+	});
+
+	it('still says a recusal happened when the title did not survive the redirect', () => {
+		const body = renderQueue([row(1, 'A talk', 0)], 'coverage', '');
+
+		expect(body).toContain('data-testid="recused-notice"');
+		expect(body).toContain('no longer assigned to that talk');
+	});
+
+	it('says nothing to a reviewer who simply opened their queue', () => {
+		expect(renderQueue([row(1, 'A talk', 0)])).not.toContain('data-testid="recused-notice"');
 	});
 });

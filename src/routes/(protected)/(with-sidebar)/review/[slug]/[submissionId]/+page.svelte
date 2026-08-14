@@ -16,6 +16,15 @@
 	import { formatScore } from '$lib/conference/scoring';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 
 	let { data, form } = $props();
@@ -29,7 +38,52 @@
 	const locked = $derived(withdrawn || shut);
 	let busy = $state(false);
 
-	const submitting = () => {
+	/**
+	 * Recusing asks first (#463).
+	 *
+	 * Every other button in that row is reversible — a draft can be saved again, a
+	 * submitted review can be edited. This one hands the talk back to the organizers
+	 * and nothing in the reviewer's own screens can undo it; only an organizer can
+	 * re-assign. It sits one careless click from "Save progress", so it gets the
+	 * question the bulk-decide table already asks before it acts.
+	 *
+	 * The interception lives in `enhance`, not on the button, for the same reason the
+	 * button stays live outside the round window: the server takes this POST whatever
+	 * the page drew. A dialog is a courtesy to the reviewer, not a guard on the action
+	 * — cancelling the submit is the whole mechanism, and the confirm click re-submits
+	 * the same button so a browser without JS keeps the old one-click behaviour rather
+	 * than losing the control.
+	 */
+	let reviewForm = $state<HTMLFormElement | null>(null);
+	let confirmRecuseOpen = $state(false);
+	let allowRecuse = false;
+
+	/** The recuse button is the only submitter on this form named `reviewId`. */
+	const isRecuse = (submitter: HTMLElement | null) =>
+		submitter instanceof HTMLButtonElement && submitter.name === 'reviewId';
+
+	const confirmRecuse = () => {
+		const button = reviewForm?.querySelector<HTMLButtonElement>('button[name="reviewId"]');
+		if (!button) return;
+		allowRecuse = true;
+		confirmRecuseOpen = false;
+		reviewForm?.requestSubmit(button);
+	};
+
+	const submitting = ({
+		submitter,
+		cancel
+	}: {
+		submitter: HTMLElement | null;
+		cancel: () => void;
+	}) => {
+		if (isRecuse(submitter) && !allowRecuse) {
+			cancel();
+			confirmRecuseOpen = true;
+			return;
+		}
+		// The confirm click re-submits the same button; that one goes through.
+		allowRecuse = false;
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
@@ -209,6 +263,7 @@
 	     reloads on THIS url, and a bare `?/save` would drop the query and redraw the
 	     other round's scorecard under the answers just filed. -->
 	<form
+		bind:this={reviewForm}
 		method="POST"
 		action="?/save&round={s.round.id}"
 		use:enhance={submitting}
@@ -386,3 +441,19 @@
 		</p>
 	</form>
 </div>
+
+<AlertDialog bind:open={confirmRecuseOpen}>
+	<AlertDialogContent data-testid="recuse-dialog">
+		<AlertDialogHeader>
+			<AlertDialogTitle>Hand this talk back to the organizers?</AlertDialogTitle>
+			<AlertDialogDescription>
+				Your assignment for {s.round.name} is removed and the talk returns to the organizers. You will
+				not be able to review it again unless they assign it to you.
+			</AlertDialogDescription>
+		</AlertDialogHeader>
+		<AlertDialogFooter>
+			<AlertDialogCancel data-testid="recuse-cancel">Keep the assignment</AlertDialogCancel>
+			<Button data-testid="recuse-confirm" onclick={confirmRecuse}>Recuse myself</Button>
+		</AlertDialogFooter>
+	</AlertDialogContent>
+</AlertDialog>
