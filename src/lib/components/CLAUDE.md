@@ -77,6 +77,13 @@ up, but this is **not** an enforced convention: the feature components (`nav-use
 `$lib/paraglide/messages` if you are adding translated copy; hardcoded English matches the rest
 of the codebase as it stands.
 
+The message files hold exactly one key, `locale_name`, and no component renders it. It is not
+copy — it is the fixture that keeps the compiler honest (Paraglide emits an index that is not a
+module when the message set is empty, and `npm run check` fails). `paraglide-messages.unit.test.ts`
+is its only reader. The locale _machinery_ below it is load-bearing and tested: request locale
+resolution (`hooks.server.locale.unit.test.ts`) and the public cache key `__rendered_locale`
+(`public-page-cache.unit.test.ts`), which is what stops the CDN serving one language to everyone.
+
 ## Forms (Superforms + Formsnap)
 
 ```svelte
