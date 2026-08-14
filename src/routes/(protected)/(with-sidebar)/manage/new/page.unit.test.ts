@@ -24,15 +24,14 @@ describe('new conference', () => {
 		const html = body(true);
 
 		expect(html).toContain('href="/manage"');
-		expect(html).not.toContain('data-testid="shell-account-links"');
-		expect(html).not.toContain('data-testid="shell-logout"');
+		expect(html).not.toContain('data-testid="account-menu-trigger"');
 	});
 
 	it('keeps the organization prerequisite inside the same shared shell', () => {
 		const html = body(false);
 
 		expect(html).toContain('/settings/organization/new');
-		expect(html).not.toContain('data-testid="shell-account-links"');
+		expect(html).not.toContain('data-testid="account-menu-trigger"');
 	});
 
 	it('points the organizer at Settings and the call for papers after create', () => {

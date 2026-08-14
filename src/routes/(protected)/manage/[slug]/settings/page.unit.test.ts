@@ -27,6 +27,7 @@ describe('setup landing after creating a conference', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference: { ...conference, status },
@@ -66,6 +67,7 @@ describe('conference settings config surface', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -100,6 +102,7 @@ describe('conference settings config surface', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -133,6 +136,7 @@ describe('conference settings config surface', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -167,6 +171,7 @@ describe('conference date range', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference: { ...conference, startsOn: '2028-05-12', endsOn: '2028-05-14', ...over },
@@ -212,6 +217,7 @@ describe('draft or live', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference: { ...conference, status },
@@ -265,6 +271,7 @@ describe('task templates on settings', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -457,6 +464,7 @@ describe('adding structure a list at a time', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -520,6 +528,7 @@ describe('editing a room, track or format in place', () => {
 		props: {
 			data: {
 				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
@@ -569,6 +578,7 @@ describe('editing a room, track or format in place', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -603,6 +613,7 @@ describe('settings section nav', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -669,6 +680,7 @@ describe('settings list preview', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -695,6 +707,7 @@ describe('settings list preview', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,

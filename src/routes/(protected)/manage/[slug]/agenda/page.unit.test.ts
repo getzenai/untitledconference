@@ -37,6 +37,7 @@ const renderWith = (roomCount: number, dayCount = 1, board: BoardOverrides = {})
 		props: {
 			data: {
 				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
@@ -262,6 +263,7 @@ describe('agenda builder readability (#219)', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,

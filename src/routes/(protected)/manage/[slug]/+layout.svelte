@@ -7,8 +7,10 @@
 	 * ones that are not built yet are visibly not links rather than 404s.
 	 */
 	import { page } from '$app/state';
+	import AccountMenu from '$lib/components/account-menu.svelte';
 	import ModeToggle from '$lib/components/mode-toggle.svelte';
-	import ShellAccountLinks from '$lib/components/shell-account-links.svelte';
+	import * as Avatar from '$lib/components/ui/avatar/index.js';
+	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 
 	let { data, children } = $props();
 
@@ -105,7 +107,26 @@
 				>
 					Public site
 				</a>
-				<ShellAccountLinks />
+				<!-- The same account menu as the app sidebar, down to an avatar because
+				     an email does not fit a phone header (#127). -->
+				<AccountMenu user={data.user} speakerProfile={data.speakerProfile} side="bottom">
+					{#snippet trigger(props)}
+						<button
+							{...props}
+							type="button"
+							data-testid="account-menu-trigger-mobile"
+							aria-label="Account menu"
+							class="focus-visible:ring-ring rounded-full focus-visible:ring-[3px] focus-visible:outline-none"
+						>
+							<Avatar.Root class="size-7 rounded-full">
+								<Avatar.Image src={data.user?.avatar} alt={data.user?.email} />
+								<Avatar.Fallback class="rounded-full text-xs">
+									{data.user?.email?.charAt(0).toUpperCase()}
+								</Avatar.Fallback>
+							</Avatar.Root>
+						</button>
+					{/snippet}
+				</AccountMenu>
 				<ModeToggle />
 			</div>
 		</div>
@@ -210,8 +231,32 @@
 			>
 				Back to home
 			</a>
-			<!-- Logout only here: Home is already above as manage-home-link. -->
-			<ShellAccountLinks showHome={false} />
+			<!--
+				Account, speaker profile, organization and Log out — the same menu the app
+				sidebar carries (#127). "Back to home" stays a link of its own above: it is
+				navigation, not the account, and the rail has no other way to /home.
+			-->
+			<AccountMenu user={data.user} speakerProfile={data.speakerProfile}>
+				{#snippet trigger(props)}
+					<button
+						{...props}
+						type="button"
+						data-testid="account-menu-trigger"
+						class="hover:bg-muted focus-visible:ring-ring -mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left focus-visible:ring-[3px] focus-visible:outline-none"
+					>
+						<Avatar.Root class="size-7 rounded-md">
+							<Avatar.Image src={data.user?.avatar} alt={data.user?.email} />
+							<Avatar.Fallback class="rounded-md text-xs">
+								{data.user?.email?.charAt(0).toUpperCase()}
+							</Avatar.Fallback>
+						</Avatar.Root>
+						<span class="text-muted-foreground min-w-0 flex-1 truncate text-xs"
+							>{data.user?.email}</span
+						>
+						<ChevronsUpDownIcon class="text-muted-foreground size-3.5 shrink-0" />
+					</button>
+				{/snippet}
+			</AccountMenu>
 			<div class="flex items-center justify-between">
 				<span class="text-muted-foreground text-xs">Theme</span>
 				<ModeToggle />
