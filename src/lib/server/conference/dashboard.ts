@@ -15,10 +15,21 @@
  *   This runs on every visit to the organizer's landing page; it may not grow a term
  *   with the size of the tables.
  */
+import { callWindow } from '$lib/conference/call-window';
+import { dashboardMode, type DashboardMode } from '$lib/conference/dashboard-mode';
 import { classifyAcceptedTalk, type PlacementSlot } from '$lib/conference/program-states';
 import { db } from '$lib/server/db';
-import { submissionTable, type Submission } from '$lib/server/db/conference/cfp-schema';
-import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import {
+	cfpFormTable,
+	submissionTable,
+	type Submission
+} from '$lib/server/db/conference/cfp-schema';
+import {
+	conferenceSpeakerTable,
+	roomTable,
+	speakerProfileTable,
+	trackTable
+} from '$lib/server/db/conference/conference-schema';
 import { taskTable } from '$lib/server/db/conference/content-schema';
 import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
@@ -115,7 +126,18 @@ export type SubmissionDay = {
 /** How far back the submissions chart looks. */
 export const TIMELINE_DAYS = 30;
 
+export type DashboardSetup = {
+	rooms: number;
+	tracks: number;
+	cfpOpen: boolean;
+	submissions: number;
+	speakers: number;
+};
+
 export type DashboardSnapshot = {
+	/** `setup` while nothing is waiting; see `dashboardMode`. */
+	mode: DashboardMode;
+	setup: DashboardSetup;
 	decisions: {
 		undecided: number;
 		unreviewed: number;
@@ -152,23 +174,113 @@ export type DashboardSnapshot = {
 	submissionsOverTime: SubmissionDay[];
 };
 
-/** Everything the landing page shows, in one call. */
+/**
+ * Everything the landing page shows, in one call.
+ *
+ * Rooms, tracks and the form are only drawn on the setup screen. Papers and
+ * speakers travel with the queues; the three setup queries run only when
+ * nothing is waiting. Mail and tasks flip the screen too, so the skip is
+ * here — after those counts exist — not inside a helper that cannot see them.
+ */
 export async function conferenceDashboard(
 	conferenceId: number,
 	at: Date = new Date()
 ): Promise<DashboardSnapshot> {
-	const [decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime] =
-		await Promise.all([
-			decisionQueue(conferenceId),
-			schedulingGap(conferenceId),
-			taskLoad(conferenceId, at),
-			mailQueue(conferenceId),
-			reviewerLoad(conferenceId),
-			leftovers(conferenceId),
-			submissionTimeline(conferenceId, at)
-		]);
+	const [
+		papers,
+		decisions,
+		scheduling,
+		tasks,
+		mail,
+		reviews,
+		inconsistencies,
+		submissionsOverTime
+	] = await Promise.all([
+		paperAndSpeakerCounts(conferenceId),
+		decisionQueue(conferenceId),
+		schedulingGap(conferenceId),
+		taskLoad(conferenceId, at),
+		mailQueue(conferenceId),
+		reviewerLoad(conferenceId),
+		leftovers(conferenceId),
+		submissionTimeline(conferenceId, at)
+	]);
 
-	return { decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime };
+	const mode = dashboardMode({
+		submissions: papers.submissions,
+		speakers: papers.speakers,
+		queuedMail: mail.queued,
+		failedMail: mail.failed,
+		tasks: tasks.open
+	});
+
+	return {
+		mode,
+		setup:
+			mode === 'setup'
+				? { ...(await setupProgress(conferenceId, at)), ...papers }
+				: { rooms: 0, tracks: 0, cfpOpen: false, ...papers },
+		decisions,
+		scheduling,
+		tasks,
+		mail,
+		reviews,
+		inconsistencies,
+		submissionsOverTime
+	};
+}
+
+async function paperAndSpeakerCounts(conferenceId: number) {
+	const [[submissions], [speakers]] = await Promise.all([
+		db
+			.select({ n: count() })
+			.from(submissionTable)
+			.where(eq(submissionTable.conferenceId, conferenceId)),
+		db
+			.select({ n: count() })
+			.from(conferenceSpeakerTable)
+			.where(eq(conferenceSpeakerTable.conferenceId, conferenceId))
+	]);
+	return {
+		submissions: Number(submissions?.n ?? 0),
+		speakers: Number(speakers?.n ?? 0)
+	};
+}
+
+/**
+ * CFP is open the same way a submitter would see it: a published or closed
+ * form whose window includes `at`. The same `published`/`closed` filter as
+ * `publishedFormFor` — an older draft must not hide the live form. No form, a
+ * draft-only conference, or a closed window is closed.
+ */
+async function setupProgress(conferenceId: number, at: Date) {
+	const [[rooms], [tracks], [form]] = await Promise.all([
+		db.select({ n: count() }).from(roomTable).where(eq(roomTable.conferenceId, conferenceId)),
+		db.select({ n: count() }).from(trackTable).where(eq(trackTable.conferenceId, conferenceId)),
+		db
+			.select({
+				status: cfpFormTable.status,
+				opensAt: cfpFormTable.opensAt,
+				closesAt: cfpFormTable.closesAt
+			})
+			.from(cfpFormTable)
+			.where(
+				and(
+					eq(cfpFormTable.conferenceId, conferenceId),
+					inArray(cfpFormTable.status, ['published', 'closed'])
+				)
+			)
+			.orderBy(asc(cfpFormTable.id))
+			.limit(1)
+	]);
+
+	return {
+		rooms: Number(rooms?.n ?? 0),
+		tracks: Number(tracks?.n ?? 0),
+		cfpOpen: form
+			? callWindow(form.opensAt, form.closesAt, form.status === 'closed', at) === 'open'
+			: false
+	};
 }
 
 /**

@@ -85,6 +85,7 @@ describe('home hub', () => {
 		expect(html).toContain('href="/manage/devflow/dashboard"');
 		expect(html).toContain('All events');
 		expect(html).toContain('href="/manage"');
+		expect(html).toContain('data-testid="home-new-event"');
 		expect(html).toContain('Speaker sourcing');
 		expect(html).toContain('data-testid="home-sourcing-link"');
 		expect(html).toContain('href="/contacts"');
@@ -300,5 +301,47 @@ describe('a page that belongs to the reviewer', () => {
 			html.indexOf('Reviews waiting') === -1 ? Infinity : html.indexOf('Reviews waiting')
 		);
 		expect(html).not.toContain('data-testid="home-no-events-reviewer"');
+	});
+});
+
+/**
+ * #473. New event was a grey caption under the list. Speaker sourcing was the
+ * only styled button, and it duplicated the card below. The thing someone came
+ * here to do is the header action.
+ */
+describe('New event is an action', () => {
+	it('puts New event on a button, not on a caption', () => {
+		const html = body(null, {
+			...emptyHub,
+			events: [
+				{
+					id: 1,
+					organizationId: 'org-1',
+					name: 'DevFlow Summit',
+					slug: 'devflow',
+					status: 'published',
+					startsOn: '2026-09-01',
+					endsOn: '2026-09-02',
+					venue: 'Berlin',
+					createdAt: new Date('2026-01-01'),
+					updatedAt: new Date('2026-01-01')
+				} as never
+			],
+			canSourcing: true
+		});
+
+		expect(html).toContain('data-testid="home-new-event"');
+		expect(html).toContain('href="/manage/new"');
+		// The yellow create variant, not the muted caption that used to sit under
+		// the list. `bg-act` is how this product marks "this starts something".
+		const action = html.slice(html.indexOf('data-testid="home-new-event"') - 120);
+		expect(action).toContain('bg-act');
+		expect(html).not.toMatch(/text-muted-foreground[^"]*text-xs[^"]*">\s*New event/);
+	});
+
+	it('does not offer New event to someone who cannot create one', () => {
+		const html = body(null, { ...emptyHub, canCreateEvent: false });
+
+		expect(html).not.toContain('data-testid="home-new-event"');
 	});
 });
