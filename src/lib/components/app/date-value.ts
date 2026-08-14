@@ -55,6 +55,25 @@ export function formatDay(value: string | null | undefined): string {
 }
 
 /**
+ * A stored moment shown as a day only — "1 May 2026" (#468).
+ *
+ * For the dates that are administration rather than deadlines: when an account
+ * was created, when an invitation runs out. `toLocaleDateString()` with no
+ * arguments took the browser's locale, so `/admin/users` read `5/1/2026` on a US
+ * machine and `1/5/2026` on a German one — the same cell, two different days,
+ * and nothing on screen to say which.
+ *
+ * It names no zone, unlike `formatInstant`, because nothing hangs on the hour
+ * here. If something ever does, that value belongs in `formatInstant` instead.
+ */
+export function formatStoredDay(value: string | number | Date | null | undefined): string {
+	if (!value && value !== 0) return '';
+
+	const at = value instanceof Date ? value : new Date(value);
+	return Number.isNaN(at.getTime()) ? '' : formatter.format(at);
+}
+
+/**
  * A moment on the wire: `YYYY-MM-DDTHH:mm`, local wall time, no zone suffix.
  *
  * This is what `<input type="datetime-local">` posted and what the CFP action

@@ -54,6 +54,7 @@
 	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { formatStoredDay } from '$lib/components/app/date-value';
 	import type { PageData, ActionData } from './$types';
 	import { INVITATION_EXPIRY_SECONDS } from '$lib/constants';
 	import { generateRandomPassword } from '$lib/utils/password';
@@ -461,20 +462,6 @@
 		})
 	);
 
-	/**
-	 * Day-first, like every other date in the app (#468).
-	 *
-	 * `toLocaleDateString()` with no arguments took the browser's locale, so this
-	 * table read `5/1/2026` on a US machine and `1/5/2026` on a German one — the
-	 * same cell, two different days, and no way to tell which. An account date is
-	 * not a deadline: it names no zone because nothing hangs on the hour.
-	 */
-	const accountDay = (value: string | Date) =>
-		new Intl.DateTimeFormat('en-GB', {
-			day: 'numeric',
-			month: 'short',
-			year: 'numeric'
-		}).format(new Date(value));
 </script>
 
 <div class="container mx-auto max-w-7xl py-8">
@@ -890,7 +877,7 @@
 									{/if}
 								</TableCell>
 								<TableCell>
-									{accountDay(user.createdAt)}
+									{formatStoredDay(user.createdAt)}
 								</TableCell>
 								<TableCell class="text-right">
 									{#if user.id !== currentUser?.id}
@@ -1001,10 +988,10 @@
 										</div>
 									</TableCell>
 									<TableCell>
-										{accountDay(invitation.expiresAt)}
+										{formatStoredDay(invitation.expiresAt)}
 									</TableCell>
 									<TableCell>
-										{accountDay(invitation.createdAt)}
+										{formatStoredDay(invitation.createdAt)}
 									</TableCell>
 									<TableCell>
 										<div class="flex items-center gap-2">

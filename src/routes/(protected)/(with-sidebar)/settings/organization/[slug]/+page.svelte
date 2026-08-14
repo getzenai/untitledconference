@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { invalidateAll } from '$app/navigation';
 	import { enhance } from '$app/forms';
+	import { formatStoredDay } from '$lib/components/app/date-value';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -475,10 +476,7 @@
 									</Badge>
 								</TableCell>
 								<TableCell>
-									{new Date(invitation.expiresAt as string | number | Date).toLocaleDateString(
-										'en-GB',
-										{ day: 'numeric', month: 'short', year: 'numeric' }
-									)}
+									{formatStoredDay(invitation.expiresAt as string | number | Date)}
 								</TableCell>
 								<TableCell class="text-right">
 									<div class="flex items-center justify-end gap-2">
