@@ -14,7 +14,11 @@
  */
 describe('Admin invitation link', () => {
 	it('hands the admin a working link, and gives a wildcard nothing', () => {
-		const invitee = `invitee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+		// Typed with capitals on purpose: Better Auth lowercases `user.email`,
+		// and the link is resolved by comparing that column with the invitation
+		// row. When the two spellings disagreed, the invitee landed on /login
+		// with a link the admin had just seen work (#395 review).
+		const invitee = `Invitee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@Example.test`;
 
 		cy.createTestUser({ organizationName: 'Invite Org' }).then((admin) => {
 			cy.task('setUserRole', { email: admin.email, role: 'admin' });

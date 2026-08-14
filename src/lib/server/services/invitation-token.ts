@@ -17,7 +17,8 @@
  */
 import { db } from '$lib/server/db';
 import { systemInvitation, user, verification } from '$lib/server/db/auth-schema';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { normalizeEmail } from './email-address';
 
 /** Better Auth's key prefix for password-reset tokens. */
 const RESET_TOKEN_PREFIX = 'reset-password:';
@@ -47,10 +48,21 @@ export async function resolveInvitationEmail(
 	// A reset token proves who asked; a pending invitation proves this page is
 	// the right one. Someone resetting a normal password has no invitation row
 	// and belongs on /reset-password, not here.
+	//
+	// Compared case-insensitively although both sides are stored lowercased
+	// (Better Auth for `user.email`, `normalizeEmail` for ours, migration 0019
+	// for the rows written before it): the cost is a scan of a table with one
+	// row per pending invitation, and the failure it prevents is a dead
+	// invitation link, which nobody can debug from the outside.
 	const [invitation] = await db
 		.select({ id: systemInvitation.id })
 		.from(systemInvitation)
-		.where(and(eq(systemInvitation.email, row.email), isNull(systemInvitation.acceptedAt)))
+		.where(
+			and(
+				sql`lower(${systemInvitation.email}) = ${normalizeEmail(row.email)}`,
+				isNull(systemInvitation.acceptedAt)
+			)
+		)
 		.limit(1);
 
 	return invitation ? row.email : null;

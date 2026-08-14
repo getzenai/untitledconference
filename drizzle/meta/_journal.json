@@ -134,6 +134,13 @@
 			"when": 1786694001577,
 			"tag": "0018_drop_invitation_reset_link",
 			"breakpoints": true
+		},
+		{
+			"idx": 19,
+			"version": "7",
+			"when": 1786780401577,
+			"tag": "0019_lowercase_invitation_email",
+			"breakpoints": true
 		}
 	]
 }

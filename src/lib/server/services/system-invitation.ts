@@ -3,6 +3,7 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '../db';
 import { systemInvitation, user } from '../db/auth-schema';
+import { normalizeEmail } from './email-address';
 
 export interface CreateSystemInvitationParams {
 	email: string;
@@ -20,7 +21,10 @@ export interface SystemInvitationResponse {
 export async function createSystemInvitation(
 	params: CreateSystemInvitationParams
 ): Promise<SystemInvitationResponse> {
-	const { email, invitedBy, role = 'user' } = params;
+	const { invitedBy, role = 'user' } = params;
+	// Stored lowercased: `user.email` is, and the invitation link is resolved by
+	// comparing the two (see `email-address.ts`).
+	const email = normalizeEmail(params.email);
 
 	// Check if user already exists
 	const existingUser = await db.select().from(user).where(eq(user.email, email)).limit(1);
@@ -57,7 +61,8 @@ export async function createSystemInvitation(
 	};
 }
 
-export async function markInvitationAsAccepted(email: string): Promise<void> {
+export async function markInvitationAsAccepted(rawEmail: string): Promise<void> {
+	const email = normalizeEmail(rawEmail);
 	await db
 		.update(systemInvitation)
 		.set({

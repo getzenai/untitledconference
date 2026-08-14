@@ -13,14 +13,20 @@ import { eq, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resolveInvitationEmail } from './invitation-token';
+import { createSystemInvitation } from './system-invitation';
 
 const suffix = nanoid(8).toLowerCase();
 const invitedEmail = `invited-${suffix}@example.test`;
 const strangerEmail = `stranger-${suffix}@example.test`;
 
+// A row written the way the admin typed it, before migration 0019 folded the
+// case. Better Auth lowercased the matching `user.email` all along.
+const legacyMixedEmail = `Legacy-${suffix}@Example.test`;
+
 const REAL_TOKEN = `tok-${suffix}-abcdefghijklmnop`;
 const EXPIRED_TOKEN = `exp-${suffix}-abcdefghijklmnop`;
 const STRANGER_TOKEN = `str-${suffix}-abcdefghijklmnop`;
+const LEGACY_TOKEN = `leg-${suffix}-abcdefghijklmnop`;
 
 const userIds: string[] = [];
 const verificationIds: string[] = [];
@@ -77,6 +83,10 @@ beforeAll(async () => {
 	await seedResetToken(EXPIRED_TOKEN, invitedId, anHourAgo);
 	// A normal password reset: valid token, no pending invitation.
 	await seedResetToken(STRANGER_TOKEN, strangerId, inAnHour);
+
+	const legacyId = await seedUser(legacyMixedEmail.toLowerCase());
+	await seedInvitation(legacyMixedEmail, inviterId);
+	await seedResetToken(LEGACY_TOKEN, legacyId, inAnHour);
 });
 
 afterAll(async () => {
@@ -129,5 +139,35 @@ describe('resolveInvitationEmail', () => {
 			.update(systemInvitation)
 			.set({ acceptedAt: null })
 			.where(eq(systemInvitation.email, invitedEmail));
+	});
+});
+
+/**
+ * The invitation link now travels over the two email columns instead of over
+ * the dropped `reset_link`, and those columns did not agree: Better Auth
+ * lowercases `user.email`, our invitation row kept what the admin typed. An
+ * admin who invited `Ada@Example.test` got a link that dropped the invitee on
+ * /login. Found in review of #395.
+ */
+describe('invitations whose email was not lowercased', () => {
+	it('resolves a row written before the case was normalized', async () => {
+		await expect(resolveInvitationEmail(LEGACY_TOKEN)).resolves.toBe(
+			legacyMixedEmail.toLowerCase()
+		);
+	});
+
+	it('stores a newly typed address lowercased', async () => {
+		const typed = `Fresh-${suffix}@Example.test`;
+		const inviterId = userIds[0];
+
+		const created = await createSystemInvitation({ email: typed, invitedBy: inviterId });
+		invitationIds.push(created.id);
+
+		const [row] = await db
+			.select({ email: systemInvitation.email })
+			.from(systemInvitation)
+			.where(eq(systemInvitation.id, created.id));
+
+		expect(row.email).toBe(typed.toLowerCase());
 	});
 });
