@@ -108,7 +108,9 @@ export const actions: Actions = {
 	add: async ({ locals, request }) => {
 		const userId = locals.user!.id;
 		const orgIds = await organizerOrganizationIds(userId);
-		if (orgIds.length === 0) return fail(403, { error: 'You need an organization to manage.' });
+		if (orgIds.length === 0) {
+			return fail(403, { scope: 'add', error: 'You need an organization to manage.' });
+		}
 
 		const form = await request.formData();
 		const organizationId = resolveOrganizationId(form, locals.organizationId, orgIds);
@@ -123,9 +125,9 @@ export const actions: Actions = {
 		});
 
 		if (!result.ok) {
-			if (result.reason === 'invalid') return fail(400, { error: result.message });
-			if (result.reason === 'forbidden') return fail(403, { error: 'Not allowed.' });
-			return fail(400, { error: 'Could not add the contact.' });
+			if (result.reason === 'invalid') return fail(400, { scope: 'add', error: result.message });
+			if (result.reason === 'forbidden') return fail(403, { scope: 'add', error: 'Not allowed.' });
+			return fail(400, { scope: 'add', error: 'Could not add the contact.' });
 		}
 
 		throw redirect(303, `/contacts/${result.speakerProfileId}`);
