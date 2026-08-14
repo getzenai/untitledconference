@@ -47,6 +47,7 @@ const renderWith = (files: ReturnType<typeof file>[]) =>
 		props: {
 			data: {
 				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
@@ -80,6 +81,7 @@ describe('organizer task file comments', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference: {
@@ -132,6 +134,7 @@ describe('organizer task file comments', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference: {

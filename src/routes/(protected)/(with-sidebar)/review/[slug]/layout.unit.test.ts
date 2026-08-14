@@ -36,8 +36,9 @@ describe('reviewer conference header', () => {
 			}
 		});
 
-		expect(body).not.toContain('data-testid="shell-account-links"');
-		expect(body).not.toContain('data-testid="shell-logout"');
+		// The shell above renders AppSidebar with the account menu; a second one
+		// here would be two answers to "where is my account" on one screen (#127).
+		expect(body).not.toContain('data-testid="account-menu-trigger"');
 		expect(body).toContain('Review committee');
 	});
 });

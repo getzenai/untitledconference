@@ -57,6 +57,7 @@ function pageWith(items: Reviewer[]) {
 		props: {
 			data: {
 				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
@@ -143,6 +144,7 @@ describe('dashboard metrics', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -209,6 +211,7 @@ describe('dashboard metrics', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -244,6 +247,7 @@ describe('dashboard metrics', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -272,6 +276,7 @@ describe('submissions trend line', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -322,6 +327,7 @@ describe('reviewer progress as a comparison', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -390,6 +396,7 @@ describe('queue cards', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,

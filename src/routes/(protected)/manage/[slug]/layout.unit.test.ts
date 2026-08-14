@@ -34,6 +34,7 @@ describe('organizer shell exit', () => {
 				data: {
 					conference,
 					user: { id: 'owner-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined }
 					// Layout props are looser than the full PageData tree; cast once.
@@ -48,9 +49,10 @@ describe('organizer shell exit', () => {
 		expect(body).toContain('data-testid="manage-home-link"');
 		expect(body).toContain('href="/home"');
 		expect(body).toContain('Back to home');
-		// Logout outside the sidebar shell (Sol #80 review).
-		expect(body).toContain('data-testid="shell-logout"');
-		expect(body).toContain('Log out');
+		// The account menu, the same one the app sidebar carries (#127). Its items
+		// only exist once the menu is open, so the shell can only be asked for the
+		// trigger — that the items are shared is a property of AccountMenu itself.
+		expect(body).toContain('data-testid="account-menu-trigger"');
 		// Old label that looked clickable but described a no-op in earlier builds.
 		expect(body).not.toContain('Switch conference');
 	});
@@ -71,6 +73,7 @@ describe('draft state in the shell', () => {
 				data: {
 					conference: { ...conference, status },
 					user: { id: 'owner-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined }
 				} as never,
@@ -117,6 +120,7 @@ describe('abstract-management labels on the rail', () => {
 				data: {
 					conference,
 					user: { id: 'owner-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined }
 				} as never,

@@ -78,6 +78,7 @@ const renderWith = (count: number) =>
 		props: {
 			data: {
 				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
@@ -147,6 +148,7 @@ describe('organizer speaker content cards', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -211,6 +213,7 @@ describe('bulk deliverable reminders', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
@@ -264,6 +267,7 @@ describe('bulk deliverable reminders', () => {
 			props: {
 				data: {
 					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
 					impersonating: null,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,

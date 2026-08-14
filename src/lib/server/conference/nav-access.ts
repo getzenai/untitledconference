@@ -43,7 +43,7 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 	// queries onto the single per-request connection, so this costs one
 	// database roundtrip instead of three — measured on this exact setup
 	// while chasing the public pages' latency.
-	const [[orgSeat], seats, [profile]] = await Promise.all([
+	const [[orgSeat], seats, profile] = await Promise.all([
 		db
 			.select({ id: member.id })
 			.from(member)
@@ -58,23 +58,7 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 					inArray(membershipTable.role, ['organizer', 'reviewer'])
 				)
 			),
-		// The email half mirrors `claimProfilesForAccount`: a profile an organizer
-		// created for this address is already this person's, the claim just has not
-		// run yet because they never opened the portal — exactly who the menu entry
-		// is for. An existence check, not the claim itself: writing on every
-		// navigation is not this function's business.
-		db
-			.select({ id: speakerProfileTable.id })
-			.from(speakerProfileTable)
-			.where(
-				email
-					? or(
-							eq(speakerProfileTable.userId, userId),
-							and(isNull(speakerProfileTable.userId), eq(speakerProfileTable.email, email))
-						)
-					: eq(speakerProfileTable.userId, userId)
-			)
-			.limit(1)
+		hasSpeakerProfile(userId, email)
 	]);
 
 	const orgWide = Boolean(orgSeat);
@@ -83,6 +67,33 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 		conferences: orgWide || seats.some((s) => s.role === 'organizer'),
 		contacts: orgWide,
 		reviewing: seats.some((s) => s.role === 'reviewer'),
-		speakerProfile: Boolean(profile)
+		speakerProfile: profile
 	};
+}
+
+/**
+ * Does this person have a speaker profile — the one flag the conference rail needs
+ * from this file (#127).
+ *
+ * The email half mirrors `claimProfilesForAccount`: a profile an organizer created
+ * for this address is already this person's, the claim just has not run yet because
+ * they never opened the portal — exactly who the menu entry is for. An existence
+ * check, not the claim itself: writing on every navigation is not this function's
+ * business.
+ */
+export async function hasSpeakerProfile(userId: string, email: string | null): Promise<boolean> {
+	const [profile] = await db
+		.select({ id: speakerProfileTable.id })
+		.from(speakerProfileTable)
+		.where(
+			email
+				? or(
+						eq(speakerProfileTable.userId, userId),
+						and(isNull(speakerProfileTable.userId), eq(speakerProfileTable.email, email))
+					)
+				: eq(speakerProfileTable.userId, userId)
+		)
+		.limit(1);
+
+	return Boolean(profile);
 }
