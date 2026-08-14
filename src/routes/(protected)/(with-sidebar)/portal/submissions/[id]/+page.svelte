@@ -14,6 +14,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
+	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 
@@ -21,6 +22,7 @@
 
 	const s = $derived(data.submission);
 	const zone = readerZone();
+	const site = $derived(publicSiteLink(s.conferenceStatus, s.conferenceSlug));
 
 	// Goose easter egg: `justSubmitted` is a one-shot signal from the submit
 	// action's redirect, not page truth — the banner below still reads off
@@ -85,7 +87,11 @@
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{s.title}</h1>
 			<p class="text-muted-foreground mt-1 text-sm">
-				<a class="hover:underline" href="/c/{s.conferenceSlug}">{s.conferenceName}</a>
+				{#if site.available}
+					<a class="hover:underline" href={site.href}>{s.conferenceName}</a>
+				{:else}
+					{s.conferenceName}
+				{/if}
 			</p>
 		</div>
 		<Badge variant={s.status === 'draft' ? 'outline' : 'secondary'}>

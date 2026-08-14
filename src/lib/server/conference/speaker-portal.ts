@@ -118,7 +118,7 @@ export type PortalSubmission = {
 	submittedAt: Date | null;
 	decidedAt: Date | null;
 	isPrimary: boolean;
-	conference: { slug: string; name: string };
+	conference: { slug: string; name: string; status: string };
 };
 
 /**
@@ -141,7 +141,11 @@ export async function mySubmissions(userId: string): Promise<PortalSubmission[]>
 			submittedAt: submissionTable.submittedAt,
 			decidedAt: submissionTable.decidedAt,
 			isPrimary: submissionSpeakerTable.isPrimary,
-			conference: { slug: conferenceTable.slug, name: conferenceTable.name }
+			conference: {
+				slug: conferenceTable.slug,
+				name: conferenceTable.name,
+				status: conferenceTable.status
+			}
 		})
 		.from(submissionTable)
 		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
@@ -157,7 +161,7 @@ export type PortalTask = {
 	instructions: string | null;
 	status: string;
 	dueOn: Date | null;
-	conference: { slug: string; name: string };
+	conference: { slug: string; name: string; status: string };
 	submissionTitle: string | null;
 	/**
 	 * This speaker's event-wide answer, for the participation task only.
@@ -188,7 +192,11 @@ export async function myTasks(userId: string): Promise<PortalTask[]> {
 			instructions: taskTable.instructions,
 			status: taskTable.status,
 			dueOn: taskTable.dueOn,
-			conference: { slug: conferenceTable.slug, name: conferenceTable.name },
+			conference: {
+				slug: conferenceTable.slug,
+				name: conferenceTable.name,
+				status: conferenceTable.status
+			},
 			submissionTitle: submissionTable.title,
 			participationStatus: conferenceSpeakerTable.status
 		})
@@ -227,6 +235,7 @@ async function ownedSubmissionRow(userId: string, submissionId: number) {
 			conferenceId: submissionTable.conferenceId,
 			conferenceSlug: conferenceTable.slug,
 			conferenceName: conferenceTable.name,
+			conferenceStatus: conferenceTable.status,
 			formatName: sessionFormatTable.name,
 			trackName: trackTable.name
 		})

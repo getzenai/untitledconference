@@ -10,7 +10,7 @@ const task = (id: number, over: Partial<Record<string, unknown>> = {}) => ({
 	instructions: null,
 	status: 'open',
 	dueOn: null,
-	conference: { slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027' },
+	conference: { slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027', status: 'published' },
 	submissionTitle: 'Build systems without the wait',
 	...over
 });
@@ -94,6 +94,17 @@ describe('speaker portal task list', () => {
 		expect(body).toContain('2 May 2027, 12:00 UTC');
 		expect(body).toContain('href="/c/devflow-conf-2027"');
 		expect(body).toContain('DevFlow Conf 2027');
+	});
+
+	it('does not link an archived conference to a 404 (#498)', () => {
+		const body = draw([
+			task(21, {
+				conference: { slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027', status: 'archived' }
+			})
+		]);
+
+		expect(body).toContain('DevFlow Conf 2027');
+		expect(body).not.toContain('href="/c/devflow-conf-2027"');
 	});
 
 	/**

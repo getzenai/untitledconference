@@ -37,6 +37,7 @@ export async function ownTask(userId: string, taskId: number) {
 			conferenceId: taskTable.conferenceId,
 			conferenceSlug: conferenceTable.slug,
 			conferenceName: conferenceTable.name,
+			conferenceStatus: conferenceTable.status,
 			conferenceVenue: conferenceTable.venue,
 			speakerProfileId: taskTable.speakerProfileId,
 			title: taskTable.title,

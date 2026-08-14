@@ -21,6 +21,7 @@
 	} from '$lib/components/ui/alert-dialog';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
+	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
@@ -30,6 +31,7 @@
 	const zone = readerZone();
 
 	const task = $derived(data.task);
+	const site = $derived(publicSiteLink(task.conferenceStatus, task.conferenceSlug));
 	const files = $derived(data.files);
 	const participationTask = $derived(
 		task.kind === 'action' && isParticipationTaskTitle(task.title)
@@ -129,8 +131,11 @@
 		<div>
 			<h1 class="text-2xl font-semibold tracking-tight">{task.title}</h1>
 			<p class="text-muted-foreground mt-1 text-sm">
-				<a class="hover:underline" href="/c/{task.conferenceSlug}">{task.conferenceName}</a
-				>{#if task.submissionTitle}<span class="px-1.5">·</span>{task.submissionTitle}{/if}
+				{#if site.available}
+					<a class="hover:underline" href={site.href}>{task.conferenceName}</a>
+				{:else}
+					{task.conferenceName}
+				{/if}{#if task.submissionTitle}<span class="px-1.5">·</span>{task.submissionTitle}{/if}
 			</p>
 		</div>
 		<!-- A withdrawal closes this task, so the status used to read "Done" on the

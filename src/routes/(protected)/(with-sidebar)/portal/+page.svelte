@@ -10,6 +10,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
@@ -25,6 +26,7 @@
 		title: string;
 		conferenceName: string;
 		conferenceSlug: string;
+		conferenceStatus: string;
 		tasks: Task[];
 		doneCount: number;
 	};
@@ -59,6 +61,7 @@
 				title: task.submissionTitle ?? 'Event-wide tasks',
 				conferenceName: task.conference.name,
 				conferenceSlug: task.conference.slug,
+				conferenceStatus: task.conference.status,
 				tasks: [task],
 				doneCount: 0
 			});
@@ -163,6 +166,7 @@
 			     weight — the rows themselves are not made smaller to pay for it. -->
 			<div class="mt-4 space-y-10">
 				{#each groups as group (group.key)}
+					{@const site = publicSiteLink(group.conferenceStatus, group.conferenceSlug)}
 					<section aria-labelledby="task-group-{group.key}">
 						<div class="flex flex-wrap items-baseline justify-between gap-x-3">
 							<h3 id="task-group-{group.key}" class="text-base font-semibold">{group.title}</h3>
@@ -173,7 +177,11 @@
 							{/if}
 						</div>
 						<p class="text-muted-foreground mt-0.5 text-sm">
-							<a class="hover:underline" href="/c/{group.conferenceSlug}">{group.conferenceName}</a>
+							{#if site.available}
+								<a class="hover:underline" href={site.href}>{group.conferenceName}</a>
+							{:else}
+								{group.conferenceName}
+							{/if}
 						</p>
 						<ul class="divide-border mt-2 divide-y border-y">
 							{#each group.tasks as task (task.id)}
@@ -238,6 +246,7 @@
 		{:else}
 			<ul class="divide-border mt-3 divide-y">
 				{#each data.submissions as submission (submission.id)}
+					{@const site = publicSiteLink(submission.conference.status, submission.conference.slug)}
 					<li class="flex flex-wrap items-start justify-between gap-3 py-3">
 						<div>
 							<a
@@ -247,9 +256,11 @@
 								{submission.title}
 							</a>
 							<p class="text-muted-foreground mt-0.5 text-sm">
-								<a class="hover:underline" href="/c/{submission.conference.slug}"
-									>{submission.conference.name}</a
-								>{#if !submission.isPrimary}<span class="px-1.5">·</span>co-presenting{/if}
+								{#if site.available}
+									<a class="hover:underline" href={site.href}>{submission.conference.name}</a>
+								{:else}
+									{submission.conference.name}
+								{/if}{#if !submission.isPrimary}<span class="px-1.5">·</span>co-presenting{/if}
 							</p>
 						</div>
 						<div class="flex items-center gap-3">
