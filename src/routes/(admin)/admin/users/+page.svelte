@@ -1015,8 +1015,10 @@
 													}}
 													class="inline-flex"
 												>
+													<!-- Only the id. The address comes from the invitation row on
+													     the server; a form that carries both invites the two to
+													     disagree (#407). -->
 													<input type="hidden" name="invitationId" value={invitation.id} />
-													<input type="hidden" name="email" value={invitation.email} />
 													<TooltipProvider>
 														<Tooltip>
 															<TooltipTrigger>
