@@ -45,6 +45,8 @@ returns.
 | Tool                                             | What it does                                                                                           |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `list_my_conferences`                            | The conferences you organize, newest first                                                             |
+| `list_conferences`                               | Same list as list_my_conferences                                                                       |
+| `get_conference`                                 | One conference you organize — name, venue, dates, status                                               |
 | `create_conference`                              | A new conference, always as a draft                                                                    |
 | `update_conference`                              | Name, venue, dates                                                                                     |
 | `publish_conference` / `unpublish_conference`    | Put the public page live, or take it back to draft                                                     |
@@ -63,6 +65,7 @@ returns.
 | `decide_submissions`                             | Accept, reject or waitlist — accepting also confirms the speakers and puts the talk in the agenda tray |
 | `notify_speakers`                                | Tell speakers the decision — same path as the Notify button. No email without a decision               |
 | `get_agenda`                                     | The scheduled programme, in start order                                                                |
+| `list_sessions`                                  | Same programme as get_agenda — day, room, start, session                                               |
 | `list_rooms` / `create_room`                     | The rooms of the grid                                                                                  |
 | `get_agenda_tray`                                | Accepted talks not yet on the grid, plus the days and rooms open to them                               |
 | `place_talk` / `move_talk` / `unplace_talk`      | Put a talk on the grid, move it, take it back to the tray                                              |
