@@ -11,7 +11,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 
 	if (!user) {
 		logger.debug('No user found, redirecting to login');
-		throw redirect(303, `/login?returnTo=${url.pathname}`);
+		throw redirect(303, `/login?returnTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
 	// Check if user is admin
