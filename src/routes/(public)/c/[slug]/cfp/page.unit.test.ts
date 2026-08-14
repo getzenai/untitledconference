@@ -107,6 +107,19 @@ describe('the public call for papers', () => {
 		expect(body).toContain('This call has closed — proposals were accepted until');
 	});
 
+	/**
+	 * #468: this instant is the 15th in UTC and the 16th in Berlin, and the page
+	 * used to print the UTC day with no time and no zone — so the organizer's own
+	 * screen named a different day than the speaker's. The deadline decides
+	 * whether a talk is accepted, so the moment and its clock both have to show.
+	 */
+	it('names the closing moment and its zone, not a bare day', () => {
+		const body = renderCfp('open', null, null, new Date('2027-02-15T23:59:00Z'));
+
+		expect(body).toContain('Proposals close 15 Feb 2027, 23:59 UTC.');
+		expect(body).not.toContain('Monday 15 February 2027');
+	});
+
 	it('renders the call unchanged when the organizer wrote nothing', () => {
 		const body = renderCfp('open', null);
 
