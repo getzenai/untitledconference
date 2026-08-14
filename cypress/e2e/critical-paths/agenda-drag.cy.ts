@@ -62,13 +62,14 @@ describe('Agenda drag and drop', () => {
 	};
 
 	/**
-	 * Drag whatever the source selector matches onto a room's slot.
+	 * Drag the source onto a room's slot.
 	 *
-	 * Two moves rather than one: the first crosses the threshold that separates a
-	 * drag from a click, the second lands. A single jump would work today and would
-	 * stop proving anything the moment the threshold changes.
+	 * `named` picks the matching element by its visible text — the tray lists more
+	 * than one talk, and `.first()` is whichever row the unordered insert happened
+	 * to give the lowest id. Two moves rather than one: the first crosses the
+	 * threshold that separates a drag from a click, the second lands.
 	 */
-	const dragOnto = (source: string, room: string, startMinutes: number) => {
+	const dragOnto = (source: string, room: string, startMinutes: number, named?: string) => {
 		cy.contains('[data-testid="agenda-room-card"]', room)
 			.invoke('attr', 'data-room-id')
 			.then((roomId) => {
@@ -80,7 +81,8 @@ describe('Agenda drag and drop', () => {
 				// coordinate from a page that has since moved under it. The drop then
 				// lands a few rows off, which is the shape of a bug that looks like
 				// "drag is broken" and is really "the test measured too early".
-				cy.get(source).first().trigger('pointerdown', {
+				const grip = named ? cy.contains(source, named) : cy.get(source).first();
+				grip.trigger('pointerdown', {
 					eventConstructor: 'PointerEvent',
 					button: 0,
 					pointerId: 1,
@@ -157,7 +159,7 @@ describe('Agenda drag and drop', () => {
 
 		cy.contains('[data-testid="agenda-tray-item"]', 'Fixture Talk A').should('exist');
 
-		dragOnto('[data-testid="agenda-tray-item"]', 'Hall 1', 14 * 60 + 30);
+		dragOnto('[data-testid="agenda-tray-item"]', 'Hall 1', 14 * 60 + 30, 'Fixture Talk A');
 
 		cy.contains('[data-testid="agenda-room-card"]', 'Hall 1')
 			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
