@@ -10,6 +10,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import DatePicker from '$lib/components/app/date-picker.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { CONFERENCE_CREATE_FIELDS, createFormBlockReason } from '$lib/conference/create-form';
@@ -27,6 +28,13 @@
 	let nameEdit = $state<string | null>(null);
 	let slugEdit = $state<string | null>(null);
 	let busy = $state(false);
+	// Set by any input in the form rather than compared field by field: what the
+	// guard needs to know is only "has this person put something in here that
+	// the server has not seen", and on a creation form every keystroke qualifies.
+	// The date pickers are the exception that needs saying out loud — they write
+	// a hidden input from script, which fires no `input` event, so they report
+	// themselves through `onpick`.
+	let dirty = $state(false);
 
 	const name = $derived(nameEdit ?? form?.values?.name ?? '');
 	// The address follows the name until the organizer touches it, and then stops
@@ -44,9 +52,22 @@
 
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		// Clear it before the request, not after: a success redirects, and the
+		// redirect is a navigation the guard would otherwise stop.
+		dirty = false;
+		return async ({
+			update,
+			result
+		}: {
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+			result: { type: string };
+		}) => {
 			try {
 				await update(formUpdateOptions('edit'));
+				// A rejected submit leaves the same typed values on the screen and
+				// the server still has none of them, so the next click on the
+				// sidebar has to ask again.
+				if (result.type !== 'redirect') dirty = true;
 			} finally {
 				busy = false;
 			}
@@ -75,7 +96,14 @@
 			open the call for papers when the structure is ready.
 		</p>
 
-		<form method="POST" use:enhance={submitting} class="mt-8 space-y-5">
+		<UnsavedGuard {dirty} />
+
+		<form
+			method="POST"
+			use:enhance={submitting}
+			oninput={() => (dirty = true)}
+			class="mt-8 space-y-5"
+		>
 			<div class="space-y-2">
 				<Label for="name">
 					Name{#if CONFERENCE_CREATE_FIELDS.name.required}<span class="text-status-bad"
@@ -113,11 +141,19 @@
 			<div class="grid gap-5 sm:grid-cols-2">
 				<div class="space-y-2">
 					<Label for="startsOn">Starts</Label>
-					<DatePicker name="startsOn" value={form?.values?.startsOn ?? ''} />
+					<DatePicker
+						name="startsOn"
+						value={form?.values?.startsOn ?? ''}
+						onpick={() => (dirty = true)}
+					/>
 				</div>
 				<div class="space-y-2">
 					<Label for="endsOn">Ends</Label>
-					<DatePicker name="endsOn" value={form?.values?.endsOn ?? ''} />
+					<DatePicker
+						name="endsOn"
+						value={form?.values?.endsOn ?? ''}
+						onpick={() => (dirty = true)}
+					/>
 				</div>
 			</div>
 

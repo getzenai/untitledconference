@@ -13,10 +13,17 @@
 		CardTitle
 	} from '$lib/components/ui/card';
 	import { toast } from 'svelte-sonner';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 
 	let organizationName = $state('');
 	let isCreatingOrg = $state(false);
 	let createOrgError = $state('');
+
+	// One field, so the typed name is the whole answer to "is there unsaved work
+	// here". `created` is what keeps the guard out of the way of our own `goto`
+	// to the new organization — that navigation is the save, not a way out of it.
+	let created = $state(false);
+	const dirty = $derived(!created && organizationName.trim() !== '');
 
 	const submitBlockReason = $derived(
 		createFormBlockReason([{ ...ORGANIZATION_CREATE_FIELDS.name, value: organizationName }])
@@ -76,6 +83,7 @@
 				});
 
 				toast.success('Organization created successfully!');
+				created = true;
 				// Navigate to the organization details page
 				await goto(`/settings/organization/${slug}`);
 			} else if (error) {
@@ -89,6 +97,8 @@
 		}
 	}
 </script>
+
+<UnsavedGuard {dirty} />
 
 <div class="container mx-auto max-w-6xl py-8">
 	<h1 class="mb-8 text-3xl font-bold">Create Organization</h1>

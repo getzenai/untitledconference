@@ -53,6 +53,29 @@ describe('speaker compose form', () => {
 		expect(body).toContain('Send to 2 speakers');
 	});
 
+	// #435: the draft belongs to the page, not to this component, because the
+	// dialog around it is unmounted on Escape. The browser spec proves the round
+	// trip; this pins the half that makes it possible — a draft handed in has to
+	// come back out in the fields, or reopening the dialog shows a blank form
+	// while the page still believes it is holding a message.
+	it('shows a draft it was handed rather than starting empty', () => {
+		const { body } = render(Compose, {
+			props: {
+				recipients: 2,
+				filtered: false,
+				filters: {},
+				busy: false,
+				enhanceForm: (() => ({})) as never,
+				form: null,
+				subject: 'Arrival details',
+				body: 'Please reply with your travel time.'
+			}
+		});
+
+		expect(body).toContain('value="Arrival details"');
+		expect(body).toContain('Please reply with your travel time.');
+	});
+
 	it('renders a scoped compose error in place, so it is not lost behind the dialog', () => {
 		const { body } = render(Compose, {
 			props: {

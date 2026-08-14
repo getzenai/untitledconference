@@ -14,7 +14,10 @@ vi.mock('$lib/auth-client', () => ({
 	authClient: { organization: { create: vi.fn(), setActive: vi.fn() } }
 }));
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+// `beforeNavigate` comes with the unsaved-work guard (#435), which the page
+// mounts. It registers a callback and returns nothing, so a no-op is the whole
+// contract here; whether the guard asks the right question is tested next to it.
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), beforeNavigate: vi.fn() }));
 
 vi.mock('svelte-sonner', () => ({ toast: { success: vi.fn() } }));
 

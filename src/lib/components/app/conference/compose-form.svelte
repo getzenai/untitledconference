@@ -5,6 +5,13 @@
 	 *
 	 * Lives in a dialog on the roster page (issue #220): at rest the list is a
 	 * list, and this only appears when an organizer actually wants to write.
+	 *
+	 * The two fields are bound outwards on purpose (#435). Closing the dialog
+	 * unmounts this component, and Escape is the documented way to close it — so
+	 * a message to fourteen speakers used to die on the keystroke the app itself
+	 * teaches. Holding the text one level up means dismissing the dialog only
+	 * puts the draft away; reopening brings it back. Nothing here asks a question
+	 * on the way out, because there is nothing to lose.
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { Button } from '$lib/components/ui/button';
@@ -16,7 +23,9 @@
 		filters,
 		busy,
 		enhanceForm,
-		form
+		form,
+		subject = $bindable(''),
+		body = $bindable('')
 	}: {
 		recipients: number;
 		filtered: boolean;
@@ -25,6 +34,9 @@
 		/** The page's shared enhanced-action handler (disables with the other forms). */
 		enhanceForm: Parameters<typeof enhance>[1];
 		form: { scope?: string; message?: string; error?: string } | null;
+		/** The draft, kept by the page so it survives this dialog closing. */
+		subject?: string;
+		body?: string;
 	} = $props();
 </script>
 
@@ -42,6 +54,7 @@
 		<Input
 			id="speaker-mail-subject"
 			name="subject"
+			bind:value={subject}
 			maxlength={200}
 			required
 			autofocus
@@ -55,6 +68,7 @@
 		<textarea
 			id="speaker-mail-body"
 			name="body"
+			bind:value={body}
 			rows="5"
 			maxlength="10000"
 			required

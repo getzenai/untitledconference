@@ -30,6 +30,7 @@
 		size = 'default',
 		class: className,
 		disabled = false,
+		onpick,
 		'aria-label': ariaLabel
 	}: {
 		name: string;
@@ -40,6 +41,14 @@
 		size?: 'default' | 'sm';
 		class?: string;
 		disabled?: boolean;
+		/**
+		 * Called with the new `YYYY-MM-DD` (or `''` when cleared) each time the
+		 * organizer picks a day. The value still travels through the hidden input
+		 * below; this exists because writing that input from script fires no
+		 * `input` event, so a form watching its own fields would never hear a date
+		 * being chosen (#435).
+		 */
+		onpick?: (value: string) => void;
 		'aria-label'?: string;
 	} = $props();
 
@@ -57,6 +66,7 @@
 	const choose = (next: DateValue | undefined) => {
 		picked = next ? next.toString() : '';
 		open = false;
+		onpick?.(picked);
 	};
 </script>
 
