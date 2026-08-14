@@ -1,3 +1,5 @@
+import type { NavAccess } from '$lib/conference/nav-access';
+import { navAccess } from '$lib/server/conference/nav-access';
 import { createLogger } from '$lib/server/logger';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
@@ -23,8 +25,18 @@ export const load: LayoutServerLoad = async ({ url, locals }) => {
 	}
 
 	logger.debug('User authenticated, allowing access to:', url.pathname);
-	// User is available from locals, pass it to the layout and child pages
+	// AppSidebar now lives on this layout so it stays mounted across
+	// /home ↔ /manage/<slug> (#410). The flags used to load only under
+	// `(with-sidebar)` to spare conference pages a query they did not read;
+	// those pages render the same rail now, so they owe it the same data.
+	//
+	// Optional on the *type* so page unit tests under /manage/<slug> do not
+	// all have to invent a navAccess fixture for a field they never read.
+	const shell: { navAccess?: NavAccess } = {
+		navAccess: await navAccess(user.id, user.email ?? null)
+	};
 	return {
-		user // This makes `data.user` available to Svelte components
+		user,
+		...shell
 	};
 };

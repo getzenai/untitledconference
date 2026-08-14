@@ -10,8 +10,6 @@
 	 * Account and cross-role navigation stay in the shared application sidebar;
 	 * this local header only identifies the conference-specific review queue.
 	 */
-	import ModeToggle from '$lib/components/mode-toggle.svelte';
-
 	let { data, children } = $props();
 </script>
 
@@ -22,7 +20,6 @@
 				{data.conference.name}
 				<span class="text-muted-foreground ml-2 text-xs font-normal">Review committee</span>
 			</a>
-			<ModeToggle />
 		</div>
 	</header>
 
