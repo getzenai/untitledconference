@@ -5,6 +5,7 @@
  * `/manage/anything-else` is still a conference.
  */
 import { MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
+import { CONFERENCE_CREATE_FIELDS, createFormBlockReason } from '$lib/conference/create-form';
 import { slugify } from '$lib/conference/slug';
 import {
 	createConference,
@@ -64,6 +65,16 @@ export const actions: Actions = {
 			startsOn: optional(form, 'startsOn'),
 			endsOn: optional(form, 'endsOn')
 		};
+
+		const blocked = createFormBlockReason([
+			{ ...CONFERENCE_CREATE_FIELDS.name, value: values.name },
+			{ ...CONFERENCE_CREATE_FIELDS.slug, value: values.slug },
+			{ ...CONFERENCE_CREATE_FIELDS.startsOn, value: values.startsOn ?? '' },
+			{ ...CONFERENCE_CREATE_FIELDS.endsOn, value: values.endsOn ?? '' }
+		]);
+		if (blocked) {
+			return fail(400, { values, error: blocked, field: 'name' });
+		}
 
 		const result = await createConference(locals.user!.id, values);
 

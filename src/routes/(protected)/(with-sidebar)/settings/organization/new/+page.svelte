@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { authClient } from '$lib/auth-client';
+	import { ORGANIZATION_CREATE_FIELDS, createFormBlockReason } from '$lib/conference/create-form';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -16,6 +17,10 @@
 	let organizationName = $state('');
 	let isCreatingOrg = $state(false);
 	let createOrgError = $state('');
+
+	const submitBlockReason = $derived(
+		createFormBlockReason([{ ...ORGANIZATION_CREATE_FIELDS.name, value: organizationName }])
+	);
 
 	async function generateUniqueSlug(baseName: string) {
 		const baseSlug = baseName
@@ -51,8 +56,8 @@
 	}
 
 	async function createOrganization() {
-		if (!organizationName.trim()) {
-			createOrgError = 'Please enter an organization name';
+		if (submitBlockReason) {
+			createOrgError = submitBlockReason;
 			return;
 		}
 
@@ -96,14 +101,18 @@
 		<CardContent>
 			<div class="space-y-4">
 				<div>
-					<Label for="orgName">Organization Name</Label>
+					<Label for="orgName">
+						Organization Name{#if ORGANIZATION_CREATE_FIELDS.name.required}<span
+								class="text-status-bad">&nbsp;*</span
+							>{/if}
+					</Label>
 					<Input
 						id="orgName"
 						type="text"
 						placeholder="My Organization"
 						bind:value={organizationName}
 						disabled={isCreatingOrg}
-						required
+						required={ORGANIZATION_CREATE_FIELDS.name.required}
 					/>
 					<p class="text-muted-foreground mt-2 text-sm">
 						You'll be the owner of this organization and can invite other members.
@@ -114,17 +123,29 @@
 					<div class="text-destructive text-sm">{createOrgError}</div>
 				{/if}
 
-				<Button
-					onclick={createOrganization}
-					disabled={isCreatingOrg || !organizationName.trim()}
-					class="w-full"
-				>
-					{#if isCreatingOrg}
-						Creating...
-					{:else}
-						Create Organization
+				<div class="flex flex-col items-stretch gap-1">
+					<Button
+						onclick={createOrganization}
+						disabled={isCreatingOrg || Boolean(submitBlockReason)}
+						class="w-full"
+						aria-describedby={submitBlockReason ? 'create-block-reason' : undefined}
+					>
+						{#if isCreatingOrg}
+							Creating...
+						{:else}
+							Create Organization
+						{/if}
+					</Button>
+					{#if submitBlockReason}
+						<p
+							id="create-block-reason"
+							class="text-muted-foreground text-xs"
+							data-testid="create-block-reason"
+						>
+							{submitBlockReason}
+						</p>
 					{/if}
-				</Button>
+				</div>
 			</div>
 		</CardContent>
 	</Card>
