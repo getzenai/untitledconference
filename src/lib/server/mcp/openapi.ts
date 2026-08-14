@@ -65,8 +65,9 @@ export function buildOpenApiDocument(origin: string): Record<string, unknown> {
 		}
 
 		const operation: Record<string, unknown> = {
-			operationId: route.tool,
+			operationId: route.operationId ?? route.tool,
 			summary: tool.description,
+			...(route.note ? { description: route.note } : {}),
 			tags: [route.tool.split('_')[0] ?? 'tools'],
 			parameters,
 			responses: {

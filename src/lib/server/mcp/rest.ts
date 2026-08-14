@@ -18,6 +18,17 @@ export type RestRoute = {
 	method: RestMethod;
 	pattern: string;
 	tool: string;
+	/**
+	 * Only for the second route onto a tool that already has one. OpenAPI
+	 * requires operation ids to be unique, and the tool name is the default.
+	 */
+	operationId?: string;
+	/**
+	 * Anything true of this route and not of the tool. It reaches the OpenAPI
+	 * operation and nothing else — an MCP caller has no routes, so a note about
+	 * one does not belong in the tool's own description.
+	 */
+	note?: string;
 };
 
 /**
@@ -35,7 +46,31 @@ export const REST_ROUTES: RestRoute[] = [
 	//
 	// The confirmation slug travels in the body — a URL that carries it twice would
 	// be one nobody could type wrong, which is the opposite of what it is for.
-	{ method: 'DELETE', pattern: '/conferences/:conferenceSlug', tool: 'archive_conference' },
+	// `dispatchRest` enforces that: on a write the query is not read at all.
+	{
+		method: 'DELETE',
+		pattern: '/conferences/:conferenceSlug',
+		tool: 'archive_conference',
+		note:
+			'confirmSlug travels in the body, and a DELETE body is the one thing a request ' +
+			'can lose on the way — clients and proxies drop it. If yours does, or you would ' +
+			'rather not find out, archive a published conference with ' +
+			'POST /conferences/{conferenceSlug}/archive instead. It is the same operation.'
+	},
+	// The same tool under a name, because a published conference needs the
+	// confirmation and a `DELETE` body is the one place a request can lose it.
+	// The query is not an option — that is the whole point of the rule below.
+	// An unpublished conference needs no confirmation, so `DELETE` stays the
+	// plain way to archive one.
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/archive',
+		tool: 'archive_conference',
+		operationId: 'archive_conference_confirmed',
+		note:
+			'The archive again, as a named step with a body that no client drops. Use this ' +
+			'when the conference is published and DELETE cannot carry confirmSlug.'
+	},
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/restore', tool: 'restore_conference' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/erase', tool: 'delete_conference' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/publish', tool: 'publish_conference' },
@@ -311,8 +346,18 @@ export async function dispatchRest(
 		return { status: 404, body: { error: 'Not found.' } };
 	}
 
+	// A read takes its arguments from the query, a write from the body. That is
+	// already what the OpenAPI document says — `buildOpenApiDocument` puts the
+	// leftover fields `in: 'query'` for GET and into a `requestBody` otherwise —
+	// and until now the dispatcher contradicted it by merging the query into
+	// every call. `?confirmSlug=x` therefore confirmed a destructive operation
+	// from the URL, where it lands in access logs, referrers and shell history.
+	//
+	// The rule is stated here rather than as a list of fields to keep out,
+	// because a list is a thing to forget: the next confirmation field is
+	// covered by this without anyone remembering it.
 	const args: Record<string, unknown> = {
-		...input.query,
+		...(matched.route.method === 'GET' ? input.query : {}),
 		...input.body,
 		...matched.params
 	};
