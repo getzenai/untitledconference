@@ -521,6 +521,7 @@ describe('ABS-06 assignment at scale', () => {
 
 		expect(result.created).toBe(3);
 		expect(result.skipped).toBe(1);
+		expect(result.skipped).toBe(result.skippedItems.length);
 		expect(result.skippedItems).toEqual([{ submissionId: talkIds[3], reason: 'pool_exhausted' }]);
 
 		const recused = await db
@@ -642,6 +643,143 @@ describe('ABS-06 assignment at scale', () => {
 			expect(assigned).toBe(ROUND_REVIEWER);
 		}
 		await db.delete(submissionTable).where(inArray(submissionTable.id, talkIds));
+	});
+
+	it('records one skip item per unfilled seat and names the empty pool', async () => {
+		const [talkId] = await insertTalks(['Empty pool']);
+		const result = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 2,
+			capPerReviewer: 10,
+			reviewerUserIds: ['nobody-on-the-committee']
+		});
+		expect(result.created).toBe(0);
+		expect(result.skipped).toBe(2);
+		expect(result.skipped).toBe(result.skippedItems.length);
+		expect(result.skippedItems).toEqual([
+			{ submissionId: talkId, reason: 'empty_committee' },
+			{ submissionId: talkId, reason: 'empty_committee' }
+		]);
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+	});
+
+	it('names a track lock when every remaining candidate is barred from the talk', async () => {
+		const [allowedTrack, blockedTrack] = await db
+			.insert(trackTable)
+			.values([
+				{ conferenceId: conference.id, name: `Skip allowed ${suffix}` },
+				{ conferenceId: conference.id, name: `Skip blocked ${suffix}` }
+			])
+			.returning();
+		const [membership] = await db
+			.select({ id: membershipTable.id })
+			.from(membershipTable)
+			.where(eq(membershipTable.userId, CONFERENCE_REVIEWER));
+		await db
+			.insert(membershipTrackTable)
+			.values({ membershipId: membership.id, trackId: allowedTrack.id });
+
+		const [talkId] = await insertTalks(['All blocked']);
+		await db
+			.update(submissionTable)
+			.set({ trackId: blockedTrack.id })
+			.where(eq(submissionTable.id, talkId));
+
+		const result = await autoDistributeReviews(conference.id, [talkId], roundId, {
+			reviewsPerSubmission: 1,
+			capPerReviewer: 10,
+			reviewerUserIds: [CONFERENCE_REVIEWER]
+		});
+		expect(result.created).toBe(0);
+		expect(result.skipped).toBe(1);
+		expect(result.skipped).toBe(result.skippedItems.length);
+		expect(result.skippedItems).toEqual([{ submissionId: talkId, reason: 'track_restricted' }]);
+
+		await db
+			.delete(membershipTrackTable)
+			.where(eq(membershipTrackTable.membershipId, membership.id));
+		await db.update(submissionTable).set({ trackId: null }).where(eq(submissionTable.id, talkId));
+		await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+		await db.delete(trackTable).where(inArray(trackTable.id, [allowedTrack.id, blockedTrack.id]));
+	});
+
+	it('unions track allow-lists across a dual-scoped reviewer in either row order', async () => {
+		const dualId = `dual-track-${suffix}`;
+		await db.insert(user).values({
+			id: dualId,
+			name: 'Dual Track',
+			email: `${dualId}@example.com`,
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+		const [trackA, trackB, trackC] = await db
+			.insert(trackTable)
+			.values([
+				{ conferenceId: conference.id, name: `Union A ${suffix}` },
+				{ conferenceId: conference.id, name: `Union B ${suffix}` },
+				{ conferenceId: conference.id, name: `Union C ${suffix}` }
+			])
+			.returning();
+
+		const conferenceSeat = {
+			userId: dualId,
+			role: 'reviewer' as const,
+			scopeType: 'conference' as const,
+			scopeId: conference.id
+		};
+		const roundSeat = {
+			userId: dualId,
+			role: 'reviewer' as const,
+			scopeType: 'round' as const,
+			scopeId: roundId
+		};
+
+		async function restrict(conferenceFirst: boolean) {
+			await db.delete(membershipTable).where(eq(membershipTable.userId, dualId));
+			const inserted = await db
+				.insert(membershipTable)
+				.values(conferenceFirst ? [conferenceSeat, roundSeat] : [roundSeat, conferenceSeat])
+				.returning({ id: membershipTable.id, scopeType: membershipTable.scopeType });
+			const conferenceMembership = inserted.find((row) => row.scopeType === 'conference');
+			const roundMembership = inserted.find((row) => row.scopeType === 'round');
+			await db.insert(membershipTrackTable).values([
+				{ membershipId: conferenceMembership!.id, trackId: trackA.id },
+				{ membershipId: roundMembership!.id, trackId: trackB.id }
+			]);
+		}
+
+		async function distributeOnto(track: typeof trackA) {
+			const [talkId] = await insertTalks([`Union ${track.id}`]);
+			await db
+				.update(submissionTable)
+				.set({ trackId: track.id })
+				.where(eq(submissionTable.id, talkId));
+			const result = await autoDistributeReviews(conference.id, [talkId], roundId, {
+				reviewsPerSubmission: 1,
+				capPerReviewer: 10,
+				reviewerUserIds: [dualId]
+			});
+			await db.delete(reviewTable).where(eq(reviewTable.submissionId, talkId));
+			await db.delete(submissionTable).where(eq(submissionTable.id, talkId));
+			return result;
+		}
+
+		// Last row is the round seat (track B). Talk on A would fail if that row were the only gate.
+		await restrict(true);
+		expect(await distributeOnto(trackA)).toMatchObject({ created: 1, skipped: 0 });
+
+		// Last row is the conference seat (track A). Talk on B would fail without the union.
+		await restrict(false);
+		expect(await distributeOnto(trackB)).toMatchObject({ created: 1, skipped: 0 });
+
+		const blocked = await distributeOnto(trackC);
+		expect(blocked.created).toBe(0);
+		expect(blocked.skipped).toBe(blocked.skippedItems.length);
+		expect(blocked.skippedItems).toEqual([expect.objectContaining({ reason: 'track_restricted' })]);
+
+		await db.delete(membershipTable).where(eq(membershipTable.userId, dualId));
+		await db.delete(trackTable).where(inArray(trackTable.id, [trackA.id, trackB.id, trackC.id]));
+		await db.delete(user).where(eq(user.id, dualId));
 	});
 
 	it('is a no-op when every selected talk already has N reviewers', async () => {

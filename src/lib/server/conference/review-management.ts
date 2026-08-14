@@ -463,8 +463,10 @@ export type AssignSkipReason =
 	| 'speaker_conflict'
 	| 'not_in_round'
 	| 'track_restricted'
-	/** Auto-distribute: the paper still needed a seat and nobody eligible was under the cap. */
-	| 'pool_exhausted';
+	/** Auto-distribute: remaining seats, and every remaining candidate is at the cap. */
+	| 'pool_exhausted'
+	/** Auto-distribute: the candidate pool is empty (no committee, or none of the checked reviewers). */
+	| 'empty_committee';
 
 export type BulkAssignSkip = {
 	submissionId: number;
@@ -618,7 +620,8 @@ type FillInput = {
 	trackId: number | null;
 	seats: SubmissionSeat[];
 	speakers: Set<string>;
-	restrictions: Map<number, Set<number>>;
+	/** Per user: allowed track ids, or `null` when any of their memberships is unrestricted. */
+	restrictions: Map<string, Set<number> | null>;
 	capPerReviewer: number;
 };
 
@@ -629,7 +632,7 @@ type RunDistributeArgs = {
 	reviewsPerSubmission: number;
 	capPerReviewer: number;
 	pool: Membership[];
-	restrictions: Map<number, Set<number>>;
+	restrictions: Map<string, Set<number> | null>;
 	snapshot: DistributeSnapshot;
 };
 
@@ -715,6 +718,42 @@ function uniqueMembershipsByUser(memberships: Membership[]): Membership[] {
 	return [...byUser.values()];
 }
 
+/**
+ * Union of track allow-lists across every membership a user holds.
+ * An unrestricted membership (no rows) wins: that user can sit any track.
+ */
+function mergeTrackAllowlists(
+	memberships: Membership[],
+	byMembership: Map<number, Set<number>>
+): Map<string, Set<number> | null> {
+	const byUser = new Map<string, Set<number> | null>();
+	for (const membership of memberships) {
+		const tracks = byMembership.get(membership.membershipId);
+		if (!tracks) {
+			byUser.set(membership.userId, null);
+			continue;
+		}
+		const existing = byUser.get(membership.userId);
+		if (existing === null) continue;
+		if (!existing) {
+			byUser.set(membership.userId, new Set(tracks));
+			continue;
+		}
+		for (const trackId of tracks) existing.add(trackId);
+	}
+	return byUser;
+}
+
+function userAllowsTrack(
+	userId: string,
+	trackId: number | null,
+	restrictions: Map<string, Set<number> | null>
+) {
+	const tracks = restrictions.get(userId);
+	if (tracks === undefined || tracks === null) return true;
+	return trackId !== null && tracks.has(trackId);
+}
+
 function distributePool(memberships: Membership[], reviewerUserIds: string[]): Membership[] {
 	const unique = uniqueMembershipsByUser(memberships);
 	if (reviewerUserIds.length === 0) return unique;
@@ -758,7 +797,7 @@ function eligibleDistributeCandidates(
 	active: Set<string>,
 	recusedIds: Set<string>,
 	speakers: Set<string>,
-	restrictions: Map<number, Set<number>>,
+	restrictions: Map<string, Set<number> | null>,
 	load: Map<string, number>,
 	capPerReviewer: number
 ) {
@@ -766,13 +805,45 @@ function eligibleDistributeCandidates(
 		.filter((membership) => {
 			if (active.has(membership.userId) || recusedIds.has(membership.userId)) return false;
 			if (speakers.has(membership.userId)) return false;
-			if (!membershipAllowsTrack(membership.membershipId, trackId, restrictions)) return false;
+			if (!userAllowsTrack(membership.userId, trackId, restrictions)) return false;
 			return (load.get(membership.userId) ?? 0) < capPerReviewer;
 		})
 		.sort((a, b) => {
 			const loadDelta = (load.get(a.userId) ?? 0) - (load.get(b.userId) ?? 0);
 			return loadDelta !== 0 ? loadDelta : a.userId.localeCompare(b.userId);
 		});
+}
+
+/** Why the remaining seats on this paper could not be filled. First empty filter wins. */
+function classifyUnfilled(
+	input: FillInput,
+	active: Set<string>,
+	recusedIds: Set<string>
+): AssignSkipReason {
+	if (input.pool.length === 0) return 'empty_committee';
+	const remaining = input.pool.filter(
+		(membership) => !active.has(membership.userId) && !recusedIds.has(membership.userId)
+	);
+	if (remaining.length === 0) return 'pool_exhausted';
+	const notSpeakers = remaining.filter((membership) => !input.speakers.has(membership.userId));
+	if (notSpeakers.length === 0) return 'speaker_conflict';
+	const allowed = notSpeakers.filter((membership) =>
+		userAllowsTrack(membership.userId, input.trackId, input.restrictions)
+	);
+	return allowed.length === 0 ? 'track_restricted' : 'pool_exhausted';
+}
+
+function recordUnfilledSeats(
+	input: FillInput,
+	active: Set<string>,
+	recusedIds: Set<string>,
+	remaining: number,
+	acc: DistributeAcc
+) {
+	const reason = classifyUnfilled(input, active, recusedIds);
+	for (let i = 0; i < remaining; i++) {
+		acc.skippedItems.push({ submissionId: input.submissionId, reason });
+	}
 }
 
 function applyFillResult(
@@ -824,7 +895,7 @@ function resultOf(acc: DistributeAcc): BulkAssignResult {
 	return {
 		created: acc.created,
 		already: acc.already,
-		skipped: acc.skipped,
+		skipped: acc.skippedItems.length,
 		recused: acc.recused,
 		skippedItems: acc.skippedItems
 	};
@@ -864,8 +935,7 @@ async function fillSubmissionSeats(tx: Tx, input: FillInput, acc: DistributeAcc)
 		}
 	}
 	if (need - filled > 0) {
-		acc.skipped += need - filled;
-		acc.skippedItems.push({ submissionId: input.submissionId, reason: 'pool_exhausted' });
+		recordUnfilledSeats(input, active, recusedIds, need - filled, acc);
 	}
 }
 
@@ -882,7 +952,6 @@ async function runDistribute(tx: Tx, args: RunDistributeArgs): Promise<BulkAssig
 	for (const submissionId of args.ids) {
 		const submission = args.snapshot.onConference.get(submissionId);
 		if (!submission) {
-			acc.skipped += 1;
 			acc.skippedItems.push({ submissionId, reason: 'not_on_conference' });
 			continue;
 		}
@@ -898,7 +967,9 @@ async function runDistribute(tx: Tx, args: RunDistributeArgs): Promise<BulkAssig
  * same gates as bulk assign. Existing active seats count toward N, so a second
  * run is a no-op on papers that are already full. Reviewers at the cap are
  * skipped rather than overflowing. The pool is one row per user; a checked
- * subset, when present, replaces the whole committee.
+ * subset, when present, replaces the whole committee. Dual-scoped reviewers
+ * keep the union of their track allow-lists, not whichever membership row
+ * happened to come last.
  */
 export async function autoDistributeReviews(
 	conferenceId: number,
@@ -910,13 +981,10 @@ export async function autoDistributeReviews(
 	if (!parsed) return { ...EMPTY_BULK };
 
 	const memberships = await conferenceReviewerMemberships(conferenceId, [roundId]);
-	const restrictions = await membershipTrackRestrictions(
-		memberships.map((row) => row.membershipId)
-	);
-	const pool = distributePool(
-		memberships.filter((membership) => belongsToRound(membership, roundId)),
-		parsed.reviewerUserIds
-	);
+	const belonging = memberships.filter((membership) => belongsToRound(membership, roundId));
+	const byMembership = await membershipTrackRestrictions(belonging.map((row) => row.membershipId));
+	const restrictions = mergeTrackAllowlists(belonging, byMembership);
+	const pool = distributePool(belonging, parsed.reviewerUserIds);
 	const snapshot = await loadDistributeSnapshot(conferenceId, parsed.ids, roundId);
 
 	return db.transaction((tx) =>
