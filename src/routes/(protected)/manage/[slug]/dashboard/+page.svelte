@@ -23,6 +23,13 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
+	import {
+		dashboardSchedulingEmpty,
+		dashboardSchedulingHeadline,
+		dashboardSchedulingLabel,
+		dashboardSchedulingSubhead,
+		dashboardSchedulingTile
+	} from '$lib/conference/program-states';
 	import { submissionsTrend, TREND_WINDOW } from '$lib/conference/submissions-trend';
 	import CalendarClockIcon from '@lucide/svelte/icons/calendar-clock';
 	import CheckCircleIcon from '@lucide/svelte/icons/circle-check-big';
@@ -48,9 +55,11 @@
 	const headline = $derived.by(() => {
 		const parts: string[] = [];
 		if (d.decisions.undecided > 0) parts.push(`${d.decisions.undecided} awaiting a decision`);
-		if (d.scheduling.unplaced + d.scheduling.tentative > 0) {
-			parts.push(`${d.scheduling.unplaced + d.scheduling.tentative} accepted without a slot`);
-		}
+		const schedulingLine = dashboardSchedulingHeadline({
+			unplaced: d.scheduling.unplaced,
+			draft: d.scheduling.tentative
+		});
+		if (schedulingLine) parts.push(schedulingLine);
 		if (d.tasks.overdue > 0) parts.push(`${d.tasks.overdue} speaker tasks overdue`);
 		if (d.mail.failed > 0) parts.push(`${d.mail.failed} emails failed`);
 		return parts.length > 0 ? parts.join(' · ') : 'Nothing is waiting on you right now.';
@@ -297,7 +306,10 @@
 			CheckCircleIcon,
 			'Accepted',
 			d.scheduling.accepted,
-			`${d.scheduling.unplaced + d.scheduling.tentative} without a confirmed slot`,
+			dashboardSchedulingTile({
+				unplaced: d.scheduling.unplaced,
+				draft: d.scheduling.tentative
+			}),
 			`${base}/submissions?status=accepted`
 		)}
 		{@render tile(
@@ -593,11 +605,7 @@
 
 		{#snippet schedulingBody()}
 			{#if d.scheduling.items.length === 0}
-				{@render nothing(
-					d.scheduling.accepted === 0
-						? 'Nothing accepted yet.'
-						: 'Every accepted talk has a confirmed slot.'
-				)}
+				{@render nothing(dashboardSchedulingEmpty(d.scheduling.accepted))}
 			{:else}
 				<ul class="space-y-2 text-sm">
 					{#each d.scheduling.items as item (item.id)}
@@ -611,7 +619,7 @@
 							</a>
 							<StatusBadge
 								status={item.state === 'unplaced' ? 'submitted' : 'tentative'}
-								label={item.state === 'unplaced' ? 'Not in the tray' : 'In the tray'}
+								label={dashboardSchedulingLabel(item.state)}
 							/>
 						</li>
 					{/each}
@@ -624,8 +632,11 @@
 			</a>
 		{/snippet}
 		{@render card(
-			'Accepted, not scheduled',
-			`${d.scheduling.tentative} in the agenda tray · ${d.scheduling.unplaced} not even parked`,
+			'Accepted, not published',
+			dashboardSchedulingSubhead({
+				unplaced: d.scheduling.unplaced,
+				draft: d.scheduling.tentative
+			}),
 			schedulingBody,
 			d.scheduling.accepted > 0 ? schedulingFooter : undefined
 		)}

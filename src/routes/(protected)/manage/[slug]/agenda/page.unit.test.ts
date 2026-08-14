@@ -582,3 +582,66 @@ describe('agenda public state (#497)', () => {
 		expect(card).toContain('Declined');
 	});
 });
+
+/**
+ * #466 — colour already codes draft vs published on the cards (#219). The
+ * legend names those colours so white cards among green are not a mystery,
+ * and the fill confirmation says the new cards are invisible to the public.
+ */
+describe('agenda draft legend (#466)', () => {
+	it('names draft against published next to the board', () => {
+		const body = renderWith(1, 1, {
+			placed: [
+				{
+					placementId: 1,
+					submissionId: 1,
+					title: 'Live',
+					kind: 'session',
+					status: 'confirmed',
+					submissionStatus: 'accepted',
+					trackName: null,
+					formatName: 'Talk',
+					minutes: 30,
+					dayId: 1,
+					roomId: 1,
+					startMinutes: 540,
+					endMinutes: 570,
+					speakers: ['Ada']
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="agenda-publish-legend"');
+		expect(body).toContain('Published — the public can see it');
+		expect(body).toContain('Draft — only you can see it');
+	});
+
+	it('says fill-the-slots left drafts, not a live programme', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					board: {
+						days: [{ id: 1, date: '2027-05-10', position: 0 }],
+						rooms: [{ id: 1, name: 'Room 1', position: 0 }],
+						tracks: [],
+						formats: [],
+						placed: [],
+						tray: [],
+						conflicts: []
+					},
+					slots: [{ minutes: 540, label: '09:00' }]
+				},
+				form: { autoPlaced: 2 }
+			} as never
+		}).body;
+
+		expect(body).toContain('data-testid="agenda-autoplace-result"');
+		expect(body).toContain('Placed 2 sessions as drafts.');
+		expect(body).toContain('invisible to the public until you publish');
+	});
+});

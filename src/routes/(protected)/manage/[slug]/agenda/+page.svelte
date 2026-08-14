@@ -39,6 +39,7 @@
 	} from '$lib/components/ui/tooltip';
 	import { blockRows, gridSlots, laneLayout, type GridFrame } from '$lib/conference/agenda-grid';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { agendaReadyLine, autoPlaceResult, PROGRAM_LEGEND } from '$lib/conference/program-states';
 	import { formatDayLong } from '$lib/conference/public-view';
 	import { DragController } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
@@ -142,6 +143,14 @@
 	const placedTalks = $derived(board.placed.filter((p) => p.submissionId !== null));
 	const liveTalks = $derived(
 		placedTalks.filter((p) => p.status === 'confirmed' && p.submissionStatus === 'accepted')
+	);
+	const draftTalks = $derived(placedTalks.filter((p) => p.status !== 'confirmed'));
+	const readyLine = $derived(
+		agendaReadyLine({
+			unplaced: unscheduled,
+			draft: draftTalks.length,
+			placed: board.placed.length
+		})
 	);
 	/**
 	 * What the button toggles, which is not what the public sees.
@@ -339,14 +348,7 @@
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Agenda</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm">
-				{#if unscheduled > 0}
-					{unscheduled}
-					{unscheduled === 1 ? 'talk needs' : 'talks need'} a slot.
-				{:else if board.placed.length === 0}
-					Nothing has been accepted yet, so there is nothing to schedule.
-				{:else}
-					Every accepted talk has a slot.
-				{/if}
+				{readyLine}
 				{#if publicState}
 					<span data-testid="agenda-public-state">{publicState}</span>
 				{/if}
@@ -418,10 +420,8 @@
 		<p class="text-status-bad text-sm">{form.error}</p>
 	{/if}
 	{#if form?.autoPlaced !== undefined}
-		<p class="text-muted-foreground text-sm">
-			{form.autoPlaced === 0
-				? 'Nothing could be placed — every room is full for the length of those sessions.'
-				: `Placed ${form.autoPlaced} ${form.autoPlaced === 1 ? 'session' : 'sessions'}. Move anything you disagree with.`}
+		<p class="text-muted-foreground text-sm" data-testid="agenda-autoplace-result">
+			{autoPlaceResult(form.autoPlaced)}
 		</p>
 	{/if}
 	{#if form?.published !== undefined}
@@ -520,6 +520,27 @@
 
 		<!-- The grid -->
 		<section class="min-w-0">
+			{#if day}
+				<ul
+					class="text-muted-foreground mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs"
+					data-testid="agenda-publish-legend"
+				>
+					<li class="flex items-center gap-1.5">
+						<span
+							class="border-status-good bg-status-good-bg size-2.5 shrink-0 rounded-sm border"
+							aria-hidden="true"
+						></span>
+						{PROGRAM_LEGEND.published}
+					</li>
+					<li class="flex items-center gap-1.5">
+						<span
+							class="border-border bg-card size-2.5 shrink-0 rounded-sm border"
+							aria-hidden="true"
+						></span>
+						{PROGRAM_LEGEND.draft}
+					</li>
+				</ul>
+			{/if}
 			{#if board.days.length > 1}
 				<div class="border-border mb-4 flex flex-wrap gap-1 border-b">
 					{#each board.days as d, i (d.id)}

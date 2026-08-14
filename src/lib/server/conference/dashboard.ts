@@ -61,7 +61,7 @@ export type DecisionQueueItem = {
 export type SchedulingItem = {
 	id: number;
 	title: string;
-	/** `unplaced` = not even in the tray, `tentative` = in the tray, no confirmed slot. */
+	/** `unplaced` = no placement, `tentative` = draft (tray or grid, not published). */
 	state: 'unplaced' | 'tentative';
 };
 
