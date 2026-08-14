@@ -70,10 +70,19 @@ export function formatInstant(
  * the screen just never said which, and the speaker's page said a different
  * day. With a value stored, the hint reads it back as an instant; with the
  * field still empty there is nothing to read back, so it names the zone alone.
+ *
+ * And it only claims the zone is the browser's once that is known. Until
+ * `onMount` swaps it in, every screen renders `SERVER_ZONE` — calling that "your
+ * browser's zone" would be false for everyone not sitting on UTC, which is a
+ * strange thing to print on the one field this module exists to stop lying
+ * about. "Times are UTC." is true for the second it is on screen.
  */
 export function callHint(value: Date | string | null, timeZone: string): string {
-	return value
-		? `${formatInstant(value, timeZone)} — speakers see this moment on their own clock`
+	if (value) {
+		return `${formatInstant(value, timeZone)} — speakers see this moment on their own clock`;
+	}
+	return timeZone === SERVER_ZONE
+		? `Times are ${zoneLabel(timeZone)}.`
 		: `Times are ${zoneLabel(timeZone)}, your browser's zone`;
 }
 
