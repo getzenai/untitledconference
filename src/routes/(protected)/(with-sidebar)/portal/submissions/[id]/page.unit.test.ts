@@ -61,6 +61,24 @@ describe('speaker submission detail', () => {
 		expect(body.match(/href="\/portal"/g)).toHaveLength(1);
 	});
 
+	it('says why an accepted talk can no longer be edited, instead of removing the button in silence', () => {
+		const body = draw();
+
+		// The affordance stays and carries its reason: a control that vanishes reads
+		// as a bug at the one moment the speaker cares most about the words (#496).
+		expect(body).toContain('Editing closed');
+		expect(body).toContain('the organizers accepted these words');
+		expect(body).toContain('ask the organizers');
+		expect(body).not.toContain(`/portal/submissions/${submission().id}/edit`);
+	});
+
+	it('keeps the edit link while the proposal is still the speaker’s to change', () => {
+		const body = draw({ status: 'in_review' });
+
+		expect(body).toContain(`/portal/submissions/${submission().id}/edit`);
+		expect(body).not.toContain('Editing closed');
+	});
+
 	it('names a rejection so the speaker does not have to infer it from a badge', () => {
 		const body = draw({ status: 'rejected' });
 

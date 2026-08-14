@@ -316,6 +316,33 @@ async function draftRow(userId: string, submissionId: number) {
 		: null;
 }
 
+/**
+ * The status of a proposal that is this user's own, or null if it is not (#496).
+ *
+ * `editableDraft` deliberately answers null to three different refusals so a
+ * stranger cannot tell which one applied. That is right for a stranger and wrong
+ * for the speaker who wrote the thing: their accepted talk is not "no such page",
+ * it is a page whose editing closed. This says which of the two it is, and only
+ * ever about a proposal the asker is already on.
+ */
+export async function ownSubmissionStatus(
+	userId: string,
+	submissionId: number
+): Promise<string | null> {
+	const [row] = await db
+		.select({ status: submissionTable.status })
+		.from(submissionTable)
+		.innerJoin(submissionSpeakerTable, eq(submissionSpeakerTable.submissionId, submissionTable.id))
+		.innerJoin(
+			speakerProfileTable,
+			eq(speakerProfileTable.id, submissionSpeakerTable.speakerProfileId)
+		)
+		.where(and(eq(submissionTable.id, submissionId), eq(speakerProfileTable.userId, userId)))
+		.limit(1);
+
+	return row?.status ?? null;
+}
+
 /** Answers keyed by field id, which is what the form's `answer:<id>` inputs need. */
 async function draftAnswers(submissionId: number): Promise<Record<number, string>> {
 	const rows = await db
