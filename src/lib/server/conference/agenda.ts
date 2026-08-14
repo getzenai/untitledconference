@@ -23,6 +23,7 @@
  * choosing a start and being handed an end cannot accidentally book a 30-minute talk
  * into a 15-minute hole, and the format already carries the length.
  */
+import { placementHasSlot } from '$lib/conference/program-states';
 import { db } from '$lib/server/db';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
@@ -210,15 +211,12 @@ function toSession(row: PlacementRow, speakers: Map<number, string[]>): BoardSes
 /**
  * Is this placement on the grid?
  *
- * A session needs all three of day, time and room. A break does not: a null room means
- * "across every room", which is how lunch is expressed, and requiring one would drop
- * every break into the tray offering to schedule it into a single room. That is what
- * this screen did on its first run against the demo tenant — three lunches queued as
- * talks needing a slot.
+ * Same rule the dashboard uses to tell unplaced from draft. The break caveat
+ * lives on `placementHasSlot`: a null room means "across every room", and
+ * requiring one would drop every lunch into the tray.
  */
 function isPlaced(row: PlacementRow): boolean {
-	if (row.dayId === null || row.startsAt === null) return false;
-	return row.kind !== 'session' || row.roomId !== null;
+	return placementHasSlot(row);
 }
 
 export async function agendaBoard(conferenceId: number): Promise<AgendaBoard> {

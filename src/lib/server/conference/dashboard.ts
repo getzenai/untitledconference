@@ -15,6 +15,7 @@
  *   This runs on every visit to the organizer's landing page; it may not grow a term
  *   with the size of the tables.
  */
+import { classifyAcceptedTalk, type PlacementSlot } from '$lib/conference/program-states';
 import { db } from '$lib/server/db';
 import { submissionTable, type Submission } from '$lib/server/db/conference/cfp-schema';
 import { speakerProfileTable } from '$lib/server/db/conference/conference-schema';
@@ -61,7 +62,7 @@ export type DecisionQueueItem = {
 export type SchedulingItem = {
 	id: number;
 	title: string;
-	/** `unplaced` = not even in the tray, `tentative` = in the tray, no confirmed slot. */
+	/** `unplaced` = no slot (missing row or tray). `tentative` = draft on the grid. */
 	state: 'unplaced' | 'tentative';
 };
 
@@ -261,11 +262,15 @@ async function reviewerLoad(conferenceId: number): Promise<DashboardSnapshot['re
 }
 
 /**
- * Accepted talks that are not on the grid yet — the gap between "yes" and "when".
+ * Accepted talks that are not published — the gap between "yes" and "the public
+ * can see it". Split on the slot, same line the agenda tray already draws:
  *
- * Accepting parks a tentative placement in the tray, so "in the tray" is the normal
- * state right after a decision round and not an error; a talk with no placement at
- * all is the one that fell out of the process.
+ *   unplaced  — no placement, or a placement with no day/time/room
+ *   tentative — draft: tentative *with* a slot (white card on the grid)
+ *
+ * Accepting writes a tentative row with no slot, so the state after a decision
+ * round is N unplaced, not N drafts. A talk with no row at all fell out of
+ * that process; it still needs a slot, so it sits in the same box.
  */
 async function schedulingGap(conferenceId: number): Promise<DashboardSnapshot['scheduling']> {
 	const accepted = await db
@@ -281,7 +286,14 @@ async function schedulingGap(conferenceId: number): Promise<DashboardSnapshot['s
 		ids.length === 0
 			? []
 			: await db
-					.select({ submissionId: placementTable.submissionId, status: placementTable.status })
+					.select({
+						submissionId: placementTable.submissionId,
+						status: placementTable.status,
+						kind: placementTable.kind,
+						dayId: placementTable.conferenceDayId,
+						roomId: placementTable.roomId,
+						startsAt: placementTable.startsAt
+					})
 					.from(placementTable)
 					.where(
 						and(
@@ -290,25 +302,26 @@ async function schedulingGap(conferenceId: number): Promise<DashboardSnapshot['s
 						)
 					);
 
-	const confirmed = new Set<number>();
-	const parked = new Set<number>();
+	const bySubmission = new Map<number, PlacementSlot[]>();
 	for (const p of placements) {
 		if (p.submissionId === null) continue;
-		(p.status === 'confirmed' ? confirmed : parked).add(p.submissionId);
+		const list = bySubmission.get(p.submissionId) ?? [];
+		list.push(p);
+		bySubmission.set(p.submissionId, list);
 	}
 
-	const items: SchedulingItem[] = accepted
-		.filter((a) => !confirmed.has(a.id))
-		.map((a) => ({
-			...a,
-			state: parked.has(a.id) ? ('tentative' as const) : ('unplaced' as const)
-		}));
+	const items: SchedulingItem[] = [];
+	for (const a of accepted) {
+		const state = classifyAcceptedTalk(bySubmission.get(a.id) ?? []);
+		if (state === 'published') continue;
+		items.push({ ...a, state: state === 'draft' ? 'tentative' : 'unplaced' });
+	}
 
 	return {
 		accepted: accepted.length,
 		unplaced: items.filter((i) => i.state === 'unplaced').length,
 		tentative: items.filter((i) => i.state === 'tentative').length,
-		// Unplaced first: a talk nobody has even parked is further from done.
+		// Unplaced first: a talk with no slot is further from done than a draft.
 		items: [...items]
 			.sort((a, b) => (a.state === b.state ? 0 : a.state === 'unplaced' ? -1 : 1))
 			.slice(0, MAX_ITEMS)
