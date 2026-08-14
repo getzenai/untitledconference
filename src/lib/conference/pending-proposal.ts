@@ -10,6 +10,15 @@
  * a save actually lands. localStorage, not sessionStorage — closing the tab
  * is exactly the thing the sentence said they could do.
  *
+ * Which is why the autosaved copy carries an owner and an age (#505). A draft
+ * holds a name, an email address and a bio, and localStorage is per browser,
+ * not per tab and not per account: on a shared machine the next person opened
+ * the same call and found the last one's proposal in the form, ready to send
+ * under their own account. So a signed-in reader only ever sees their own key,
+ * an anonymous copy crosses over exactly once through the same-tab sign-in
+ * handoff above, and anything older than `DRAFT_MAX_AGE_MS` is deleted on the
+ * way out rather than offered.
+ *
  * Storage is passed in, not read from the global, so the parse/consume rules
  * can be tested without a browser.
  */
@@ -18,12 +27,29 @@ import { emptyProposal, type ProposalDraft } from './proposal-draft';
 const PENDING_PREFIX = 'cfp-pending-proposal:';
 const AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
 
+/**
+ * Who typed it: the user id when signed in, `null` while nobody is.
+ *
+ * The anonymous slot cannot be keyed by user because there is no user yet —
+ * that is the whole point of the journey it serves. It is kept narrow instead:
+ * adoptable only through the one-time handoff, and swept as soon as a signed-in
+ * reader opens the same call.
+ */
+export type DraftOwner = string | null;
+
+/**
+ * Long enough that a call's own deadline runs out first in every normal case,
+ * short enough that an abandoned draft does not sit in a public browser for
+ * a year.
+ */
+export const DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 export function pendingProposalKey(slug: string): string {
 	return `${PENDING_PREFIX}${slug}`;
 }
 
-export function autosavedProposalKey(slug: string): string {
-	return `${AUTOSAVE_PREFIX}${slug}`;
+export function autosavedProposalKey(slug: string, owner: DraftOwner): string {
+	return owner ? `${AUTOSAVE_PREFIX}${slug}:u${owner}` : `${AUTOSAVE_PREFIX}${slug}`;
 }
 
 function text(value: FormDataEntryValue | null): string {
@@ -143,12 +169,18 @@ export function isTypedProposal(draft: ProposalDraft): boolean {
 	return Boolean(draft.title.trim() || draft.abstract.trim() || draft.speaker.name.trim());
 }
 
+/** An object, not an array and not null — the only shape either parser reads. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+	return value as Record<string, unknown>;
+}
+
 /** Reject junk so a leftover string cannot become an auto-submit. */
 export function parsePendingProposal(raw: string): ProposalDraft | null {
 	try {
-		const data: unknown = JSON.parse(raw);
-		if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
-		const draft = draftFromUnknown(data as Record<string, unknown>);
+		const row = asRecord(JSON.parse(raw));
+		if (!row) return null;
+		const draft = draftFromUnknown(row);
 		return isTypedProposal(draft) ? draft : null;
 	} catch {
 		return null;
@@ -174,24 +206,83 @@ export function consumePendingProposal(
 	return parsePendingProposal(raw);
 }
 
+/** A draft plus when it was written, so the page can say where it came from. */
+export type AutosavedProposal = { draft: ProposalDraft; savedAt: number };
+
 export function writeAutosavedProposal(
 	storage: Pick<Storage, 'setItem'>,
 	slug: string,
-	draft: ProposalDraft
+	owner: DraftOwner,
+	draft: ProposalDraft,
+	now: number = Date.now()
 ): void {
-	storage.setItem(autosavedProposalKey(slug), JSON.stringify(draft));
+	storage.setItem(
+		autosavedProposalKey(slug, owner),
+		JSON.stringify({ savedAt: now, draft } satisfies { savedAt: number; draft: ProposalDraft })
+	);
 }
 
-/** Read without removing — coming back a second time must still find it. */
+/**
+ * Read without removing — coming back a second time must still find it.
+ *
+ * Except when it is too old, or when it predates the envelope: a bare draft
+ * with no `savedAt` is one of the copies this issue is about, written before
+ * anything bounded them, so it is deleted rather than restored. The cost is a
+ * draft typed in the last minutes of the old build; the alternative is keeping
+ * exactly the copies whose age nobody can vouch for.
+ */
 export function readAutosavedProposal(
-	storage: Pick<Storage, 'getItem'>,
-	slug: string
-): ProposalDraft | null {
-	const raw = storage.getItem(autosavedProposalKey(slug));
+	storage: Pick<Storage, 'getItem' | 'removeItem'>,
+	slug: string,
+	owner: DraftOwner,
+	now: number = Date.now()
+): AutosavedProposal | null {
+	const key = autosavedProposalKey(slug, owner);
+	const raw = storage.getItem(key);
 	if (raw == null) return null;
-	return parsePendingProposal(raw);
+
+	const saved = parseAutosavedProposal(raw);
+	if (!saved || now - saved.savedAt > DRAFT_MAX_AGE_MS) {
+		storage.removeItem(key);
+		return null;
+	}
+	return saved;
 }
 
-export function clearAutosavedProposal(storage: Pick<Storage, 'removeItem'>, slug: string): void {
-	storage.removeItem(autosavedProposalKey(slug));
+/** The envelope, or nothing: no timestamp is as good as no draft here. */
+function parseAutosavedProposal(raw: string): AutosavedProposal | null {
+	try {
+		const row = asRecord(JSON.parse(raw));
+		const parked = row && asRecord(row.draft);
+		if (!row || !parked) return null;
+		if (typeof row.savedAt !== 'number' || !Number.isFinite(row.savedAt)) return null;
+		const draft = draftFromUnknown(parked);
+		return isTypedProposal(draft) ? { draft, savedAt: row.savedAt } : null;
+	} catch {
+		return null;
+	}
+}
+
+export function clearAutosavedProposal(
+	storage: Pick<Storage, 'removeItem'>,
+	slug: string,
+	owner: DraftOwner
+): void {
+	storage.removeItem(autosavedProposalKey(slug, owner));
+}
+
+/**
+ * Everything this module ever parked, for every call and every owner.
+ *
+ * Signing out is the moment a browser stops being one person's, so it is the
+ * moment the typed name, email and bio stop being fair game for whoever sits
+ * down next.
+ */
+export function clearProposalDrafts(storage: Pick<Storage, 'length' | 'key' | 'removeItem'>): void {
+	const keys: string[] = [];
+	for (let i = 0; i < storage.length; i++) {
+		const key = storage.key(i);
+		if (key && (key.startsWith(AUTOSAVE_PREFIX) || key.startsWith(PENDING_PREFIX))) keys.push(key);
+	}
+	for (const key of keys) storage.removeItem(key);
 }

@@ -7,6 +7,7 @@
 	 */
 	import { goto } from '$app/navigation';
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
+	import { Button } from '$lib/components/ui/button/index.js';
 	import {
 		clearAutosavedProposal,
 		consumePendingProposal,
@@ -38,15 +39,30 @@
 	 * speaker walked back in (#494).
 	 */
 	let restored = $state<ProposalDraft | null>(null);
+	let restoredAt = $state<number | null>(null);
 	let fromPending = $state(false);
 	let listening = $state(false);
 
+	/**
+	 * Whose parked draft this page may open (#505).
+	 *
+	 * A signed-in reader sees only what they typed themselves. The anonymous
+	 * copy reaches an account through one door — the same-tab handoff below —
+	 * and is swept the moment somebody signed in opens this call, because from
+	 * then on nobody can adopt it and it is only a stranger's name, email and
+	 * bio sitting in a browser that is plainly shared.
+	 */
+	const owner = $derived(data.user?.id ?? null);
+
 	onMount(() => {
 		const slug = data.call.conference.slug;
+		const mine = data.user?.id ?? null;
 		if (data.existing) {
 			// A server copy is the truth. A leftover local one would come back
-			// if this proposal were later withdrawn.
-			clearAutosavedProposal(localStorage, slug);
+			// if this proposal were later withdrawn — and a leftover anonymous
+			// one is somebody else's, on a browser two people share.
+			clearAutosavedProposal(localStorage, slug, mine);
+			if (mine) clearAutosavedProposal(localStorage, slug, null);
 			listening = true;
 			return;
 		}
@@ -54,26 +70,40 @@
 		if (pending) {
 			restored = pending;
 			fromPending = true;
+			// It has made its trip; the anonymous slot is not a second copy.
+			clearAutosavedProposal(localStorage, slug, null);
 		} else {
-			restored = readAutosavedProposal(localStorage, slug);
+			if (mine) clearAutosavedProposal(localStorage, slug, null);
+			const saved = readAutosavedProposal(localStorage, slug, mine);
+			restored = saved?.draft ?? null;
+			restoredAt = saved?.savedAt ?? null;
 		}
 		listening = true;
 	});
 
 	const resume = $derived(Boolean(signedIn && fromPending && restored && !data.existing));
+	/** A restored local draft is worth saying out loud — see the banner below. */
+	const resumedLocal = $derived(Boolean(restored && !fromPending && restoredAt !== null));
 
 	function persistDraft(draft: ProposalDraft) {
 		const slug = data.call.conference.slug;
 		if (data.existing) return;
 		if (!isTypedProposal(draft)) {
-			clearAutosavedProposal(localStorage, slug);
+			clearAutosavedProposal(localStorage, slug, owner);
 			return;
 		}
-		writeAutosavedProposal(localStorage, slug, draft);
+		writeAutosavedProposal(localStorage, slug, owner, draft);
 	}
 
 	function clearDraft() {
-		clearAutosavedProposal(localStorage, data.call.conference.slug);
+		clearAutosavedProposal(localStorage, data.call.conference.slug, owner);
+	}
+
+	/** "Not mine" — throw the parked copy away and start on an empty form. */
+	function discardDraft() {
+		clearDraft();
+		restored = null;
+		restoredAt = null;
 	}
 
 	function stashAndSignIn(draft: ProposalDraft) {
@@ -157,6 +187,35 @@
 				before the call closes — you will need to
 				<a class="underline" href={signInHref}>sign in</a>.
 			</p>
+		{/if}
+
+		<!--
+			Where the draft actually lives, and a way out of it (#505). The form
+			coming up filled in is a good surprise only if the reader can tell
+			whose typing it is: on a shared machine the honest answer is "this
+			browser", and the useful control is throwing it away.
+		-->
+		{#if resumedLocal}
+			<div
+				class="border-border bg-muted/40 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm"
+				data-testid="cfp-resumed-local-draft"
+			>
+				<p class="text-muted-foreground">
+					Continuing a draft saved in this browser on {formatInstant(
+						new Date(restoredAt ?? 0),
+						zone.current
+					)}.
+				</p>
+				<Button
+					type="button"
+					variant="outline"
+					size="sm"
+					data-testid="cfp-discard-draft"
+					onclick={discardDraft}
+				>
+					Discard it
+				</Button>
+			</div>
 		{/if}
 
 		{#if resume}

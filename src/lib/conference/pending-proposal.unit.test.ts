@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
 	autosavedProposalKey,
 	clearAutosavedProposal,
+	clearProposalDrafts,
 	consumePendingProposal,
+	DRAFT_MAX_AGE_MS,
 	draftFromFormData,
 	isTypedProposal,
 	parsePendingProposal,
@@ -22,7 +24,11 @@ function fakeStorage(initial: Record<string, string> = {}) {
 		},
 		removeItem: (key: string) => {
 			store.delete(key);
-		}
+		},
+		get length() {
+			return store.size;
+		},
+		key: (index: number) => [...store.keys()][index] ?? null
 	};
 }
 
@@ -97,20 +103,66 @@ describe('autosaved proposal storage', () => {
 
 	it('is still there after a read — coming back twice must not empty the form', () => {
 		const storage = fakeStorage();
-		writeAutosavedProposal(storage, 'devflow', draft);
+		writeAutosavedProposal(storage, 'devflow', null, draft);
 
-		expect(storage.getItem(autosavedProposalKey('other'))).toBeNull();
-		expect(readAutosavedProposal(storage, 'devflow')).toEqual(draft);
-		expect(readAutosavedProposal(storage, 'devflow')).toEqual(draft);
+		expect(storage.getItem(autosavedProposalKey('other', null))).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', null)?.draft).toEqual(draft);
+		expect(readAutosavedProposal(storage, 'devflow', null)?.draft).toEqual(draft);
 	});
 
 	it('is gone after a real save, and an empty form is not a draft', () => {
 		const storage = fakeStorage();
-		writeAutosavedProposal(storage, 'devflow', draft);
-		clearAutosavedProposal(storage, 'devflow');
+		writeAutosavedProposal(storage, 'devflow', null, draft);
+		clearAutosavedProposal(storage, 'devflow', null);
 
-		expect(readAutosavedProposal(storage, 'devflow')).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', null)).toBeNull();
 		expect(isTypedProposal(emptyProposal())).toBe(false);
 		expect(isTypedProposal(draft)).toBe(true);
+	});
+
+	it('does not hand one person the next one their name and email (#505)', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
+
+		// The next account on the same browser, and the signed-out visitor:
+		// same call, same machine, and neither of them typed this.
+		expect(readAutosavedProposal(storage, 'devflow', 'bo')).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', null)).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', 'ada')?.draft).toEqual(draft);
+	});
+
+	it('expires, and refuses a copy whose age nobody can vouch for', () => {
+		const storage = fakeStorage();
+		const wroteAt = 1_700_000_000_000;
+		writeAutosavedProposal(storage, 'devflow', 'ada', draft, wroteAt);
+
+		expect(
+			readAutosavedProposal(storage, 'devflow', 'ada', wroteAt + DRAFT_MAX_AGE_MS)
+		).not.toBeNull();
+		expect(
+			readAutosavedProposal(storage, 'devflow', 'ada', wroteAt + DRAFT_MAX_AGE_MS + 1)
+		).toBeNull();
+		// And the stale copy is deleted on the way out, not left to be found.
+		expect(storage.getItem(autosavedProposalKey('devflow', 'ada'))).toBeNull();
+
+		// A pre-#505 bare draft: no timestamp, so no claim about its age.
+		const legacy = fakeStorage({ [autosavedProposalKey('devflow', null)]: JSON.stringify(draft) });
+		expect(readAutosavedProposal(legacy, 'devflow', null)).toBeNull();
+		expect(legacy.getItem(autosavedProposalKey('devflow', null))).toBeNull();
+	});
+
+	it('is swept wholesale on sign-out, every call and every owner', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
+		writeAutosavedProposal(storage, 'other', null, draft);
+		writePendingProposal(storage, 'devflow', draft);
+		storage.setItem('unrelated', 'keep me');
+
+		clearProposalDrafts(storage);
+
+		expect(readAutosavedProposal(storage, 'devflow', 'ada')).toBeNull();
+		expect(readAutosavedProposal(storage, 'other', null)).toBeNull();
+		expect(consumePendingProposal(storage, 'devflow')).toBeNull();
+		expect(storage.getItem('unrelated')).toBe('keep me');
 	});
 });

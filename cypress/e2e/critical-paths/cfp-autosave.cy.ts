@@ -40,7 +40,10 @@ describe('A typed proposal on the public call', () => {
 
 		cy.logout();
 
-		cy.createAndLogin();
+		let speakerId = '';
+		cy.createAndLogin().then((speaker) => {
+			speakerId = speaker.id;
+		});
 		cy.visit(`/c/${slug}/cfp`);
 		cy.waitForHydration();
 
@@ -50,10 +53,17 @@ describe('A typed proposal on the public call', () => {
 		// The write is an effect, not the keystroke. Wait until storage has
 		// it before leaving, or Back races the persist and the form is empty
 		// for the reason we are here to stop.
+		//
+		// The key carries the account since #505: what is parked here is a name,
+		// an email and a bio, and the next person on this browser is a different
+		// speaker, not the same one.
 		cy.window()
 			.its('localStorage')
-			.invoke('getItem', `cfp-autosaved-proposal:${slug}`)
-			.should('contain', abstract);
+			.should((storage: Storage) => {
+				expect(storage.getItem(`cfp-autosaved-proposal:${slug}:u${speakerId}`)).to.contain(
+					abstract
+				);
+			});
 
 		cy.get('[data-testid="conference-tabs"]').contains('a', 'Agenda').click();
 		cy.location('pathname').should('eq', `/c/${slug}/agenda`);
