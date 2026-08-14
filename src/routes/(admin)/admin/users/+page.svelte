@@ -58,6 +58,7 @@
 	import { generateRandomPassword } from '$lib/utils/password';
 	import { PASSWORD_MIN_LENGTH } from '$lib/validators/password';
 	import { banTakesEffectCopy } from './ban-copy';
+	import { REGENERATE_REPLACES_LINK_COPY } from './regenerate-copy';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -95,6 +96,7 @@
 	let isCreatingInvitation = $state(false);
 	let invitationLink = $state('');
 	let regeneratingInvitationId = $state<string | null>(null);
+	let invitationReplacedPrevious = $state(false);
 	let emailVerificationLoading = $state<Record<string, boolean>>({});
 
 	// Create user dialog state
@@ -160,10 +162,12 @@
 			if (actionType === 'createInvitation') {
 				isCreatingInvitation = false;
 				regeneratingInvitationId = null;
+				invitationReplacedPrevious = false;
 			}
 
 			if (actionType === 'regenerateInvitation') {
 				regeneratingInvitationId = null;
+				invitationReplacedPrevious = true;
 			}
 		}
 
@@ -213,6 +217,7 @@
 		inviteRole = 'user';
 		invitationLink = '';
 		showInvitationSuccess = false;
+		invitationReplacedPrevious = false;
 	}
 
 	// Alert dialog states
@@ -756,6 +761,9 @@
 											This link will expire in {INVITATION_EXPIRY_SECONDS / 3600} hours. Share it with
 											the user to complete their registration.
 										</p>
+										{#if invitationReplacedPrevious}
+											<p class="text-muted-foreground text-sm">{REGENERATE_REPLACES_LINK_COPY}</p>
+										{/if}
 									</div>
 								</div>
 								<Dialog.Footer>
@@ -1022,7 +1030,7 @@
 																</Button>
 															</TooltipTrigger>
 															<TooltipContent>
-																<p>Generate new invitation link</p>
+																<p>{REGENERATE_REPLACES_LINK_COPY}</p>
 															</TooltipContent>
 														</Tooltip>
 													</TooltipProvider>

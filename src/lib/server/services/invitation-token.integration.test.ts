@@ -12,7 +12,7 @@ import { systemInvitation, user, verification } from '$lib/server/db/auth-schema
 import { eq, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resolveInvitationEmail } from './invitation-token';
+import { invalidatePasswordResetTokensForEmail, resolveInvitationEmail } from './invitation-token';
 import { createSystemInvitation } from './system-invitation';
 
 const suffix = nanoid(8).toLowerCase();
@@ -169,5 +169,55 @@ describe('invitations whose email was not lowercased', () => {
 			.where(eq(systemInvitation.id, created.id));
 
 		expect(row.email).toBe(typed.toLowerCase());
+	});
+});
+
+/**
+ * #401: Regenerating an invitation used to mint a new reset token and leave
+ * the previous `reset-password:` row alive until its own expiry. The button
+ * means the old link leaked — redeeming it after a regenerate has to be a
+ * no. Without the delete, this test is red.
+ */
+describe('invalidatePasswordResetTokens', () => {
+	const regenEmail = `regen-${suffix}@example.test`;
+	const neighbourEmail = `neighbour-${suffix}@example.test`;
+	const oldToken = `old-${suffix}-abcdefghijklmnop`;
+	const neighbourToken = `nbr-${suffix}-abcdefghijklmnop`;
+	const otherKindId = `verify-${suffix}`;
+
+	beforeAll(async () => {
+		const regenUserId = await seedUser(regenEmail);
+		const neighbourId = await seedUser(neighbourEmail);
+		const inviterId = userIds[0];
+		await seedInvitation(regenEmail, inviterId);
+		const inAnHour = new Date(Date.now() + 3600_000);
+		await seedResetToken(oldToken, regenUserId, inAnHour);
+		await seedResetToken(neighbourToken, neighbourId, inAnHour);
+		await db.insert(verification).values({
+			id: otherKindId,
+			identifier: `email-verification:${regenEmail}`,
+			value: regenUserId,
+			expiresAt: inAnHour
+		});
+		verificationIds.push(otherKindId);
+	});
+
+	it('refuses the previous token after a regenerate, and leaves everyone else alone', async () => {
+		await expect(resolveInvitationEmail(oldToken)).resolves.toBe(regenEmail);
+
+		await invalidatePasswordResetTokensForEmail(regenEmail.replace(/^./, (c) => c.toUpperCase()));
+
+		await expect(resolveInvitationEmail(oldToken)).resolves.toBeNull();
+
+		const leftover = await db
+			.select({ id: verification.id, identifier: verification.identifier })
+			.from(verification)
+			.where(inArray(verification.id, verificationIds));
+
+		expect(leftover.map((row) => row.id)).toContain(otherKindId);
+		expect(leftover.some((row) => row.identifier === `reset-password:${oldToken}`)).toBe(false);
+		expect(leftover.some((row) => row.identifier === `reset-password:${neighbourToken}`)).toBe(
+			true
+		);
 	});
 });

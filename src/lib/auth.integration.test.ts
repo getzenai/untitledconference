@@ -9,7 +9,10 @@ import {
 	verification
 } from '$lib/server/db/auth-schema';
 import { takeInvitationLink } from '$lib/server/services/invitation-link';
-import { resolveInvitationEmail } from '$lib/server/services/invitation-token';
+import {
+	invalidatePasswordResetTokensForEmail,
+	resolveInvitationEmail
+} from '$lib/server/services/invitation-token';
 import { oauthProviderAuthServerMetadata } from '@better-auth/oauth-provider';
 import { desc, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -494,5 +497,62 @@ describe('invitation link handoff', () => {
 		});
 		expect(takeInvitationLink(invitedEmail)).toBeTruthy();
 		expect(takeInvitationLink(invitedEmail)).toBeNull();
+	});
+});
+
+/**
+ * #401: Regenerating an invitation must kill the previous reset token.
+ * Better Auth itself keeps every `reset-password:` row until expiry; the
+ * admin action has to delete them first. This is the sequence that action
+ * runs, against the real Better Auth write path. Skip the delete and the
+ * old token still resolves — the test is red without the fix.
+ */
+describe('regenerating an invitation invalidates the previous token', () => {
+	const suffix = `invite-regen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	const invitedEmail = `${suffix}@example.test`;
+	const invitedId = `user-${suffix}`;
+	const invitationId = `inv-${suffix}`;
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			id: invitedId,
+			email: invitedEmail,
+			emailVerified: false,
+			name: 'Invited regen'
+		});
+		await db.insert(systemInvitation).values({
+			id: invitationId,
+			email: invitedEmail,
+			invitedBy: invitedId,
+			role: 'user',
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+	});
+
+	afterAll(async () => {
+		await db.delete(verification).where(eq(verification.value, invitedId));
+		await db.delete(systemInvitation).where(eq(systemInvitation.id, invitationId));
+		await db.delete(user).where(eq(user.id, invitedId));
+	});
+
+	it('refuses the old token after a regenerate and accepts the new one', async () => {
+		await auth.api.requestPasswordReset({
+			body: { email: invitedEmail, redirectTo: '/complete-registration' }
+		});
+		const oldLink = takeInvitationLink(invitedEmail)!;
+		const oldToken = new URL(oldLink).pathname.split('/reset-password/')[1];
+		await expect(resolveInvitationEmail(oldToken)).resolves.toBe(invitedEmail);
+
+		await invalidatePasswordResetTokensForEmail(invitedEmail);
+		await auth.api.requestPasswordReset({
+			body: { email: invitedEmail, redirectTo: '/complete-registration' }
+		});
+		const newLink = takeInvitationLink(invitedEmail)!;
+		const newToken = new URL(newLink).pathname.split('/reset-password/')[1];
+
+		await expect(resolveInvitationEmail(oldToken)).resolves.toBeNull();
+		await expect(resolveInvitationEmail(newToken)).resolves.toBe(invitedEmail);
+		expect(newToken).not.toBe(oldToken);
 	});
 });

@@ -11,6 +11,7 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
 import { banTakesEffectCopy } from './ban-copy';
+import { REGENERATE_REPLACES_LINK_COPY } from './regenerate-copy';
 
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
@@ -74,5 +75,18 @@ describe('admin ban copy (#390)', () => {
 		expect(source).toContain('{banTakesEffectCopy()}');
 		expect(source).toMatch(/New sign-ins are blocked immediately\.\s*\{banTakesEffectCopy\(\)\}/);
 		expect(source).not.toMatch(/5 minutes/);
+	});
+});
+
+describe('regenerate invitation copy (#401)', () => {
+	it('tells the operator the previous link dies, and the action actually kills it', () => {
+		expect(REGENERATE_REPLACES_LINK_COPY).toBe('The previous invitation link no longer works.');
+		expect(source).toContain('{REGENERATE_REPLACES_LINK_COPY}');
+
+		const server = readFileSync(
+			join(dirname(fileURLToPath(import.meta.url)), '+page.server.ts'),
+			'utf8'
+		);
+		expect(server).toContain('invalidatePasswordResetTokensForEmail');
 	});
 });
