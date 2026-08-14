@@ -1366,3 +1366,126 @@ describe('withdrawSubmission', () => {
 		});
 	});
 });
+
+/**
+ * #229 A — a co-presenter given as a bare name has no key, so every save used
+ * to insert a fresh profile. Matching on the name across the organization is
+ * the merge the issue forbids; requiring an address at submit, and reusing the
+ * address-less row already on *this* proposal across draft saves, is the
+ * smallest thing that makes "same person" expressible.
+ */
+describe('a co-presenter needs an address (#229 A)', () => {
+	const keylessName = `Keyless ${suffix}`;
+
+	it('refuses a submit that names one without an address', async () => {
+		const result = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				coSpeakers: [{ name: 'Zoe Adler', email: null, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: true }
+		);
+
+		if (result.ok || result.reason !== 'invalid') {
+			throw new Error(`expected an invalid-field refusal, got ${JSON.stringify(result)}`);
+		}
+		expect(result.errors.coSpeakerEmail).toMatch(/email/);
+	});
+
+	it('still lets a draft carry a name-only co-presenter', async () => {
+		const result = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Half-named co',
+				coSpeakers: [{ name: keylessName, email: null, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false }
+		);
+
+		expect(result.ok).toBe(true);
+	});
+
+	it('reuses that name-only row on the next draft save, instead of forking it', async () => {
+		const co = { name: `Draft-keyless ${suffix}`, email: null, roleLabel: 'Co-presenter' };
+		const first = await saveSubmission(
+			submitterId,
+			slug,
+			input({ title: 'Reuse', coSpeakers: [co] }),
+			{
+				submit: false
+			}
+		);
+		if (!first.ok) throw new Error('expected a saved draft');
+
+		const again = await saveSubmission(
+			submitterId,
+			slug,
+			input({ title: 'Reuse again', coSpeakers: [co] }),
+			{ submit: false, submissionId: first.submissionId }
+		);
+		expect(again.ok).toBe(true);
+
+		const rows = await db
+			.select({ id: speakerProfileTable.id })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.name, co.name)
+				)
+			);
+		expect(rows).toHaveLength(1);
+	});
+
+	it('writes the address onto the same row when the draft later has one', async () => {
+		const name = `Later-address ${suffix}`;
+		const email = `later-${suffix}@example.test`;
+		const first = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Will get an address',
+				coSpeakers: [{ name, email: null, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false }
+		);
+		if (!first.ok) throw new Error('expected a saved draft');
+
+		const [before] = await db
+			.select({ id: speakerProfileTable.id, email: speakerProfileTable.email })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.name, name)
+				)
+			);
+		expect(before.email).toBeNull();
+
+		const again = await saveSubmission(
+			submitterId,
+			slug,
+			input({
+				title: 'Now has an address',
+				coSpeakers: [{ name, email, roleLabel: 'Co-presenter' }]
+			}),
+			{ submit: false, submissionId: first.submissionId }
+		);
+		expect(again.ok).toBe(true);
+
+		const rows = await db
+			.select({ id: speakerProfileTable.id, email: speakerProfileTable.email })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.name, name)
+				)
+			);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].id).toBe(before.id);
+		expect(rows[0].email).toBe(email);
+	});
+});

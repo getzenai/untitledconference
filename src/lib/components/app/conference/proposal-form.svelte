@@ -400,13 +400,23 @@
 		<section class="space-y-3">
 			<h3 class="text-sm font-medium">Co-presenters</h3>
 			<p class="text-muted-foreground text-sm">
-				Anyone presenting this talk with you. They appear on the programme alongside you.
+				Anyone presenting this talk with you. They appear on the programme alongside you. An email
+				address is required for each — it is what keeps two people with the same name apart.
 			</p>
+			{#if form?.errors?.coSpeakerEmail}
+				<span class="text-status-bad block text-xs">{form.errors.coSpeakerEmail}</span>
+			{/if}
 
 			{#each coSpeakers as co (co.key)}
 				<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
 					<Input name="co-name" placeholder="Name" value={co.name} />
-					<Input name="co-email" type="email" placeholder="Email" value={co.email} />
+					<Input
+						name="co-email"
+						type="email"
+						placeholder="Email"
+						aria-invalid={Boolean(form?.errors?.coSpeakerEmail) && !co.email}
+						value={co.email}
+					/>
 					<div class="flex gap-2">
 						<Input name="co-role" placeholder="Role" class="sm:w-28" value={co.roleLabel} />
 						<Button

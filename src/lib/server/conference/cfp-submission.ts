@@ -298,6 +298,20 @@ function validateForSubmit(
 	if (!input.speaker.name.trim()) errors.speakerName = 'Your name is required.';
 	if (!input.speaker.email.trim()) errors.speakerEmail = 'An email address is required.';
 
+	// #229 A: a co-presenter given as a bare name has no key to match on, so
+	// every save used to insert a fresh profile and the same person accumulated
+	// rows. Matching on the name instead would be worse — two people may share
+	// one — so the address is required at the point of entry. A draft may still
+	// be half filled; this is the gate in front of the programme, not in front
+	// of the form.
+	if (asks(fixed, 'coSpeakers')) {
+		const missing = input.coSpeakers.find((co) => co.name.trim() && !co.email?.trim());
+		if (missing) {
+			errors.coSpeakerEmail =
+				'Every co-presenter needs an email address — it is what tells two people with the same name apart.';
+		}
+	}
+
 	const ctx: AnswerContext = {
 		sessionFormatId: input.sessionFormatId,
 		trackId: input.trackId,
@@ -498,11 +512,20 @@ async function upsertOwnProfile(
  * ABS-11 checks that a co-author added at submission time survives into the
  * organizer's views, so these are real `speaker_profile` rows from the start, not
  * a text field on the submission.
+ *
+ * The address is the matching key, the same one the roster's `?/add` uses. A
+ * name alone is not — two people may share one, and merging them silently is
+ * the worse of the two faults in #229. `reuseId` is the one exception, and it
+ * is not a name match across the organization: it is "the address-less row
+ * already on *this* proposal under this name", so a draft save does not fork
+ * the same half-filled person. When the next save brings an address nobody
+ * here holds, that row is stamped rather than replaced.
  */
 async function upsertCoSpeaker(
 	tx: Tx,
 	organizationId: string,
-	co: CoSpeakerInput
+	co: CoSpeakerInput,
+	reuseId: number | null = null
 ): Promise<number> {
 	const email = co.email?.trim() || null;
 
@@ -518,6 +541,20 @@ async function upsertCoSpeaker(
 			)
 			.limit(1);
 		if (existing) return existing.id;
+
+		if (reuseId !== null) {
+			await tx
+				.update(speakerProfileTable)
+				.set({
+					name: co.name.trim(),
+					sortName: guessSortName(co.name),
+					email
+				})
+				.where(eq(speakerProfileTable.id, reuseId));
+			return reuseId;
+		}
+	} else if (reuseId !== null) {
+		return reuseId;
 	}
 
 	const [created] = await tx
@@ -593,6 +630,28 @@ async function writeSpeakers(
 		.limit(1);
 	const primaryProfileId = held?.speakerProfileId ?? ownProfileId;
 
+	// Read before the delete, and only for this submission: an address-less
+	// co-presenter has no key in the organization, but "the row that was already
+	// on this proposal under this name" is one. Without it every draft save
+	// inserted a fresh profile and left the last one orphaned on the organizer's
+	// roster (#229 A). Deliberately not a name match across the organization.
+	const priorKeyless = await tx
+		.select({ id: speakerProfileTable.id, name: speakerProfileTable.name })
+		.from(submissionSpeakerTable)
+		.innerJoin(
+			speakerProfileTable,
+			eq(submissionSpeakerTable.speakerProfileId, speakerProfileTable.id)
+		)
+		.where(
+			and(
+				eq(submissionSpeakerTable.submissionId, submissionId),
+				eq(submissionSpeakerTable.isPrimary, false),
+				isNull(speakerProfileTable.email),
+				isNull(speakerProfileTable.userId)
+			)
+		);
+	const reusable = new Map(priorKeyless.map((row) => [row.name, row.id]));
+
 	await tx
 		.delete(submissionSpeakerTable)
 		.where(eq(submissionSpeakerTable.submissionId, submissionId));
@@ -608,7 +667,9 @@ async function writeSpeakers(
 	let position = 1;
 	for (const co of coSpeakers) {
 		if (!co.name.trim()) continue;
-		const profileId = await upsertCoSpeaker(tx, organizationId, co);
+		const reuseId = reusable.get(co.name.trim()) ?? null;
+		if (reuseId !== null) reusable.delete(co.name.trim());
+		const profileId = await upsertCoSpeaker(tx, organizationId, co, reuseId);
 		if (placed.has(profileId)) continue;
 		placed.add(profileId);
 		await tx.insert(submissionSpeakerTable).values({
