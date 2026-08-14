@@ -229,8 +229,10 @@
 		<!-- Four rooms are 652 px wide and a phone shows 342 of them. Without an edge
 		     the grid ends flush and reads as the whole programme, which is the worst
 		     kind of wrong: the visitor is not confused, they are confident and mistaken
-		     about how many talks run at 11:00 (#393). -->
-		<ScrollEdge data-testid="agenda-room-grid">
+		     about how many talks run at 11:00 (#393). The fade says more is to the
+		     right; the sentence names what is missing, because a shadow is easy to
+		     miss in a bright hall (#403). -->
+		<ScrollEdge data-testid="agenda-room-grid" label="Scroll sideways for the other rooms">
 			<!-- Room headings sit in their own row so the scrollable grid below can
 			     keep one clean row-per-half-hour arithmetic.
 

@@ -1,11 +1,17 @@
 /**
- * The two sideways-scrolling strips on the public conference site (#393).
+ * The two sideways-scrolling strips on the public conference site (#393, #403).
  *
  * Both were reachable and neither said so. This spec asserts the pair of facts
  * that together make the hint honest, because either one alone is satisfiable by
  * a mistake: the strip really is wider than its box (`scrollWidth > clientWidth`),
- * and the edge is on screen. A component that always draws the edge passes the
+ * and the mark is on screen. A component that always draws the mark passes the
  * second and fails the desktop case; one that never draws it fails the first.
+ *
+ * The room grid has two marks. The fade is the "more to the right" edge and
+ * goes away at the end of the scroll. The sentence names the rooms that do not
+ * fit, and stays, because rooms that do not fit are still off-screen after the
+ * last column is visible. The tab strip keeps the fade only: there is no room
+ * for a line of prose in the header.
  *
  * The rooms come from the organizer's own settings form and the placement from
  * the slot editor, the same way the agenda specs build a board: the public grid
@@ -91,10 +97,16 @@ describe('Sideways scrolling on the public site', () => {
 	const GRID = '[data-testid="agenda-room-grid"] [data-testid="scroll-edge"]';
 	const TABS = '[data-testid="conference-tabs"] [data-testid="scroll-edge"]';
 
-	it('marks the room grid as cut off at 390 px, and drops the mark at the end of the scroll', () => {
+	it('marks the room grid as cut off at 390 px, and drops the fade at the end of the scroll', () => {
 		cy.viewport(PHONE.width, PHONE.height);
 		cy.visit(`/c/${slug}/agenda`);
 		cy.waitForHydration();
+
+		// The sentence names what is missing. A fade is easy to miss; "the other
+		// rooms" is not (#403).
+		cy.get('[data-testid="scroll-hint"]')
+			.should('be.visible')
+			.and('contain', 'Scroll sideways for the other rooms');
 
 		cy.get(GRID)
 			.should('be.visible')
@@ -104,12 +116,14 @@ describe('Sideways scrolling on the public site', () => {
 				// a visible edge would be the lie this issue is about.
 				expect(viewport.scrollWidth, 'grid content').to.be.greaterThan(viewport.clientWidth);
 
-				// Scrolled to the far right there is nothing left to promise.
+				// Scrolled to the far right there is nothing left to promise with a
+				// fade. The sentence stays: the rooms still do not fit.
 				viewport.scrollLeft = viewport.scrollWidth - viewport.clientWidth;
 				viewport.dispatchEvent(new Event('scroll'));
 			});
 
 		cy.get(GRID).should('not.exist');
+		cy.get('[data-testid="scroll-hint"]').should('be.visible');
 	});
 
 	it('leaves the desktop agenda alone', () => {
@@ -122,6 +136,7 @@ describe('Sideways scrolling on the public site', () => {
 		// the page, so if it fits, nothing here overflows.
 		cy.contains('Workshop Lab').should('exist');
 		cy.get('[data-testid="scroll-edge"]').should('not.exist'); // neither strip
+		cy.get('[data-testid="scroll-hint"]').should('not.exist');
 	});
 
 	it('marks the tab strip and still lets the tab under the edge be tapped', () => {
