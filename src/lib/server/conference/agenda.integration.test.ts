@@ -192,7 +192,7 @@ describe('the tray and the grid', () => {
 	it('starts with every accepted talk in the tray and nothing on the grid', async () => {
 		const board = await agendaBoard(conferenceId);
 		expect(board.placed).toHaveLength(0);
-		expect(board.tray.map((t) => t.title).sort()).toEqual(['Talk one', 'Talk three', 'Talk two']);
+		expect(board.tray.map((t) => t.title)).toEqual(['Talk one', 'Talk three', 'Talk two']);
 		// The other conference's talk must not appear here.
 		expect(board.tray.map((t) => t.title)).not.toContain('Somebody else’s talk');
 	});
@@ -440,5 +440,61 @@ describe('backfill', () => {
 
 		// Second run finds nothing, so it is safe to call on every page load.
 		expect(await backfillTray(conferenceId)).toBe(0);
+	});
+});
+
+describe('tray order', () => {
+	/**
+	 * Own conference so the insert order is ours, not the shared fixture's.
+	 * Zebra is written first; the board must still read Apple first.
+	 */
+	const own = `tray-order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	let ownConferenceId = 0;
+
+	beforeAll(async () => {
+		const [conference] = await db
+			.insert(conferenceTable)
+			.values({
+				organizationId,
+				name: 'Tray Order Conf',
+				slug: `conf-${own}`,
+				startsOn: '2027-07-01',
+				endsOn: '2027-07-01',
+				status: 'published'
+			})
+			.returning();
+		ownConferenceId = conference.id;
+
+		const [format] = await db
+			.insert(sessionFormatTable)
+			.values({ conferenceId: ownConferenceId, name: 'Talk', minutes: 30, position: 0 })
+			.returning();
+
+		for (const title of ['Zebra', 'Apple']) {
+			const [submission] = await db
+				.insert(submissionTable)
+				.values({
+					conferenceId: ownConferenceId,
+					title,
+					sessionFormatId: format.id,
+					status: 'accepted'
+				})
+				.returning();
+			await db.insert(placementTable).values({
+				conferenceId: ownConferenceId,
+				kind: 'session',
+				status: 'tentative',
+				submissionId: submission.id
+			});
+		}
+	});
+
+	afterAll(async () => {
+		await db.delete(conferenceTable).where(eq(conferenceTable.id, ownConferenceId));
+	});
+
+	it('lists waiting talks by title, even when the rows were inserted backwards', async () => {
+		const board = await agendaBoard(ownConferenceId);
+		expect(board.tray.map((t) => t.title)).toEqual(['Apple', 'Zebra']);
 	});
 });
