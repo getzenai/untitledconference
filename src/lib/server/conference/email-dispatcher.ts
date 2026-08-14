@@ -76,11 +76,20 @@ export async function deliverViaResend(
 	throw providerError(response.status, error);
 }
 
-function configuredTransport(): EmailTransport | null {
+function resendConfig(): ResendConfig | null {
 	const env = serverEnv();
 	if (!env.RESEND_API_KEY || !env.RESEND_FROM) return null;
-	const config = { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM };
-	return (email) => deliverViaResend(email, config);
+	return { apiKey: env.RESEND_API_KEY, from: env.RESEND_FROM };
+}
+
+/** Known before anyone clicks Send queued — a disabled button is not a lock. */
+export function mailDeliveryConfigured(): boolean {
+	return resendConfig() !== null;
+}
+
+function configuredTransport(): EmailTransport | null {
+	const config = resendConfig();
+	return config ? (email) => deliverViaResend(email, config) : null;
 }
 
 function errorMessage(error: unknown): string {
