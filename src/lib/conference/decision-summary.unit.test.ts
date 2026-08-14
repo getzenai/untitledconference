@@ -159,6 +159,32 @@ describe('describeBulkAssign', () => {
 		);
 	});
 
+	it('names skip reasons so the organizer knows which handle to pull', () => {
+		expect(
+			describeBulkAssign({
+				created: 0,
+				already: 0,
+				skipped: 3,
+				skippedItems: [
+					{ reason: 'pool_exhausted' },
+					{ reason: 'pool_exhausted' },
+					{ reason: 'track_restricted' }
+				]
+			})
+		).toBe('3 assignments skipped: 2 over the cap, 1 track-restricted.');
+	});
+
+	it('names an empty committee separately from the cap', () => {
+		expect(
+			describeBulkAssign({
+				created: 0,
+				already: 0,
+				skipped: 2,
+				skippedItems: [{ reason: 'empty_committee' }, { reason: 'empty_committee' }]
+			})
+		).toBe('2 assignments skipped: 2 empty committee.');
+	});
+
 	it('names recusals bulk left alone so the organizer sees the override that did not happen', () => {
 		expect(describeBulkAssign({ created: 40, already: 0, skipped: 0, recused: 3 })).toBe(
 			'40 assignments created. 3 recused seats left alone — flip each on the submission if you mean to override.'

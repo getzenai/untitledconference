@@ -101,6 +101,40 @@ export function describeNotification(result: NotificationResult): string {
 	return parts.join(' ');
 }
 
+const SKIP_REASON_ORDER = [
+	'empty_committee',
+	'pool_exhausted',
+	'track_restricted',
+	'speaker_conflict',
+	'not_in_round',
+	'not_on_conference'
+] as const;
+
+const SKIP_REASON_LABEL: Record<(typeof SKIP_REASON_ORDER)[number], (n: number) => string> = {
+	empty_committee: (n) => `${n} empty committee`,
+	pool_exhausted: (n) => `${n} over the cap`,
+	track_restricted: (n) => `${n} track-restricted`,
+	speaker_conflict: (n) => `${n} speaker conflict${n === 1 ? '' : 's'}`,
+	not_in_round: (n) => `${n} not on this round`,
+	not_on_conference: (n) => `${n} not on this conference`
+};
+
+function describeSkipReasons(items: { reason: string }[]): string {
+	const counts = new Map<string, number>();
+	for (const item of items) {
+		counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
+	}
+	const parts: string[] = [];
+	for (const reason of SKIP_REASON_ORDER) {
+		const n = counts.get(reason);
+		if (n) parts.push(SKIP_REASON_LABEL[reason](n));
+	}
+	for (const [reason, n] of counts) {
+		if (!(reason in SKIP_REASON_LABEL)) parts.push(`${n} ${reason.replaceAll('_', ' ')}`);
+	}
+	return parts.join(', ');
+}
+
 /** Confirmation after bulk reviewer assignment on the submissions table (ABS-06). */
 export function describeBulkAssign(result: {
 	created: number;
@@ -108,6 +142,8 @@ export function describeBulkAssign(result: {
 	skipped: number;
 	/** Recusals bulk left alone (optional so older call sites still type-check). */
 	recused?: number;
+	/** Why each skipped seat was refused — named in the sentence when present. */
+	skippedItems?: { reason: string }[];
 }): string {
 	const parts: string[] = [];
 	if (result.created > 0) {
@@ -124,7 +160,12 @@ export function describeBulkAssign(result: {
 		);
 	}
 	if (result.skipped > 0) {
-		parts.push(`${plural(result.skipped, 'assignment')} skipped.`);
+		const named = result.skippedItems?.length ? describeSkipReasons(result.skippedItems) : '';
+		parts.push(
+			named
+				? `${plural(result.skipped, 'assignment')} skipped: ${named}.`
+				: `${plural(result.skipped, 'assignment')} skipped.`
+		);
 	}
 	// Empty batch after a mis-click should still read as a completed action.
 	return parts.length > 0 ? parts.join(' ') : 'Nothing to assign.';
