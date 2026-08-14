@@ -174,32 +174,52 @@ export type DashboardSnapshot = {
 	submissionsOverTime: SubmissionDay[];
 };
 
-/** Everything the landing page shows, in one call. */
+/**
+ * Everything the landing page shows, in one call.
+ *
+ * Rooms, tracks and the form are only drawn on the setup screen. Papers and
+ * speakers travel with the queues; the three setup queries run only when
+ * nothing is waiting. Mail and tasks flip the screen too, so the skip is
+ * here — after those counts exist — not inside a helper that cannot see them.
+ */
 export async function conferenceDashboard(
 	conferenceId: number,
 	at: Date = new Date()
 ): Promise<DashboardSnapshot> {
-	const [setup, decisions, scheduling, tasks, mail, reviews, inconsistencies, submissionsOverTime] =
-		await Promise.all([
-			setupState(conferenceId, at),
-			decisionQueue(conferenceId),
-			schedulingGap(conferenceId),
-			taskLoad(conferenceId, at),
-			mailQueue(conferenceId),
-			reviewerLoad(conferenceId),
-			leftovers(conferenceId),
-			submissionTimeline(conferenceId, at)
-		]);
+	const [
+		papers,
+		decisions,
+		scheduling,
+		tasks,
+		mail,
+		reviews,
+		inconsistencies,
+		submissionsOverTime
+	] = await Promise.all([
+		paperAndSpeakerCounts(conferenceId),
+		decisionQueue(conferenceId),
+		schedulingGap(conferenceId),
+		taskLoad(conferenceId, at),
+		mailQueue(conferenceId),
+		reviewerLoad(conferenceId),
+		leftovers(conferenceId),
+		submissionTimeline(conferenceId, at)
+	]);
+
+	const mode = dashboardMode({
+		submissions: papers.submissions,
+		speakers: papers.speakers,
+		queuedMail: mail.queued,
+		failedMail: mail.failed,
+		tasks: tasks.open
+	});
 
 	return {
-		mode: dashboardMode({
-			submissions: setup.submissions,
-			speakers: setup.speakers,
-			queuedMail: mail.queued,
-			failedMail: mail.failed,
-			tasks: tasks.open
-		}),
-		setup,
+		mode,
+		setup:
+			mode === 'setup'
+				? { ...(await setupProgress(conferenceId, at)), ...papers }
+				: { rooms: 0, tracks: 0, cfpOpen: false, ...papers },
 		decisions,
 		scheduling,
 		tasks,
@@ -208,23 +228,6 @@ export async function conferenceDashboard(
 		inconsistencies,
 		submissionsOverTime
 	};
-}
-
-/**
- * The setup steps plus the counts that decide whether this snapshot is still
- * that screen.
- *
- * Rooms, tracks and the form are only drawn on the setup screen. Count
- * submissions and speakers first; skip the other three once either exists.
- * Queued or failed mail and open tasks flip the screen too — those counts
- * arrive from the parallel fetches, not here.
- */
-async function setupState(conferenceId: number, at: Date): Promise<DashboardSetup> {
-	const waiting = await paperAndSpeakerCounts(conferenceId);
-	if (waiting.submissions > 0 || waiting.speakers > 0) {
-		return { rooms: 0, tracks: 0, cfpOpen: false, ...waiting };
-	}
-	return { ...(await setupProgress(conferenceId, at)), submissions: 0, speakers: 0 };
 }
 
 async function paperAndSpeakerCounts(conferenceId: number) {
