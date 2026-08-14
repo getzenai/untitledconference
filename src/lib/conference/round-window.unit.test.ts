@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-	combineRoundWindows,
+	byRoundWindowPriority,
 	roundWindow,
 	roundWindowLabel,
 	roundWindowNotice,
@@ -89,18 +89,21 @@ describe('the wording that replaces the form', () => {
 	});
 });
 
-describe('combineRoundWindows', () => {
+/**
+ * `combineRoundWindows` lived here and is gone with #464. It folded a reviewer's
+ * rounds into one window by window state alone, which is the wrong question for a
+ * to-do list: a round I have already filed still has an open window. The rule that
+ * replaced it needs the review's status as well as the round's dates, so it sits
+ * in `reviewer.ts` next to the rows that carry both — and this file keeps only
+ * `byRoundWindowPriority`, which is the half that is genuinely about windows.
+ */
+describe('byRoundWindowPriority', () => {
 	const open = roundWindow(null, null, now);
 	const soon = roundWindow(at(DAY), null, now);
 	const closed = roundWindow(null, at(-DAY), now);
 
-	it('is open when nothing is known — a submission in no round asks nothing of nobody', () => {
-		expect(combineRoundWindows([]).state).toBe('open');
-	});
-
-	it('lets the round that still wants work win', () => {
-		expect(combineRoundWindows([closed, open]).state).toBe('open');
-		expect(combineRoundWindows([closed, soon]).state).toBe('not_yet_open');
-		expect(combineRoundWindows([closed]).state).toBe('closed');
+	it('puts the round that can take work first, and waiting before over', () => {
+		expect([closed, open].sort(byRoundWindowPriority)[0].state).toBe('open');
+		expect([closed, soon].sort(byRoundWindowPriority)[0].state).toBe('not_yet_open');
 	});
 });

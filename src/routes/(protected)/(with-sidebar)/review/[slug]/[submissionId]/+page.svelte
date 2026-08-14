@@ -155,7 +155,16 @@
 					>
 						{round.name}
 						<span class="text-muted-foreground">
-							· {round.submitted ? 'filed' : round.window.state === 'open' ? 'to do' : 'shut'}
+							<!-- "shut" said the same word for a round that closed last week and one
+							     that opens on Tuesday, and the first reading of it is "I missed it"
+							     (#464). `label` already tells them apart — "Closed", "Opens in 4
+							     days" — and it is the wording the queue and the organizer's table
+							     use, so the reviewer meets one vocabulary and not three. -->
+							· {round.submitted
+								? 'filed'
+								: round.window.state === 'open'
+									? 'to do'
+									: round.window.label.toLowerCase()}
 						</span>
 					</a>
 				{/each}
@@ -340,6 +349,7 @@
 						max={criterion.scaleMax ?? undefined}
 						step="1"
 						value={criterion.value ?? ''}
+						disabled={locked}
 						class="{inputClass} mt-1 w-full"
 					/>
 				{:else if criterion.kind === 'select'}
@@ -349,14 +359,18 @@
 						aria-label={criterion.label}
 						placeholder="—"
 						value={criterion.valueText ?? ''}
+						disabled={locked}
 						options={parseOptions(criterion.options).map((option) => ({
 							value: option,
 							label: option
 						}))}
 					/>
 				{:else}
-					<textarea name="criterion-{criterion.id}" rows="2" class="{inputClass} mt-1 w-full"
-						>{criterion.valueText ?? ''}</textarea
+					<textarea
+						name="criterion-{criterion.id}"
+						rows="2"
+						disabled={locked}
+						class="{inputClass} mt-1 w-full">{criterion.valueText ?? ''}</textarea
 					>
 					<span class="text-muted-foreground mt-1 block text-xs">
 						Part of this round's scorecard — not the overall comment below.
@@ -367,7 +381,7 @@
 
 		<label class="block text-sm">
 			<span class="text-muted-foreground text-xs">Overall comment</span>
-			<textarea name="comment" rows="4" class="{inputClass} mt-1 w-full"
+			<textarea name="comment" rows="4" disabled={locked} class="{inputClass} mt-1 w-full"
 				>{s.own.comment ?? ''}</textarea
 			>
 			<span class="text-muted-foreground mt-1 block text-xs">

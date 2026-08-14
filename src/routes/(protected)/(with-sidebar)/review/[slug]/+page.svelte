@@ -34,6 +34,18 @@
 	// and counting them would make a finished queue read as unfinished forever.
 	const outstanding = $derived(data.queue.filter((row) => !row.withdrawn));
 	const done = $derived(outstanding.filter((row) => row.ownReviewSubmitted).length);
+	/**
+	 * The number a volunteer with a free evening came for (#464).
+	 *
+	 * "9 of 22 reviewed" answers how far the season has got; it does not answer
+	 * *what is mine to do tonight*, and the difference used to be invisible until
+	 * you opened each row — 22 said To do, 9 could actually be filed. A row waits
+	 * if its own review is outstanding and the round that speaks for it is open;
+	 * the server decides which round that is, so this counts rather than judges.
+	 */
+	const waiting = $derived(
+		outstanding.filter((row) => !row.ownReviewSubmitted && row.window.state === 'open').length
+	);
 	const blind = $derived(data.conference.reviewVisibility === 'blind_until_reviewed');
 	const current = $derived(QUEUE_SORTS.find((s) => s.value === data.sort) ?? QUEUE_SORTS[0]);
 
@@ -60,8 +72,13 @@
 <div class="flex flex-wrap items-end justify-between gap-3">
 	<div>
 		<h1 class="text-lg font-semibold tracking-tight">My review queue</h1>
-		<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
+		<p class="text-muted-foreground mt-0.5 text-sm tabular-nums" data-testid="queue-counts">
 			{done} of {outstanding.length} reviewed
+			{#if waiting > 0}
+				· <span class="text-foreground font-medium">{waiting} you can file now</span>
+			{:else if done < outstanding.length}
+				· nothing you can file today
+			{/if}
 			{#if blind}
 				· other reviews stay hidden until you file your own
 			{/if}

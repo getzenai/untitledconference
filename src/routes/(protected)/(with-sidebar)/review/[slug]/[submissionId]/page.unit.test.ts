@@ -379,6 +379,27 @@ describe('a talk held in two rounds', () => {
 		expect(body).toContain('action="?/save&amp;round=1"');
 	});
 
+	/**
+	 * #464: both a round that closed last week and one that opens on Tuesday read
+	 * "shut", and the first reading of that word is "I missed it". The label the
+	 * queue and the organizer's table already use tells them apart.
+	 */
+	it('tells a round that is over from one that has not started', () => {
+		const soon = new Date(Date.now() + 4 * 86_400_000);
+		const gone = new Date(Date.now() - 86_400_000);
+		const body = page('assigned', {
+			heldRounds: [
+				{ id: 1, name: 'Screening', window: roundWindow(null, null), submitted: false },
+				{ id: 2, name: 'Committee', window: roundWindow(soon, null), submitted: false },
+				{ id: 3, name: 'Final', window: roundWindow(null, gone), submitted: false }
+			]
+		});
+
+		expect(body).not.toContain('shut');
+		expect(body).toContain('opens in 4 days');
+		expect(body).toContain('closed');
+	});
+
 	it('says nothing about rounds when there is only one', () => {
 		const body = page('assigned');
 

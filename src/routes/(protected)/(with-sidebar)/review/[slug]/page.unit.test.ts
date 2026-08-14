@@ -284,3 +284,36 @@ describe('after a recusal (#463)', () => {
 		expect(renderQueue([row(1, 'A talk', 0)])).not.toContain('data-testid="recused-notice"');
 	});
 });
+
+/**
+ * #464: "22 of 28 reviewed" answers how far the season has got, not what is mine
+ * to do tonight. The row badges tell the truth per talk now; this is the same
+ * truth counted once, at the top, where a volunteer with a free evening looks.
+ */
+describe('what can actually be filed today', () => {
+	const soon = roundWindow(new Date(Date.now() + 4 * 86_400_000), null);
+
+	it('counts only the rows whose round is open', () => {
+		const waiting = { ...row(1, 'Open now', 0) };
+		const later = { ...row(2, 'Opens later', 0), window: soon };
+		const body = renderQueue([waiting, later]);
+
+		expect(body).toContain('1 you can file now');
+	});
+
+	it('says so plainly when the queue is full but nothing can be filed', () => {
+		const later = { ...row(1, 'Opens later', 0), window: soon };
+		const body = renderQueue([later]);
+
+		expect(body).toContain('nothing you can file today');
+		expect(body).not.toContain('you can file now');
+	});
+
+	it('claims nothing when every assignment is answered', () => {
+		const done = { ...row(1, 'Filed', 0), ownReviewSubmitted: true };
+		const body = renderQueue([done]);
+
+		expect(body).not.toContain('you can file now');
+		expect(body).not.toContain('nothing you can file today');
+	});
+});

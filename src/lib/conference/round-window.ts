@@ -73,24 +73,6 @@ export function roundWindow(
 }
 
 /**
- * One reviewer's several rounds on the same talk, as one window.
- *
- * Open wins: a reviewer who holds a submission in a closed round and an open one still
- * has work to do on it, and the queue's job is to say whether anything is asked of
- * them. Between two shut rounds the one that is only waiting wins over the one that is
- * over, for the same reason — "opens tomorrow" is a thing to come back for, "closed"
- * is not.
- *
- * The same order picks which of those rounds the reviewer's form belongs to
- * (`ownReview`). One rule for both: if the queue says "To do" and the page it links to
- * says "closed", the reviewer is being sent to work the server will refuse.
- */
-export function combineRoundWindows(windows: RoundWindow[]): RoundWindow {
-	if (windows.length === 0) return roundWindow(null, null);
-	return [...windows].sort(byRoundWindowPriority)[0];
-}
-
-/**
  * Which of a reviewer's rounds on one submission speaks for the others.
  *
  * A comparator rather than a `find`, because the caller with the rows — not just the
