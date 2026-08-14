@@ -131,8 +131,29 @@
 			? 'Places the waiting talk into free slots. Nothing already on the grid moves.'
 			: `Places the ${unscheduled} waiting talks into free slots. Nothing already on the grid moves.`
 	);
+	// Talks, not breaks. The public loader (`selectPublishedPlacements`) requires
+	// three things: placement confirmed, submission accepted, content approved.
+	// The board carries the first two (`status`, `submissionStatus`). Content
+	// approval is not on the board — it defaults to approved and nobody writes
+	// it — so a count of the two we know is the honest match, not a complete
+	// copy of the query. A declined talk keeps its confirmed slot on purpose
+	// (a human has to resolve it); counting it as live was #497 with the sign
+	// flipped.
+	const placedTalks = $derived(board.placed.filter((p) => p.submissionId !== null));
+	const liveTalks = $derived(
+		placedTalks.filter((p) => p.status === 'confirmed' && p.submissionStatus === 'accepted')
+	);
 	const everythingPublished = $derived(
-		board.placed.length > 0 && board.placed.every((p) => p.status === 'confirmed')
+		placedTalks.length > 0 && liveTalks.length === placedTalks.length
+	);
+	const publicState = $derived(
+		placedTalks.length === 0
+			? null
+			: liveTalks.length === 0
+				? 'The public cannot see these slots yet.'
+				: liveTalks.length === placedTalks.length
+					? `The public agenda shows ${liveTalks.length} ${liveTalks.length === 1 ? 'session' : 'sessions'}.`
+					: `The public agenda shows ${liveTalks.length} of ${placedTalks.length} sessions.`
 	);
 
 	/**
@@ -314,6 +335,9 @@
 				{:else}
 					Every accepted talk has a slot.
 				{/if}
+				{#if publicState}
+					<span data-testid="agenda-public-state">{publicState}</span>
+				{/if}
 				{#if board.conflicts.length > 0}
 					<span class="text-status-bad font-medium">
 						{board.conflicts.length}
@@ -336,7 +360,17 @@
 			{/if}
 			<form method="POST" action="?/publish" use:enhance={submitting}>
 				<input type="hidden" name="published" value={everythingPublished ? 'false' : 'true'} />
-				<Button type="submit" disabled={busy || board.placed.length === 0}>
+				<!--
+					Publish is the action this screen exists to take. Unpublish used to
+					be the same filled button, so once the programme was live the
+					loudest control took it down (#497).
+				-->
+				<Button
+					type="submit"
+					variant={everythingPublished ? 'outline' : 'default'}
+					disabled={busy || placedTalks.length === 0}
+					data-testid="agenda-publish"
+				>
 					{everythingPublished ? 'Unpublish the agenda' : 'Publish the agenda'}
 				</Button>
 			</form>
@@ -376,6 +410,15 @@
 			{form.autoPlaced === 0
 				? 'Nothing could be placed — every room is full for the length of those sessions.'
 				: `Placed ${form.autoPlaced} ${form.autoPlaced === 1 ? 'session' : 'sessions'}. Move anything you disagree with.`}
+		</p>
+	{/if}
+	{#if form?.published !== undefined}
+		<p class="text-muted-foreground text-sm" data-testid="agenda-publish-result" role="status">
+			{form.published
+				? liveTalks.length === 0
+					? 'Nothing went live — only slotted talks can appear on the public agenda.'
+					: `The public agenda now shows ${liveTalks.length} ${liveTalks.length === 1 ? 'session' : 'sessions'}.`
+				: 'Taken off the public agenda. These slots are only visible to you.'}
 		</p>
 	{/if}
 
@@ -645,13 +688,18 @@
 											{@const clashes = clashesFor(session.placementId)}
 											{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
 											{@const published = session.status === 'confirmed'}
+											{@const decidedDown =
+												session.submissionStatus === 'rejected' ||
+												session.submissionStatus === 'waitlisted'}
 											{#if rows}
 												<!--
 													Title first — the clock is already on the grid axis, so the
 													card's job is the talk name. Colour codes publish state so the
 													title keeps the full card width (#219); clash colour wins.
-													min-w-0 + overflow-hidden still clip width (#154 / #166);
-													nothing here changes DnD keys or drop targets.
+													A declined talk used to keep the published green, so "every
+													accepted talk has a slot" read as if this one still counted
+													(#497). min-w-0 + overflow-hidden still clip width
+													(#154 / #166); nothing here changes DnD keys or drop targets.
 												-->
 												<div
 													data-testid="agenda-placed-session"
@@ -660,9 +708,11 @@
 													class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
 													0
 														? 'border-status-bad bg-status-bad/10'
-														: published
-															? 'border-status-good bg-status-good-bg'
-															: 'border-border bg-card'} {drag.dragging?.placementId ===
+														: decidedDown
+															? 'border-status-warn bg-status-warn-bg'
+															: published
+																? 'border-status-good bg-status-good-bg'
+																: 'border-border bg-card'} {drag.dragging?.placementId ===
 													session.placementId
 														? 'opacity-40'
 														: ''}"
@@ -721,14 +771,18 @@
 																	</span>
 																	<!-- Clock is secondary: the grid axis already places the block.
 																	     Kept small so short slots still read the title first, and so
-																	     existing E2E can pin a drop by the range text. -->
-																	<span
-																		class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
-																	>
-																		{timeLabel(session.startMinutes)}–{timeLabel(
-																			session.endMinutes
-																		)}
-																	</span>
+																	     existing E2E can pin a drop by the range text. A declined
+																	     line used to draw on top of the range (#497); the axis
+																	     already says when, so the label takes that row. -->
+																	{#if !decidedDown}
+																		<span
+																			class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
+																		>
+																			{timeLabel(session.startMinutes)}–{timeLabel(
+																				session.endMinutes
+																			)}
+																		</span>
+																	{/if}
 																	{#if session.submissionStatus === 'rejected'}
 																		<span
 																			class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
