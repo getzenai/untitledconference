@@ -464,6 +464,93 @@ describe('auto-place', () => {
 		expect(same.startMinutes).toBe(anchor.startMinutes);
 		expect(same.roomId).toBe(anchor.roomId);
 	});
+
+	it('still treats a room-bound hold as only that room', async () => {
+		const { placementId } = await makeSubmission('Other room is free');
+		const dates = ['2027-05-12', '2027-05-13'] as const;
+		await db.insert(placementTable).values(
+			dayIds.map((dayId, i) => ({
+				conferenceId,
+				kind: 'block' as const,
+				status: 'confirmed' as const,
+				title: `Main Stage reserved ${dates[i]}`,
+				conferenceDayId: dayId,
+				startsAt: slotInstant(dates[i], 9 * 60),
+				endsAt: slotInstant(dates[i], 18 * 60),
+				roomId: roomIds[0]
+			}))
+		);
+
+		expect(await autoPlace(conferenceId)).toBe(1);
+
+		const board = await agendaBoard(conferenceId);
+		const placed = board.placed.find((p) => p.placementId === placementId);
+		expect(placed?.roomId).toBe(roomIds[1]);
+	});
+
+	it('does not put a talk in a roomless hold, even when that is the only remaining window', async () => {
+		// Two rooms, lunch across both, the rest of both days already spent —
+		// the 60-minute talk's only hole is the break, so it has to stay in
+		// the tray rather than land in Mittagessen (#565).
+		const [hour] = await db
+			.insert(sessionFormatTable)
+			.values({ conferenceId, name: 'Hour', minutes: 60, position: 9 })
+			.returning();
+		const [submission] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId,
+				title: 'Only lunch',
+				sessionFormatId: hour.id,
+				status: 'accepted'
+			})
+			.returning();
+		const [talk] = await db
+			.insert(placementTable)
+			.values({
+				conferenceId,
+				kind: 'session',
+				status: 'tentative',
+				submissionId: submission.id
+			})
+			.returning();
+
+		const dates = ['2027-05-12', '2027-05-13'] as const;
+		const blocks: {
+			title: string;
+			day: number;
+			roomId: number | null;
+			start: number;
+			end: number;
+		}[] = [
+			{ title: 'Lunch all rooms', day: 0, roomId: null, start: 12 * 60 + 30, end: 13 * 60 + 30 },
+			{ title: 'Day two closed', day: 1, roomId: null, start: 9 * 60, end: 18 * 60 }
+		];
+		for (const roomId of roomIds) {
+			blocks.push(
+				{ title: `Morning ${roomId}`, day: 0, roomId, start: 9 * 60, end: 12 * 60 + 30 },
+				{ title: `Afternoon ${roomId}`, day: 0, roomId, start: 13 * 60 + 30, end: 18 * 60 }
+			);
+		}
+		await db.insert(placementTable).values(
+			blocks.map((b) => ({
+				conferenceId,
+				kind: 'block' as const,
+				status: 'confirmed' as const,
+				title: b.title,
+				conferenceDayId: dayIds[b.day],
+				startsAt: slotInstant(dates[b.day], b.start),
+				endsAt: slotInstant(dates[b.day], b.end),
+				roomId: b.roomId
+			}))
+		);
+
+		expect(await autoPlace(conferenceId)).toBe(0);
+
+		const board = await agendaBoard(conferenceId);
+		expect(board.tray.map((t) => t.placementId)).toContain(talk.id);
+		expect(board.placed.map((p) => p.placementId)).not.toContain(talk.id);
+	});
 });
 
 describe('rooms added inline (AIA-02)', () => {
