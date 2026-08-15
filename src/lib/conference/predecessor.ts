@@ -40,3 +40,36 @@ export function predecessorWouldCycle(
 export function predecessorLine(name: string): string {
 	return `Follows ${name}`;
 }
+
+export type EditionRef = { id: number; name: string; slug: string };
+
+type Edition = EditionRef & { organizationId: string };
+
+/**
+ * The other editions this caller may name as a predecessor.
+ *
+ * Built from the list that already passed `requireOrganizer` / `organizedConferences`,
+ * not from every conference in the organization. A scoped organizer invited to one
+ * event must not see the names of the ones they would otherwise 404 on.
+ */
+export function editionOptions(conferences: readonly Edition[], current: Edition): EditionRef[] {
+	return conferences
+		.filter((row) => row.organizationId === current.organizationId && row.id !== current.id)
+		.map((row) => ({ id: row.id, name: row.name, slug: row.slug }))
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * The named predecessor, if it is on the same authorized list.
+ *
+ * A pointer at an edition the caller does not organize stays a stored id and
+ * is not turned into a name — naming it is the leak the options used to have.
+ */
+export function namedPredecessor(
+	conferences: readonly EditionRef[],
+	predecessorId: number | null
+): EditionRef | null {
+	if (predecessorId === null) return null;
+	const row = conferences.find((conference) => conference.id === predecessorId);
+	return row ? { id: row.id, name: row.name, slug: row.slug } : null;
+}

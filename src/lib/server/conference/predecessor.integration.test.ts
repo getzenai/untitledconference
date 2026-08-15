@@ -10,7 +10,7 @@ import { organization } from '$lib/server/db/auth-schema';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { setConferencePredecessor } from './predecessor';
+import { setConferencePredecessor, withEditionLinks } from './predecessor';
 
 const suffix = `pred-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -102,5 +102,51 @@ describe('setConferencePredecessor', () => {
 			reason: 'not_found'
 		});
 		expect(await storedPredecessor(ours.id)).toBeNull();
+	});
+});
+
+describe('withEditionLinks', () => {
+	it('offers only the editions the caller already passed in', async () => {
+		const visible = await conference(organizationId, 'Visible');
+		const hidden = await conference(organizationId, 'Hidden');
+
+		const [linked] = withEditionLinks([visible]);
+
+		expect(linked.predecessorOptions.map((option) => option.id)).not.toContain(hidden.id);
+		expect(linked.predecessorOptions).toEqual([]);
+	});
+
+	it('does not name a stored predecessor that was not on the authorized list', async () => {
+		const visible = await conference(organizationId, 'Visible Stored');
+		const hidden = await conference(organizationId, 'Hidden Stored');
+		await setConferencePredecessor(visible.id, hidden.id);
+
+		const [fresh] = await db
+			.select()
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, visible.id));
+		const [linked] = withEditionLinks([fresh]);
+
+		expect(linked.predecessor).toBeNull();
+		expect(linked.predecessorOptions).toEqual([]);
+	});
+
+	it('names a predecessor the caller also organizes', async () => {
+		const current = await conference(organizationId, 'Current Named');
+		const previous = await conference(organizationId, 'Previous Named');
+		await setConferencePredecessor(current.id, previous.id);
+
+		const [fresh] = await db
+			.select()
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, current.id));
+		const [linked] = withEditionLinks([fresh, previous]);
+
+		expect(linked.predecessor).toEqual({
+			id: previous.id,
+			name: previous.name,
+			slug: previous.slug
+		});
+		expect(linked.predecessorOptions.map((option) => option.id)).toEqual([previous.id]);
 	});
 });

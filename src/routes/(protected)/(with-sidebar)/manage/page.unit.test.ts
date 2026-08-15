@@ -112,4 +112,14 @@ describe('my conferences', () => {
 		expect(html).not.toContain('data-testid="predecessor-line"');
 		expect(html).not.toContain('Follows ');
 	});
+
+	it('hides the form when there is no other authorized edition to name', () => {
+		// A scoped organizer invited to one conference has an empty option list.
+		// The form must not appear over that emptiness — there is nothing they
+		// may point at, and offering "No previous edition" alone would still be
+		// a write control they do not need.
+		const html = body([conference(1, 'devflow-2028')], true);
+
+		expect(html).not.toContain('data-testid="predecessor-select"');
+	});
 });

@@ -5,15 +5,21 @@
  * lane travel with the pointer. The rules that have to hold before any of
  * that can sit on top are here — same organization, not itself, no cycle.
  *
- * The caller re-checks that the user organizes the conference. This function
- * re-checks the row in its own queries so a stale id cannot write across orgs.
+ * The caller re-checks that the user organizes the conference, and the
+ * predecessor too. This function re-checks the row in its own queries so a
+ * stale id cannot write across orgs.
  */
-import { predecessorWouldCycle } from '$lib/conference/predecessor';
+import {
+	editionOptions,
+	namedPredecessor,
+	predecessorWouldCycle,
+	type EditionRef
+} from '$lib/conference/predecessor';
 import { db } from '$lib/server/db';
 import { conferenceTable, type Conference } from '$lib/server/db/conference/conference-schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
-export type EditionRef = { id: number; name: string; slug: string };
+export type { EditionRef };
 
 export type ConferenceWithEdition = Conference & {
 	predecessor: EditionRef | null;
@@ -32,48 +38,18 @@ const editionColumns = {
 	predecessorConferenceId: conferenceTable.predecessorConferenceId
 } as const;
 
-function asRef(row: { id: number; name: string; slug: string }): EditionRef {
-	return { id: row.id, name: row.name, slug: row.slug };
-}
-
 /**
- * Attach the named predecessor and the other editions in the same org, so the
- * manage list can show the relationship and offer a form without a second
- * round-trip per row.
+ * Attach the named predecessor and the other editions the caller already
+ * organizes. Options come from that list, not from a new org-wide query —
+ * a scoped organizer invited to one conference must not see the names of
+ * the ones `requireOrganizer` would 404.
  */
-export async function withEditionLinks(
-	conferences: Conference[]
-): Promise<ConferenceWithEdition[]> {
-	if (conferences.length === 0) return [];
-
-	const orgIds = [...new Set(conferences.map((conference) => conference.organizationId))];
-	const siblings = await db
-		.select({
-			id: conferenceTable.id,
-			name: conferenceTable.name,
-			slug: conferenceTable.slug,
-			organizationId: conferenceTable.organizationId
-		})
-		.from(conferenceTable)
-		.where(inArray(conferenceTable.organizationId, orgIds));
-
-	const byId = new Map(siblings.map((row) => [row.id, row]));
-
-	return conferences.map((conference) => {
-		const predecessorRow = conference.predecessorConferenceId
-			? byId.get(conference.predecessorConferenceId)
-			: undefined;
-		return {
-			...conference,
-			predecessor: predecessorRow ? asRef(predecessorRow) : null,
-			predecessorOptions: siblings
-				.filter(
-					(row) => row.organizationId === conference.organizationId && row.id !== conference.id
-				)
-				.map(asRef)
-				.sort((a, b) => a.name.localeCompare(b.name))
-		};
-	});
+export function withEditionLinks(conferences: Conference[]): ConferenceWithEdition[] {
+	return conferences.map((conference) => ({
+		...conference,
+		predecessor: namedPredecessor(conferences, conference.predecessorConferenceId),
+		predecessorOptions: editionOptions(conferences, conference)
+	}));
 }
 
 export async function setConferencePredecessor(

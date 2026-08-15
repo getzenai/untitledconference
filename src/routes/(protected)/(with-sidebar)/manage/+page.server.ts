@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// and every entry point living on it — including "New conference" — became
 	// unreachable the moment an organizer had their first event. A list of one
 	// with a visible button is the honest state.
-	const conferences = await withEditionLinks(await organizedConferences(locals.user!.id));
+	const conferences = withEditionLinks(await organizedConferences(locals.user!.id));
 
 	// Whether the page offers "create a conference" or "create an organization
 	// first". This is the page a new organizer lands on, and it used to send them
@@ -38,6 +38,23 @@ function editionId(value: FormDataEntryValue | null): number | null {
 	return Number.isInteger(id) && id > 0 ? id : NaN;
 }
 
+/**
+ * The same `requireOrganizer` gate the page itself uses, by id.
+ *
+ * The form posts ids. Looking the slug up and asking again is how the
+ * predecessor is held to the same boundary as the conference being edited:
+ * a scoped organizer cannot name an edition they would 404 on.
+ */
+async function organizedEdition(userId: string, id: number) {
+	const [row] = await db
+		.select({ slug: conferenceTable.slug })
+		.from(conferenceTable)
+		.where(eq(conferenceTable.id, id))
+		.limit(1);
+	if (!row) throw error(404, 'Conference not found');
+	return requireOrganizer(userId, row.slug);
+}
+
 export const actions: Actions = {
 	/**
 	 * Name or clear the previous edition (#448). Empty `predecessorId` is the
@@ -53,13 +70,10 @@ export const actions: Actions = {
 			return fail(400, { conferenceId, error: predecessorError('not_found') });
 		}
 
-		const [row] = await db
-			.select({ slug: conferenceTable.slug })
-			.from(conferenceTable)
-			.where(eq(conferenceTable.id, conferenceId))
-			.limit(1);
-		if (!row) throw error(404, 'Conference not found');
-		const { conference } = await requireOrganizer(locals.user!.id, row.slug);
+		const { conference } = await organizedEdition(locals.user!.id, conferenceId);
+		if (predecessorId !== null) {
+			await organizedEdition(locals.user!.id, predecessorId);
+		}
 
 		const result = await setConferencePredecessor(conference.id, predecessorId);
 		if (!result.ok) {
