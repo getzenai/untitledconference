@@ -52,6 +52,27 @@ function renderUsersPage() {
 	}).body;
 }
 
+describe('admin chrome (#477)', () => {
+	it('uses the same heading scale and sentence case as the rest of the app', () => {
+		const html = renderUsersPage();
+
+		expect(html).toContain('>Users<');
+		expect(html).not.toContain('System Admin Dashboard');
+		expect(html).toContain('Email verified');
+		expect(html).not.toContain('E-Mail');
+		expect(html).toContain('Create user');
+		expect(html).toContain('Invite user');
+		expect(html).toContain('Search users');
+		expect(html).not.toContain('User Management');
+		expect(html).not.toContain('System Invitations');
+		expect(html).toContain('>Invitations<');
+		// Prettier wraps the count and the noun; the words still sit next to each other.
+		expect(html.replace(/\s+/g, ' ')).toContain('2 accounts');
+		expect(html).toContain('1 admin');
+		expect(html).toContain('1 banned');
+	});
+});
+
 describe('admin ban copy (#390)', () => {
 	it('renders the window from SESSION_COOKIE_CACHE_MAX_AGE_SECONDS, not a hardcoded 5 minutes', () => {
 		const copy = banTakesEffectCopy();

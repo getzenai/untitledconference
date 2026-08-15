@@ -33,17 +33,7 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
-	import {
-		Shield,
-		Users,
-		UserX,
-		UserCheck,
-		Mail,
-		Clock,
-		RefreshCw,
-		Loader2,
-		UserPlus
-	} from 'lucide-svelte';
+	import { UserX, UserCheck, Mail, Clock, RefreshCw, Loader2, UserPlus } from 'lucide-svelte';
 	import CopyButton from '$lib/components/ui/copy-button.svelte';
 	import {
 		Tooltip,
@@ -467,61 +457,23 @@
 	<title>Users — Admin</title>
 </svelte:head>
 
-<div class="container mx-auto max-w-7xl py-8">
-	<div class="mb-8">
-		<h1 class="flex items-center gap-2 text-3xl font-bold">
-			<Shield class="h-8 w-8" />
-			System Admin Dashboard
-		</h1>
-		<p class="text-muted-foreground mt-2">Manage users, organizations, and system settings</p>
+<div class="space-y-6">
+	<div>
+		<h1 class="text-lg font-semibold tracking-tight">Users</h1>
+		<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
+			{stats.totalUsers}
+			{stats.totalUsers === 1 ? 'account' : 'accounts'}{#if stats.adminUsers > 0}&nbsp;·
+				{stats.adminUsers} admin{/if}{#if stats.bannedUsers > 0}&nbsp;·
+				{stats.bannedUsers} banned{/if}
+		</p>
 	</div>
 
-	<!-- Statistics Cards -->
-	<div class="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3">
-		<Card>
-			<CardHeader class="pb-3">
-				<CardTitle class="text-sm font-medium">Total Users</CardTitle>
-			</CardHeader>
-			<CardContent>
-				<div class="flex items-center gap-2">
-					<Users class="text-muted-foreground h-4 w-4" />
-					<span class="text-2xl font-bold">{stats.totalUsers}</span>
-				</div>
-			</CardContent>
-		</Card>
-
-		<Card>
-			<CardHeader class="pb-3">
-				<CardTitle class="text-sm font-medium">Admin Users</CardTitle>
-			</CardHeader>
-			<CardContent>
-				<div class="flex items-center gap-2">
-					<UserCheck class="text-muted-foreground h-4 w-4" />
-					<span class="text-2xl font-bold">{stats.adminUsers}</span>
-				</div>
-			</CardContent>
-		</Card>
-
-		<Card>
-			<CardHeader class="pb-3">
-				<CardTitle class="text-sm font-medium">Banned Users</CardTitle>
-			</CardHeader>
-			<CardContent>
-				<div class="flex items-center gap-2">
-					<UserX class="text-muted-foreground h-4 w-4" />
-					<span class="text-2xl font-bold">{stats.bannedUsers}</span>
-				</div>
-			</CardContent>
-		</Card>
-	</div>
-
-	<!-- User Management -->
 	<Card>
 		<CardHeader>
 			<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
 				<div>
-					<CardTitle>User Management</CardTitle>
-					<CardDescription>View and manage all system users</CardDescription>
+					<CardTitle>Accounts</CardTitle>
+					<CardDescription>Who can sign in, and what they can do</CardDescription>
 				</div>
 				<div class="flex flex-wrap items-center gap-2">
 					<Dialog.Root
@@ -537,7 +489,7 @@
 					>
 						<Dialog.Trigger class={buttonVariants({ variant: 'secondary' })}>
 							<UserPlus class="mr-2 h-4 w-4" />
-							Create User
+							Create user
 						</Dialog.Trigger>
 						<Dialog.Content class="sm:max-w-md">
 							{#if !showCreateUserSuccess}
@@ -682,7 +634,7 @@
 					>
 						<Dialog.Trigger class={buttonVariants({ variant: 'default' })}>
 							<Mail class="mr-2 h-4 w-4" />
-							Invite User
+							Invite user
 						</Dialog.Trigger>
 						<Dialog.Content class="sm:max-w-md">
 							{#if !showInvitationSuccess}
@@ -786,7 +738,7 @@
 		<CardContent>
 			<!-- Search -->
 			<div class="mb-6">
-				<Label for="search">Search Users</Label>
+				<Label for="search">Search users</Label>
 				<Input
 					id="search"
 					type="text"
@@ -805,7 +757,7 @@
 							<TableHead>Email</TableHead>
 							<TableHead>Name</TableHead>
 							<TableHead>Role</TableHead>
-							<TableHead>E-Mail Verified</TableHead>
+							<TableHead>Email verified</TableHead>
 							<TableHead>Login</TableHead>
 							<TableHead>Created</TableHead>
 							<TableHead class="text-right">Actions</TableHead>
@@ -860,7 +812,7 @@
 												<Loader2 class="text-muted-foreground h-4 w-4 animate-spin" />
 												<span>Updating...</span>
 											{:else if user.emailVerified}
-												<UserCheck class="h-4 w-4 text-green-500" />
+												<UserCheck class="text-status-good h-4 w-4" />
 												<span>Verified</span>
 											{:else}
 												<UserX class="text-muted-foreground h-4 w-4" />
@@ -934,11 +886,10 @@
 		</CardContent>
 	</Card>
 
-	<!-- System Invitations -->
-	<Card class="mt-8">
+	<Card>
 		<CardHeader>
-			<CardTitle>System Invitations</CardTitle>
-			<CardDescription>Track and manage pending invitations</CardDescription>
+			<CardTitle>Invitations</CardTitle>
+			<CardDescription>Links that have not been used yet</CardDescription>
 		</CardHeader>
 		<CardContent>
 			{#if invitations.length === 0}
@@ -946,7 +897,7 @@
 					<Mail class="text-muted-foreground mb-4 h-12 w-12" />
 					<p class="text-muted-foreground">No invitations sent yet</p>
 					<p class="text-muted-foreground text-sm">
-						Click "Invite User" above to send your first invitation
+						Click "Invite user" above to send the first one
 					</p>
 				</div>
 			{:else}
@@ -957,7 +908,7 @@
 								<TableHead>Email</TableHead>
 								<TableHead>Role</TableHead>
 								<TableHead>Status</TableHead>
-								<TableHead>Invited By</TableHead>
+								<TableHead>Invited by</TableHead>
 								<TableHead>Expires</TableHead>
 								<TableHead>Created</TableHead>
 								<TableHead>Actions</TableHead>

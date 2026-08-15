@@ -27,7 +27,7 @@ describe('Admin invitation link', () => {
 			cy.visit('/admin/users');
 			cy.waitForHydration();
 
-			cy.contains('button', 'Invite User').click();
+			cy.contains('button', 'Invite user').click();
 			cy.get('#invite-email').type(invitee);
 			cy.contains('button', 'Create Invitation').click();
 

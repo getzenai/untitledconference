@@ -12,7 +12,7 @@ export class AdminDashboardPage extends BasePage {
 	readonly path = '/admin/users';
 
 	dashboardTitle(): Cypress.Chainable<JQuery<HTMLElement>> {
-		return cy.contains('h1', /System Admin Dashboard/i);
+		return cy.contains('h1', /^Users$/);
 	}
 
 	searchInput(): Cypress.Chainable<JQuery<HTMLElement>> {
