@@ -159,7 +159,7 @@
 		{
 			"idx": 22,
 			"version": "7",
-			"when": 1786753934909,
+			"when": 1786780401580,
 			"tag": "0022_slot_capacity",
 			"breakpoints": true
 		}
