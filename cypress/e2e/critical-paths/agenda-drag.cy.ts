@@ -74,9 +74,10 @@ describe('Agenda drag and drop', () => {
 		room: string,
 		startMinutes: number,
 		named?: string,
-		options: { altKey?: boolean } = {}
+		options: { altKey?: boolean; beforeDrop?: () => void; commit?: boolean } = {}
 	) => {
 		const altKey = options.altKey ?? false;
+		const commit = options.commit ?? true;
 		cy.contains('[data-testid="agenda-room-card"]', room)
 			.invoke('attr', 'data-room-id')
 			.then((roomId) => {
@@ -114,6 +115,24 @@ describe('Agenda drag and drop', () => {
 							clientX: at.x,
 							clientY: at.y
 						});
+					}
+
+					options.beforeDrop?.();
+
+					if (!commit) {
+						// Escape cancels. A pointerup off the grid still writes the
+						// last hover, which is how the first cut of this spec
+						// accidentally copied the draft and then could not publish.
+						cy.window().trigger('keydown', { key: 'Escape' });
+						cy.window().trigger('pointerup', {
+							eventConstructor: 'PointerEvent',
+							pointerId: 1,
+							pointerType: 'mouse',
+							altKey,
+							clientX: to.x,
+							clientY: to.y
+						});
+						return;
 					}
 
 					cy.window().trigger('pointerup', {
@@ -214,6 +233,49 @@ describe('Agenda drag and drop', () => {
 			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
 			.should('contain', '09:00');
 		cy.get('[data-testid="agenda-alternative"]').should('exist');
+	});
+
+	/**
+	 * #611. The existing Alt+drag case never looks at the badge before the
+	 * drop, so it cannot catch a published talk promising a copy the server
+	 * will refuse. Draft still says "+ Alternative"; published stays a move.
+	 */
+	it('shows + Alternative on a draft and hides it on a published talk, before the drop', () => {
+		addRooms(['Hall 1', 'Hall 2']);
+		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
+
+		dragOnto('[data-testid^="agenda-edit-slot-"]', 'Hall 2', 11 * 60, undefined, {
+			altKey: true,
+			commit: false,
+			beforeDrop: () => {
+				cy.get('[data-testid="agenda-drag-intent"]').should('contain', '+ Alternative');
+			}
+		});
+
+		roomCard('Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '09:00');
+		roomCard('Hall 2').find('[data-testid="agenda-placed-session"]').should('not.exist');
+
+		cy.get('[data-testid="agenda-publish"]').click();
+		cy.get('[data-testid="agenda-publish-result"]', { timeout: 20000 }).should(
+			'contain.text',
+			'The public agenda now shows 1 talk.'
+		);
+
+		dragOnto('[data-testid^="agenda-edit-slot-"]', 'Hall 2', 11 * 60, undefined, {
+			altKey: true,
+			beforeDrop: () => {
+				cy.get('[data-testid="agenda-drag-intent"]').should('not.exist');
+			}
+		});
+
+		roomCard('Hall 2')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '11:00');
+		roomCard('Hall 1').find('[data-testid="agenda-placed-session"]').should('not.exist');
+		cy.get('[data-testid="agenda-alternative"]').should('not.exist');
+		cy.get('[data-testid="agenda-write-error"]').should('not.exist');
 	});
 
 	it('takes a talk out of the tray onto the slot it is dropped on', () => {
