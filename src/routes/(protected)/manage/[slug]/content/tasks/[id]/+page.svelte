@@ -61,7 +61,7 @@
 -->
 <div class="mx-auto max-w-3xl space-y-6 px-6 py-5">
 	<a class="text-muted-foreground text-sm hover:underline" href="{base}/content">
-		← Speaker content
+		← Speaker materials
 	</a>
 
 	<div class="flex flex-wrap items-start justify-between gap-3">

@@ -94,12 +94,14 @@ const renderWith = (count: number) =>
 		}
 	}).body;
 
-describe('organizer speaker content layout', () => {
+describe('organizer speaker materials layout', () => {
 	it('gives the content a padded, bounded container instead of sitting flush against the rail', () => {
 		const body = renderWith(3);
 
 		// The header bar every other organizer page uses, then a body that is padded
 		// and capped — the two properties Fabian's walkthrough found missing.
+		expect(body).toContain('Speaker materials');
+		expect(body).not.toContain('Speaker content');
 		expect(body).toMatch(/<div class="[^"]*border-b[^"]*px-6 py-5[^"]*"/);
 		const container = body.match(/<div class="([^"]*max-w-5xl[^"]*)"/)?.[1];
 		expect(container).toContain('px-6');
@@ -114,7 +116,7 @@ describe('organizer speaker content layout', () => {
 	});
 });
 
-describe('organizer speaker content cards', () => {
+describe('organizer speaker materials cards', () => {
 	it('starts every card collapsed, with a to-do count on the header', () => {
 		const body = renderWith(2);
 

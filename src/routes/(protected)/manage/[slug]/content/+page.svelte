@@ -92,13 +92,13 @@
 </script>
 
 <svelte:head>
-	<title>Speaker content — {data.conference.name}</title>
+	<title>Speaker materials — {data.conference.name}</title>
 </svelte:head>
 
 <div class="border-border bg-card border-b px-6 py-5">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">Speaker content</h1>
+			<h1 class="text-lg font-semibold tracking-tight">Speaker materials</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm">
 				{headline}
 				{#if t.overdue > 0}

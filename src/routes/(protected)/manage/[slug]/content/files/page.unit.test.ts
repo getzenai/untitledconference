@@ -59,6 +59,8 @@ describe('files library page', () => {
 		expect(body).toContain('action="/manage/devflow-conf-2027/content/files/download"');
 		expect(body).toContain('data-testid="file-open"');
 		expect(body).toContain('/manage/devflow-conf-2027/content/files/7');
+		expect(body).toContain('Back to speaker materials');
+		expect(body).not.toContain('speaker content');
 	});
 
 	it('leaves a type we cannot render as a download, with the sentence saying why', () => {

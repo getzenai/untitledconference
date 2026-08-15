@@ -1,5 +1,5 @@
 /**
- * #423: the organizer opens a PDF on speaker content without leaving the
+ * #423: the organizer opens a PDF on speaker materials without leaving the
  * page, and an unknown type stays a download. The unit suite pins the two
  * shapes; this spec is the click on the library they actually collect from.
  */
