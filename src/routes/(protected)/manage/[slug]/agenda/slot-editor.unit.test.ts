@@ -193,15 +193,19 @@ describe('the slot editor', () => {
 	 * makes rather than the state it is in — and post the opposite of the current
 	 * status, which is the half a label alone cannot prove.
 	 */
-	it('offers to publish a draft and to hold back a published one', () => {
+	it('offers to publish a draft and to make a published one a draft', () => {
 		const draft = body({ rooms, occupant: placed(7, 'tentative') });
 		expect(draft).toContain('data-testid="agenda-slot-status"');
 		expect(draft).toContain('Publish it');
 		expect(draft).toMatch(/name="status"[^>]*value="confirmed"/);
+		expect(draft).toContain('Preview this placement');
+		expect(draft).toContain('Puts a draft copy in this slot');
 
 		const live = body({ rooms, occupant: placed(7, 'confirmed') });
-		expect(live).toContain('Hold it back');
+		expect(live).toContain('Make draft');
+		expect(live).toContain('takes it off the public agenda');
 		expect(live).toMatch(/name="status"[^>]*value="tentative"/);
+		expect(live).not.toContain('Hold it back');
 	});
 
 	/**

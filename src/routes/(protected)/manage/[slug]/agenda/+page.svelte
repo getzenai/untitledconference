@@ -674,11 +674,16 @@
 							disabled={busy || board.days.length === 0}
 							data-testid="agenda-hold-open"
 						>
-							Hold a slot
+							Block this slot
 						</Button>
 					{/snippet}
 				</Popover.Trigger>
 				<Popover.Content class="w-80 p-4" align="end">
+					<p class="mb-3 text-sm font-medium">Block this slot</p>
+					<p class="text-muted-foreground mb-3 text-xs">
+						Keeps talks out of this time. Use it for a break, or for a sponsor slot you have already
+						sold.
+					</p>
 					<form
 						method="POST"
 						action="?/hold"
@@ -800,7 +805,7 @@
 				</Popover.Content>
 			</Popover.Root>
 			<Button href="{base}/agenda/run-of-show" variant="ghost" data-testid="agenda-run-of-show">
-				Run of show
+				Printable schedule
 			</Button>
 			<Button
 				href="/c/{data.conference.slug}/agenda"

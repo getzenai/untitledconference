@@ -20,7 +20,7 @@
 </script>
 
 <svelte:head>
-	<title>Run of show — {data.conference.name}</title>
+	<title>Printable schedule — {data.conference.name}</title>
 </svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-8" data-testid="run-of-show">
@@ -30,7 +30,7 @@
 		>
 	</p>
 
-	<h1 class="text-2xl font-semibold tracking-tight">Run of show</h1>
+	<h1 class="text-2xl font-semibold tracking-tight">Printable schedule</h1>
 	<p class="text-muted-foreground mt-1 text-sm">{data.conference.name}</p>
 	<p class="text-muted-foreground mt-3 max-w-prose text-sm">
 		The programme in order, for the table. Print this page. What we do not know is left blank.

@@ -87,10 +87,12 @@ describe('organizer agenda layout', () => {
 		expect(body).toContain('/manage/test-conf/settings');
 	});
 
-	it('offers the run of show next to the public agenda (#449)', () => {
+	it('offers the printable schedule next to the public agenda (#449)', () => {
 		const body = renderWith(2);
 		expect(body).toContain('data-testid="agenda-run-of-show"');
 		expect(body).toContain('/manage/test-conf/agenda/run-of-show');
+		expect(body).toContain('Printable schedule');
+		expect(body).not.toContain('Run of show');
 	});
 
 	// The pair either side of the threshold, not two points far away from it: a test
@@ -754,11 +756,12 @@ describe('holding a slot', () => {
 	 * until it opens — the same reason the room filter is asserted this way. What
 	 * is inside the form is a browser spec's job.
 	 */
-	it('offers the organizer a way to hold a slot', () => {
+	it('offers the organizer a way to block a slot', () => {
 		const body = renderWith(2);
 
 		expect(body).toContain('data-testid="agenda-hold-open"');
-		expect(body).toContain('Hold a slot');
+		expect(body).toContain('Block this slot');
+		expect(body).not.toContain('Hold a slot');
 	});
 
 	it('names a sponsor hold as one and offers to release it', () => {
