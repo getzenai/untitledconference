@@ -31,8 +31,8 @@ describe('program-states (#466)', () => {
 		expect(notPublished(mixed)).toBe(2);
 		expect(dashboardSchedulingHeadline(mixed)).toBe('2 accepted not yet published');
 		expect(dashboardSchedulingTile(mixed)).toBe('2 not yet published');
-		expect(dashboardSchedulingSubhead(mixed)).toBe('1 draft · 1 unplaced');
-		expect(dashboardSchedulingLabel('unplaced')).toBe('Unplaced');
+		expect(dashboardSchedulingSubhead(mixed)).toBe('1 draft · 1 unscheduled');
+		expect(dashboardSchedulingLabel('unplaced')).toBe('Unscheduled');
 		expect(dashboardSchedulingLabel('tentative')).toBe('Draft');
 	});
 

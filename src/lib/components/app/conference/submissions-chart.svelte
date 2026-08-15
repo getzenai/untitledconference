@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Submissions per day, as an area with a line on top.
+	 * Talks per day, as an area with a line on top.
 	 *
 	 * One series, so there is no legend: the card's own heading says what is
 	 * plotted, and a box with a single swatch would only restate it. The colour is
@@ -182,7 +182,7 @@
 							fill="transparent"
 							tabindex="0"
 							role="slider"
-							aria-label="Submissions per day over the last {days.length} days, {total} in total — use the arrow keys to step through the days"
+							aria-label="Talks per day over the last {days.length} days, {total} in total — use the arrow keys to step through the days"
 							aria-valuemin={0}
 							aria-valuemax={days.length - 1}
 							aria-valuenow={active ?? days.length - 1}
@@ -251,7 +251,7 @@
 		<summary class="text-muted-foreground cursor-pointer">Show the numbers</summary>
 		<table class="mt-2 w-full text-left">
 			<thead class="text-muted-foreground">
-				<tr><th class="font-medium">Day</th><th class="font-medium">Submissions</th></tr>
+				<tr><th class="font-medium">Day</th><th class="font-medium">Talks</th></tr>
 			</thead>
 			<tbody class="tabular-nums">
 				{#each days as day (day.day)}

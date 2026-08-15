@@ -90,12 +90,12 @@ export function dashboardSchedulingEmpty(accepted: number): string {
 
 export function dashboardSchedulingSubhead(counts: SchedulingCounts): string {
 	const drafts = counts.draft === 1 ? '1 draft' : `${counts.draft} drafts`;
-	const unplaced = counts.unplaced === 1 ? '1 unplaced' : `${counts.unplaced} unplaced`;
+	const unplaced = counts.unplaced === 1 ? '1 unscheduled' : `${counts.unplaced} unscheduled`;
 	return `${drafts} · ${unplaced}`;
 }
 
 export function dashboardSchedulingLabel(state: 'unplaced' | 'tentative'): string {
-	return state === 'unplaced' ? 'Unplaced' : 'Draft';
+	return state === 'unplaced' ? 'Unscheduled' : 'Draft';
 }
 
 export type AgendaReady = {

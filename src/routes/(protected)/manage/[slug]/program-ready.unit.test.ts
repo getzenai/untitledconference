@@ -138,12 +138,12 @@ describe('dashboard vs agenda (#466)', () => {
 		const agendaLine = agendaReadyLine({ unplaced: 1, draft: 1, placed: 1 });
 
 		expect(dashLine).toBe('2 accepted not yet published');
-		expect(dashSplit).toBe('1 draft · 1 unplaced');
+		expect(dashSplit).toBe('1 draft · 1 unscheduled');
 		expect(agendaLine).toBe('1 talk is unscheduled.');
 
 		expect(dashboard).toContain(dashLine);
 		expect(dashboard).toContain(dashSplit);
-		expect(dashboard).toContain('Unplaced');
+		expect(dashboard).toContain('Unscheduled');
 		expect(dashboard).toContain('Draft');
 		expect(dashboard).not.toContain('confirmed slot');
 		expect(dashboard).not.toContain('Every accepted talk is published.');
@@ -154,12 +154,10 @@ describe('dashboard vs agenda (#466)', () => {
 		expect(agenda).not.toContain('Every accepted talk has a published slot.');
 		expect(agenda).not.toContain('Every accepted talk has a slot.</');
 
-		// Dashboard still uses #466's three words. Agenda names the same
-		// unplaced set as Unscheduled — the noun the other three surfaces
-		// agreed on (#476). Draft and published stay on the legend.
-		for (const word of Object.values(PROGRAM_WORDS)) {
-			expect(dashboard.toLowerCase()).toContain(word);
-		}
+		// Same talk state, same word on both screens (#476). Draft/published
+		// stay on the agenda legend; the tray is Unscheduled, not Unplaced.
+		expect(dashboard.toLowerCase()).toContain('unscheduled');
+		expect(dashboard.toLowerCase()).toContain(PROGRAM_WORDS.draft);
 		expect(agenda.toLowerCase()).toContain('unscheduled');
 		expect(agenda.toLowerCase()).toContain(PROGRAM_WORDS.draft);
 		expect(agenda.toLowerCase()).toContain(PROGRAM_WORDS.published);
@@ -184,8 +182,8 @@ describe('dashboard vs agenda (#466)', () => {
 		});
 
 		expect(dashboard).toContain('2 accepted not yet published');
-		expect(dashboard).toContain('0 drafts · 2 unplaced');
-		expect(dashboard).toContain('Unplaced');
+		expect(dashboard).toContain('0 drafts · 2 unscheduled');
+		expect(dashboard).toContain('Unscheduled');
 		expect(dashboard).not.toContain('Draft');
 		expect(agenda).toContain('2 talks are unscheduled.');
 		expect(agenda).not.toContain('still drafts');
@@ -207,7 +205,7 @@ describe('dashboard vs agenda (#466)', () => {
 		});
 
 		expect(dashboard).toContain('2 accepted not yet published');
-		expect(dashboard).toContain('2 drafts · 0 unplaced');
+		expect(dashboard).toContain('2 drafts · 0 unscheduled');
 		expect(agenda).toContain('Every accepted talk has a slot. 2 are still drafts.');
 		expect(agenda).not.toMatch(/>Every accepted talk has a slot\.</);
 	});

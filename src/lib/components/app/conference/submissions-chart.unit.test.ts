@@ -36,7 +36,7 @@ describe('submissions over time', () => {
 		expect(body).toContain('5 in the last 4 days');
 		expect(body).toContain('busiest day 3');
 		expect(body).toContain(
-			'aria-label="Submissions per day over the last 4 days, 5 in total — use the arrow keys to step through the days"'
+			'aria-label="Talks per day over the last 4 days, 5 in total — use the arrow keys to step through the days"'
 		);
 	});
 
@@ -53,7 +53,7 @@ describe('submissions over time', () => {
 
 		expect(body).toContain('role="presentation"');
 		expect(body).not.toContain('role="img"');
-		expect(body.match(/aria-label="Submissions per day/g) ?? []).toHaveLength(1);
+		expect(body.match(/aria-label="Talks per day/g) ?? []).toHaveLength(1);
 	});
 
 	/** One series: the card heading names it, so a one-swatch legend is noise. */

@@ -321,7 +321,7 @@
 				<h1 class="text-lg font-semibold tracking-tight">Dashboard</h1>
 				<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">{headline}</p>
 			</div>
-			<Button href="{base}/submissions" variant="outline">Open the submissions table</Button>
+			<Button href="{base}/submissions" variant="outline">Open the talks table</Button>
 		</div>
 	</div>
 
@@ -339,10 +339,10 @@
 					decided against
 				</h2>
 				<p class="mt-0.5 text-xs">
-					Taking an acceptance back clears the agenda tray and the untouched tasks, and deliberately
-					leaves the rest: a confirmed slot somebody may have announced, work the speaker already
-					handed in, and tasks an organizer typed by hand. Nothing disappears behind your back — so
-					these need a human.
+					Taking an acceptance back takes the talk off the agenda and the untouched tasks, and
+					deliberately leaves the rest: a confirmed slot somebody may have announced, work the
+					speaker already handed in, and tasks an organizer typed by hand. Nothing disappears behind
+					your back — so these need a human.
 				</p>
 				<ul class="mt-2 space-y-1 text-sm">
 					{#each d.inconsistencies.items as item (`${item.kind}-${item.id}`)}
@@ -425,7 +425,7 @@
 		<section class="border-border bg-card rounded-lg border" data-testid="submissions-over-time">
 			<div class="flex flex-wrap items-start justify-between gap-4 p-4 pb-3">
 				<div>
-					<h2 class="text-sm font-semibold tracking-tight">Submissions over time</h2>
+					<h2 class="text-sm font-semibold tracking-tight">Talks over time</h2>
 					<p class="text-muted-foreground mt-0.5 text-xs">
 						Per day, counted when the submission was started. Quiet days are on the axis as zeroes —
 						the gaps are the point of the chart.
@@ -661,7 +661,7 @@
 		<div class="grid gap-4 md:grid-cols-2">
 			{#snippet decisionsBody()}
 				{#if d.decisions.items.length === 0}
-					{@render nothing('Every submission has an answer.')}
+					{@render nothing('Every talk has an answer.')}
 				{:else}
 					<ul class="space-y-2 text-sm">
 						{#each d.decisions.items as item (item.id)}
