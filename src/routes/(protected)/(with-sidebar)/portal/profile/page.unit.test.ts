@@ -115,6 +115,22 @@ describe('the speaker profile page', () => {
 		expect(withPhoto).toContain('/speaker-photo/7?v=1');
 	});
 
+	it('does not offer to remove a seed placeholder that looks like initials', () => {
+		// Priya's demo row stores `/speakers/lovelace.svg`, which draws "PR" —
+		// the same letters the no-photo fallback uses. #618 is that button.
+		const body = draw([profile({ headshotUrl: '/speakers/lovelace.svg' })]);
+		expect(body).not.toContain('action="?/removeHeadshot"');
+		expect(body).toContain('/speakers/lovelace.svg');
+	});
+
+	it('names JPEG, PNG and WebP before the picker, and accepts them by extension', () => {
+		const body = draw([profile()]);
+		expect(body).toContain('JPEG, PNG or WebP');
+		// A MIME-only accept greys out a `.PNG` the OS cannot map to a UTI (#625).
+		expect(body).toMatch(/accept="[^"]*\.png[^"]*"/);
+		expect(body).toMatch(/accept="[^"]*image\/png[^"]*"/);
+	});
+
 	/**
 	 * #495: removing the headshot deleted it on one click, and the circle looks
 	 * the same afterwards — picture and initials fill the same space — so nothing

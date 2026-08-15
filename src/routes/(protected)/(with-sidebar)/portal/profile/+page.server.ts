@@ -6,7 +6,7 @@
  * end up on the public speaker page, and the headshot that goes with them.
  */
 import { collectSpeakerLinks, SPEAKER_LINK_ROWS } from '$lib/conference/speaker-links';
-import { REJECTION_MESSAGES, rejectUpload } from '$lib/conference/upload-limits';
+import { HEADSHOT_TYPES, REJECTION_MESSAGES, rejectUpload } from '$lib/conference/upload-limits';
 import { uploadsBucket } from '$lib/server/conference/deliverable-storage';
 import {
 	headshotHref,
@@ -19,9 +19,6 @@ import {
 } from '$lib/server/conference/speaker-profile';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-
-/** Only what a browser can actually paint as a face. */
-const HEADSHOT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) error(401, 'Sign in to edit your profile');

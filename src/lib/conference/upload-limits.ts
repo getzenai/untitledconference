@@ -33,6 +33,18 @@ export const ALLOWED_UPLOAD_TYPES = [
 /** The `accept` attribute, so the file picker filters before the server refuses. */
 export const UPLOAD_ACCEPT = ALLOWED_UPLOAD_TYPES.join(',');
 
+/**
+ * Only what a browser can paint as a face. SVG is out of the deliverable
+ * list already; it stays out here for the same reason.
+ *
+ * Extensions sit next to the MIME types because a MIME-only `accept` greys
+ * out a `.PNG` (or a file with no extension) when the OS cannot map it to a
+ * UTI — that is #625, not an allow-list that forgot PNG.
+ */
+export const HEADSHOT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+export const HEADSHOT_ACCEPT = [...HEADSHOT_TYPES, '.jpg', '.jpeg', '.png', '.webp'].join(',');
+
 export type UploadRejection = 'too_large' | 'unsupported_type' | 'empty' | 'no_storage';
 
 export const REJECTION_MESSAGES: Record<UploadRejection, string> = {
