@@ -28,26 +28,33 @@ const emptyUsage = {
 };
 
 /**
- * A model that always calls `list_my_review_assignments` on the first step
- * and then names that tool in the follow-up text. Used when `AI_CHAT_MODEL`
- * is `mock`, so a local session can see streaming and a tool name without a
- * Gateway key.
+ * A model that calls one read tool on the first step and then names that tool
+ * in the follow-up text. Used when `AI_CHAT_MODEL` is `mock`, so a local
+ * session can see streaming and a tool name without a Gateway key.
+ *
+ * The default is the reviewer queue; the agenda surface passes `get_agenda`
+ * with its own arguments, since a tool that takes a conference slug cannot be
+ * called with `{}`.
  */
-export function createMockChatModel(): LanguageModel {
+export function createMockChatModel(
+	toolName = 'list_my_review_assignments',
+	input: Record<string, unknown> = {}
+): LanguageModel {
+	const args = JSON.stringify(input);
 	const toolStep = [
 		{ type: 'stream-start' as const, warnings: [] },
 		{
 			type: 'tool-input-start' as const,
 			id: 'call_list',
-			toolName: 'list_my_review_assignments'
+			toolName
 		},
-		{ type: 'tool-input-delta' as const, id: 'call_list', delta: '{}' },
+		{ type: 'tool-input-delta' as const, id: 'call_list', delta: args },
 		{ type: 'tool-input-end' as const, id: 'call_list' },
 		{
 			type: 'tool-call' as const,
 			toolCallId: 'call_list',
-			toolName: 'list_my_review_assignments',
-			input: '{}'
+			toolName,
+			input: args
 		},
 		{ type: 'finish' as const, finishReason: 'tool-calls' as const, usage: emptyUsage }
 	];
@@ -57,7 +64,7 @@ export function createMockChatModel(): LanguageModel {
 		{
 			type: 'text-delta' as const,
 			id: 'text_1',
-			delta: 'I used list_my_review_assignments to look at your queue.'
+			delta: `I used ${toolName} to look.`
 		},
 		{ type: 'text-end' as const, id: 'text_1' },
 		{ type: 'finish' as const, finishReason: 'stop' as const, usage: emptyUsage }
