@@ -25,6 +25,7 @@
 		nextEditorialStand
 	} from '$lib/conference/editorial-stand';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -497,7 +498,14 @@
 					{#each s.answers as answer, i (i)}
 						<div>
 							<dt class="text-muted-foreground">{answer.label}</dt>
-							<dd>{answerValue(answer)}</dd>
+							<dd>
+								{#if answer.kind === 'boolean' || answer.value === null || answer.value === ''}
+									{answerValue(answer)}
+								{:else}
+									<!-- #477: a link the submitter typed is a link here too. -->
+									<AnswerText value={answer.value} />
+								{/if}
+							</dd>
 						</div>
 					{/each}
 				</dl>

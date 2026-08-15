@@ -106,6 +106,13 @@ type FixtureRequest = {
 	 */
 	attachments?: { label: string; url: string }[];
 	/**
+	 * Free-text CFP answers on the first session (#477).
+	 *
+	 * The form has no link field — "Link to a recording" is a text question, and
+	 * the answer that has to become clickable is the string a submitter typed.
+	 */
+	textAnswers?: { label: string; value: string }[];
+	/**
 	 * Files already handed in on speaker content (#423).
 	 *
 	 * A deliverable cannot be produced through the UI without walking
@@ -282,6 +289,7 @@ type Fixture = {
 	blindReview: boolean;
 	tracks: string[];
 	attachments: { label: string; url: string }[];
+	textAnswers: { label: string; value: string }[];
 	contentFiles: { filename: string; contentType: string }[];
 };
 
@@ -305,6 +313,7 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		blindReview: body.blindReview ?? false,
 		tracks: orEmpty(body.tracks),
 		attachments: orEmpty(body.attachments),
+		textAnswers: orEmpty(body.textAnswers),
 		contentFiles: orEmpty(body.contentFiles)
 	};
 }
@@ -366,15 +375,18 @@ async function addSessions(
 }
 
 /**
- * File-kind answers on one talk, so the reviewer preview spec has something
- * to open without walking the CFP editor (#423).
+ * CFP answers already sitting on one talk, so a spec can read them without
+ * walking CFP editor → publish → submit (#423, #477).
+ *
+ * One form for all of them: two calls would leave the talk answering two
+ * different calls, which is not a shape the product can produce.
  */
-async function addAttachments(
+async function addAnswers(
 	conferenceId: number,
 	submissionId: number,
-	attachments: { label: string; url: string }[]
+	answers: { label: string; value: string; kind: 'file' | 'short_text' }[]
 ): Promise<void> {
-	if (attachments.length === 0) return;
+	if (answers.length === 0) return;
 
 	const [form] = await db
 		.insert(cfpFormTable)
@@ -384,10 +396,10 @@ async function addAttachments(
 	const fields = await db
 		.insert(formFieldTable)
 		.values(
-			attachments.map((attachment, position) => ({
+			answers.map((answer, position) => ({
 				cfpFormId: form.id,
-				label: attachment.label,
-				kind: 'file' as const,
+				label: answer.label,
+				kind: answer.kind,
 				position
 			}))
 		)
@@ -397,7 +409,7 @@ async function addAttachments(
 		fields.map((field, i) => ({
 			submissionId,
 			formFieldId: field.id,
-			value: attachments[i].url
+			value: answers[i].value
 		}))
 	);
 }
@@ -476,8 +488,11 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	const trackIds = await addTracks(conference.id, fixture.tracks);
 	const firstSubmissionId = await addSessions(conference.id, organizationId, fixture, trackIds);
-	if (firstSubmissionId && fixture.attachments.length > 0) {
-		await addAttachments(conference.id, firstSubmissionId, fixture.attachments);
+	if (firstSubmissionId) {
+		await addAnswers(conference.id, firstSubmissionId, [
+			...fixture.attachments.map((a) => ({ label: a.label, value: a.url, kind: 'file' as const })),
+			...fixture.textAnswers.map((a) => ({ ...a, kind: 'short_text' as const }))
+		]);
 	}
 
 	if (fixture.contentFiles.length > 0) {

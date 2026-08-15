@@ -14,6 +14,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
+	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
@@ -247,7 +248,14 @@
 				{#each s.answers as answer, i (i)}
 					<div>
 						<dt class="text-muted-foreground text-xs">{answer.label}</dt>
-						<dd class="mt-0.5 whitespace-pre-line">{answerValue(answer)}</dd>
+						<dd class="mt-0.5">
+							{#if answer.kind === 'boolean' || answer.value === null || answer.value === ''}
+								<span class="whitespace-pre-line">{answerValue(answer)}</span>
+							{:else}
+								<!-- #477: the same answer, the same links, on the submitter's own copy. -->
+								<AnswerText value={answer.value} />
+							{/if}
+						</dd>
 					</div>
 				{/each}
 			</dl>

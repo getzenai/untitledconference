@@ -51,10 +51,12 @@ describe('speaker submission detail', () => {
 		const body = draw();
 
 		expect(body).toContain('Have you given this talk before?');
-		expect(body).toContain('>Yes</dd>');
-		expect(body).toContain('>No</dd>');
-		expect(body).not.toContain('>true</dd>');
-		expect(body).not.toContain('>false</dd>');
+		// The stored value is the string the dropdown posted, so what has to be
+		// asserted is the word, not the tag it sits in (#477 moved the tag).
+		expect(body).toContain('>Yes</span>');
+		expect(body).toContain('>No</span>');
+		expect(body).not.toContain('>true<');
+		expect(body).not.toContain('>false<');
 		expect(body).toContain('I need a lectern.');
 	});
 
