@@ -1084,14 +1084,22 @@ export async function reviewerProgress(conferenceId: number): Promise<ReviewerPr
 			name: user.name,
 			email: user.email,
 			assigned: count(),
-			submitted: sql<number>`count(*) filter (where ${reviewTable.status} = 'submitted')`
+			submitted: count(reviewTable.submittedAt),
+			// Drafts are not reviewable yet, while a withdrawn assignment remains
+			// visible but is no longer work the reviewer can complete (#641).
+			outstanding: sql<number>`count(*) filter (where ${reviewTable.submittedAt} is null and ${submissionTable.status} <> 'withdrawn')`
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
 		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.innerJoin(submissionTable, eq(submissionTable.id, reviewTable.submissionId))
 		.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
 		.where(
-			and(eq(evaluationPlanTable.conferenceId, conferenceId), ne(reviewTable.status, 'recused'))
+			and(
+				eq(evaluationPlanTable.conferenceId, conferenceId),
+				ne(reviewTable.status, 'recused'),
+				ne(submissionTable.status, 'draft')
+			)
 		)
 		.groupBy(reviewTable.reviewerUserId, user.name, user.email)
 		.orderBy(asc(user.name), asc(user.email));
@@ -1113,19 +1121,15 @@ export async function reviewerProgress(conferenceId: number): Promise<ReviewerPr
 					.orderBy(asc(emailLogTable.id));
 	const latest = new Map(reminders.map((reminder) => [reminder.toEmail, reminder.status]));
 
-	return rows.map((row) => {
-		const assigned = Number(row.assigned);
-		const submitted = Number(row.submitted);
-		return {
-			userId: row.userId,
-			name: row.name ?? row.email,
-			email: row.email,
-			assigned,
-			submitted,
-			outstanding: assigned - submitted,
-			reminderStatus: latest.get(row.email) ?? null
-		};
-	});
+	return rows.map((row) => ({
+		userId: row.userId,
+		name: row.name ?? row.email,
+		email: row.email,
+		assigned: Number(row.assigned),
+		submitted: Number(row.submitted),
+		outstanding: Number(row.outstanding),
+		reminderStatus: latest.get(row.email) ?? null
+	}));
 }
 
 export type ReminderResult = 'queued' | 'already_queued' | 'nothing_outstanding' | 'no_email';

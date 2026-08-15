@@ -29,6 +29,7 @@ import {
 	setReviewAssignment
 } from './review-management';
 import { recuseReview, reviewerSubmission, reviewQueue } from './reviewer';
+import { committee } from './reviewer-roster';
 
 const suffix = `review-management-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -855,7 +856,8 @@ describe('reviewer progress and reminders', () => {
 				reviewRoundId: roundId,
 				submissionId,
 				reviewerUserId: CONFERENCE_REVIEWER,
-				status: 'submitted'
+				status: 'submitted',
+				submittedAt: new Date()
 			},
 			{
 				reviewRoundId: roundId,
@@ -879,6 +881,60 @@ describe('reviewer progress and reminders', () => {
 				outstanding: 0
 			})
 		]);
+	});
+
+	it('uses the same actionable assignment counts as the reviewer roster', async () => {
+		const [pending, submitted, draft, withdrawn] = await db
+			.insert(submissionTable)
+			.values([
+				{ conferenceId: conference.id, title: 'Pending review', status: 'submitted' },
+				{ conferenceId: conference.id, title: 'Completed review', status: 'submitted' },
+				{ conferenceId: conference.id, title: 'Speaker draft', status: 'draft' },
+				{ conferenceId: conference.id, title: 'Withdrawn talk', status: 'withdrawn' }
+			])
+			.returning({ id: submissionTable.id });
+		const submittedAt = new Date();
+		await db.insert(reviewTable).values([
+			{
+				reviewRoundId: roundId,
+				submissionId: pending.id,
+				reviewerUserId: CONFERENCE_REVIEWER,
+				status: 'assigned'
+			},
+			{
+				reviewRoundId: roundId,
+				submissionId: submitted.id,
+				reviewerUserId: CONFERENCE_REVIEWER,
+				status: 'submitted',
+				submittedAt
+			},
+			{
+				reviewRoundId: roundId,
+				submissionId: draft.id,
+				reviewerUserId: CONFERENCE_REVIEWER,
+				status: 'assigned'
+			},
+			{
+				reviewRoundId: roundId,
+				submissionId: withdrawn.id,
+				reviewerUserId: CONFERENCE_REVIEWER,
+				status: 'assigned'
+			}
+		]);
+
+		const dashboard = (await reviewerProgress(conference.id)).find(
+			(row) => row.userId === CONFERENCE_REVIEWER
+		);
+		const roster = (await committee(conference.id)).find(
+			(row) => row.userId === CONFERENCE_REVIEWER
+		);
+
+		expect(dashboard).toMatchObject({ assigned: 3, submitted: 1, outstanding: 1 });
+		expect(dashboard).toMatchObject({
+			assigned: roster?.assigned,
+			submitted: roster?.submitted,
+			outstanding: roster?.outstanding
+		});
 	});
 
 	it('queues one observable reminder, suppresses a repeat, and retries a failed send', async () => {
