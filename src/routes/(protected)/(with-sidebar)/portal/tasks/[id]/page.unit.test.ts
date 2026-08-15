@@ -158,6 +158,133 @@ describe('speaker task detail', () => {
 		expect(body).not.toContain('Upload the file here once it is ready.');
 	});
 
+	it('hands a file in as soon as it is picked, and keeps Upload only for no-JS', () => {
+		expect(source).toContain('onchange={handInOnPick}');
+		expect(source).toContain('input.form.requestSubmit()');
+		expect(source).toContain("input.value = ''");
+		expect(source).toContain('{#if !hydrated}');
+		expect(source).toContain('data-testid="task-upload"');
+
+		const body = draw(
+			task({ title: 'Session presentation', kind: 'file_request', status: 'open' })
+		);
+		expect(body).toContain('data-testid="task-upload"');
+		expect(body).toContain('>Upload<');
+		expect(body).not.toContain('It is handed in as soon as you pick it');
+	});
+
+	it('shows a thumbnail for an image, and names who reads a question (#626)', () => {
+		const body = draw(
+			task({
+				title: 'Upload headshot',
+				kind: 'file_request',
+				status: 'submitted'
+			}),
+			[
+				{
+					id: 4,
+					filename: 'headshot.png',
+					contentType: 'image/png',
+					sizeBytes: 1024,
+					version: 1,
+					approvalStatus: 'pending',
+					uploadedAt: new Date('2027-04-01T12:00:00Z'),
+					comments: []
+				}
+			]
+		);
+
+		expect(body).toContain('<img');
+		expect(body).toMatch(/<img[^>]*src="\/portal\/files\/4"/);
+		expect(body).toContain('data-testid="file-open"');
+		expect(body).toContain('Goes to the programme team of DevFlow Conf 2027');
+		expect(body).toContain('Their reply appears here.');
+		expect(body).toContain('Send to the programme team');
+		expect(body).not.toContain('Add comment');
+		expect(body).not.toContain('Ask a question about this file');
+	});
+
+	it('opens a PDF from the name and leaves a document as a download', () => {
+		const pdf = draw(task({ title: 'Upload slides', kind: 'file_request', status: 'submitted' }), [
+			{
+				id: 8,
+				filename: 'slides.pdf',
+				contentType: 'application/pdf',
+				sizeBytes: 2048,
+				version: 1,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-01T12:00:00Z'),
+				comments: []
+			}
+		]);
+		const docx = draw(task({ title: 'Upload notes', kind: 'file_request', status: 'submitted' }), [
+			{
+				id: 9,
+				filename: 'notes.docx',
+				contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+				sizeBytes: 4096,
+				version: 1,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-01T12:00:00Z'),
+				comments: []
+			}
+		]);
+
+		expect(pdf).not.toContain('<img');
+		expect(pdf).toContain('data-testid="file-open"');
+		expect(pdf).toContain('/portal/files/8');
+		expect(docx).not.toContain('data-testid="file-open"');
+		expect(docx).toContain('data-testid="file-download"');
+		expect(docx).toContain('We cannot show this type here — download it instead.');
+		expect(docx).toContain('/portal/files/9');
+	});
+
+	it('will not preview a file whose stored type is not one we render', () => {
+		const body = draw(task({ title: 'Upload slides', kind: 'file_request', status: 'submitted' }), [
+			{
+				id: 11,
+				filename: 'slides.pdf',
+				contentType: 'text/html',
+				sizeBytes: 64,
+				version: 1,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-01T12:00:00Z'),
+				comments: []
+			}
+		]);
+
+		expect(body).not.toContain('data-testid="file-open"');
+		expect(body).toContain('data-testid="file-download"');
+		expect(body).toContain('We cannot show this type here — download it instead.');
+	});
+
+	it('shows a programme-team reply under the file it answers', () => {
+		const body = draw(task({ title: 'Upload slides', kind: 'file_request', status: 'submitted' }), [
+			{
+				id: 8,
+				filename: 'slides.pdf',
+				contentType: 'application/pdf',
+				sizeBytes: 2048,
+				version: 1,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-01T12:00:00Z'),
+				comments: [
+					{
+						id: 1,
+						authorName: 'Inés Ortega',
+						body: 'Can you crop the title slide?',
+						createdAt: new Date('2027-04-02T09:00:00Z')
+					}
+				]
+			}
+		]);
+
+		expect(body).toContain('Inés Ortega');
+		expect(body).toContain('Can you crop the title slide?');
+		expect(body).toContain('Goes to the programme team of DevFlow Conf 2027');
+		expect(body).toContain('Their reply appears here.');
+	});
+
 	it('says the organizers asked for a new version after a rejection', () => {
 		const body = draw(
 			task({

@@ -8,6 +8,8 @@
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
+	import ContentFileLink from '$lib/components/content-file-link.svelte';
+	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import {
@@ -24,8 +26,10 @@
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
+	import type { FilePreviewKind } from '$lib/conference/file-preview';
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
 	import { withdrawWarning } from '$lib/conference/withdraw-warning';
+	import { onMount } from 'svelte';
 
 	let { data, form } = $props();
 	const zone = readerZone();
@@ -43,6 +47,28 @@
 	const participationDecision = $derived(task.status === 'done' ? task.participationStatus : null);
 	let busy = $state(false);
 	let confirmWithdraw = $state(false);
+	// The Upload button is only for a form that never hydrated. Once JS is
+	// running, picking a file hands it in — a second click after that is
+	// ceremony (#626).
+	let hydrated = $state(false);
+	onMount(() => {
+		hydrated = true;
+	});
+	let preview = $state<{ title: string; src: string; kind: FilePreviewKind } | null>(null);
+
+	const openFile = (src: string, title: string, kind: FilePreviewKind) => {
+		preview = { src, title, kind };
+	};
+
+	const handInOnPick = (event: Event) => {
+		const input = event.currentTarget;
+		if (!(input instanceof HTMLInputElement) || !input.files?.length || !input.form) return;
+		input.form.requestSubmit();
+		// The submit handler has already copied the file. Clear so picking the
+		// same path again is still a change — a refused upload must not trap
+		// the speaker on a dead control.
+		input.value = '';
+	};
 
 	const warning = $derived(withdrawWarning(task.conferenceName, data.acceptedTalks));
 
@@ -328,11 +354,17 @@
 					name="file"
 					accept={UPLOAD_ACCEPT}
 					required
+					disabled={busy}
+					data-testid="task-upload"
+					onchange={handInOnPick}
 					class="file:border-input file:bg-background text-sm file:mr-3 file:rounded-md file:border file:px-3 file:py-1.5 file:text-sm"
 				/>
-				<Button type="submit" disabled={busy}>Upload</Button>
+				{#if !hydrated}
+					<Button type="submit" disabled={busy}>Upload</Button>
+				{/if}
 				<span class="text-muted-foreground text-sm"
-					>PDF, image, slides or document, up to {megabytes} MB.</span
+					>PDF, image, slides or document, up to {megabytes} MB.{#if hydrated}
+						It is handed in as soon as you pick it.{/if}</span
 				>
 			</form>
 
@@ -349,11 +381,14 @@
 			<ul class="divide-border mt-3 divide-y">
 				{#each files as file, i (file.id)}
 					<li class="py-4">
-						<div class="flex flex-wrap items-baseline justify-between gap-2">
+						<div class="flex flex-wrap items-start justify-between gap-2">
 							<div>
-								<a class="text-sm font-medium hover:underline" href="/portal/files/{file.id}">
-									{file.filename}
-								</a>
+								<ContentFileLink
+									filename={file.filename}
+									contentType={file.contentType}
+									href="/portal/files/{file.id}"
+									onOpen={openFile}
+								/>
 								<span class="text-muted-foreground ml-2 text-sm">
 									v{file.version}{#if file.sizeBytes}<span class="px-1.5">·</span>{sizeLabel(
 											file.sizeBytes
@@ -387,16 +422,26 @@
 							</ul>
 						{/if}
 
-						<form method="POST" action="?/comment" use:enhance={submitting('add')} class="mt-3">
+						<form
+							method="POST"
+							action="?/comment"
+							use:enhance={submitting('add')}
+							class="mt-3"
+							data-testid={`speaker-question-form-${file.id}`}
+						>
 							<input type="hidden" name="deliverableId" value={file.id} />
+							<p class="text-muted-foreground mb-2 text-sm">
+								Goes to the programme team of {task.conferenceName}. Their reply appears here.
+							</p>
 							<Textarea
 								name="body"
 								rows={2}
-								placeholder="Ask a question about this file"
+								aria-label="Question for the programme team of {task.conferenceName}"
+								placeholder="Ask the programme team of {task.conferenceName}"
 								class="text-sm"
 							/>
 							<Button type="submit" variant="outline" size="sm" class="mt-2" disabled={busy}>
-								Add comment
+								Send to the programme team
 							</Button>
 						</form>
 					</li>
@@ -409,3 +454,5 @@
 		</section>
 	{/if}
 </div>
+
+<FilePreviewSheet bind:preview />

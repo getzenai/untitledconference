@@ -8,10 +8,10 @@
  * asking.
  *
  * Sharing one route behind a role flag would put both answers in one branch, and the
- * branch that is wrong by default is the one that leaks. The portal stays
- * attachment-only. This route inlines PDF and ordinary images so the sheet can
- * render them; everything else stays attachment. The type we send is one we
- * chose — an uploaded `text/html` named `slides.pdf` must not execute here.
+ * branch that is wrong by default is the one that leaks. Both routes inline the
+ * same types — PDF and ordinary images — so a preview can render; everything
+ * else stays attachment. The type we send is one we chose — an uploaded
+ * `text/html` named `slides.pdf` must not execute here.
  *
  * The reason it exists at all: a speaker profile created by an organizer has no
  * account, so its uploads are unreachable through the ownership route — on the demo
