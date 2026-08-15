@@ -39,6 +39,8 @@ type Extras = {
 	acceptCondition?: string | null;
 	acceptConditionOwner?: string | null;
 	acceptConditionOwnerId?: string | null;
+	resubmitGuidance?: string | null;
+	declineNote?: string | null;
 	editorialStand?:
 		| 'materials_requested'
 		| 'received'
@@ -61,7 +63,7 @@ type Extras = {
 };
 
 function renderPage(
-	status: 'accepted' | 'submitted' | 'rejected' | 'draft' | 'waitlisted',
+	status: 'accepted' | 'submitted' | 'rejected' | 'draft' | 'waitlisted' | 'resubmit_with_guidance',
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
@@ -95,6 +97,8 @@ function renderPage(
 					acceptCondition: extras.acceptCondition ?? null,
 					acceptConditionOwner: extras.acceptConditionOwner ?? null,
 					acceptConditionOwnerId: extras.acceptConditionOwnerId ?? null,
+					resubmitGuidance: extras.resubmitGuidance ?? null,
+					declineNote: extras.declineNote ?? null,
 					editorialStand: extras.editorialStand ?? null,
 					speakers: extras.speakers ?? [],
 					answers: [],
@@ -144,7 +148,7 @@ describe('organizer submission detail decision workflow', () => {
 		expect(decide).toContain('value="rejected"');
 		expect(decide).toContain('value="waitlisted"');
 		expect(decide).toContain('value="accepted"');
-		expect(decide.match(/disabled=""/g)?.length).toBe(3);
+		expect(decide.match(/disabled=""/g)?.length).toBe(4);
 		expect(body).toContain('data-testid="decision-block-reason"');
 		expect(body).toContain(DRAFT_DECISION_REASON);
 		expect(body).not.toContain('text-status-good');
@@ -166,7 +170,9 @@ describe('organizer submission detail decision workflow', () => {
 
 		expect(body).toContain('action="?/decide"');
 		expect(body).toContain('action="?/notify"');
-		expect(body).toContain('Saving Accept, Waitlist or Decline does not notify speakers');
+		expect(body).toContain(
+			'Saving Accept, Waitlist, Decline or Ask to resubmit does not notify speakers'
+		);
 		expect(body).toContain('Decision saved. Speakers have not been notified.');
 		expect(body).toContain('Notify speakers of decision');
 		expect(body).not.toContain('queue the decision email');
@@ -533,6 +539,30 @@ describe('the organizer talk editor', () => {
 		expect(body).toContain('bring a co-presenter');
 		expect(body).toContain('name="conditionOwnerId"');
 		expect(body).toContain('value="ann"');
+	});
+
+	it('offers resubmit with guidance as its own way out (#447)', () => {
+		const open = renderPage('submitted');
+		expect(open).toContain('data-testid="decide-resubmit"');
+		expect(open).toContain('data-testid="resubmit-guidance-text"');
+		expect(open).toContain('data-testid="decline-note-text"');
+		expect(open).toContain('value="resubmit_with_guidance"');
+
+		const asked = renderPage('resubmit_with_guidance', null, null, null, 'one', null, {
+			resubmitGuidance: 'resubmit with your client'
+		});
+		expect(asked).toContain('data-testid="submission-guidance"');
+		expect(asked).toContain('resubmit with your client');
+		expect(asked).not.toContain('data-testid="resubmit-guidance-text"');
+	});
+
+	it('keeps a decline note when one was written (#447)', () => {
+		const body = renderPage('rejected', null, null, null, 'one', null, {
+			declineNote: 'closest we had — try again with the case study'
+		});
+		expect(body).toContain('data-testid="submission-decline-note"');
+		expect(body).toContain('closest we had — try again with the case study');
+		expect(body).not.toContain('data-testid="decline-note-text"');
 	});
 });
 

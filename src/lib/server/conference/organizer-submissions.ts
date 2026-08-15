@@ -527,6 +527,8 @@ async function submissionHeader(conferenceId: number, submissionId: number) {
 			acceptCondition: submissionTable.acceptCondition,
 			acceptConditionOwnerId: submissionTable.acceptConditionOwnerId,
 			editorialStand: submissionTable.editorialStand,
+			resubmitGuidance: submissionTable.resubmitGuidance,
+			declineNote: submissionTable.declineNote,
 			ownerName: user.name,
 			ownerEmail: user.email
 		})

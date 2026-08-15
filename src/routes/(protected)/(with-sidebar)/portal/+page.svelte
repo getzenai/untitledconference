@@ -95,6 +95,7 @@
 		accepted: 'default',
 		rejected: 'destructive',
 		waitlisted: 'secondary',
+		resubmit_with_guidance: 'secondary',
 		withdrawn: 'outline'
 	};
 
@@ -105,6 +106,7 @@
 		accepted: 'Accepted',
 		rejected: 'Not accepted',
 		waitlisted: 'Waitlisted',
+		resubmit_with_guidance: 'Please resubmit',
 		withdrawn: 'Withdrawn'
 	};
 

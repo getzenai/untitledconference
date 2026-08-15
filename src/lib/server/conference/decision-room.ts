@@ -42,7 +42,14 @@ const ACCEPTED = 'accepted';
  * it back, and a committee arguing over a talk that is no longer offered is the kind
  * of wasted minute this screen exists to prevent.
  */
-const ARGUABLE = ['submitted', 'in_review', 'rejected', 'waitlisted', 'accepted'] as const;
+const ARGUABLE = [
+	'submitted',
+	'in_review',
+	'rejected',
+	'waitlisted',
+	'accepted',
+	'resubmit_with_guidance'
+] as const;
 
 export type LobbyRow = {
 	submissionId: number;
@@ -69,6 +76,9 @@ export type LobbyRow = {
 	 */
 	acceptCondition: string | null;
 	acceptConditionOwner: string | null;
+	/** #447 — the sentence on a resubmit, or the champion's line on a decline. */
+	resubmitGuidance: string | null;
+	declineNote: string | null;
 };
 
 export type CommitteeSeat = { userId: string; name: string; queueLength: number };
@@ -239,6 +249,8 @@ function myReviews(conferenceId: number, reviewerUserId: string) {
 			track: trackTable.name,
 			sponsorTier: sponsorTierTable.name,
 			acceptCondition: submissionTable.acceptCondition,
+			resubmitGuidance: submissionTable.resubmitGuidance,
+			declineNote: submissionTable.declineNote,
 			ownerName: user.name,
 			ownerEmail: user.email
 		})
@@ -333,7 +345,9 @@ export async function lobbyingQueue(
 			myComment: row.comment,
 			sponsorTier: row.sponsorTier,
 			acceptCondition: row.acceptCondition,
-			acceptConditionOwner: row.ownerName?.trim() || row.ownerEmail || null
+			acceptConditionOwner: row.ownerName?.trim() || row.ownerEmail || null,
+			resubmitGuidance: row.resubmitGuidance,
+			declineNote: row.declineNote
 		};
 	});
 

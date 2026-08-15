@@ -280,6 +280,109 @@ describe('decideSubmissions — declining', () => {
 	});
 });
 
+/**
+ * #447. Three ways out of the meeting. Resubmit is not a decline wearing a
+ * note: the status is its own, the guidance is required, and nothing is mailed.
+ */
+describe('decideSubmissions — the three decline-path outcomes', () => {
+	it('asks them back under a new name, with the sentence attached', async () => {
+		const result = await decideSubmissions(
+			conference,
+			[submissionId],
+			'resubmit_with_guidance',
+			null,
+			'resubmit with your client'
+		);
+
+		expect(result).toMatchObject({ decided: 1, sessionsCreated: 0, tasksCreated: 0 });
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('resubmit_with_guidance');
+		expect(row.resubmitGuidance).toBe('resubmit with your client');
+		expect(row.declineNote).toBeNull();
+		expect(row.acceptCondition).toBeNull();
+
+		const placements = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, submissionId));
+		expect(placements).toHaveLength(0);
+
+		const emails = await db
+			.select()
+			.from(emailLogTable)
+			.where(eq(emailLogTable.relatedId, submissionId));
+		expect(emails).toHaveLength(0);
+	});
+
+	it('refuses a resubmit that has no sentence, and writes nothing', async () => {
+		await expect(
+			decideSubmissions(conference, [submissionId], 'resubmit_with_guidance')
+		).rejects.toThrow('missing_guidance');
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('submitted');
+	});
+
+	it('keeps a champion sentence on a decline, and does not pretend it is a resubmit', async () => {
+		const result = await decideSubmissions(
+			conference,
+			[submissionId],
+			'rejected',
+			null,
+			'closest we had — try again with the case study'
+		);
+
+		expect(result).toMatchObject({ decided: 1, sessionsCreated: 0 });
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('rejected');
+		expect(row.declineNote).toBe('closest we had — try again with the case study');
+		expect(row.resubmitGuidance).toBeNull();
+	});
+
+	it('lets a decline go out with no sentence at all', async () => {
+		await decideSubmissions(conference, [submissionId], 'rejected');
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('rejected');
+		expect(row.declineNote).toBeNull();
+	});
+
+	it('takes the tray slot back when an accept becomes a resubmit', async () => {
+		await decideSubmissions(conference, [submissionId], 'accepted');
+		const result = await decideSubmissions(
+			conference,
+			[submissionId],
+			'resubmit_with_guidance',
+			null,
+			'come back with the client on stage'
+		);
+
+		expect(result).toMatchObject({ decided: 1, sessionsRemoved: 1, tasksRemoved: 2 });
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('resubmit_with_guidance');
+		expect(row.acceptCondition).toBeNull();
+		expect(row.resubmitGuidance).toBe('come back with the client on stage');
+	});
+});
+
 describe('decideSubmissions — scoping', () => {
 	it('ignores ids that belong to a different conference', async () => {
 		const result = await decideSubmissions(

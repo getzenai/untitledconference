@@ -63,7 +63,14 @@ describe('decisionBlockReason', () => {
 	});
 
 	it('is silent once the speaker has handed the talk in', () => {
-		for (const status of ['submitted', 'in_review', 'accepted', 'rejected', 'waitlisted']) {
+		for (const status of [
+			'submitted',
+			'in_review',
+			'accepted',
+			'rejected',
+			'waitlisted',
+			'resubmit_with_guidance'
+		]) {
 			expect(decisionBlockReason(status)).toBeNull();
 		}
 	});

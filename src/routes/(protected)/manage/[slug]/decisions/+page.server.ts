@@ -15,6 +15,7 @@ import {
 	conditionForDecision,
 	conferenceOrganizers
 } from '$lib/server/conference/accept-condition';
+import { sentenceForDecision } from '$lib/server/conference/decision-note';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	committeeSeats,
@@ -26,7 +27,7 @@ import { decideSubmissions, type Decision } from '$lib/server/conference/decisio
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted'];
+const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted', 'resubmit_with_guidance'];
 
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
@@ -70,7 +71,16 @@ export const actions: Actions = {
 		const note = await conditionForDecision(conference, form, decision);
 		if (!note.ok) return fail(400, { message: note.message });
 
-		const result = await decideSubmissions(conference, [id], decision as Decision, note.condition);
+		const sentence = sentenceForDecision(form, decision);
+		if (!sentence.ok) return fail(400, { message: sentence.message });
+
+		const result = await decideSubmissions(
+			conference,
+			[id],
+			decision as Decision,
+			note.condition,
+			sentence.sentence
+		);
 		return { decision, result };
 	},
 

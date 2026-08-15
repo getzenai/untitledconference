@@ -104,7 +104,10 @@
 			.join('');
 
 	const decided = $derived(
-		s.status === 'accepted' || s.status === 'rejected' || s.status === 'waitlisted'
+		s.status === 'accepted' ||
+			s.status === 'rejected' ||
+			s.status === 'waitlisted' ||
+			s.status === 'resubmit_with_guidance'
 	);
 	const cannotDecide = $derived(decisionBlockReason(s.status));
 	const inTray = $derived(s.placements.length > 0);
@@ -147,6 +150,8 @@
 				: s.acceptCondition
 			: null
 	);
+	const guidanceLine = $derived(s.resubmitGuidance);
+	const declineLine = $derived(s.declineNote);
 	const standOptions = EDITORIAL_STANDS.map((stand) => ({
 		value: stand,
 		label: EDITORIAL_STAND_LABELS[stand]
@@ -178,6 +183,16 @@
 				{#if s.editorialStand}
 					<span data-testid="submission-editorial-stand">
 						<StatusBadge status={s.editorialStand} />
+					</span>
+				{/if}
+				{#if guidanceLine}
+					<span data-testid="submission-guidance">
+						<StatusBadge status="open" tone="warn" label={guidanceLine} />
+					</span>
+				{/if}
+				{#if declineLine}
+					<span data-testid="submission-decline-note">
+						<StatusBadge status="open" tone="warn" label={declineLine} />
 					</span>
 				{/if}
 			</div>
@@ -222,7 +237,31 @@
 						/>
 					</div>
 				{/if}
-				<div class="flex gap-2">
+				{#if s.status !== 'resubmit_with_guidance'}
+					<div class="flex w-64 flex-col gap-2" data-testid="resubmit-guidance">
+						<input
+							name="guidance"
+							type="text"
+							maxlength="280"
+							placeholder="Resubmit with your client…"
+							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+							data-testid="resubmit-guidance-text"
+						/>
+					</div>
+				{/if}
+				{#if s.status !== 'rejected'}
+					<div class="flex w-64 flex-col gap-2" data-testid="decline-note">
+						<input
+							name="declineNote"
+							type="text"
+							maxlength="280"
+							placeholder="Optional — one sentence from the champion"
+							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+							data-testid="decline-note-text"
+						/>
+					</div>
+				{/if}
+				<div class="flex flex-wrap justify-end gap-2">
 					<Button
 						type="submit"
 						name="decision"
@@ -232,6 +271,17 @@
 						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
 					>
 						Decline
+					</Button>
+					<Button
+						type="submit"
+						name="decision"
+						value="resubmit_with_guidance"
+						variant="outline"
+						disabled={busy || Boolean(cannotDecide)}
+						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+						data-testid="decide-resubmit"
+					>
+						Ask to resubmit
 					</Button>
 					<Button
 						type="submit"
@@ -872,8 +922,8 @@
 		<section class="border-border bg-card rounded-lg border p-4">
 			<h2 class="text-sm font-medium">Decision workflow</h2>
 			<p class="text-muted-foreground mt-1 text-xs">
-				Saving Accept, Waitlist or Decline does not notify speakers. Check the programme first, then
-				send the decision explicitly.
+				Saving Accept, Waitlist, Decline or Ask to resubmit does not notify speakers. Check the
+				programme first, then send the decision explicitly.
 			</p>
 			<h3 class="mt-3 text-xs font-medium">Accepting also</h3>
 			<ul class="text-muted-foreground mt-2 space-y-1 text-sm">
@@ -890,13 +940,17 @@
 				withdraws the tasks nobody has started. A slot you already confirmed stays — that one is
 				yours to move.
 			</p>
-			{#if inTray && (s.status === 'rejected' || s.status === 'waitlisted')}
+			{#if inTray && (s.status === 'rejected' || s.status === 'waitlisted' || s.status === 'resubmit_with_guidance')}
 				<p
 					class="border-status-warn/40 bg-status-warn-bg text-status-warn mt-3 rounded-md border px-3 py-2 text-sm font-medium"
 					data-testid="rejected-placement-badge"
 					role="status"
 				>
-					{s.status === 'rejected' ? 'Declined' : 'Waitlisted'} but still on the programme ({s.placements
+					{s.status === 'rejected'
+						? 'Declined'
+						: s.status === 'resubmit_with_guidance'
+							? 'Asked to resubmit'
+							: 'Waitlisted'} but still on the programme ({s.placements
 						.map((p) => p.status)
 						.join(', ')}). Remove or reassign the slot on
 					<a class="underline underline-offset-4" href="{base}/agenda">Agenda</a>.

@@ -22,7 +22,7 @@ import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { isConferenceOrganizer, type AcceptCondition } from './accept-condition';
 import { taskDueDate } from './task-templates';
 
-export type Decision = 'accepted' | 'rejected' | 'waitlisted';
+export type Decision = 'accepted' | 'rejected' | 'waitlisted' | 'resubmit_with_guidance';
 
 /**
  * The transaction handle, so the steps below can be separate functions without any
@@ -67,12 +67,19 @@ export async function decideSubmissions(
 	conference: Conference,
 	submissionIds: number[],
 	decision: Decision,
-	condition: AcceptCondition | null = null
+	condition: AcceptCondition | null = null,
+	/**
+	 * The sentence on a decline-path outcome (#447). Guidance on
+	 * `resubmit_with_guidance` (required); the champion's optional line on
+	 * a decline. Ignored on accept and waitlist.
+	 */
+	sentence: string | null = null
 ): Promise<DecisionResult> {
 	const result: DecisionResult = { ...NOTHING_HAPPENED };
 	if (submissionIds.length === 0) return result;
 
 	const note = await acceptedNote(conference, decision, condition);
+	const attached = attachedSentence(decision, sentence);
 
 	await db.transaction(async (tx) => {
 		const selected = await tx
@@ -109,7 +116,7 @@ export async function decideSubmissions(
 		const ids = targets.map((t) => t.id);
 		const now = new Date();
 
-		await recordDecision(tx, ids, decision, note);
+		await recordDecision(tx, ids, decision, note, attached);
 		result.decided = ids.length;
 
 		const speakers = await speakersOn(tx, ids);
@@ -146,20 +153,38 @@ async function acceptedNote(
 }
 
 /**
+ * Guidance is the outcome; without it we would be writing a decline under
+ * another name. A decline may carry a sentence or not.
+ */
+function attachedSentence(decision: Decision, sentence: string | null): string | null {
+	if (decision === 'resubmit_with_guidance') {
+		const text = sentence?.trim() ?? '';
+		if (!text) throw new Error('missing_guidance');
+		return text;
+	}
+	if (decision === 'rejected') return sentence?.trim() || null;
+	return null;
+}
+
+/**
  * Use the database wall clock so this decision boundary is strictly after any
  * notification row committed by an earlier organizer action. A JS Date only
  * has millisecond precision and can otherwise make two rapid actions appear
  * simultaneous to Postgres.
  *
- * A clean accept writes null; a decline or waitlist drops a leftover note.
+ * A clean accept writes null; any other decision drops a leftover note.
  * The talk is accepted either way — the note is not a second status, and it
  * must not survive a decision that is no longer an accept (#445).
+ *
+ * The same is true of the two decline-path sentences (#447): guidance lives
+ * only on `resubmit_with_guidance`, the champion line only on a decline.
  */
 async function recordDecision(
 	tx: Tx,
 	ids: number[],
 	decision: Decision,
-	note: AcceptCondition | null
+	note: AcceptCondition | null,
+	sentence: string | null
 ) {
 	await tx
 		.update(submissionTable)
@@ -167,7 +192,9 @@ async function recordDecision(
 			status: decision,
 			decidedAt: sql`clock_timestamp()`,
 			acceptCondition: note?.text ?? null,
-			acceptConditionOwnerId: note?.ownerId ?? null
+			acceptConditionOwnerId: note?.ownerId ?? null,
+			resubmitGuidance: decision === 'resubmit_with_guidance' ? sentence : null,
+			declineNote: decision === 'rejected' ? sentence : null
 		})
 		.where(inArray(submissionTable.id, ids));
 }

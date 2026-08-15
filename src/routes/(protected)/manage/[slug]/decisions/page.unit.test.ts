@@ -101,7 +101,9 @@ const renderQueue = (sponsorTier: string | null) =>
 						myComment: null,
 						sponsorTier,
 						acceptCondition: null,
-						acceptConditionOwner: null
+						acceptConditionOwner: null,
+						resubmitGuidance: null,
+						declineNote: null
 					}
 				]
 			},
@@ -155,7 +157,9 @@ describe('conditional accept on the decision list', () => {
 							myComment: null,
 							sponsorTier: null,
 							acceptCondition: 'bring a co-presenter',
-							acceptConditionOwner: 'Ann Follows'
+							acceptConditionOwner: 'Ann Follows',
+							resubmitGuidance: null,
+							declineNote: null
 						}
 					]
 				},

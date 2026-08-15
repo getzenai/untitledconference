@@ -61,7 +61,15 @@
 	 * of their own that brings them back rather than a seventh box among the
 	 * decisions.
 	 */
-	const STATUSES = ['submitted', 'in_review', 'accepted', 'waitlisted', 'rejected', 'withdrawn'];
+	const STATUSES = [
+		'submitted',
+		'in_review',
+		'accepted',
+		'waitlisted',
+		'rejected',
+		'resubmit_with_guidance',
+		'withdrawn'
+	];
 
 	/**
 	 * Apply the filters the moment one of them changes.

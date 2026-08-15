@@ -16,10 +16,16 @@ import { dispatchConferenceEmails, type DispatchResult } from './email-dispatche
 const EMAIL_TEMPLATE: Record<Decision, string> = {
 	accepted: 'decision_accepted',
 	rejected: 'decision_rejected',
-	waitlisted: 'decision_waitlisted'
+	waitlisted: 'decision_waitlisted',
+	resubmit_with_guidance: 'decision_resubmit'
 };
 
-const DECISIONS = new Set<Decision>(['accepted', 'rejected', 'waitlisted']);
+const DECISIONS = new Set<Decision>([
+	'accepted',
+	'rejected',
+	'waitlisted',
+	'resubmit_with_guidance'
+]);
 
 export type DecisionNotificationStatus = EmailLog['status'] | null;
 
@@ -48,17 +54,26 @@ function decision(value: string): Decision | null {
 function subjectFor(value: Decision, conference: Conference): string {
 	if (value === 'accepted') return `Your ${conference.name} submission was accepted`;
 	if (value === 'waitlisted') return `Your ${conference.name} submission is on the waitlist`;
+	if (value === 'resubmit_with_guidance') {
+		return `Please resubmit your ${conference.name} proposal`;
+	}
 	return `About your ${conference.name} submission`;
 }
 
-function bodyFor(value: Decision, conference: Conference, title: string): string {
-	if (value === 'accepted') {
+function bodyFor(target: NotificationTarget, conference: Conference): string {
+	const title = target.title;
+	if (target.decision === 'accepted') {
 		return `“${title}” is in the programme for ${conference.name}. Your speaker portal now lists what we need from you and when.`;
 	}
-	if (value === 'waitlisted') {
+	if (target.decision === 'waitlisted') {
 		return `“${title}” is on the waitlist for ${conference.name}. We will be in touch if a slot opens up.`;
 	}
-	return `We are not able to fit “${title}” into ${conference.name} this time. Thank you for submitting.`;
+	if (target.decision === 'resubmit_with_guidance') {
+		const guidance = target.guidance ? ` ${target.guidance}` : '';
+		return `Please resubmit “${title}” for ${conference.name} with this guidance:${guidance}`;
+	}
+	const note = target.declineNote ? `\n\n${target.declineNote}` : '';
+	return `We are not able to fit “${title}” into ${conference.name} this time. Thank you for submitting.${note}`;
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -67,6 +82,8 @@ type NotificationTarget = {
 	title: string;
 	decision: Decision;
 	decidedAt: Date | null;
+	guidance: string | null;
+	declineNote: string | null;
 };
 
 type ExpectedNotification = { template: string; decidedAt: Date | null };
@@ -170,7 +187,9 @@ async function targetsFor(tx: Tx, conferenceId: number, submissionIds: number[])
 			id: submissionTable.id,
 			title: submissionTable.title,
 			status: submissionTable.status,
-			decidedAt: submissionTable.decidedAt
+			decidedAt: submissionTable.decidedAt,
+			guidance: submissionTable.resubmitGuidance,
+			declineNote: submissionTable.declineNote
 		})
 		.from(submissionTable)
 		.where(
@@ -270,7 +289,7 @@ function planTargetMails(
 			toEmail,
 			template,
 			subject: subjectFor(target.decision, conference),
-			bodyPreview: bodyFor(target.decision, conference, target.title),
+			bodyPreview: bodyFor(target, conference),
 			status: 'queued',
 			relatedType: 'submission',
 			relatedId: target.id

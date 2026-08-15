@@ -43,6 +43,12 @@ export const submissionStatus = pgEnum('submission_status', [
 	'accepted',
 	'rejected',
 	'waitlisted',
+	/**
+	 * A first-class way out of the meeting (#447). Not a decline with a note:
+	 * the committee wants this talk back under new guidance. No slot, no
+	 * speaker tasks — that is what keeps it from being an accept.
+	 */
+	'resubmit_with_guidance',
 	'withdrawn'
 ]);
 
@@ -206,6 +212,17 @@ export const submissionTable = pgTable(
 		 * done. The slot, the speaker tasks and the programme do not move.
 		 */
 		editorialStand: editorialStand('editorial_stand'),
+		/**
+		 * The sentence on a `resubmit_with_guidance` (#447). Null when the
+		 * talk was never asked back. Cleared by any other decision.
+		 */
+		resubmitGuidance: text('resubmit_guidance'),
+		/**
+		 * One optional sentence from the champion on a decline (#447).
+		 * Null is the default: send nothing rather than something generic.
+		 * Cleared by any other decision.
+		 */
+		declineNote: text('decline_note'),
 		contentApproval: contentApproval('content_approval').notNull().default('approved'),
 		submittedAt: timestamp('submitted_at', { withTimezone: true }),
 		decidedAt: timestamp('decided_at', { withTimezone: true }),
