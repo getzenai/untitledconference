@@ -427,7 +427,8 @@ async function unclaimedProfileForEmail(
  * profile, then by the account's address so that being invited before you signed
  * up does not fork it either. Updated on every save so the organizer sees the job
  * title and company the submitter last stated — EMB-01 and EMB-09 read those
- * columns literally.
+ * columns literally. The public call names that scope before Submit (#558): a
+ * second proposal from the same account lands on this row, never a fork.
  *
  * What it will not do is move somebody else's address onto this account (#229).
  * On prod an organizer submitted a proposal describing another speaker and their
