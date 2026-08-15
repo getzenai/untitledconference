@@ -27,7 +27,7 @@
 		focus = undefined
 	}: {
 		slug: string;
-		focus?: { submissionId: number; title: string };
+		focus?: { submissionId: number; title: string; roundId: number; roundName: string };
 	} = $props();
 
 	let input = $state('');
@@ -47,7 +47,8 @@
 		chat = new Chat({
 			transport: new DefaultChatTransport({
 				api: `/review/${slug}/chat`,
-				body: () => (focus ? { focus } : {})
+				body: () =>
+					focus ? { focus: { submissionId: focus.submissionId, roundId: focus.roundId } } : {}
 			}),
 			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses
 		});
@@ -111,7 +112,7 @@
 									class="border-border bg-background rounded-md border p-3"
 									data-testid="chat-review-confirm"
 								>
-									<p>{previewReviewWrite(part.input ?? {}, focus?.title)}</p>
+									<p>{previewReviewWrite(part.input ?? {}, focus?.title, focus?.roundName)}</p>
 									<div class="mt-2 flex gap-2">
 										<Button
 											type="button"
@@ -144,7 +145,7 @@
 									class="bg-status-good-bg text-status-good w-fit rounded-md px-2 py-0.5 text-xs"
 									data-testid="chat-review-saved"
 								>
-									{describeReviewWrite(part.input ?? {}, focus?.title)}
+									{describeReviewWrite(part.input ?? {}, focus?.title, focus?.roundName)}
 								</p>
 							{:else if isToolUIPart(part) && getToolName(part) === 'submit_review' && part.state === 'output-denied'}
 								<p class="text-muted-foreground text-xs" data-testid="chat-review-denied">

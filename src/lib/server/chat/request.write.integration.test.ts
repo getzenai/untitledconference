@@ -25,6 +25,8 @@ let ellis: McpContext;
 let conference: typeof conferenceTable.$inferSelect;
 let submissionId: number;
 let criterionId: number;
+let roundId: number;
+let otherRoundId: number;
 let answers: Record<string, string>;
 
 beforeAll(async () => {
@@ -34,6 +36,16 @@ beforeAll(async () => {
 	const seated = await addReviewer(seeded.conferenceId, ellisPerson.email);
 	expect(seated.ok).toBe(true);
 
+	const otherRound = await addReviewRound(seeded.conferenceId, {
+		name: 'Earlier round',
+		anonymized: false,
+		opensAt: null,
+		closesAt: null
+	});
+	expect(otherRound.ok).toBe(true);
+	if (!otherRound.ok) throw new Error('other round');
+	otherRoundId = otherRound.id;
+
 	const round = await addReviewRound(seeded.conferenceId, {
 		name: 'Screening',
 		anonymized: false,
@@ -42,6 +54,7 @@ beforeAll(async () => {
 	});
 	expect(round.ok).toBe(true);
 	if (!round.ok) throw new Error('round');
+	roundId = round.id;
 
 	const criterion = await addScorecardCriterion(seeded.conferenceId, round.id, {
 		label: 'Fit',
@@ -55,6 +68,13 @@ beforeAll(async () => {
 	criterionId = criterion.id;
 
 	submissionId = seeded.submissionIds['casey-observability'];
+	const assignedElsewhere = await assignReviewerToSubmissions(
+		seeded.conferenceId,
+		[submissionId],
+		otherRoundId,
+		ellis.userId
+	);
+	expect(assignedElsewhere.created).toBeGreaterThan(0);
 	const assigned = await assignReviewerToSubmissions(
 		seeded.conferenceId,
 		[submissionId],
@@ -92,13 +112,18 @@ describe('reviewer chat submit_review (#302)', () => {
 				submissionId,
 				answers
 			}),
-			focus: { submissionId, title: 'Observability for agents that call tools' }
+			focus: {
+				submissionId,
+				title: 'Observability for agents that call tools',
+				roundId: roundId,
+				roundName: 'Screening'
+			}
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();
 		expect(body).toContain('submit_review');
 
-		const before = await reviewerSubmission(conference, ellis.userId, submissionId);
+		const before = await reviewerSubmission(conference, ellis.userId, submissionId, roundId);
 		expect(before?.own.status).not.toBe('submitted');
 		expect(before?.criteria[0]?.value).not.toBe(4);
 	});
@@ -134,15 +159,28 @@ describe('reviewer chat submit_review (#302)', () => {
 				{ conferenceSlug: conference.slug, submissionId, answers },
 				true
 			),
-			focus: { submissionId, title: 'Observability for agents that call tools' }
+			focus: {
+				submissionId,
+				title: 'Observability for agents that call tools',
+				roundId: roundId,
+				roundName: 'Screening'
+			}
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();
 		expect(body).toMatch(/Saved review|submit_review|4/);
 
-		const after = await reviewerSubmission(conference, ellis.userId, submissionId);
+		const after = await reviewerSubmission(conference, ellis.userId, submissionId, roundId);
 		expect(after?.own.status).toBe('submitted');
 		expect(after?.criteria[0]?.value).toBe(4);
+
+		const otherRound = await reviewerSubmission(
+			conference,
+			ellis.userId,
+			submissionId,
+			otherRoundId
+		);
+		expect(otherRound?.own.status).toBe('assigned');
 	});
 
 	// The panel reads this shape: a refusal finishes like a write, so a tool
@@ -164,7 +202,8 @@ describe('reviewer chat submit_review (#302)', () => {
 							conferenceSlug: conference.slug,
 							submissionId: strangerId,
 							answers,
-							comment: ''
+							comment: '',
+							roundId
 						},
 						approval: { id: 'appr_2', approved: true }
 					}

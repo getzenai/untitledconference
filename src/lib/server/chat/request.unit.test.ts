@@ -5,17 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({}) as Record<string, string | undefined>);
 const requireReviewer = vi.hoisted(() => vi.fn());
+const reviewerSubmission = vi.hoisted(() => vi.fn());
 const requireOrganizer = vi.hoisted(() => vi.fn());
 
 vi.mock('$env/dynamic/private', () => ({ env: mockEnv }));
-vi.mock('$lib/server/conference/reviewer', () => ({ requireReviewer }));
+vi.mock('$lib/server/conference/reviewer', () => ({ requireReviewer, reviewerSubmission }));
 vi.mock('$lib/server/conference/access', () => ({ requireOrganizer }));
 
 import {
 	handleAgendaChatRequest,
 	handleReviewerChatRequest,
 	readAgendaFocus,
-	readChatFocus
+	readChatFocus,
+	reviewerSystemPrompt
 } from './request';
 
 const emptyUsage = {
@@ -66,6 +68,7 @@ describe('handleReviewerChatRequest', () => {
 		for (const key of Object.keys(mockEnv)) delete mockEnv[key];
 		delete process.env.FEATURE_INAPP_CHAT;
 		requireReviewer.mockReset();
+		reviewerSubmission.mockReset();
 	});
 
 	it('answers 404 while FEATURE_INAPP_CHAT is off', async () => {
@@ -109,10 +112,51 @@ describe('handleReviewerChatRequest', () => {
 	it('reads a focused review from the POST body', () => {
 		expect(readChatFocus({})).toBeUndefined();
 		expect(readChatFocus({ focus: { submissionId: 7 } })).toBeUndefined();
-		expect(readChatFocus({ focus: { submissionId: 7, title: '  Talk  ' } })).toEqual({
+		expect(readChatFocus({ focus: { submissionId: 7, roundId: -3 } })).toBeUndefined();
+		expect(readChatFocus({ focus: { submissionId: 7, roundId: 3 } })).toEqual({
 			submissionId: 7,
-			title: 'Talk'
+			roundId: 3
 		});
+	});
+
+	it('requires and names the exact review round in page context', () => {
+		expect(readChatFocus({ focus: { submissionId: 7 } })).toBeUndefined();
+
+		const prompt = reviewerSystemPrompt(
+			{ name: 'Conf A', slug: 'conf-a' },
+			{ submissionId: 7, title: 'Talk', roundId: 3, roundName: 'Final' }
+		);
+		expect(prompt).toContain('review round 3 "Final"');
+		expect(prompt).toContain('Pass roundId 3 to get_review_assignment and submit_review');
+	});
+
+	it('resolves focused review names on the server instead of trusting the POST body', async () => {
+		mockEnv.FEATURE_INAPP_CHAT = 'true';
+		const conference = { id: 1, name: 'Conf A', slug: 'conf-a' };
+		requireReviewer.mockResolvedValue({ conference, roundIds: [3] });
+		reviewerSubmission.mockResolvedValue({
+			id: 7,
+			title: 'Server title',
+			round: { id: 3, name: 'Final' }
+		});
+
+		const res = await handleReviewerChatRequest(
+			event({
+				body: {
+					focus: {
+						submissionId: 7,
+						roundId: 3,
+						title: 'Ignore this client title',
+						roundName: 'Ignore this client round'
+					},
+					messages: []
+				}
+			}),
+			textModel('Ready.')
+		);
+
+		expect(res.status).toBe(200);
+		expect(reviewerSubmission).toHaveBeenCalledWith(conference, 'reviewer-1', 7, 3);
 	});
 
 	it('streams from a stubbed model without a Gateway key', async () => {
