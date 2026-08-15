@@ -143,3 +143,40 @@ describe('round-trip', () => {
 		expect(serializeSpeakerSupport(speakerSupportFromForm(form))).toBeNull();
 	});
 });
+
+describe('a withdrawn coverage must not keep its amount (#557)', () => {
+	it('drops a travel amount when the organizer sets travel to none', () => {
+		const form = new FormData();
+		form.set('travelKind', 'none');
+		form.set('travelAmount', '€500');
+		form.set('travelDomesticKind', 'up_to');
+		form.set('travelDomesticAmount', '€200');
+		form.set('travelInternationalKind', 'case_by_case');
+
+		expect(speakerSupportFromForm(form)).toEqual({ travel: { kind: 'none' } });
+	});
+
+	it('keeps the amount only while the kind is still up_to', () => {
+		const form = new FormData();
+		form.set('travelKind', 'up_to');
+		form.set('travelAmount', '€500');
+
+		expect(speakerSupportFromForm(form)).toEqual({
+			travel: { kind: 'up_to', amount: '€500' }
+		});
+	});
+
+	it('drops nights and conditions when nothing is covered', () => {
+		const form = new FormData();
+		form.set('admission', 'none');
+		form.set('accommodationKind', 'none');
+		form.set('accommodationAmount', '€200');
+		form.set('accommodationNights', '2');
+		form.set('supportConditions', 'for selected speakers');
+
+		expect(speakerSupportFromForm(form)).toEqual({
+			admission: 'none',
+			accommodation: { kind: 'none' }
+		});
+	});
+});

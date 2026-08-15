@@ -233,7 +233,8 @@ describe('what the builder posts', () => {
 	it('names every control the update actions read', () => {
 		const html = bodyWith(dated, [field]);
 
-		// Settings — read by `updateForm`.
+		// Settings — read by `updateForm`. Amounts, nights and conditions stay
+		// off the form until a parent answer makes them meaningful (#557).
 		for (const name of [
 			'title',
 			'status',
@@ -242,11 +243,12 @@ describe('what the builder posts', () => {
 			'description',
 			'admission',
 			'travelKind',
-			'accommodationKind',
-			'supportConditions'
+			'accommodationKind'
 		]) {
 			expect(html).toContain(`name="${name}"`);
 		}
+		expect(html).not.toContain('name="supportConditions"');
+		expect(html).not.toContain('name="travelAmount"');
 
 		// A field — read by `fieldInput()`, for both the edit and the add form.
 		for (const name of ['label', 'kind', 'required', 'conditionSource']) {
