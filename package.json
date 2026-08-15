@@ -26,6 +26,7 @@
 		"test:e2e:open": "node scripts/test/with-isolated-db.mjs -- ./scripts/run-e2e.sh open",
 		"test:e2e:headed": "node scripts/test/with-isolated-db.mjs -- ./scripts/run-e2e.sh --headed",
 		"test:e2e:spec": "node scripts/test/with-isolated-db.mjs -- ./scripts/run-e2e.sh --spec",
+		"test:e2e:verification": "REQUIRE_EMAIL_VERIFICATION=true node scripts/test/with-isolated-db.mjs -- ./scripts/run-e2e.sh --spec cypress/e2e/critical-paths/cfp-verification-preserves-proposal.cy.ts",
 		"test:all": "./scripts/test-all.sh",
 		"db:push": "./scripts/infisical/dev-from-infisical.sh npx drizzle-kit push",
 		"db:push:force": "./scripts/infisical/dev-from-infisical.sh npx drizzle-kit push --force",

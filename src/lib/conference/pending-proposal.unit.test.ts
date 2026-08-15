@@ -8,8 +8,10 @@ import {
 	draftFromFormData,
 	isTypedProposal,
 	parsePendingProposal,
+	parseRegistrationProposal,
 	pendingProposalKey,
 	readAutosavedProposal,
+	readPendingProposal,
 	writeAutosavedProposal,
 	writePendingProposal
 } from './pending-proposal';
@@ -95,6 +97,29 @@ describe('pending proposal storage', () => {
 		expect(storage.getItem(pendingProposalKey('other'))).toBeNull();
 		expect(consumePendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'draft' });
 		expect(consumePendingProposal(storage, 'devflow')).toBeNull();
+	});
+
+	it('can be read for sign-up without losing the same-tab fallback', () => {
+		const storage = fakeStorage();
+		const draft = { ...emptyProposal(), title: 'Keep this' };
+		writePendingProposal(storage, 'devflow', draft, 'submit');
+
+		expect(readPendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'submit' });
+		expect(consumePendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'submit' });
+	});
+});
+
+describe('registration proposal input', () => {
+	it('keeps only a bounded call slug and parsed pending proposal', () => {
+		const draft = { ...emptyProposal(), title: 'Across the verification tab' };
+		expect(parseRegistrationProposal({ slug: 'devflow-2028', draft, intent: 'draft' })).toEqual({
+			slug: 'devflow-2028',
+			draft,
+			intent: 'draft'
+		});
+		expect(parseRegistrationProposal({ slug: '', draft })).toBeNull();
+		expect(parseRegistrationProposal({ slug: 'x'.repeat(256), draft })).toBeNull();
+		expect(parseRegistrationProposal({ slug: 'devflow', draft: {} })).toBeNull();
 	});
 });
 

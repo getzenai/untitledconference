@@ -62,7 +62,8 @@ export BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:$E2E_PORT,http://127.0.0.1:
 export CYPRESS_BASE_URL="$BETTER_AUTH_URL"
 export BETTER_AUTH_SECRET="${BETTER_AUTH_SECRET:-e2e-local-secret-not-a-real-credential}"
 export ENABLE_TEST_ENDPOINTS=true
-export REQUIRE_EMAIL_VERIFICATION=false
+export REQUIRE_EMAIL_VERIFICATION="${REQUIRE_EMAIL_VERIFICATION:-false}"
+export CYPRESS_REQUIRE_EMAIL_VERIFICATION="$REQUIRE_EMAIL_VERIFICATION"
 export SEND_EMAILS_INSTEAD_OF_CONSOLE_LOG=false
 # A developer may have loaded the production-shaped Resend variables before
 # starting this script. E2E mail addresses are invented and the outbox state is
@@ -88,6 +89,7 @@ echo "=== E2E environment ==="
 echo "Database: ${TEST_DATABASE_URL//:*@/:***@}"
 echo "Base URL: $BETTER_AUTH_URL"
 echo "FEATURE_INAPP_CHAT: $FEATURE_INAPP_CHAT"
+echo "REQUIRE_EMAIL_VERIFICATION: $REQUIRE_EMAIL_VERIFICATION"
 echo ""
 
 echo "=== Pushing database schema ==="

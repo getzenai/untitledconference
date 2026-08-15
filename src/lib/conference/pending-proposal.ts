@@ -38,6 +38,7 @@ const AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
 export type DraftOwner = string | null;
 export type PendingProposalIntent = 'draft' | 'submit';
 export type PendingProposal = { draft: ProposalDraft; intent: PendingProposalIntent };
+export type RegistrationProposal = PendingProposal & { slug: string };
 
 /**
  * Long enough that a call's own deadline runs out first in every normal case,
@@ -191,6 +192,32 @@ export function parsePendingProposal(raw: string): PendingProposal | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The subset of a sign-up body the auth hook is allowed to persist.
+ *
+ * Better Auth deliberately accepts additional fields in the request body, but
+ * none of those fields are trusted. Parse the proposal back through the same
+ * narrow reader as browser storage and keep the slug bounded before it reaches
+ * the shared verification table.
+ */
+export function parseRegistrationProposal(value: unknown): RegistrationProposal | null {
+	const row = asRecord(value);
+	if (!row || typeof row.slug !== 'string' || row.slug.length === 0 || row.slug.length > 255) {
+		return null;
+	}
+	const pending = parsePendingProposal(JSON.stringify(row));
+	return pending ? { slug: row.slug, ...pending } : null;
+}
+
+/** Read without consuming, so a failed sign-up still leaves the same-tab fallback intact. */
+export function readPendingProposal(
+	storage: Pick<Storage, 'getItem'>,
+	slug: string
+): PendingProposal | null {
+	const raw = storage.getItem(pendingProposalKey(slug));
+	return raw == null ? null : parsePendingProposal(raw);
 }
 
 export function writePendingProposal(

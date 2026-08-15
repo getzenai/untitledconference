@@ -15,6 +15,7 @@ import {
 	SESSION_FRESH_AGE_SECONDS
 } from './constants';
 import { safeReturnTo } from './safe-return-to';
+import { parkRegistrationProposal } from './server/conference/registration-proposal';
 import { acceptReviewerInvitation } from './server/conference/reviewer-roster';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
@@ -28,6 +29,7 @@ import {
 } from './server/services/email-service';
 import { captureInvitationLink } from './server/services/invitation-link';
 import { markInvitationAsAccepted } from './server/services/system-invitation';
+import { captureVerificationLink } from './server/services/verification-link';
 
 const logger = createLogger('Auth');
 
@@ -297,6 +299,7 @@ function createAuth() {
 						: '/email-verified'
 				);
 				const finalUrl = verificationUrl.toString();
+				if (env.ENABLE_TEST_ENDPOINTS) captureVerificationLink(user.email, finalUrl);
 
 				const { subject, text, html } = generateVerificationEmailContent(finalUrl, user.email);
 				await sendEmail({
@@ -346,7 +349,14 @@ function createAuth() {
 
 						return { data: user };
 					},
-					after: async (user) => {
+					after: async (user, context) => {
+						if (context?.path === '/sign-up/email') {
+							await parkRegistrationProposal(
+								context.context.internalAdapter,
+								user.id,
+								(context.body as Record<string, unknown>).pendingProposal
+							);
+						}
 						logUserCreationWithRole(user);
 					}
 				}

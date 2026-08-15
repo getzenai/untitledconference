@@ -208,6 +208,7 @@ export default defineConfig({
 			config.env = {
 				...config.env,
 				TEST_DATABASE_URL: connectionString,
+				REQUIRE_EMAIL_VERIFICATION: process.env.CYPRESS_REQUIRE_EMAIL_VERIFICATION ?? 'false',
 				FEATURE_INAPP_CHAT:
 					process.env.CYPRESS_FEATURE_INAPP_CHAT ?? process.env.FEATURE_INAPP_CHAT ?? 'false'
 			};
