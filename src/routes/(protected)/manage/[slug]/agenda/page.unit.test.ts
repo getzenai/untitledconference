@@ -74,8 +74,8 @@ describe('organizer agenda layout', () => {
 	it('pads the grid away from the rail while staying full width', () => {
 		const body = renderWith(2);
 
-		expect(body).toMatch(/<div class="[^"]*border-b[^"]*px-6 py-5[^"]*"/);
-		expect(body).toMatch(/<div class="space-y-6 px-6 py-5"/);
+		expect(body).toMatch(/<div class="[^"]*border-b[^"]*px-4 py-5 sm:px-6[^"]*"/);
+		expect(body).toMatch(/<div class="space-y-6 px-4 py-5 sm:px-6"/);
 	});
 
 	it('does not bury room/track creation on the agenda (#63)', () => {
@@ -112,6 +112,64 @@ describe('organizer agenda layout', () => {
 		expect(body).toContain('data-testid="agenda-time-gutter"');
 		// Class list is emitted before data-testid in SSR attribute order.
 		expect(body).toMatch(/sticky left-0[^>]*data-testid="agenda-time-gutter"/);
+	});
+});
+
+/**
+ * #477: at 320 px two `min-w-36` columns plus the gutter clipped the second
+ * room mid-word, with no hint that the grid continued and no room name once
+ * the header had scrolled off. A column is now a full card (`min-w-52`), the
+ * header sticks, and the card repeats the room name below `sm`.
+ *
+ * The sideways-scroll hint is a ResizeObserver — it is absent from the SSR
+ * body, the same way a closed bits-ui list is. Cypress covers the live hint.
+ */
+describe('agenda at 320 px (#477)', () => {
+	it('gives each room column a full-card floor and a sticky header', () => {
+		const body = renderWith(2);
+
+		expect(body).toMatch(/min-w-52[^>]*data-testid="agenda-room-card"/);
+		expect(body).toMatch(/sticky top-0[^>]*data-testid="agenda-room-head"/);
+	});
+
+	it('names the room on the session card so a scrolled-off header is not the only label', () => {
+		const body = renderWith(1, 1, {
+			placed: [
+				{
+					placementId: 1,
+					submissionId: 1,
+					title: 'Opening keynote',
+					kind: 'session',
+					status: 'tentative',
+					submissionStatus: 'accepted',
+					trackName: null,
+					formatName: 'Talk',
+					minutes: 30,
+					dayId: 1,
+					roomId: 1,
+					startMinutes: 540,
+					endMinutes: 570,
+					speakers: ['Ada']
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="agenda-session-room"');
+		const mark = body.indexOf('data-testid="agenda-session-room"');
+		const tag = body.slice(body.lastIndexOf('<', mark), body.indexOf('>', mark));
+		expect(tag).toContain('max-sm:block');
+		expect(body.slice(mark, mark + 80)).toContain('Room 1');
+	});
+
+	it('measures sideways overflow so a hint can appear once the grid is wider than the box', () => {
+		const source = readFileSync(
+			join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'),
+			'utf8'
+		);
+
+		expect(source).toContain('data-testid="agenda-grid-scroll-hint"');
+		expect(source).toContain('More rooms to the side');
+		expect(source).toContain('scrollWidth - element.clientWidth');
 	});
 });
 

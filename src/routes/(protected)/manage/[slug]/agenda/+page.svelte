@@ -345,8 +345,32 @@
 	 * what already sits in a slot, and the form a drop posts.
 	 */
 	let gridEl = $state<HTMLElement | null>(null);
+	let gridScrollEl = $state<HTMLDivElement | null>(null);
+	let gridOverflows = $state(false);
 	let placeForm = $state<HTMLFormElement | null>(null);
 	let pending = $state<{ placementId: number; roomId: number; startMinutes: number } | null>(null);
+
+	/**
+	 * #477: two rooms already overflow 320 px once a column is wide enough to
+	 * hold a title. `overflow-x-auto` alone is silent — a cut card reads as
+	 * the end of the grid. Same measure ScrollTable uses: only hint while the
+	 * content is actually wider than the box.
+	 */
+	$effect(() => {
+		const element = gridScrollEl;
+		if (!element) return;
+
+		const measure = () => {
+			gridOverflows = element.scrollWidth - element.clientWidth > 1;
+		};
+
+		const observer = new ResizeObserver(measure);
+		observer.observe(element);
+		if (element.firstElementChild) observer.observe(element.firstElementChild);
+		measure();
+
+		return () => observer.disconnect();
+	});
 
 	const drag = new DragController({
 		frame: () => frame,
@@ -402,8 +426,8 @@
 	<title>Agenda — {data.conference.name}</title>
 </svelte:head>
 
-<div class="border-border bg-card border-b px-6 py-5">
-	<div class="flex flex-wrap items-start justify-between gap-3">
+<div class="border-border bg-card border-b px-4 py-5 sm:px-6">
+	<div class="flex min-w-0 flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Agenda</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm">
@@ -426,7 +450,7 @@
 			</p>
 		</div>
 
-		<div class="flex flex-wrap items-center gap-2">
+		<div class="flex min-w-0 flex-wrap items-center gap-2">
 			<form method="POST" action="?/autoPlace" use:enhance={submitting}>
 				<Button type="submit" variant="outline" disabled={busy || unscheduled === 0}>
 					Fill the empty slots
@@ -621,8 +645,10 @@
 	<input type="hidden" name="startMinutes" value={pending?.startMinutes ?? ''} />
 </form>
 
-<!-- Wide on purpose — this is the grid — but never flush against the rail. -->
-<div class="space-y-6 px-6 py-5">
+<!-- Wide on purpose — this is the grid — but never flush against the rail.
+     320 px (#477): the page pad drops to 1rem so a room column can be a
+     whole card instead of a clipped half. -->
+<div class="space-y-6 px-4 py-5 sm:px-6">
 	{#if form?.error}
 		<p class="text-status-bad text-sm">{form.error}</p>
 	{/if}
@@ -848,7 +874,16 @@
 					paint through the sticky labels.
 				-->
 				<TooltipProvider>
-					<div class="overflow-x-auto" data-testid="agenda-grid-scroll">
+					{#if gridOverflows}
+						<p
+							class="text-muted-foreground mb-1.5 text-xs"
+							data-testid="agenda-grid-scroll-hint"
+							role="status"
+						>
+							More rooms to the side <span aria-hidden="true">→</span>
+						</p>
+					{/if}
+					<div bind:this={gridScrollEl} class="overflow-x-auto" data-testid="agenda-grid-scroll">
 						<div class="flex w-full" bind:this={gridEl}>
 							<!-- The time axis. Its header spacer matches the room-head height so
 							     gutter labels line up with the columns without measuring. -->
@@ -872,12 +907,12 @@
 							<div class="relative flex min-w-0 flex-1">
 								{#each visibleRooms as room (room.id)}
 									<div
-										class="border-border min-w-36 flex-1 overflow-hidden border-l"
+										class="border-border min-w-52 flex-1 overflow-hidden border-l"
 										data-testid="agenda-room-card"
 										data-room-id={room.id}
 									>
 										<div
-											class="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
+											class="bg-background sticky top-0 z-10 flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
 											data-testid="agenda-room-head"
 										>
 											<Tooltip>
@@ -1046,6 +1081,18 @@
 																			class="block min-w-0 shrink-0 truncate text-sm leading-tight font-medium"
 																		>
 																			{session.title}
+																		</span>
+																		<!--
+																			#477: at 320 px the room header scrolls off. The
+																			name on the card is how you still know which
+																			column you are in. Hidden from sm up, where the
+																			header stays in view.
+																		-->
+																		<span
+																			class="text-muted-foreground hidden truncate text-[0.65rem] max-sm:block"
+																			data-testid="agenda-session-room"
+																		>
+																			{room.name}
 																		</span>
 																		<!-- Clock is secondary: the grid axis already places the block.
 																	     Kept small so short slots still read the title first, and so
