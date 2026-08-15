@@ -66,7 +66,11 @@ describe('parsePendingProposal', () => {
 			speaker: { ...emptyProposal().speaker, name: 'Ada', email: 'ada@example.test' }
 		};
 
-		expect(parsePendingProposal(JSON.stringify(draft))).toEqual(draft);
+		expect(parsePendingProposal(JSON.stringify(draft))).toEqual({ draft, intent: 'submit' });
+		expect(parsePendingProposal(JSON.stringify({ draft, intent: 'draft' }))).toEqual({
+			draft,
+			intent: 'draft'
+		});
 	});
 
 	it('rejects junk so it cannot become an auto-submit', () => {
@@ -86,10 +90,10 @@ describe('pending proposal storage', () => {
 			speaker: { ...emptyProposal().speaker, name: 'Ada' }
 		};
 
-		writePendingProposal(storage, 'devflow', draft);
+		writePendingProposal(storage, 'devflow', draft, 'draft');
 
 		expect(storage.getItem(pendingProposalKey('other'))).toBeNull();
-		expect(consumePendingProposal(storage, 'devflow')).toEqual(draft);
+		expect(consumePendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'draft' });
 		expect(consumePendingProposal(storage, 'devflow')).toBeNull();
 	});
 });
@@ -155,7 +159,7 @@ describe('autosaved proposal storage', () => {
 		const storage = fakeStorage();
 		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
 		writeAutosavedProposal(storage, 'other', null, draft);
-		writePendingProposal(storage, 'devflow', draft);
+		writePendingProposal(storage, 'devflow', draft, 'submit');
 		storage.setItem('unrelated', 'keep me');
 
 		clearProposalDrafts(storage);

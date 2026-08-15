@@ -66,7 +66,7 @@ describe('the proposal form', () => {
 		expect(posts(html, 'speakerCompany')).toBe(true);
 	});
 
-	it('lets a signed-out visitor submit the form they just filled (#236)', () => {
+	it('lets a signed-out visitor submit or save the form they just filled (#236, #624)', () => {
 		const html = render(ProposalForm, {
 			props: {
 				fields: [],
@@ -80,10 +80,12 @@ describe('the proposal form', () => {
 
 		expect(html).toContain('Sign in to submit');
 		expect(html).toContain('data-testid="cfp-sign-in-to-submit"');
-		expect(html).toContain("We'll send this proposal as soon as you sign in.");
+		expect(html).toContain('data-testid="cfp-sign-in-to-draft"');
+		expect(html).toContain("We'll save your choice as soon as you sign in or create an account.");
 		// Without this the JS-less POST has no action name, SvelteKit looks for
 		// `default`, and the visitor gets a 404 instead of /login.
 		expect(html).toContain('formaction="?/submit"');
+		expect(html).toContain('formaction="?/draft"');
 	});
 
 	it('keeps the three that identify the talk and the speaker, whatever is stored', () => {

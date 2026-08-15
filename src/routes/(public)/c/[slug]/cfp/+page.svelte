@@ -43,6 +43,7 @@
 	let restored = $state<ProposalDraft | null>(null);
 	let restoredAt = $state<number | null>(null);
 	let fromPending = $state(false);
+	let pendingIntent = $state<'draft' | 'submit' | null>(null);
 	let listening = $state(false);
 
 	/**
@@ -70,7 +71,8 @@
 		}
 		const pending = consumePendingProposal(sessionStorage, slug);
 		if (pending) {
-			restored = pending;
+			restored = pending.draft;
+			pendingIntent = pending.intent;
 			fromPending = true;
 			// It has made its trip; the anonymous slot is not a second copy.
 			clearAutosavedProposal(localStorage, slug, null);
@@ -118,8 +120,8 @@
 		restoredAt = null;
 	}
 
-	function stashAndSignIn(draft: ProposalDraft) {
-		writePendingProposal(sessionStorage, data.call.conference.slug, draft);
+	function stashAndSignIn(draft: ProposalDraft, intent: 'draft' | 'submit') {
+		writePendingProposal(sessionStorage, data.call.conference.slug, draft, intent);
 		void goto(signInHref);
 	}
 
@@ -282,7 +284,9 @@
 				role="status"
 			>
 				{#if form?.errors || form?.fieldErrors}
-					You are signed in — press Submit to finish.
+					You are signed in — press {pendingIntent === 'draft' ? 'Save as draft' : 'Submit'} to finish.
+				{:else if pendingIntent === 'draft'}
+					You are signed in — saving the draft you wrote.
 				{:else}
 					You are signed in — submitting the proposal you wrote.
 				{/if}
@@ -299,7 +303,7 @@
 				{form}
 				{signedIn}
 				onSignIn={stashAndSignIn}
-				autoSubmit={resume}
+				autoAction={resume ? pendingIntent : null}
 				onDraftChange={listening ? persistDraft : undefined}
 				onCommitted={clearDraft}
 			/>

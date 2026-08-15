@@ -11,10 +11,10 @@
 import { DEFAULT_TEST_PASSWORD, generateTestUserEmail } from '../../support/globals';
 
 describe('Registering before hydration', () => {
-	const post = (body: Record<string, string>) =>
+	const post = (body: Record<string, string>, returnTo?: string) =>
 		cy.request({
 			method: 'POST',
-			url: `${Cypress.config('baseUrl')}/register`,
+			url: `${Cypress.config('baseUrl')}/register${returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''}`,
 			form: true,
 			headers: { origin: Cypress.config('baseUrl') as string, accept: 'text/html' },
 			body,
@@ -27,6 +27,15 @@ describe('Registering before hydration', () => {
 		post({ email, password: DEFAULT_TEST_PASSWORD }).then((res) => {
 			expect(res.status, 'no 405, and no error page').to.be.oneOf([200, 303]);
 			expect(res.body).to.not.contain('Method Not Allowed');
+		});
+	});
+
+	it('keeps the requested destination when registration creates a session', () => {
+		const email = generateTestUserEmail('nojs-register-return');
+
+		post({ email, password: DEFAULT_TEST_PASSWORD }, '/portal').then((res) => {
+			expect(res.status).to.eq(200);
+			expect(res.redirects?.some((entry) => entry.endsWith('/portal'))).to.eq(true);
 		});
 	});
 

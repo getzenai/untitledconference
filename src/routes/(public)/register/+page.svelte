@@ -12,6 +12,7 @@
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { registerSchema } from './schema';
+	import { safeReturnTo } from '$lib/safe-return-to';
 
 	// The server action's answer. It only ever renders for a submit that happened
 	// before hydration — once superForm is live it cancels the native submit.
@@ -19,6 +20,13 @@
 
 	// Check for invitation code in URL
 	const invitationCode = $derived(page.url.searchParams.get('invitation'));
+	const returnTo = $derived(safeReturnTo(page.url.searchParams.get('returnTo'), page.url.origin));
+	const hasReturnTo = $derived(page.url.searchParams.has('returnTo'));
+	const loginHref = $derived(
+		hasReturnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : '/login'
+	);
+	const verifyEmailHref = $derived(`/verify-email?returnTo=${encodeURIComponent(returnTo)}`);
+	const verificationCallback = $derived(`/email-verified?returnTo=${encodeURIComponent(returnTo)}`);
 
 	// Initialize form client-side
 	const form = superForm(
@@ -39,7 +47,8 @@
 					const { data: signUpData, error: signUpError } = await authClient.signUp.email({
 						email,
 						password,
-						name: '' // Better Auth requires a name field
+						name: '', // Better Auth requires a name field
+						callbackURL: verificationCallback
 					});
 
 					if (signUpError) {
@@ -87,9 +96,9 @@
 						// off — which is how production runs. The first screen after
 						// registering was a dead end asking for a mail nobody had sent.
 						if (signUpData.token) {
-							await goto('/home', { invalidateAll: true });
+							await goto(returnTo, { invalidateAll: true });
 						} else {
-							await goto('/verify-email');
+							await goto(verifyEmailHref);
 						}
 					} else {
 						errors.set({ _errors: ['Registration failed. Please try again.'] });
@@ -194,7 +203,7 @@
 	{#snippet footer()}
 		<p>
 			Already have an account?
-			<a href="/login" class="text-foreground font-medium underline underline-offset-4">Login</a>
+			<a href={loginHref} class="text-foreground font-medium underline underline-offset-4">Login</a>
 		</p>
 	{/snippet}
 </AuthShell>

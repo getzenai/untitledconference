@@ -10,19 +10,22 @@
 	} from '$lib/components/ui/card';
 	import { CheckCircle2, AlertCircle } from 'lucide-svelte';
 	import type { PageData } from './$types';
+	import { page } from '$app/state';
+	import { safeReturnTo } from '$lib/safe-return-to';
 
 	interface Props {
 		data: PageData;
 	}
 
 	let { data }: Props = $props();
+	const returnTo = $derived(safeReturnTo(page.url.searchParams.get('returnTo'), page.url.origin));
 
 	function handleContinue() {
-		goto('/home');
+		goto(returnTo);
 	}
 
 	function handleVerifyEmail() {
-		goto('/verify-email');
+		goto(`/verify-email?returnTo=${encodeURIComponent(returnTo)}`);
 	}
 </script>
 

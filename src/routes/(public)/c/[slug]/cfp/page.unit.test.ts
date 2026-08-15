@@ -196,8 +196,10 @@ describe('the public call for papers', () => {
 		const body = renderCfp('open', null);
 
 		expect(body).toContain('Sign in to submit');
-		expect(body).toContain("We'll send this proposal as soon as you sign in.");
+		expect(body).toContain('Save as draft');
+		expect(body).toContain("We'll save your choice as soon as you sign in or create an account.");
 		expect(body).toContain('formaction="?/submit"');
+		expect(body).toContain('formaction="?/draft"');
 	});
 });
 

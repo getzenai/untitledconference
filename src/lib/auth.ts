@@ -14,6 +14,7 @@ import {
 	SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
 	SESSION_FRESH_AGE_SECONDS
 } from './constants';
+import { safeReturnTo } from './safe-return-to';
 import { acceptReviewerInvitation } from './server/conference/reviewer-roster';
 import { db } from './server/db';
 import * as schema from './server/db/auth-schema';
@@ -288,7 +289,13 @@ function createAuth() {
 			autoSignInAfterVerification: true,
 			sendVerificationEmail: async ({ user, url }) => {
 				const verificationUrl = new URL(url);
-				verificationUrl.searchParams.set('callbackURL', '/email-verified');
+				const requestedCallback = verificationUrl.searchParams.get('callbackURL');
+				verificationUrl.searchParams.set(
+					'callbackURL',
+					requestedCallback
+						? safeReturnTo(requestedCallback, verificationUrl.origin)
+						: '/email-verified'
+				);
 				const finalUrl = verificationUrl.toString();
 
 				const { subject, text, html } = generateVerificationEmailContent(finalUrl, user.email);
