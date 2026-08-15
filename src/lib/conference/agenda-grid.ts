@@ -184,3 +184,65 @@ export function dropTarget(
 
 	return { roomId: frame.rooms[column], startMinutes: frame.slots[row] };
 }
+
+/**
+ * A hold covers a slot when it runs through that minute in that room.
+ *
+ * `roomId === null` is every column — lunch, a keynote, the thing that is not
+ * free even though no talk sits there. A talk is never a hold: overlapping
+ * talks are how a room clash is *made* (AIA-05), and greying those out would
+ * close the only path an agent has to produce one. Dropping onto a hold is
+ * the opposite: the time is already spoken for (#560).
+ */
+export function isHoldKind(kind: string): boolean {
+	return kind === 'block' || kind === 'reservation';
+}
+
+export function holdCoversSlot(
+	hold: {
+		kind: string;
+		roomId: number | null;
+		startMinutes: number | null;
+		endMinutes: number | null;
+	},
+	slot: { roomId: number; startMinutes: number }
+): boolean {
+	if (!isHoldKind(hold.kind)) return false;
+	if (hold.startMinutes === null) return false;
+	const end = hold.endMinutes ?? hold.startMinutes + 1;
+	if (slot.startMinutes < hold.startMinutes || slot.startMinutes >= end) return false;
+	return hold.roomId === null || hold.roomId === slot.roomId;
+}
+
+/** Timed holds with no room — they span every column, like the public agenda. */
+export function spanningHolds<
+	T extends { kind: string; roomId: number | null; startMinutes: number | null }
+>(sessions: T[]): T[] {
+	return sessions.filter((s) => isHoldKind(s.kind) && s.roomId === null && s.startMinutes !== null);
+}
+
+/** Holds that have no time yet, so the grid has nowhere to put them. */
+export function untimedHolds<T extends { kind: string; startMinutes: number | null }>(
+	sessions: T[]
+): T[] {
+	return sessions.filter((s) => isHoldKind(s.kind) && s.startMinutes === null);
+}
+
+/**
+ * What a drop would land on: a session that *starts* here, or a hold that
+ * covers here. Mid-talk coverage is not an occupant — that is still a free
+ * drop that becomes a visible clash. A hold covering the minute is taken.
+ */
+export function dropOccupant<
+	T extends {
+		kind: string;
+		roomId: number | null;
+		startMinutes: number | null;
+		endMinutes: number | null;
+	}
+>(sessions: T[], slot: { roomId: number; startMinutes: number }): T | null {
+	const starting =
+		sessions.find((s) => s.roomId === slot.roomId && s.startMinutes === slot.startMinutes) ?? null;
+	if (starting) return starting;
+	return sessions.find((s) => holdCoversSlot(s, slot)) ?? null;
+}

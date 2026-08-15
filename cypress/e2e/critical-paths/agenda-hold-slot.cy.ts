@@ -44,7 +44,10 @@ describe('An organizer holds a slot for a sponsor', () => {
 		cy.get('[data-testid="agenda-hold-title"]').type('Gold sponsor slot');
 		cy.get('[data-testid="agenda-hold-submit"]').click();
 
-		cy.get('[data-testid="agenda-holds"]').should('contain', 'Gold sponsor slot');
+		cy.get('[data-testid="agenda-hold"][data-kind="reservation"]').should(
+			'contain',
+			'Gold sponsor slot'
+		);
 
 		// It reached the database, not just the page.
 		cy.reload();
@@ -62,7 +65,7 @@ describe('An organizer holds a slot for a sponsor', () => {
 		cy.visit(`/manage/${slug}/agenda`);
 		cy.waitForHydration();
 		cy.get('[data-testid="agenda-hold"] button').contains('Release').click();
-		cy.get('[data-testid="agenda-holds"]').should('not.exist');
+		cy.get('[data-testid="agenda-hold"]').should('not.exist');
 
 		cy.visit(`/manage/${slug}/decisions`);
 		cy.waitForHydration();
@@ -93,7 +96,10 @@ describe('An organizer holds a slot for a sponsor', () => {
 		cy.get('[data-testid="agenda-hold-minutes"]').select('120');
 		cy.get('[data-testid="agenda-hold-submit"]').click();
 
-		cy.get('[data-testid="agenda-holds"]').should('contain', 'Gold sponsor slot');
+		cy.get('[data-testid="agenda-hold"][data-kind="reservation"]').should(
+			'contain',
+			'Gold sponsor slot'
+		);
 
 		cy.reload();
 		cy.waitForHydration();
@@ -111,7 +117,7 @@ describe('An organizer holds a slot for a sponsor', () => {
 
 		cy.get('[data-testid="agenda-slot-release"]').click();
 
-		cy.get('[data-testid="agenda-holds"]').should('not.exist');
+		cy.get('[data-testid="agenda-hold"]').should('not.exist');
 		cy.contains('[data-testid="agenda-session-title"]', 'Gold sponsor slot').should('not.exist');
 
 		// Released means released — the slot is back with the programme, and the

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { blockRows, dropTarget, gridSlots, laneLayout, type GridFrame } from './agenda-grid';
+import {
+	blockRows,
+	dropOccupant,
+	dropTarget,
+	gridSlots,
+	holdCoversSlot,
+	laneLayout,
+	spanningHolds,
+	untimedHolds,
+	type GridFrame
+} from './agenda-grid';
 
 const DAY = { dayStartsAt: 9 * 60, dayEndsAt: 18 * 60, slotMinutes: 15 };
 
@@ -218,5 +228,102 @@ describe('dropTarget', () => {
 		expect(
 			dropTarget(day, { left: 100, top: 50, width: 0, height: 360 }, { x: 100, y: 100 })
 		).toBeNull();
+	});
+});
+
+describe('holdCoversSlot', () => {
+	const lunch = {
+		kind: 'block',
+		roomId: null,
+		startMinutes: 12 * 60 + 30,
+		endMinutes: 13 * 60 + 30
+	};
+	const gold = {
+		kind: 'reservation',
+		roomId: 2,
+		startMinutes: 10 * 60,
+		endMinutes: 12 * 60
+	};
+
+	it('treats a room-less lunch as occupying every room at 12:30 and 13:15, not 13:30', () => {
+		expect(holdCoversSlot(lunch, { roomId: 1, startMinutes: 12 * 60 + 30 })).toBe(true);
+		expect(holdCoversSlot(lunch, { roomId: 9, startMinutes: 13 * 60 + 15 })).toBe(true);
+		expect(holdCoversSlot(lunch, { roomId: 1, startMinutes: 13 * 60 + 30 })).toBe(false);
+		expect(holdCoversSlot(lunch, { roomId: 1, startMinutes: 12 * 60 })).toBe(false);
+	});
+
+	it('keeps a room-specific hold in that room only', () => {
+		expect(holdCoversSlot(gold, { roomId: 2, startMinutes: 10 * 60 + 30 })).toBe(true);
+		expect(holdCoversSlot(gold, { roomId: 1, startMinutes: 10 * 60 + 30 })).toBe(false);
+	});
+
+	it('never treats a talk as a hold', () => {
+		const talk = {
+			roomId: null,
+			startMinutes: 12 * 60 + 30,
+			endMinutes: 13 * 60 + 30
+		};
+		expect(
+			holdCoversSlot({ ...talk, kind: 'session' }, { roomId: 1, startMinutes: 12 * 60 + 45 })
+		).toBe(false);
+		expect(
+			holdCoversSlot({ ...talk, kind: 'talk' }, { roomId: 1, startMinutes: 12 * 60 + 45 })
+		).toBe(false);
+	});
+});
+
+describe('spanningHolds / untimedHolds', () => {
+	it('splits timed all-rooms holds from ones the grid cannot place', () => {
+		const lunch = {
+			kind: 'block' as const,
+			roomId: null,
+			startMinutes: 750,
+			endMinutes: 810
+		};
+		const pending = { kind: 'block' as const, roomId: null, startMinutes: null, endMinutes: null };
+		const gold = {
+			kind: 'reservation' as const,
+			roomId: 1,
+			startMinutes: 600,
+			endMinutes: 720
+		};
+		const talk = {
+			kind: 'session' as const,
+			roomId: null,
+			startMinutes: 540,
+			endMinutes: 570
+		};
+
+		expect(spanningHolds([lunch, pending, gold, talk])).toEqual([lunch]);
+		expect(untimedHolds([lunch, pending, gold, talk])).toEqual([pending]);
+	});
+});
+
+describe('dropOccupant', () => {
+	const lunch = {
+		kind: 'block',
+		roomId: null,
+		startMinutes: 750,
+		endMinutes: 810,
+		title: 'Lunch'
+	};
+	const talk = {
+		kind: 'session',
+		roomId: 1,
+		startMinutes: 540,
+		endMinutes: 570,
+		title: 'Opening'
+	};
+
+	it('names the hold when a drop lands in the middle of lunch', () => {
+		expect(dropOccupant([lunch, talk], { roomId: 1, startMinutes: 765 })).toEqual(lunch);
+	});
+
+	it('still names a talk that starts in the slot, even next to a hold', () => {
+		expect(dropOccupant([lunch, talk], { roomId: 1, startMinutes: 540 })).toEqual(talk);
+	});
+
+	it('leaves a free minute free', () => {
+		expect(dropOccupant([lunch, talk], { roomId: 1, startMinutes: 600 })).toBeNull();
 	});
 });
