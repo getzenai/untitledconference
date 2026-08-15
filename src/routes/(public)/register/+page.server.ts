@@ -11,6 +11,7 @@
  * next to a throttled one.
  */
 import { auth } from '$lib/auth';
+import { safeReturnTo } from '$lib/safe-return-to';
 import { applySetCookies } from '$lib/server/set-cookie';
 import { registrationEmailSchema } from '$lib/validators/email';
 import { passwordSchema } from '$lib/validators/password';
@@ -59,6 +60,9 @@ export const actions: Actions = {
 		headers.set('content-type', 'application/json');
 		headers.delete('content-length');
 
+		const returnTo = safeReturnTo(url.searchParams.get('returnTo'), url.origin);
+		const callbackURL = `/email-verified?returnTo=${encodeURIComponent(returnTo)}`;
+
 		const response = await auth.handler(
 			new Request(new URL('/api/auth/sign-up/email', url.origin), {
 				method: 'POST',
@@ -66,7 +70,8 @@ export const actions: Actions = {
 				body: JSON.stringify({
 					email: parsed.data.email,
 					password: parsed.data.password,
-					name: ''
+					name: '',
+					callbackURL
 				})
 			})
 		);
@@ -111,8 +116,9 @@ export const actions: Actions = {
 		// A token means Better Auth created a session. No token means this
 		// deployment gates on email verification — same fork the client takes.
 		if (body.token) {
-			redirect(303, '/home');
+			redirect(303, returnTo);
 		}
-		redirect(303, `/verify-email?email=${encodeURIComponent(parsed.data.email)}`);
+		const params = new URLSearchParams({ email: parsed.data.email, returnTo });
+		redirect(303, `/verify-email?${params}`);
 	}
 };

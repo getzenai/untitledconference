@@ -33,6 +33,7 @@
 		type FieldDefinition
 	} from '$lib/conference/form-definition';
 	import type { ProposalDraft } from '$lib/conference/proposal-draft';
+	import ProposalAuthActions from './proposal-auth-actions.svelte';
 
 	type Props = {
 		fields: FieldDefinition[];
@@ -63,9 +64,9 @@
 		 * Signed-out submit: the page parks the draft and sends them to login.
 		 * The form does not own storage — it only reads the fields.
 		 */
-		onSignIn?: (draft: ProposalDraft) => void;
-		/** After login restored a draft: send it. The button they clicked said submit. */
-		autoSubmit?: boolean;
+		onSignIn?: (draft: ProposalDraft, intent: 'draft' | 'submit') => void;
+		/** After login restored a draft: perform the action the visitor chose. */
+		autoAction?: 'draft' | 'submit' | null;
 		/** Page owns storage (#494). Withheld until restore so the empty paint cannot wipe it. */
 		onDraftChange?: (draft: ProposalDraft) => void;
 		/** A save that landed. The parked copy can go. */
@@ -83,7 +84,7 @@
 		submitLabel = 'Submit proposal',
 		allowDraft = true,
 		onSignIn,
-		autoSubmit = false,
+		autoAction = null,
 		onDraftChange,
 		onCommitted
 	}: Props = $props();
@@ -282,12 +283,13 @@
 	 * treats a 500 like a failed navigation, and `+error.svelte` takes the typed
 	 * abstract with it.
 	 */
-	const submitting: SubmitFunction = ({ formData, cancel }) => {
-		// The click said submit. Without a session the POST would redirect to
-		// login and drop the body, so we park the draft and let the page go there.
+	const submitting: SubmitFunction = ({ formData, cancel, submitter }) => {
+		// Without a session the POST would redirect to login and drop the body, so
+		// park the draft together with the action the visitor chose.
 		if (!signedIn) {
 			cancel();
-			if (onSignIn) onSignIn(draftFromFormData(formData));
+			const intent = submitter?.getAttribute('formaction') === '?/draft' ? 'draft' : 'submit';
+			if (onSignIn) onSignIn(draftFromFormData(formData), intent);
 			return;
 		}
 		busy = true;
@@ -307,8 +309,8 @@
 	};
 
 	onMount(() => {
-		if (!autoSubmit || !formEl) return;
-		const submit = formEl.querySelector<HTMLButtonElement>('button[formaction="?/submit"]');
+		if (!autoAction || !formEl) return;
+		const submit = formEl.querySelector<HTMLButtonElement>(`button[formaction="?/${autoAction}"]`);
 		if (submit) formEl.requestSubmit(submit);
 	});
 </script>
@@ -629,13 +631,6 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="flex flex-wrap items-center gap-3 border-t pt-6">
-			<Button type="submit" formaction="?/submit" data-testid="cfp-sign-in-to-submit">
-				Sign in to submit
-			</Button>
-			<span class="text-muted-foreground text-sm">
-				We'll send this proposal as soon as you sign in.
-			</span>
-		</div>
+		<ProposalAuthActions {allowDraft} />
 	{/if}
 </form>

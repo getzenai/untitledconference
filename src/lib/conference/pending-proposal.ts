@@ -1,9 +1,9 @@
 /**
  * Two parked copies of a filled-in proposal, different lifetimes.
  *
- * The pending draft is the signed-out visitor's sign-in round trip (#236):
- * written on "Sign in to submit", consumed once on the way back so it cannot
- * become a second auto-submit. sessionStorage, because that trip is same-tab.
+ * The pending draft is the signed-out visitor's sign-in round trip (#236, #624):
+ * written on submit or draft, consumed once on the way back so it cannot
+ * become a second automatic save. sessionStorage, because that trip is same-tab.
  *
  * The autosaved draft is the sentence on the call (#494): "Drafts are saved."
  * Written as they type, read (not consumed) when they come back, cleared when
@@ -36,6 +36,8 @@ const AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
  * reader opens the same call.
  */
 export type DraftOwner = string | null;
+export type PendingProposalIntent = 'draft' | 'submit';
+export type PendingProposal = { draft: ProposalDraft; intent: PendingProposalIntent };
 
 /**
  * Long enough that a call's own deadline runs out first in every normal case,
@@ -175,13 +177,17 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 	return value as Record<string, unknown>;
 }
 
-/** Reject junk so a leftover string cannot become an auto-submit. */
-export function parsePendingProposal(raw: string): ProposalDraft | null {
+/** Reject junk so a leftover string cannot become an automatic save. */
+export function parsePendingProposal(raw: string): PendingProposal | null {
 	try {
 		const row = asRecord(JSON.parse(raw));
 		if (!row) return null;
-		const draft = draftFromUnknown(row);
-		return isTypedProposal(draft) ? draft : null;
+		// Bare drafts were written before #624 and always meant submit.
+		const parked = asRecord(row.draft);
+		const draft = draftFromUnknown(parked ?? row);
+		if (!isTypedProposal(draft)) return null;
+		const intent = row.intent === 'draft' ? 'draft' : 'submit';
+		return { draft, intent };
 	} catch {
 		return null;
 	}
@@ -190,15 +196,19 @@ export function parsePendingProposal(raw: string): ProposalDraft | null {
 export function writePendingProposal(
 	storage: Pick<Storage, 'setItem'>,
 	slug: string,
-	draft: ProposalDraft
+	draft: ProposalDraft,
+	intent: PendingProposalIntent
 ): void {
-	storage.setItem(pendingProposalKey(slug), JSON.stringify(draft));
+	storage.setItem(
+		pendingProposalKey(slug),
+		JSON.stringify({ draft, intent } satisfies PendingProposal)
+	);
 }
 
 export function consumePendingProposal(
 	storage: Pick<Storage, 'getItem' | 'removeItem'>,
 	slug: string
-): ProposalDraft | null {
+): PendingProposal | null {
 	const key = pendingProposalKey(slug);
 	const raw = storage.getItem(key);
 	storage.removeItem(key);

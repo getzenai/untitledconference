@@ -7,7 +7,7 @@
  * is the opposite: the click said submit, so after sign-in the proposal exists
  * on the Speaking tab.
  */
-import { DEFAULT_TEST_PASSWORD } from '../../support/globals';
+import { DEFAULT_TEST_PASSWORD, generateTestUserEmail } from '../../support/globals';
 
 const uniqueSlug = () => `cfp-signin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -68,6 +68,56 @@ describe('Signing in from the public call', () => {
 			cy.contains('a', title).should('exist');
 			cy.contains('You have not proposed anything yet.').should('not.exist');
 		});
+	});
+
+	it('creates the draft after the visitor registers from the sign-in page', () => {
+		const slug = uniqueSlug();
+		const title = `A draft worth keeping ${Date.now()}`;
+		const speakerEmail = generateTestUserEmail('cfp-register-draft');
+
+		cy.createAndLogin().then((user) => {
+			cy.request({
+				method: 'POST',
+				url: `${Cypress.config('baseUrl')}/api/v1/test/agenda-fixture`,
+				body: { userId: user.id, slug, days: ['2028-05-10'], sessions: [] }
+			})
+				.its('status')
+				.should('eq', 200);
+		});
+
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="settings-visibility"] [data-testid="visibility-submit"]').click();
+		cy.get('[data-testid="visibility-state"]', { timeout: 20000 }).should('contain.text', 'Live');
+
+		cy.visit(`/manage/${slug}/cfp`);
+		cy.waitForHydration();
+		cy.contains('button', 'Create the call for papers').click();
+		cy.get('[data-testid="cfp-publish"]').click();
+		cy.get('[data-testid="cfp-live-banner"]', { timeout: 20000 }).should('exist');
+
+		cy.logout();
+		cy.visit(`/c/${slug}/cfp`);
+		cy.waitForHydration();
+		cy.get('input[name="title"]').clear().type(title);
+		cy.get('[data-testid="cfp-sign-in-to-draft"]').click();
+
+		cy.url({ timeout: 20000 }).should('include', `/login?returnTo=/c/${slug}/cfp`);
+		cy.get('a')
+			.contains('Register')
+			.should('have.attr', 'href', `/register?returnTo=${encodeURIComponent(`/c/${slug}/cfp`)}`)
+			.click();
+		cy.url().should('include', `/register?returnTo=${encodeURIComponent(`/c/${slug}/cfp`)}`);
+		cy.waitForHydration();
+		cy.get('input[name="email"]').type(speakerEmail);
+		cy.get('input[name="password"]').type(DEFAULT_TEST_PASSWORD, { log: false });
+		cy.contains('button[type="submit"]', /^Register$/).click();
+
+		cy.url({ timeout: 30000 }).should('match', /\/portal\/submissions\/\d+$/);
+		cy.contains(title).should('be.visible');
+		cy.visit('/portal');
+		cy.waitForHydration();
+		cy.contains('a', title).should('exist');
 	});
 
 	/**

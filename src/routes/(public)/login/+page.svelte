@@ -26,6 +26,12 @@
 	// Password pre-fill only in dev mode to avoid leaking credentials via URL
 	const prefillEmail = page.url.searchParams.get('email') ?? '';
 	const prefillPassword = dev ? (page.url.searchParams.get('pw') ?? '') : '';
+	const returnTo = $derived(safeReturnTo(page.url.searchParams.get('returnTo'), page.url.origin));
+	const registerHref = $derived(
+		page.url.searchParams.has('returnTo')
+			? `/register?returnTo=${encodeURIComponent(returnTo)}`
+			: '/register'
+	);
 
 	const form = superForm(
 		{ email: prefillEmail, password: prefillPassword, rememberMe: true },
@@ -187,7 +193,7 @@
 	{#snippet footer()}
 		<p>
 			Don't have an account?
-			<a href="/register" class="text-foreground font-medium underline underline-offset-4">
+			<a href={registerHref} class="text-foreground font-medium underline underline-offset-4">
 				Register
 			</a>
 		</p>

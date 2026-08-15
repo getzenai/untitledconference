@@ -86,9 +86,11 @@
 		successMessage = null;
 
 		try {
+			const callbackURL = new URL('/email-verified', window.location.origin);
+			callbackURL.searchParams.set('returnTo', returnToTarget);
 			await authClient.sendVerificationEmail({
 				email,
-				callbackURL: window.location.origin + '/email-verified'
+				callbackURL: callbackURL.toString()
 			});
 
 			successMessage = 'Verification email sent! Please check your inbox.';
@@ -191,7 +193,12 @@
 				<Button variant="ghost" size="sm" class="flex-1" onclick={handleLogout}>
 					Use a different account
 				</Button>
-				<Button variant="ghost" size="sm" class="flex-1" onclick={() => goto('/login')}>
+				<Button
+					variant="ghost"
+					size="sm"
+					class="flex-1"
+					onclick={() => goto(`/login?returnTo=${encodeURIComponent(returnToTarget)}`)}
+				>
 					Back to login
 				</Button>
 			</div>
