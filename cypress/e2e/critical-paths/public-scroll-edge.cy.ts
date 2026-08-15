@@ -22,6 +22,14 @@
 const uniqueSlug = () => `scroll-edge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const PHONE = { width: 390, height: 844 };
+/**
+ * The narrow phone, and the reason there are two (#617). The tab strip used to
+ * overflow at 390 px and arrive with "Call for papers" cut to "Cal"; it fits
+ * there now. It still does not fit here — 320 px is the old iPhone SE and what a
+ * 390 px screen becomes under large browser text — so this is where the strip's
+ * own behaviour is measured. The room grid overflows on both.
+ */
+const NARROW_PHONE = { width: 320, height: 568 };
 const DESKTOP = { width: 1280, height: 800 };
 
 const ROOMS = ['Main Hall', 'Room 2A', 'Room 2B', 'Workshop Lab'];
@@ -187,7 +195,7 @@ describe('Sideways scrolling on the public site', () => {
 	});
 
 	it('gives the two strips on one screen two different button names (#604)', () => {
-		cy.viewport(PHONE.width, PHONE.height);
+		cy.viewport(NARROW_PHONE.width, NARROW_PHONE.height);
 		cy.visit(`/c/${slug}/agenda`);
 		cy.waitForHydration();
 
@@ -230,8 +238,35 @@ describe('Sideways scrolling on the public site', () => {
 		cy.get('[data-testid="scroll-back"]').should('not.exist');
 	});
 
-	it('marks the tab strip and still lets the tab under the edge be tapped', () => {
+	it('fits every tab on a 390 px phone, whole words (#617)', () => {
 		cy.viewport(PHONE.width, PHONE.height);
+		cy.visit(`/c/${slug}`);
+		cy.waitForHydration();
+
+		// The bug was a tab arriving as "Cal". The fix is not a wider strip but a
+		// shorter label, so the assertion is the strip fitting: nothing sticks out,
+		// therefore nothing is cut, therefore every label on screen is whole.
+		cy.get('[data-testid="conference-tabs"] > div')
+			.first()
+			.then(($viewport) => {
+				const viewport = $viewport[0];
+				expect(viewport.scrollWidth, 'tab strip at 390 px').to.be.at.most(viewport.clientWidth + 1);
+			});
+
+		// Nothing sticking out means nothing to promise: no fade, no button.
+		cy.get(TABS).should('not.exist');
+		cy.get('[data-testid="conference-tabs"] [data-testid="scroll-on"]').should('not.exist');
+
+		// The eye reads three letters; a screenreader still hears the whole name,
+		// and the link still goes where the long name says it does.
+		cy.contains('nav[aria-label="Conference sections"] a', 'CFP')
+			.should('be.visible')
+			.and('have.attr', 'href', `/c/${slug}/cfp`);
+		cy.get('nav[aria-label="Conference sections"]').should('contain.text', 'Call for papers');
+	});
+
+	it('marks the tab strip and still lets the tab under the edge be tapped', () => {
+		cy.viewport(NARROW_PHONE.width, NARROW_PHONE.height);
 		cy.visit(`/c/${slug}`);
 		cy.waitForHydration();
 
