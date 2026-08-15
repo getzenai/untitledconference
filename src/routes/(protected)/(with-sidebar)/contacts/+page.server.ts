@@ -1,5 +1,5 @@
 /**
- * Org-wide speaker directory (CRM-01 / CRM-02 / CRM-05), overview (CRM-12),
+ * Org-wide contacts (CRM-01 / CRM-02 / CRM-05), overview (CRM-12),
  * and saved segments (CRM-09).
  *
  * Outside any single event: every contact in organizations the user owns or

@@ -2,9 +2,14 @@
  * Pipeline board surface (CRM-07 / CRM-08).
  */
 import { PIPELINE_STAGES } from '$lib/conference/pipeline-stages';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
+
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
 vi.mock('$app/forms', () => ({
 	enhance: () => ({})
@@ -60,6 +65,9 @@ describe('pipeline page', () => {
 			props: { data: baseData as never, form: null }
 		});
 
+		expect(source).toContain('<title>Sourcing pipeline</title>');
+		expect(source).not.toContain('Speaker CRM');
+		expect(body).not.toContain('Speaker CRM');
 		expect(body).toContain('data-testid="pipeline-heading"');
 		expect(body).toContain('data-testid="pipeline-board"');
 		expect(body).toContain('data-testid="pipeline-enroll"');

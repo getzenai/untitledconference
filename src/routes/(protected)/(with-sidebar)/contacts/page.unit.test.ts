@@ -182,6 +182,22 @@ describe('contacts directory page', () => {
 		expect(body).not.toContain('data-testid="speakers-import"');
 	});
 
+	it('calls the records contacts, not speakers or a CRM (#455)', () => {
+		const { body } = render(Page, {
+			props: { data: baseData as never, form: null }
+		});
+
+		// svelte:head is not in the SSR body; the tab title lives only in the source.
+		expect(source).toContain('<title>Contacts</title>');
+		expect(source).not.toContain('Speaker CRM');
+		expect(source).toContain('Import contacts');
+		expect(source).not.toContain('Import a list');
+		expect(source).not.toContain('Import speakers');
+		expect(body).toContain('Organization-wide contacts across every event you administer.');
+		expect(body).not.toContain('Speaker CRM');
+		expect(body).not.toContain('speaker directory');
+	});
+
 	it('prompts for an organization when the user cannot manage', () => {
 		const { body } = render(Page, {
 			props: {
@@ -195,5 +211,7 @@ describe('contacts directory page', () => {
 			}
 		});
 		expect(body).toContain('data-testid="contacts-empty-org"');
+		expect(body).toContain('to use Contacts');
+		expect(body).not.toContain('speaker directory');
 	});
 });

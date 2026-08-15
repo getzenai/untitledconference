@@ -82,7 +82,7 @@
 </script>
 
 <svelte:head>
-	<title>Pipeline — Speaker CRM</title>
+	<title>Sourcing pipeline</title>
 </svelte:head>
 
 <div class="space-y-6" data-testid="pipeline-page">
