@@ -4,11 +4,15 @@
 	 *
 	 * Desktop puts this in `ConferenceSidebar`; the mobile sheet puts the same
 	 * group inside `AppSidebar`. One list, one active-state rule.
+	 *
+	 * Three groups in the conference's own order (#627). Collapsed to icons the
+	 * labels are hidden by the sidebar itself, so the grouping costs nothing
+	 * there and the icon order still follows the same timeline.
 	 */
 	import { page } from '$app/state';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import {
-		conferenceNav,
+		conferenceNavSections,
 		isConferenceNavCurrent,
 		type ConferenceRail
 	} from '$lib/conference/conference-nav';
@@ -48,30 +52,38 @@
 		settings: SettingsIcon
 	};
 
-	const items = $derived(conferenceNav(conference.slug));
+	const sections = $derived(conferenceNavSections(conference.slug));
 
 	const isCurrent = (href: string) => isConferenceNavCurrent(page.url.pathname, href);
 </script>
 
-<Sidebar.Group class={className}>
-	<Sidebar.GroupLabel>Conference</Sidebar.GroupLabel>
-	<Sidebar.Menu>
-		{#each items as item (item.id)}
-			{@const Icon = icons[item.id]}
-			<Sidebar.MenuItem>
-				<Sidebar.MenuButton
-					tooltipContent={item.label}
-					isActive={isCurrent(item.href)}
-					data-testid="conference-nav-{item.id}"
-				>
-					{#snippet child({ props })}
-						<a href={item.href} aria-current={isCurrent(item.href) ? 'page' : undefined} {...props}>
-							<Icon />
-							<span>{item.label}</span>
-						</a>
-					{/snippet}
-				</Sidebar.MenuButton>
-			</Sidebar.MenuItem>
-		{/each}
-	</Sidebar.Menu>
-</Sidebar.Group>
+{#each sections as section (section.id)}
+	<Sidebar.Group class={className}>
+		<Sidebar.GroupLabel data-testid="conference-nav-section-{section.id}">
+			{section.label}
+		</Sidebar.GroupLabel>
+		<Sidebar.Menu>
+			{#each section.items as item (item.id)}
+				{@const Icon = icons[item.id]}
+				<Sidebar.MenuItem>
+					<Sidebar.MenuButton
+						tooltipContent={item.label}
+						isActive={isCurrent(item.href)}
+						data-testid="conference-nav-{item.id}"
+					>
+						{#snippet child({ props })}
+							<a
+								href={item.href}
+								aria-current={isCurrent(item.href) ? 'page' : undefined}
+								{...props}
+							>
+								<Icon />
+								<span>{item.label}</span>
+							</a>
+						{/snippet}
+					</Sidebar.MenuButton>
+				</Sidebar.MenuItem>
+			{/each}
+		</Sidebar.Menu>
+	</Sidebar.Group>
+{/each}

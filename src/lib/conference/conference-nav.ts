@@ -4,6 +4,11 @@
  * The list is the product map, not a route dump: labels name the work
  * ("Rounds & scorecards", "Reviewer pool") so an organizer — or an eval
  * agent — hunting for a thing finds the word on the door.
+ *
+ * The order is the conference's own timeline, in three sections (#627): open
+ * the call, choose the talks, build the programme. Twelve equal entries in
+ * build order made the reader scan the whole rail to find where they were;
+ * the sections say which part of the job each door belongs to.
  */
 
 export type ConferenceRail = {
@@ -35,22 +40,54 @@ export type ConferenceNavItem = {
 	label: string;
 };
 
-export function conferenceNav(slug: string): ConferenceNavItem[] {
+export type ConferenceNavSection = {
+	/** Stable handle for tests and `data-testid`; the label is the wording. */
+	id: 'setup' | 'select' | 'programme';
+	label: string;
+	items: ConferenceNavItem[];
+};
+
+export function conferenceNavSections(slug: string): ConferenceNavSection[] {
 	const base = `/manage/${slug}`;
 	return [
-		{ id: 'dashboard', href: `${base}/dashboard`, label: 'Dashboard' },
-		{ id: 'submissions', href: `${base}/submissions`, label: 'Talks' },
-		{ id: 'decisions', href: `${base}/decisions`, label: 'Decision meeting' },
-		{ id: 'carryForward', href: `${base}/carry-forward`, label: 'Carry forward' },
-		{ id: 'cfp', href: `${base}/cfp`, label: 'Call for papers' },
-		{ id: 'agenda', href: `${base}/agenda`, label: 'Agenda' },
-		{ id: 'speakers', href: `${base}/speakers`, label: 'Speakers' },
-		{ id: 'content', href: `${base}/content`, label: 'Speaker materials' },
-		{ id: 'rounds', href: `${base}/rounds`, label: 'Rounds & scorecards' },
-		{ id: 'people', href: `${base}/people`, label: 'Reviewer pool' },
-		{ id: 'embed', href: `${base}/embed`, label: 'Embed & share' },
-		{ id: 'settings', href: `${base}/settings`, label: 'Settings' }
+		{
+			id: 'setup',
+			label: 'Set up',
+			items: [
+				{ id: 'dashboard', href: `${base}/dashboard`, label: 'Dashboard' },
+				{ id: 'settings', href: `${base}/settings`, label: 'Settings' },
+				{ id: 'cfp', href: `${base}/cfp`, label: 'Call for papers' }
+			]
+		},
+		{
+			id: 'select',
+			// Everything between "the call is open" and "these talks are in".
+			label: 'Review & decide',
+			items: [
+				{ id: 'submissions', href: `${base}/submissions`, label: 'Talks' },
+				{ id: 'people', href: `${base}/people`, label: 'Reviewer pool' },
+				{ id: 'rounds', href: `${base}/rounds`, label: 'Rounds & scorecards' },
+				{ id: 'decisions', href: `${base}/decisions`, label: 'Decision meeting' },
+				// Last year's declined talks are picked up here, at the same table.
+				{ id: 'carryForward', href: `${base}/carry-forward`, label: 'Carry forward' }
+			]
+		},
+		{
+			id: 'programme',
+			label: 'Programme',
+			items: [
+				{ id: 'speakers', href: `${base}/speakers`, label: 'Speakers' },
+				{ id: 'content', href: `${base}/content`, label: 'Speaker materials' },
+				{ id: 'agenda', href: `${base}/agenda`, label: 'Agenda' },
+				{ id: 'embed', href: `${base}/embed`, label: 'Embed & share' }
+			]
+		}
 	];
+}
+
+/** The same doors, flat, for anything that only needs hrefs and labels. */
+export function conferenceNav(slug: string): ConferenceNavItem[] {
+	return conferenceNavSections(slug).flatMap((section) => section.items);
 }
 
 /**
