@@ -3,13 +3,15 @@
  * About-you section (#558). The public call never used to load a profile, so
  * someone who had already spoken three times typed name, bio and email again.
  *
- * The write-back scope ("this talk" vs "everywhere") and merging a second
- * profile are a different ticket — this file only pins the prefill.
+ * Parts 2 and 3 pin the write: a change here updates that same profile, and a
+ * second proposal from the same account links to it instead of forking one.
  */
+import { saveSubmission, type SubmissionInput } from '$lib/server/conference/cfp-submission';
 import { db } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
-import { cfpFormTable } from '$lib/server/db/conference/cfp-schema';
+import { cfpFormTable, submissionSpeakerTable } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { load, type CfpSpeakerProfile } from './+page.server';
 
@@ -122,5 +124,104 @@ describe('the public call prefills a speaker profile at this organizer', () => {
 		const data = (await visit(strangerId)) as Loaded;
 
 		expect(data.speakerProfile).toBeNull();
+	});
+});
+
+function proposal(title: string, bio: string): SubmissionInput {
+	return {
+		title,
+		abstract: 'An abstract.',
+		keyTakeaway: null,
+		audienceLevel: null,
+		sessionFormatId: null,
+		trackId: null,
+		answers: {},
+		speaker: {
+			name: 'Priya Raman',
+			sortName: 'Raman, Priya',
+			email: `${speakerId}@example.test`,
+			jobTitle: 'Staff Engineer',
+			company: 'Northwind Labs',
+			bio
+		},
+		coSpeakers: []
+	};
+}
+
+/**
+ * The write the notice above the form is talking about (#558 parts 2 and 3).
+ *
+ * A second proposal from the same account must land on the same profile — that
+ * is the merge. A bio change on that second save must rewrite that row, not
+ * open a second one — that is the named scope, and why the public page has to
+ * say "every talk" before Submit.
+ */
+describe('the public call writes the existing profile, not a fork', () => {
+	it('keeps one profile across two proposals and applies a bio change to it', async () => {
+		const slugB = `conf-b-${suffix}`;
+		const [conferenceB] = await db
+			.insert(conferenceTable)
+			.values({
+				organizationId,
+				name: 'Northwind Summit II',
+				slug: slugB,
+				startsOn: '2028-05-12',
+				endsOn: '2028-05-12',
+				status: 'published'
+			})
+			.returning();
+		await db.insert(cfpFormTable).values({
+			conferenceId: conferenceB.id,
+			title: 'Call for papers',
+			status: 'published'
+		});
+
+		const [before] = await db
+			.select({ id: speakerProfileTable.id, bio: speakerProfileTable.bio })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.userId, speakerId)
+				)
+			);
+		expect(before.bio).toBe('Works on build systems.');
+
+		const first = await saveSubmission(speakerId, slug, proposal('Talk A', before.bio ?? ''), {
+			submit: true
+		});
+		const second = await saveSubmission(
+			speakerId,
+			slugB,
+			proposal('Talk B', 'Rewritten for the second talk.'),
+			{ submit: true }
+		);
+		if (!first.ok || !second.ok) {
+			throw new Error(`expected two saves, got ${JSON.stringify({ first, second })}`);
+		}
+
+		const profiles = await db
+			.select({ id: speakerProfileTable.id, bio: speakerProfileTable.bio })
+			.from(speakerProfileTable)
+			.where(
+				and(
+					eq(speakerProfileTable.organizationId, organizationId),
+					eq(speakerProfileTable.userId, speakerId)
+				)
+			);
+		expect(profiles).toHaveLength(1);
+		expect(profiles[0].id).toBe(before.id);
+		expect(profiles[0].bio).toBe('Rewritten for the second talk.');
+
+		const linked = await db
+			.select({ profileId: submissionSpeakerTable.speakerProfileId })
+			.from(submissionSpeakerTable)
+			.where(eq(submissionSpeakerTable.submissionId, first.submissionId));
+		const linkedB = await db
+			.select({ profileId: submissionSpeakerTable.speakerProfileId })
+			.from(submissionSpeakerTable)
+			.where(eq(submissionSpeakerTable.submissionId, second.submissionId));
+		expect(linked.map((row) => row.profileId)).toEqual([before.id]);
+		expect(linkedB.map((row) => row.profileId)).toEqual([before.id]);
 	});
 });

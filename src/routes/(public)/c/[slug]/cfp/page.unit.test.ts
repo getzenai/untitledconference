@@ -276,6 +276,21 @@ describe('prefilling a speaker who already has a profile (#558)', () => {
 		expect(body).toContain('Works on build systems.');
 	});
 
+	// The write is org-wide. If this sentence is missing, a bio typed for talk B
+	// silently rewrites talk A — the failure #558 part 2 is there to stop.
+	it('names the write scope before they can submit', () => {
+		const body = renderCfp('open', null, null, null, {
+			user: { id: 'user-1' },
+			speakerProfile: priya
+		});
+
+		const notice = body
+			.slice(body.indexOf('data-testid="cfp-profile-source"'))
+			.replace(/\s+/g, ' ');
+		expect(notice).toContain('every talk you give this organizer');
+		expect(notice).toContain('not just this proposal');
+	});
+
 	it('says nothing about a profile when there is none', () => {
 		const signedOut = renderCfp('open', null);
 		const signedIn = renderCfp('open', null, null, null, { user: { id: 'user-1' } });

@@ -227,14 +227,21 @@
 			</div>
 		{/if}
 
-		{#if usingProfile && data.speakerProfile}
+		{#if data.speakerProfile}
+			<!--
+				The profile is org-wide (#558). A correction here is not "for this
+				talk" — EMB-01 reads these columns on every talk this person gives
+				the organizer. The sentence has to sit on the page before Submit,
+				or the write is silent.
+			-->
 			<p
 				class="border-border bg-card mt-4 rounded-lg border p-4 text-sm"
 				data-testid="cfp-profile-source"
 				role="status"
 			>
-				Name, bio and the rest come from your speaker profile at {data.speakerProfile
-					.organizationName}.
+				Name, bio and the rest are your speaker profile at {data.speakerProfile.organizationName}.
+				Changing them here updates that profile for every talk you give this organizer — not just
+				this proposal.
 			</p>
 		{/if}
 
