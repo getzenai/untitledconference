@@ -6,7 +6,11 @@
  * end up on the public speaker page, and the headshot that goes with them.
  */
 import { collectSpeakerLinks, SPEAKER_LINK_ROWS } from '$lib/conference/speaker-links';
-import { HEADSHOT_TYPES, REJECTION_MESSAGES, rejectUpload } from '$lib/conference/upload-limits';
+import {
+	headshotContentType,
+	REJECTION_MESSAGES,
+	rejectUpload
+} from '$lib/conference/upload-limits';
 import { uploadsBucket } from '$lib/server/conference/deliverable-storage';
 import {
 	headshotHref,
@@ -105,15 +109,17 @@ export const actions: Actions = {
 		const file = form.get('headshot');
 		if (!(file instanceof File)) return fail(400, { profileId: id, error: 'Choose a file first.' });
 
-		const rejection = rejectUpload(file);
-		if (rejection) return fail(400, { profileId: id, error: REJECTION_MESSAGES[rejection] });
-
-		// `rejectUpload` accepts every deliverable kind, PDFs and slide decks
-		// included. This is the narrower question: a headshot has to render as an
-		// image or the public page shows a broken one.
-		if (!HEADSHOT_TYPES.includes(file.type)) {
+		// Narrower than `rejectUpload`: a headshot has to render as an image or
+		// the public page shows a broken one. Resolve the stored type first so a
+		// `.PNG` the picker let through (no UTI, so no MIME) is not refused here
+		// and is not written as `octet-stream`.
+		const contentType = headshotContentType(file);
+		if (!contentType) {
 			return fail(400, { profileId: id, error: 'A headshot must be a JPEG, PNG or WebP image.' });
 		}
+
+		const rejection = rejectUpload({ size: file.size, type: contentType });
+		if (rejection) return fail(400, { profileId: id, error: REJECTION_MESSAGES[rejection] });
 
 		const bucket = uploadsBucket(platform);
 		if (!bucket) return fail(503, { profileId: id, error: REJECTION_MESSAGES.no_storage });
@@ -126,7 +132,7 @@ export const actions: Actions = {
 		if (!(await ownsProfile(locals.user.id, id))) error(404, 'No such profile');
 
 		await bucket.put(headshotObjectKey(id), await file.arrayBuffer(), {
-			httpMetadata: { contentType: file.type }
+			httpMetadata: { contentType }
 		});
 
 		const claimed = await setOwnHeadshot(locals.user.id, id, headshotHref(id, Date.now()));

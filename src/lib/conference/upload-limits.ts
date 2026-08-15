@@ -45,6 +45,32 @@ export const HEADSHOT_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 export const HEADSHOT_ACCEPT = [...HEADSHOT_TYPES, '.jpg', '.jpeg', '.png', '.webp'].join(',');
 
+/**
+ * The Content-Type we will store for a headshot, or null if it is not one.
+ *
+ * A MIME-only check is how #625 leaked through to the server: the picker now
+ * lets a `.PNG` through when the OS cannot map it to a UTI, and the browser
+ * then reports `application/octet-stream` or nothing. Trusting that report
+ * refuses a file we just invited, and writing it onto the object makes the
+ * public page serve a broken image. The extension is the same signal the
+ * picker already accepted — use it only when the MIME is missing or generic.
+ * A real, wrong type (`image/heic`, a PDF) still wins: we do not convert.
+ */
+export function headshotContentType(file: { name: string; type: string }): string | null {
+	const type = file.type.toLowerCase().split(';')[0]?.trim() ?? '';
+	if ((HEADSHOT_TYPES as readonly string[]).includes(type)) return type;
+	if (type && type !== 'application/octet-stream') return null;
+	return headshotTypeFromName(file.name);
+}
+
+function headshotTypeFromName(name: string): string | null {
+	const base = name.toLowerCase().split(/[/\\]/).pop() ?? '';
+	if (base.endsWith('.png')) return 'image/png';
+	if (base.endsWith('.webp')) return 'image/webp';
+	if (base.endsWith('.jpg') || base.endsWith('.jpeg')) return 'image/jpeg';
+	return null;
+}
+
 export type UploadRejection = 'too_large' | 'unsupported_type' | 'empty' | 'no_storage';
 
 export const REJECTION_MESSAGES: Record<UploadRejection, string> = {
