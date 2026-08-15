@@ -732,6 +732,49 @@ describe('holding a slot', () => {
 		expect(body).not.toContain('data-testid="agenda-holds"');
 	});
 
+	/**
+	 * Auto-place keys occupancy by room, so a room-less lunch does not occupy any
+	 * column and talks land inside it (#565). The band must sit under those cards
+	 * and not steal their clicks — only Release is hittable.
+	 */
+	it('keeps a talk inside lunch readable and clickable', () => {
+		const body = renderWith(2, 1, {
+			placed: [
+				hold({
+					kind: 'block',
+					title: 'Lunch',
+					roomId: null,
+					placementId: 4,
+					startMinutes: 750,
+					endMinutes: 810
+				}),
+				hold({
+					kind: 'session',
+					title: 'A talk in lunch',
+					submissionId: 3,
+					placementId: 7,
+					roomId: 1,
+					startMinutes: 750,
+					endMinutes: 810
+				})
+			]
+		});
+
+		expect(body).toContain('Lunch');
+		expect(body).toContain('A talk in lunch');
+
+		const bandsTag = body.match(/<div[^>]*data-testid="agenda-hold-bands"[^>]*>/)?.[0] ?? '';
+		expect(bandsTag).toContain('z-[5]');
+		expect(bandsTag).not.toContain('z-[15]');
+
+		const cardTag = body.match(/<div[^>]*data-testid="agenda-placed-session"[^>]*>/)?.[0] ?? '';
+		expect(cardTag).toContain('z-10');
+
+		const bandTag = body.match(/<div[^>]*data-span="all"[^>]*>/)?.[0] ?? '';
+		expect(bandTag).not.toContain('pointer-events-auto');
+		expect(body).toContain('action="?/release" class="pointer-events-auto"');
+	});
+
 	/** A talk is not a hold: releasing one would take an accepted session off the grid. */
 	it('leaves sessions out of the hold list', () => {
 		const body = renderWith(2, 1, {

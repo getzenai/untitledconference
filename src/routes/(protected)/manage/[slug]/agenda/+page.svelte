@@ -1103,12 +1103,13 @@
 
 								<!--
 									#560: a room-less hold is a band across every column, at its
-									time — the same reading as the public agenda. Pointer-events
-									stay on the band so Release works; drop targeting is coordinate
-									math, not hit-testing, so the overlay does not steal a drop.
+									time — the same reading as the public agenda. The band sits
+									under the session cards (z-5 vs z-10) so a talk that landed
+									in the pause stays readable and clickable. Only Release is
+									hittable; drop targeting is coordinate math, not hit-testing.
 								-->
 								<div
-									class="pointer-events-none absolute inset-x-0 bottom-0 z-[15]"
+									class="pointer-events-none absolute inset-x-0 bottom-0 z-[5]"
 									style="height: {gridHeight}"
 									data-testid="agenda-hold-bands"
 								>
@@ -1120,7 +1121,7 @@
 												data-kind={slot.kind}
 												data-span="all"
 												data-placement-id={slot.placementId}
-												class="border-border bg-muted/70 pointer-events-auto absolute inset-x-1 overflow-hidden rounded-md border"
+												class="border-border bg-muted/70 absolute inset-x-1 overflow-hidden rounded-md border"
 												style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span * ROW_REM}rem"
 											>
 												<div class="flex h-full min-w-0 items-start gap-2 px-2 py-0.5">
@@ -1142,7 +1143,12 @@
 															{/if}
 														</span>
 													</div>
-													<form method="POST" action="?/release" use:enhance={submitting}>
+													<form
+														method="POST"
+														action="?/release"
+														use:enhance={submitting}
+														class="pointer-events-auto"
+													>
 														<input type="hidden" name="placementId" value={slot.placementId} />
 														<Button
 															type="submit"
