@@ -21,8 +21,10 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import { isUploadedHeadshot } from '$lib/conference/headshot';
 	import { initials } from '$lib/conference/public-view';
 	import { parseSpeakerLinks, SPEAKER_LINK_ROWS } from '$lib/conference/speaker-links';
+	import { HEADSHOT_ACCEPT } from '$lib/conference/upload-limits';
 
 	let { data, form } = $props();
 
@@ -39,8 +41,8 @@
 			} finally {
 				busy = false;
 				// A removed headshot takes its dialog with it — the block is inside
-				// `{#if profile.headshotUrl}`. A refused removal does not, and the
-				// question would stand over the answer.
+				// `{#if isUploadedHeadshot(...)}`. A refused removal does not, and
+				// the question would stand over the answer.
 				confirmRemoveHeadshot = null;
 			}
 		};
@@ -152,14 +154,14 @@
 						<input
 							type="file"
 							name="headshot"
-							accept="image/jpeg,image/png,image/webp"
+							accept={HEADSHOT_ACCEPT}
 							aria-label="Choose a headshot"
 							class="border-input bg-background max-w-full rounded-md border px-3 py-2 text-sm"
 						/>
 						<Button type="submit" size="sm" disabled={busy}>Upload</Button>
 					</form>
 
-					{#if profile.headshotUrl}
+					{#if isUploadedHeadshot(profile.headshotUrl)}
 						<form
 							id="remove-headshot-{profile.id}"
 							method="POST"
