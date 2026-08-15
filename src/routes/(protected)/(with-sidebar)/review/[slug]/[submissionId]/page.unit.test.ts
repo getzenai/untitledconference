@@ -60,6 +60,7 @@ function page(
 		}[];
 		/** #451. Empty by default — the server sends nothing in an anonymised round. */
 		speakerHistory?: SpeakerHistory[];
+		chatEnabled?: boolean;
 	} = {}
 ) {
 	const submissionStatus = opts.submissionStatus ?? 'in_review';
@@ -104,7 +105,8 @@ function page(
 					heldRounds: opts.heldRounds ?? [
 						{ id: 1, name: 'Screening', window, submitted: status === 'submitted' }
 					]
-				}
+				},
+				chatEnabled: opts.chatEnabled ?? false
 			} as PageData,
 			form: opts.form ?? null
 		}
@@ -473,5 +475,17 @@ describe('speaker history on the review page', () => {
 
 		expect(body).not.toContain('Speaker history');
 		expect(body).not.toContain('data-testid="speaker-history"');
+	});
+});
+
+describe('reviewer chat on the scorecard (#302)', () => {
+	it('stays off while the flag is off', () => {
+		expect(page('assigned')).not.toContain('data-testid="reviewer-chat"');
+	});
+
+	it('is on this review so "this review" has a target', () => {
+		const body = page('assigned', { chatEnabled: true });
+		expect(body).toContain('data-testid="reviewer-chat"');
+		expect(body).toContain('file one after you confirm');
 	});
 });

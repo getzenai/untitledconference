@@ -71,6 +71,61 @@ export function createMockChatModel(): LanguageModel {
 	});
 }
 
+/**
+ * A model that calls `submit_review` once, then names the write.
+ * Tests pass a new instance per request: the first HTTP turn emits the
+ * tool call (approval stops it), the second is told `afterApproval`.
+ */
+export function createMockSubmitReviewModel(
+	input: {
+		conferenceSlug: string;
+		submissionId: number;
+		answers: Record<string, string>;
+		comment?: string;
+	},
+	afterApproval = false
+): LanguageModel {
+	const payload = JSON.stringify({
+		conferenceSlug: input.conferenceSlug,
+		submissionId: input.submissionId,
+		answers: input.answers,
+		comment: input.comment ?? ''
+	});
+	const toolStep = [
+		{ type: 'stream-start' as const, warnings: [] },
+		{
+			type: 'tool-input-start' as const,
+			id: 'call_submit',
+			toolName: 'submit_review'
+		},
+		{ type: 'tool-input-delta' as const, id: 'call_submit', delta: payload },
+		{ type: 'tool-input-end' as const, id: 'call_submit' },
+		{
+			type: 'tool-call' as const,
+			toolCallId: 'call_submit',
+			toolName: 'submit_review',
+			input: payload
+		},
+		{ type: 'finish' as const, finishReason: 'tool-calls' as const, usage: emptyUsage }
+	];
+	const textStep = [
+		{ type: 'stream-start' as const, warnings: [] },
+		{ type: 'text-start' as const, id: 'text_1' },
+		{
+			type: 'text-delta' as const,
+			id: 'text_1',
+			delta: `Saved review of submission ${input.submissionId}: ${Object.values(input.answers)[0]}`
+		},
+		{ type: 'text-end' as const, id: 'text_1' },
+		{ type: 'finish' as const, finishReason: 'stop' as const, usage: emptyUsage }
+	];
+	return new MockLanguageModelV3({
+		doStream: async () => ({
+			stream: simulateReadableStream({ chunks: (afterApproval ? textStep : toolStep) as never })
+		})
+	});
+}
+
 export function createChatModel(): LanguageModel {
 	const { AI_CHAT_MODEL, AI_GATEWAY_API_KEY, AI_GATEWAY_BASE_URL } = serverEnv();
 	// Process export first: wrangler.jsonc pins a production model id, and

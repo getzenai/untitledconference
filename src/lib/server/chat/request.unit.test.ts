@@ -9,7 +9,7 @@ const requireReviewer = vi.hoisted(() => vi.fn());
 vi.mock('$env/dynamic/private', () => ({ env: mockEnv }));
 vi.mock('$lib/server/conference/reviewer', () => ({ requireReviewer }));
 
-import { handleReviewerChatRequest } from './request';
+import { handleReviewerChatRequest, readChatFocus } from './request';
 
 const emptyUsage = {
 	inputTokens: { total: 0, noCache: 0, cacheRead: undefined, cacheWrite: undefined },
@@ -97,6 +97,15 @@ describe('handleReviewerChatRequest', () => {
 		});
 		const res = await handleReviewerChatRequest(event({ body: { prompt: 'hi' } }));
 		expect(res.status).toBe(400);
+	});
+
+	it('reads a focused review from the POST body', () => {
+		expect(readChatFocus({})).toBeUndefined();
+		expect(readChatFocus({ focus: { submissionId: 7 } })).toBeUndefined();
+		expect(readChatFocus({ focus: { submissionId: 7, title: '  Talk  ' } })).toEqual({
+			submissionId: 7,
+			title: 'Talk'
+		});
 	});
 
 	it('streams from a stubbed model without a Gateway key', async () => {

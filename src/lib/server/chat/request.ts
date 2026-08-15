@@ -20,7 +20,7 @@ import {
 	type UIMessage
 } from 'ai';
 import { ChatModelNotConfiguredError, createChatModel } from './model';
-import { reviewerReadTools } from './tools';
+import { reviewerChatTools } from './tools';
 
 export type ReviewerChatEvent = {
 	locals: App.Locals;
@@ -47,14 +47,41 @@ function mcpContextFromLocals(locals: App.Locals): McpContext {
 	};
 }
 
-function systemPrompt(conference: { name: string; slug: string }): string {
+export type ReviewerChatFocus = {
+	submissionId: number;
+	title: string;
+};
+
+function systemPrompt(
+	conference: { name: string; slug: string },
+	focus?: ReviewerChatFocus
+): string {
+	const here = focus
+		? `The reviewer is looking at submission ${focus.submissionId} "${focus.title}". ` +
+			`"This review" and "this talk" mean that one. `
+		: `The reviewer is on the queue for this conference, not a single talk. ` +
+			`If they say "this review" without naming one, ask which assignment. `;
 	return (
 		`You are a review assistant for "${conference.name}" (${conference.slug}). ` +
-		`You can list this reviewer's assignments and open one assigned scorecard. ` +
-		`You cannot file, edit or decide reviews. ` +
+		here +
+		`You can list assignments, open an assigned scorecard, and file a review ` +
+		`with submit_review. Filing waits for the reviewer to confirm. ` +
+		`After a review is saved, name the talk and the score in one sentence. ` +
+		`You cannot decide the programme. ` +
 		`When you use a tool, name it in the answer. ` +
 		`Use conference slug "${conference.slug}" unless the reviewer names another.`
 	);
+}
+
+export function readChatFocus(body: { focus?: unknown }): ReviewerChatFocus | undefined {
+	const focus = body.focus;
+	if (!focus || typeof focus !== 'object') return undefined;
+	const rec = focus as { submissionId?: unknown; title?: unknown };
+	if (typeof rec.submissionId !== 'number' || !Number.isInteger(rec.submissionId)) {
+		return undefined;
+	}
+	if (typeof rec.title !== 'string' || rec.title.trim() === '') return undefined;
+	return { submissionId: rec.submissionId, title: rec.title.trim() };
 }
 
 export async function streamReviewerChat(opts: {
@@ -62,12 +89,15 @@ export async function streamReviewerChat(opts: {
 	conference: { name: string; slug: string };
 	messages: UIMessage[];
 	model: LanguageModel;
+	focus?: ReviewerChatFocus;
 }): Promise<Response> {
+	const tools = reviewerChatTools(opts.ctx);
 	const result = streamText({
 		model: opts.model,
-		system: systemPrompt(opts.conference),
-		messages: await convertToModelMessages(opts.messages),
-		tools: reviewerReadTools(opts.ctx),
+		system: systemPrompt(opts.conference, opts.focus),
+		messages: await convertToModelMessages(opts.messages, { tools }),
+		tools,
+		toolApproval: { submit_review: 'user-approval' },
 		stopWhen: isStepCount(5)
 	});
 
@@ -98,9 +128,9 @@ export async function handleReviewerChatRequest(
 		throw err;
 	}
 
-	let body: { messages?: UIMessage[] };
+	let body: { messages?: UIMessage[]; focus?: unknown };
 	try {
-		body = (await event.request.json()) as { messages?: UIMessage[] };
+		body = (await event.request.json()) as { messages?: UIMessage[]; focus?: unknown };
 	} catch {
 		return chatError(400, 'Expected a JSON body with messages.');
 	}
@@ -113,7 +143,8 @@ export async function handleReviewerChatRequest(
 			ctx: mcpContextFromLocals(event.locals),
 			conference,
 			messages: body.messages,
-			model: model ?? createChatModel()
+			model: model ?? createChatModel(),
+			focus: readChatFocus(body)
 		});
 	} catch (err) {
 		if (err instanceof ChatModelNotConfiguredError) {

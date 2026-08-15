@@ -3,31 +3,62 @@
 	 * Reviewer chat panel. Hidden unless FEATURE_INAPP_CHAT is on — the page
 	 * decides; this component assumes it is meant to be on the screen.
 	 *
-	 * Tool parts are named `tool-<name>` by the AI SDK. We render the name so
-	 * a reviewer can see which tool produced the answer.
+	 * Tool parts are named `tool-<name>` by the AI SDK. Read tools just print
+	 * the name. `submit_review` stops for a yes before it writes, and the
+	 * history line names the talk afterwards (#302).
 	 */
 	import { Chat } from '@ai-sdk/svelte';
-	import { DefaultChatTransport, getToolName, isToolUIPart } from 'ai';
+	import { invalidateAll } from '$app/navigation';
+	import {
+		DefaultChatTransport,
+		getToolName,
+		isToolUIPart,
+		lastAssistantMessageIsCompleteWithApprovalResponses
+	} from 'ai';
 	import { onMount } from 'svelte';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { chatErrorMessage } from './reviewer-chat-error';
+	import { describeReviewWrite, previewReviewWrite } from './reviewer-chat-write';
 
-	let { slug }: { slug: string } = $props();
+	let {
+		slug,
+		focus = undefined
+	}: {
+		slug: string;
+		focus?: { submissionId: number; title: string };
+	} = $props();
 
 	let input = $state('');
 	let chat = $state<Chat | null>(null);
+	let invalidatedFor = $state<string | null>(null);
 
 	onMount(() => {
 		chat = new Chat({
 			transport: new DefaultChatTransport({
-				api: `/review/${slug}/chat`
-			})
+				api: `/review/${slug}/chat`,
+				body: focus ? { focus } : {}
+			}),
+			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses
 		});
 	});
 
 	const pending = $derived(chat?.status === 'submitted' || chat?.status === 'streaming');
+
+	$effect(() => {
+		if (!chat) return;
+		for (const message of chat.messages) {
+			for (const part of message.parts) {
+				if (!isToolUIPart(part)) continue;
+				if (getToolName(part) !== 'submit_review') continue;
+				if (part.state !== 'output-available') continue;
+				if (invalidatedFor === part.toolCallId) continue;
+				invalidatedFor = part.toolCallId;
+				void invalidateAll();
+			}
+		}
+	});
 
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
@@ -35,6 +66,11 @@
 		if (!text || !chat || pending) return;
 		input = '';
 		void chat.sendMessage({ text });
+	}
+
+	function decide(id: string, approved: boolean) {
+		if (!chat) return;
+		void chat.addToolApprovalResponse({ id, approved });
 	}
 </script>
 
@@ -45,7 +81,7 @@
 >
 	<h2 class="text-sm font-semibold tracking-tight">Review assistant</h2>
 	<p class="text-muted-foreground mt-0.5 text-xs">
-		Ask about your assigned reviews. It can look them up; it cannot file one yet.
+		Ask about your assigned reviews. It can look them up and file one after you confirm.
 	</p>
 
 	<ul class="mt-4 flex flex-col gap-3">
@@ -59,6 +95,43 @@
 						{#each message.parts as part, partIndex (partIndex)}
 							{#if part.type === 'text'}
 								<p class="whitespace-pre-wrap">{part.text}</p>
+							{:else if isToolUIPart(part) && getToolName(part) === 'submit_review' && part.state === 'approval-requested' && part.approval}
+								<div
+									class="border-border bg-background rounded-md border p-3"
+									data-testid="chat-review-confirm"
+								>
+									<p>{previewReviewWrite(part.input ?? {}, focus?.title)}</p>
+									<div class="mt-2 flex gap-2">
+										<Button
+											type="button"
+											size="sm"
+											data-testid="chat-review-confirm-yes"
+											onclick={() => decide(part.approval.id, true)}
+										>
+											File it
+										</Button>
+										<Button
+											type="button"
+											size="sm"
+											variant="outline"
+											data-testid="chat-review-confirm-no"
+											onclick={() => decide(part.approval.id, false)}
+										>
+											Don't
+										</Button>
+									</div>
+								</div>
+							{:else if isToolUIPart(part) && getToolName(part) === 'submit_review' && part.state === 'output-available'}
+								<p
+									class="bg-status-good-bg text-status-good w-fit rounded-md px-2 py-0.5 text-xs"
+									data-testid="chat-review-saved"
+								>
+									{describeReviewWrite(part.input ?? {}, focus?.title)}
+								</p>
+							{:else if isToolUIPart(part) && getToolName(part) === 'submit_review' && part.state === 'output-denied'}
+								<p class="text-muted-foreground text-xs" data-testid="chat-review-denied">
+									Review not filed.
+								</p>
 							{:else if isToolUIPart(part)}
 								<p
 									class="bg-muted text-muted-foreground w-fit rounded-md px-2 py-0.5 font-mono text-xs"
