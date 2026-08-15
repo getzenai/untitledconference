@@ -88,7 +88,7 @@ describe('Leaving a form with unsaved input', () => {
 
 		cy.get('input[name="name"]').clear().type('Saved Conference');
 		cy.get('input[name="slug"]').clear().type(slug);
-		cy.contains('button[type="submit"]', 'Create conference').click();
+		cy.contains('button[type="submit"]', 'Create event').click();
 
 		cy.location('pathname', { timeout: 20000 }).should('include', `/manage/${slug}/settings`);
 		cy.then(() => expect(asked, 'submitting is not losing work').to.eq(0));

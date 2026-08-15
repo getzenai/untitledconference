@@ -34,17 +34,17 @@
 </script>
 
 <svelte:head>
-	<title>My conferences</title>
+	<title>My events</title>
 </svelte:head>
 
 <div class="mx-auto w-full max-w-3xl px-6 py-10">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">My conferences</h1>
+			<h1 class="text-lg font-semibold tracking-tight">My events</h1>
 			<p class="text-muted-foreground mt-1 text-sm">The events you organize.</p>
 		</div>
 		{#if data.canCreate && data.conferences.length > 0}
-			<Button href="/manage/new" size="sm">New conference</Button>
+			<Button href="/manage/new" size="sm">New event</Button>
 		{/if}
 	</div>
 
@@ -57,15 +57,15 @@
 		{#if data.canCreate}
 			<EmptyState
 				class="mt-8"
-				title="You do not organize a conference yet"
+				title="You do not organize an event yet"
 				description="Start one — a name and the dates are enough to get going."
-				action={{ href: '/manage/new', label: 'Create a conference' }}
+				action={{ href: '/manage/new', label: 'Create an event' }}
 			/>
 		{:else}
 			<EmptyState
 				class="mt-8"
-				title="A conference belongs to an organization"
-				description="Create yours first, then you can start a conference under it. Or ask an organizer to add you to theirs."
+				title="An event belongs to an organization"
+				description="Create yours first, then you can start an event under it. Or ask an organizer to add you to theirs."
 				action={{ href: '/settings/organization/new', label: 'Create an organization' }}
 			/>
 		{/if}

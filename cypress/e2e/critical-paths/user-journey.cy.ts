@@ -59,7 +59,7 @@ describe('Critical User Journey', () => {
 			cy.waitForHydration();
 			cy.get('input[name="name"]').clear().type(name);
 			cy.get('input[name="slug"]').clear().type(slug);
-			cy.contains('button[type="submit"]', 'Create conference').click();
+			cy.contains('button[type="submit"]', 'Create event').click();
 
 			// The action redirects into the setup flow for the new conference.
 			cy.url({ timeout: 20000 }).should('include', `/manage/${slug}/settings`);

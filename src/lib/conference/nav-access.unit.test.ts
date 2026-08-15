@@ -4,7 +4,7 @@ import { reviewQueueHref, visibleNavItems, type NavAccess, type NavGate } from '
 
 /** The sidebar's real list, reduced to what the filter looks at. */
 const ITEMS = [
-	{ title: 'Conferences', gate: 'conferences' as const },
+	{ title: 'Events', gate: 'conferences' as const },
 	{ title: 'Contacts', gate: 'contacts' as const },
 	{ title: 'Speaking' },
 	{ title: 'Reviewing', gate: 'reviewing' as const }
@@ -29,7 +29,7 @@ describe('sidebar destinations by relation', () => {
 
 	it('keeps all four for the person who is all three', () => {
 		expect(titles({ ...NOBODY, conferences: true, contacts: true, reviewing: true })).toEqual([
-			'Conferences',
+			'Events',
 			'Contacts',
 			'Speaking',
 			'Reviewing'
@@ -44,12 +44,12 @@ describe('sidebar destinations by relation', () => {
 		// A scoped organizer on one conference manages that event but has no org-wide
 		// seat, and the contacts directory reads seats alone — so that link would
 		// lead to an empty table.
-		expect(titles({ ...NOBODY, conferences: true })).toEqual(['Conferences', 'Speaking']);
+		expect(titles({ ...NOBODY, conferences: true })).toEqual(['Events', 'Speaking']);
 	});
 
 	it('keeps the given order rather than grouping by gate', () => {
 		expect(titles({ ...NOBODY, conferences: true, reviewing: true })).toEqual([
-			'Conferences',
+			'Events',
 			'Speaking',
 			'Reviewing'
 		]);

@@ -65,12 +65,12 @@ describe('shared sidebar architecture', () => {
 });
 
 describe('organizer shell exit', () => {
-	it('links All conferences to /manage', () => {
+	it('links All events to /manage', () => {
 		const body = shell('draft');
 
 		expect(body).toContain('data-testid="switch-conference"');
 		expect(body).toContain('href="/manage"');
-		expect(body).toContain('All conferences');
+		expect(body).toContain('All events');
 		// Old label that looked clickable but described a no-op in earlier builds.
 		expect(body).not.toContain('Switch conference');
 		// The account menu is the parent's AppSidebar footer, not a second copy.

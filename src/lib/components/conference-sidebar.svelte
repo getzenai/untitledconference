@@ -27,12 +27,12 @@
 	collapsible="none"
 	class="sticky top-0 hidden min-h-svh md:flex"
 	data-testid="conference-sidebar"
-	aria-label="Conference"
+	aria-label="Event"
 >
 	<Sidebar.Header>
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>
-				<Sidebar.MenuButton size="lg" tooltipContent="All conferences">
+				<Sidebar.MenuButton size="lg" tooltipContent="All events">
 					{#snippet child({ props })}
 						<a href="/manage" data-testid="switch-conference" {...props}>
 							<div class="grid min-w-0 flex-1 text-left text-sm leading-tight">
@@ -40,7 +40,7 @@
 								{#if dateRange}
 									<span class="text-muted-foreground truncate text-xs">{dateRange}</span>
 								{/if}
-								<span class="text-muted-foreground truncate text-xs">All conferences</span>
+								<span class="text-muted-foreground truncate text-xs">All events</span>
 							</div>
 						</a>
 					{/snippet}

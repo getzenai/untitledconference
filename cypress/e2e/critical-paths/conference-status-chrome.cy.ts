@@ -24,7 +24,7 @@ describe('conference status in the manage chrome', () => {
 		cy.waitForHydration();
 		cy.get('input[name="name"]').clear().type(name);
 		cy.get('input[name="slug"]').clear().type(slug);
-		cy.contains('button[type="submit"]', 'Create conference').click();
+		cy.contains('button[type="submit"]', 'Create event').click();
 		cy.location('pathname', { timeout: 20000 }).should('include', `/manage/${slug}/`);
 
 		// Draft: the badge names the state, and there is no link to a site that

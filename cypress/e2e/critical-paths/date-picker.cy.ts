@@ -124,7 +124,7 @@ describe('Starting a conference from an empty form', () => {
 			.invoke('text')
 			.then((picked) => {
 				cy.get('input[name="startsOn"]').invoke('val').should('not.eq', '');
-				cy.contains('button', 'Create conference').click();
+				cy.contains('button', 'Create event').click();
 
 				cy.location('pathname', { timeout: 30000 }).should('match', /^\/manage\/[^/]+\//);
 				cy.location('pathname').then((path) => {

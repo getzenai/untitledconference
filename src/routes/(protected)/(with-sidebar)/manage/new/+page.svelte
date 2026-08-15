@@ -76,21 +76,21 @@
 </script>
 
 <svelte:head>
-	<title>New conference</title>
+	<title>New event</title>
 </svelte:head>
 
 <div class="mx-auto w-full max-w-2xl px-6 py-10">
-	<a class="text-muted-foreground text-sm hover:underline" href="/manage">← My conferences</a>
+	<a class="text-muted-foreground text-sm hover:underline" href="/manage">← My events</a>
 
 	{#if !data.canCreate}
 		<EmptyState
 			class="mt-8"
-			title="A conference belongs to an organization"
-			description="Create yours first — it takes one field. Then start a conference under it from My conferences."
+			title="An event belongs to an organization"
+			description="Create yours first — it takes one field. Then start an event under it from My events."
 			action={{ href: '/settings/organization/new', label: 'Create an organization' }}
 		/>
 	{:else}
-		<h1 class="mt-6 text-lg font-semibold tracking-tight">New conference</h1>
+		<h1 class="mt-6 text-lg font-semibold tracking-tight">New event</h1>
 		<p class="text-muted-foreground mt-1 text-sm">
 			Name it and pick the dates. You land in Settings next — rooms, tracks and formats first — then
 			open the call for papers when the structure is ready.
@@ -130,7 +130,7 @@
 						value={slug}
 						oninput={(event) => (slugEdit = event.currentTarget.value)}
 						maxlength={60}
-						placeholder="your-conference-2027"
+						placeholder="your-event-2027"
 					/>
 				</div>
 				<p class="text-muted-foreground text-xs">
@@ -167,7 +167,7 @@
 					disabled={busy}
 					aria-describedby={submitBlockReason ? 'create-block-reason' : undefined}
 				>
-					Create conference
+					Create event
 				</Button>
 				{#if submitBlockReason}
 					<p

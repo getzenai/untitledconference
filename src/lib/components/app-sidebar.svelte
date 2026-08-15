@@ -16,7 +16,7 @@
 		// The same person is often all three, and that case keeps every item.
 		navMain: [
 			{
-				title: 'Conferences',
+				title: 'Events',
 				url: '/manage',
 				icon: CalendarIcon,
 				gate: 'conferences' as NavGate
@@ -158,7 +158,7 @@
 					{#if conferenceDates}
 						· {conferenceDates}
 					{/if}
-					· All conferences
+					· All events
 				</a>
 				{#if conferenceBadgeState}
 					<a

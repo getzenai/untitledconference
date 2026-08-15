@@ -33,7 +33,7 @@ describe('Critical Login Workflow', () => {
 			// STEP 3: Verify the protected page is functional. This user owns an
 			// organization, so the page offers the action rather than the "create an
 			// organization first" empty state.
-			cy.contains('h1', 'My conferences').should('be.visible');
+			cy.contains('h1', 'My events').should('be.visible');
 			cy.get('a[href="/manage/new"]').should('be.visible');
 		});
 	});

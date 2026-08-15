@@ -189,7 +189,7 @@
 				{#if data.contact.events.length > 0}
 					Already on every event in this organization.
 				{:else}
-					No events available to add them to. Create a conference first.
+					No events available to add them to. Create an event first.
 				{/if}
 			</p>
 		{:else}

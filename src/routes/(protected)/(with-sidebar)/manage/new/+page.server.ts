@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 const MESSAGES = {
-	name: 'Give the conference a name.',
+	name: 'Give the event a name.',
 	slug: 'Use lowercase letters, numbers and hyphens — this becomes the public address.',
 	startsOn: 'That start date is not a real date. Use YYYY-MM-DD.',
 	endsOn: `Check the end date — it must be a real date, on or after the start, and within ${MAX_CONFERENCE_DAYS} days of it.`,
@@ -31,9 +31,9 @@ const MESSAGES = {
 	// conference holds it: naming the organization would let anyone probe for the
 	// existence of events they cannot see.
 	slug_taken:
-		'That address is already taken. Try another — an archived conference still holds its address, so if it is one of yours, restore it or give this one a different address.',
+		'That address is already taken. Try another — an archived event still holds its address, so if it is one of yours, restore it or give this one a different address.',
 	slug_reserved: '“new” is reserved — /manage/new is the page you are on. Pick another address.',
-	no_organization: 'Create an organization first — a conference belongs to one.'
+	no_organization: 'Create an organization first — an event belongs to one.'
 } as const;
 
 /** A trimmed field, or null when the organizer left it blank. */
