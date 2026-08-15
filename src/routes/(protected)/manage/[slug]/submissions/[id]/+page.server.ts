@@ -9,8 +9,8 @@ import {
 	resolveAcceptCondition,
 	updateAcceptCondition
 } from '$lib/server/conference/accept-condition';
-import { sentenceForDecision } from '$lib/server/conference/decision-note';
 import { requireOrganizer } from '$lib/server/conference/access';
+import { sentenceForDecision } from '$lib/server/conference/decision-note';
 import {
 	decisionNotificationStatuses,
 	notifySubmissionDecisions
