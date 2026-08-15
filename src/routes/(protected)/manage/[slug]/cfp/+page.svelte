@@ -18,6 +18,7 @@
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
+	import { parseSpeakerSupport } from '$lib/conference/speaker-support';
 	import {
 		FIELD_KINDS,
 		parseOptions,
@@ -28,6 +29,7 @@
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
 	import CfpFieldEditor from '$lib/components/app/conference/cfp-field-editor.svelte';
+	import CfpSpeakerSupportFields from '$lib/components/app/conference/cfp-speaker-support-fields.svelte';
 	import FixedQuestionsList from '$lib/components/app/conference/fixed-questions-list.svelte';
 	import FixedQuestionsPreview from '$lib/components/app/conference/fixed-questions-preview.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -89,6 +91,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 	 * value, never two interpretations of it.
 	 */
 	const fixedVisibility = $derived(fixedQuestionVisibility(data.form?.hiddenFixedFields));
+	const support = $derived(parseSpeakerSupport(data.form?.speakerSupport));
 
 	// Preview state. Deliberately not persisted: it is a what-if, not a draft.
 	let previewFormat = $state<number | null>(null);
@@ -389,6 +392,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 								<code>---</code> for a rule. A blank line starts a paragraph.
 							</span>
 						</label>
+						<CfpSpeakerSupportFields {support} />
 						<div class="sm:col-span-2">
 							<Button type="submit" size="sm" disabled={busy}>Save settings</Button>
 						</div>

@@ -14,6 +14,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
+	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
@@ -166,6 +167,11 @@
 				Editing closed
 			</Button>
 		</div>
+		<!--
+			The same statement as on the public call, still here after the call
+			has closed (#512). The description is gone by then; this is not.
+		-->
+		<SpeakerSupportBlock support={data.support} />
 	{:else if s.status === 'rejected'}
 		<div class="border-status-bad/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
 			<p class="font-medium">Not accepted.</p>

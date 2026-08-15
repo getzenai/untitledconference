@@ -18,6 +18,7 @@
 	} from '$lib/conference/pending-proposal';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import CallProse from '$lib/components/app/conference/call-prose.svelte';
+	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
 	import { cfpDeadlinePath } from '$lib/conference/cfp-deadline';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { proseBlocks } from '$lib/conference/prose';
@@ -152,6 +153,12 @@
 			</a>
 		</p>
 	{/if}
+
+	<!--
+		The first question a speaker asks, and the one that must survive the call
+		closing (#512). The description below is dropped then; this is not.
+	-->
+	<SpeakerSupportBlock support={call.support} />
 
 	<!--
 		What the organizer wants a submitter to know before starting (CFP-01). It

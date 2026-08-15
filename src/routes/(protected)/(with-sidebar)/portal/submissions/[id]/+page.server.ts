@@ -1,4 +1,5 @@
 import { callWindow, type CallWindow } from '$lib/conference/call-window';
+import { parseSpeakerSupport } from '$lib/conference/speaker-support';
 import { mySubmission } from '$lib/server/conference/speaker-portal';
 import { db } from '$lib/server/db';
 import { cfpFormTable } from '$lib/server/db/conference/cfp-schema';
@@ -25,7 +26,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.select({
 			status: cfpFormTable.status,
 			opensAt: cfpFormTable.opensAt,
-			closesAt: cfpFormTable.closesAt
+			closesAt: cfpFormTable.closesAt,
+			speakerSupport: cfpFormTable.speakerSupport
 		})
 		.from(cfpFormTable)
 		.where(
@@ -51,6 +53,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		submission,
 		closesAt: call?.closesAt ?? null,
 		callState,
-		closedByOrganizer: call?.status === 'closed'
+		closedByOrganizer: call?.status === 'closed',
+		support: parseSpeakerSupport(call?.speakerSupport)
 	};
 };

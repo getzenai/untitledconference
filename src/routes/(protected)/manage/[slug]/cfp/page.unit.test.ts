@@ -43,6 +43,7 @@ const cfpForm = {
 	opensAt: null,
 	closesAt: null,
 	hiddenFixedFields: null,
+	speakerSupport: null,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 };
@@ -231,7 +232,17 @@ describe('what the builder posts', () => {
 		const html = bodyWith(dated, [field]);
 
 		// Settings — read by `updateForm`.
-		for (const name of ['title', 'status', 'opensAt', 'closesAt', 'description']) {
+		for (const name of [
+			'title',
+			'status',
+			'opensAt',
+			'closesAt',
+			'description',
+			'admission',
+			'travelKind',
+			'accommodationKind',
+			'supportConditions'
+		]) {
 			expect(html).toContain(`name="${name}"`);
 		}
 

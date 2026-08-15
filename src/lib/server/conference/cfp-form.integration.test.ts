@@ -20,6 +20,7 @@ import {
 	createCfpForm,
 	deleteField,
 	moveField,
+	publishCfpForm,
 	publishedFormFor,
 	updateCfpForm,
 	updateField,
@@ -154,6 +155,35 @@ describe('creating the form', () => {
 		// page decides whether to render the card by testing for content.
 		const cleared = await updateCfpForm(conference.id, { ...meta, description: '   ' });
 		expect(cleared?.description).toBeNull();
+	});
+
+	it('keeps speaker expenses through publish, and forgets them when cleared (#512)', async () => {
+		const created = await createCfpForm(conference.id, 'DevFlow CFP');
+		const stored = '{"admission":"free"}';
+
+		const saved = await updateCfpForm(conference.id, {
+			title: created.title,
+			description: '',
+			opensAt: null,
+			closesAt: null,
+			status: 'draft',
+			speakerSupport: stored
+		});
+		expect(saved?.speakerSupport).toBe(stored);
+
+		const published = await publishCfpForm(conference.id);
+		expect(published?.speakerSupport).toBe(stored);
+		expect(published?.status).toBe('published');
+
+		const cleared = await updateCfpForm(conference.id, {
+			title: created.title,
+			description: '',
+			opensAt: null,
+			closesAt: null,
+			status: 'published',
+			speakerSupport: null
+		});
+		expect(cleared?.speakerSupport).toBeNull();
 	});
 });
 

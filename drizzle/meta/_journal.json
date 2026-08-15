@@ -148,6 +148,13 @@
 			"when": 1786780401578,
 			"tag": "0020_listed_publicly",
 			"breakpoints": true
+		},
+		{
+			"idx": 21,
+			"version": "7",
+			"when": 1786780401579,
+			"tag": "0021_cfp_speaker_support",
+			"breakpoints": true
 		}
 	]
 }

@@ -28,6 +28,7 @@ import {
 	type FieldDefinition
 } from '$lib/conference/form-definition';
 import { titleLengthError } from '$lib/conference/proposal-limits';
+import { parseSpeakerSupport, type SpeakerSupport } from '$lib/conference/speaker-support';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import {
@@ -88,6 +89,11 @@ export type OpenCall = {
 	 * own way. That is the same reason `visibleFields` is shared.
 	 */
 	fixed: FixedQuestionVisibility;
+	/**
+	 * What the call says it will pay (#512). Parsed here so the public page
+	 * cannot invent a second reading of the stored column.
+	 */
+	support: SpeakerSupport;
 };
 
 /** The two axes a proposal is filed under. Both drive CFP-02 conditions. */
@@ -161,7 +167,8 @@ export async function openCall(slug: string, now = new Date()): Promise<OpenCall
 		fields: published.fields,
 		formats,
 		tracks,
-		fixed: fixedQuestionVisibility(published.form.hiddenFixedFields)
+		fixed: fixedQuestionVisibility(published.form.hiddenFixedFields),
+		support: parseSpeakerSupport(published.form.speakerSupport)
 	};
 }
 

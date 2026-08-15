@@ -1,5 +1,6 @@
 import { FIXED_QUESTIONS } from '$lib/conference/fixed-questions';
 import type { ConditionSource, FieldKind } from '$lib/conference/form-definition';
+import { serializeSpeakerSupport, speakerSupportFromForm } from '$lib/conference/speaker-support';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	addField,
@@ -155,7 +156,8 @@ export const actions: Actions = {
 			description: text(form, 'description'),
 			opensAt: when(form, 'opensAt'),
 			closesAt: when(form, 'closesAt'),
-			status: STATUSES.includes(status) ? status : 'draft'
+			status: STATUSES.includes(status) ? status : 'draft',
+			speakerSupport: serializeSpeakerSupport(speakerSupportFromForm(form))
 		});
 
 		if (!updated)

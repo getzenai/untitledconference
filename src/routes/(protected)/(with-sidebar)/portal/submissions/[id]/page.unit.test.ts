@@ -144,3 +144,40 @@ describe('speaker submission detail', () => {
 		expect(body).toContain('reserve list');
 	});
 });
+
+describe('speaker expenses in the portal (#512)', () => {
+	const policy = {
+		admission: 'free' as const,
+		travel: { kind: 'up_to' as const, amount: 'an economy flight' },
+		accommodation: { kind: 'case_by_case' as const, domesticNights: 2, internationalNights: 3 },
+		conditions: 'for selected speakers'
+	};
+
+	const drawWith = (status: string, support: typeof policy | Record<string, never>) =>
+		render(Page, {
+			props: {
+				data: {
+					submission: submission({ status }),
+					closesAt: null,
+					callState: 'closed',
+					closedByOrganizer: true,
+					support
+				}
+			} as never
+		}).body;
+
+	it('repeats the public statement to an accepted speaker after the call has closed', () => {
+		const body = drawWith('accepted', policy);
+		expect(body).toContain('data-testid="speaker-support"');
+		expect(body).toContain('Free for speakers');
+		expect(body).toContain('Covered up to an economy flight');
+		expect(body).toContain('2 nights domestic, 3 nights international, covered case by case');
+		expect(body).toContain('for selected speakers');
+	});
+
+	it('renders nothing when the call never answered, and nothing to a speaker who was not accepted', () => {
+		expect(drawWith('accepted', {})).not.toContain('data-testid="speaker-support"');
+		expect(drawWith('submitted', policy)).not.toContain('data-testid="speaker-support"');
+		expect(drawWith('rejected', policy)).not.toContain('data-testid="speaker-support"');
+	});
+});
