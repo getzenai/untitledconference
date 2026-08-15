@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	AGENDA_CHAT_TOOL_NAMES,
 	agendaChatToolDefinitions,
+	bindReviewerFocus,
 	reviewerChatToolDefinitions
 } from './tools';
 
@@ -39,5 +40,28 @@ describe('agendaChatToolDefinitions', () => {
 		const agenda = new Set(agendaChatToolDefinitions(organizer).map((tool) => tool.name));
 		const reviewer = reviewerChatToolDefinitions(organizer).map((tool) => tool.name);
 		expect(reviewer.filter((name) => agenda.has(name))).toEqual([]);
+	});
+});
+
+describe('bindReviewerFocus', () => {
+	const focus = { submissionId: 7, roundId: 3 };
+
+	it('hard-binds both focused review tools to the page round', () => {
+		for (const name of ['get_review_assignment', 'submit_review']) {
+			expect(bindReviewerFocus(name, { submissionId: 7 }, focus)).toEqual({
+				submissionId: 7,
+				roundId: 3
+			});
+			expect(bindReviewerFocus(name, { submissionId: 7, roundId: 99 }, focus)).toEqual({
+				submissionId: 7,
+				roundId: 3
+			});
+		}
+	});
+
+	it('does not redirect an explicitly named different assignment', () => {
+		const input = { submissionId: 8, roundId: 4 };
+		expect(bindReviewerFocus('submit_review', input, focus)).toBe(input);
+		expect(bindReviewerFocus('list_my_review_assignments', input, focus)).toBe(input);
 	});
 });

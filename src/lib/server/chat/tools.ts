@@ -32,6 +32,29 @@ export const REVIEWER_CHAT_TOOL_NAMES = [
 export type ReviewerChatToolName = (typeof REVIEWER_CHAT_TOOL_NAMES)[number];
 
 const ALLOWED = new Set<string>(REVIEWER_CHAT_TOOL_NAMES);
+const ROUND_SCOPED = new Set<string>(['get_review_assignment', 'submit_review']);
+
+export type ReviewerToolFocus = { submissionId: number; roundId: number };
+
+/**
+ * The page's round wins for tools aimed at the page's submission.
+ *
+ * `roundId` remains optional in the shared MCP schema because the queue chat
+ * has no focused round. On a scorecard, however, falling back to the first
+ * open round can write a different review than the one behind the panel. The
+ * binding happens after schema validation and before the registry handler, so
+ * an omitted or invented round cannot cross that page boundary.
+ */
+export function bindReviewerFocus(
+	name: string,
+	input: unknown,
+	focus?: ReviewerToolFocus
+): unknown {
+	if (!focus || !ROUND_SCOPED.has(name) || !input || typeof input !== 'object') return input;
+	const record = input as Record<string, unknown>;
+	if (record.submissionId !== focus.submissionId) return input;
+	return { ...record, roundId: focus.roundId };
+}
 
 export function reviewerChatToolDefinitions(ctx: McpContext): AnyMcpToolDefinition[] {
 	return allTools(ctx).filter((tool) => ALLOWED.has(tool.name));
@@ -44,9 +67,17 @@ export function reviewerReadToolDefinitions(ctx: McpContext): AnyMcpToolDefiniti
 	);
 }
 
-export function reviewerChatTools(ctx: McpContext): Record<string, Tool> {
+export function reviewerChatTools(
+	ctx: McpContext,
+	focus?: ReviewerToolFocus
+): Record<string, Tool> {
 	return Object.fromEntries(
-		reviewerChatToolDefinitions(ctx).map((def) => [def.name, toLanguageModelTool(def)])
+		reviewerChatToolDefinitions(ctx).map((def) => [
+			def.name,
+			toLanguageModelTool(def, {
+				transformInput: (input) => bindReviewerFocus(def.name, input, focus)
+			})
+		])
 	);
 }
 

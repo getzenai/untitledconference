@@ -124,7 +124,7 @@ export async function streamReviewerChat(opts: {
 	model: LanguageModel;
 	focus?: ReviewerChatFocus;
 }): Promise<Response> {
-	const tools = reviewerChatTools(opts.ctx);
+	const tools = reviewerChatTools(opts.ctx, opts.focus);
 	const result = streamText({
 		model: opts.model,
 		system: reviewerSystemPrompt(opts.conference, opts.focus),

@@ -110,8 +110,7 @@ describe('reviewer chat submit_review (#302)', () => {
 			model: createMockSubmitReviewModel({
 				conferenceSlug: conference.slug,
 				submissionId,
-				answers,
-				roundId
+				answers
 			}),
 			focus: {
 				submissionId,
@@ -144,8 +143,7 @@ describe('reviewer chat submit_review (#302)', () => {
 							conferenceSlug: conference.slug,
 							submissionId,
 							answers,
-							comment: '',
-							roundId
+							comment: ''
 						},
 						approval: { id: 'appr_1', approved: true }
 					}
@@ -158,7 +156,7 @@ describe('reviewer chat submit_review (#302)', () => {
 			conference: { name: conference.name, slug: conference.slug },
 			messages: approved,
 			model: createMockSubmitReviewModel(
-				{ conferenceSlug: conference.slug, submissionId, answers, roundId },
+				{ conferenceSlug: conference.slug, submissionId, answers },
 				true
 			),
 			focus: {

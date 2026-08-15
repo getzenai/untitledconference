@@ -31,10 +31,13 @@ export async function runMcpTool(
 	}
 }
 
-export function toLanguageModelTool(def: AnyMcpToolDefinition): Tool {
+export function toLanguageModelTool(
+	def: AnyMcpToolDefinition,
+	options: { transformInput?: (input: unknown) => unknown } = {}
+): Tool {
 	return tool({
 		description: def.description,
 		inputSchema: mcpInputSchema(def),
-		execute: async (input) => runMcpTool(def, input)
+		execute: async (input) => runMcpTool(def, options.transformInput?.(input) ?? input)
 	});
 }
