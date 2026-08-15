@@ -839,7 +839,17 @@ export async function autoPlace(conferenceId: number): Promise<number> {
 		start: number;
 		end: number;
 	}) => {
-		rooms.add(roomKey(session.dayId, session.roomId), session.start, session.end);
+		// A null room is "across every room" — lunch, a house hold. Recording
+		// it under `day:null` would be a key no real room ever asks about, so
+		// the filler would treat the hour as free and drop a talk into the
+		// break (#565).
+		if (session.dayId !== null && session.roomId === null) {
+			for (const room of board.rooms) {
+				rooms.add(roomKey(session.dayId, room.id), session.start, session.end);
+			}
+		} else {
+			rooms.add(roomKey(session.dayId, session.roomId), session.start, session.end);
+		}
 		for (const s of session.speakers) {
 			speakers.add(speakerKey(session.dayId, s), session.start, session.end);
 		}
