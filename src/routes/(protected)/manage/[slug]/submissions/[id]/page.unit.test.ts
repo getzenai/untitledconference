@@ -229,14 +229,26 @@ describe('organizer submission detail decision workflow', () => {
 			body.lastIndexOf('<button', body.indexOf('value="unassign"')),
 			body.indexOf('</button>', body.indexOf('value="unassign"'))
 		);
+		expect(unassign).toContain('Unassign');
+		expect(unassign).not.toContain('·');
 		expect(unassign).toContain('disabled');
+		const row = body.slice(body.indexOf('Riley Reviewer'), body.indexOf('value="unassign"'));
+		expect(row).toContain('data-status="submitted"');
 	});
 
 	it('offers a live Unassign when the server has no block reason', () => {
 		const body = renderPage('submitted', null, 'assigned');
 
 		expect(body).toContain('value="unassign"');
-		expect(body).toContain('Unassign · assigned');
+		expect(body).not.toContain('Unassign ·');
+		const unassign = body.slice(
+			body.lastIndexOf('<button', body.indexOf('value="unassign"')),
+			body.indexOf('</button>', body.indexOf('value="unassign"'))
+		);
+		expect(unassign).toContain('Unassign');
+		expect(unassign).not.toContain('·');
+		const row = body.slice(body.indexOf('Riley Reviewer'), body.indexOf('value="unassign"'));
+		expect(row).toContain('data-status="assigned"');
 		expect(body).not.toContain('data-testid="unassign-block-reason"');
 	});
 });
