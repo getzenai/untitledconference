@@ -28,7 +28,8 @@ const renderWith = (sponsorHolds: number, capacity: number | null = null) =>
 				},
 				seats: [],
 				selectedUserId: null,
-				queue: []
+				queue: [],
+				organizers: []
 			},
 			form: null
 		} as never
@@ -86,6 +87,7 @@ const renderQueue = (sponsorTier: string | null) =>
 				},
 				seats: [{ userId: 'ada', name: 'Ada', queueLength: 1 }],
 				selectedUserId: 'ada',
+				organizers: [{ userId: 'organizer-1', name: 'Jordan' }],
 				queue: [
 					{
 						submissionId: 11,
@@ -97,7 +99,9 @@ const renderQueue = (sponsorTier: string | null) =>
 						overallScore: 4,
 						reviewsSubmitted: 1,
 						myComment: null,
-						sponsorTier
+						sponsorTier,
+						acceptCondition: null,
+						acceptConditionOwner: null
 					}
 				]
 			},
@@ -116,5 +120,51 @@ describe('sponsor affiliation on the decision list', () => {
 
 	it('says nothing when the talk is not a sponsor talk', () => {
 		expect(renderQueue(null)).not.toContain('data-testid="queue-sponsor"');
+	});
+});
+
+describe('conditional accept on the decision list', () => {
+	it('names the note on the row, without opening the talk (#445)', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					board: {
+						total: { id: null, name: 'Test Conf', capacity: null, accepted: 1 },
+						tracks: [],
+						untracked: 0,
+						sponsorHolds: 0
+					},
+					seats: [{ userId: 'ada', name: 'Ada', queueLength: 1 }],
+					selectedUserId: 'ada',
+					organizers: [{ userId: 'organizer-1', name: 'Jordan' }],
+					queue: [
+						{
+							submissionId: 11,
+							title: 'A conditional talk',
+							track: null,
+							trackId: null,
+							status: 'accepted',
+							myScore: 4,
+							overallScore: 4,
+							reviewsSubmitted: 1,
+							myComment: null,
+							sponsorTier: null,
+							acceptCondition: 'bring a co-presenter',
+							acceptConditionOwner: 'Ann Follows'
+						}
+					]
+				},
+				form: null
+			} as never
+		}).body;
+
+		expect(body).toContain('data-testid="queue-condition"');
+		expect(body).toContain('bring a co-presenter · Ann Follows');
+		expect(body).not.toContain('data-testid="accept-condition"');
 	});
 });

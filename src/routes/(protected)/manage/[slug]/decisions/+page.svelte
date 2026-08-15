@@ -11,6 +11,7 @@
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { slotCount, slotSentence } from '$lib/conference/decision-room';
 	import { formatScore } from '$lib/conference/scoring';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
@@ -36,6 +37,11 @@
 	const trackCounts = $derived(data.board.tracks.map(slotCount));
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const capacityValue = (capacity: number | null) => (capacity === null ? '' : String(capacity));
+	const organizers = $derived(data.organizers ?? []);
+	const ownerOptions = $derived([
+		{ value: '', label: 'Who follows up' },
+		...organizers.map((owner) => ({ value: owner.userId, label: owner.name }))
+	]);
 </script>
 
 <svelte:head>
@@ -231,6 +237,21 @@
 										/>
 									</span>
 								{/if}
+								{#if row.acceptCondition}
+									<!--
+										Name it, do not hold the slot back. A conditional accept
+										is an accept; the note is what still has to happen (#445).
+									-->
+									<span class="mt-1 block" data-testid="queue-condition">
+										<StatusBadge
+											status="open"
+											tone="warn"
+											label={row.acceptConditionOwner
+												? `${row.acceptCondition} · ${row.acceptConditionOwner}`
+												: row.acceptCondition}
+										/>
+									</span>
+								{/if}
 								{#if row.myComment}
 									<p class="text-muted-foreground mt-1 max-w-prose text-xs italic">
 										“{row.myComment}”
@@ -251,39 +272,61 @@
 									method="POST"
 									action="?/decide"
 									use:enhance={submitting('edit')}
-									class="flex justify-end gap-1"
+									class="flex flex-col items-end gap-1"
 								>
 									<input type="hidden" name="id" value={row.submissionId} />
 									{#if row.status !== 'accepted'}
-										<Button
-											type="submit"
-											size="sm"
-											name="decision"
-											value="accepted"
-											disabled={busy}
-											data-testid="decide-accept">Accept</Button
-										>
+										<div class="flex w-52 flex-col gap-1" data-testid="accept-condition">
+											<input
+												name="condition"
+												type="text"
+												maxlength="280"
+												placeholder="If they bring a co-presenter…"
+												class="border-input bg-background w-full rounded-md border px-2 py-1 text-xs"
+												data-testid="accept-condition-text"
+											/>
+											<AppSelect
+												name="conditionOwnerId"
+												value=""
+												options={ownerOptions}
+												size="sm"
+												aria-label="Who follows up"
+												testId="accept-condition-owner"
+											/>
+										</div>
 									{/if}
-									{#if row.status !== 'waitlisted'}
-										<Button
-											type="submit"
-											size="sm"
-											variant="outline"
-											name="decision"
-											value="waitlisted"
-											disabled={busy}>Waitlist</Button
-										>
-									{/if}
-									{#if row.status !== 'rejected'}
-										<Button
-											type="submit"
-											size="sm"
-											variant="outline"
-											name="decision"
-											value="rejected"
-											disabled={busy}>Reject</Button
-										>
-									{/if}
+									<div class="flex justify-end gap-1">
+										{#if row.status !== 'accepted'}
+											<Button
+												type="submit"
+												size="sm"
+												name="decision"
+												value="accepted"
+												disabled={busy}
+												data-testid="decide-accept">Accept</Button
+											>
+										{/if}
+										{#if row.status !== 'waitlisted'}
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												name="decision"
+												value="waitlisted"
+												disabled={busy}>Waitlist</Button
+											>
+										{/if}
+										{#if row.status !== 'rejected'}
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												name="decision"
+												value="rejected"
+												disabled={busy}>Reject</Button
+											>
+										{/if}
+									</div>
 								</form>
 							</td>
 						</tr>

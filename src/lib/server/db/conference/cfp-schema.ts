@@ -16,6 +16,7 @@ import {
 	uniqueIndex,
 	type AnyPgColumn
 } from 'drizzle-orm/pg-core';
+import { user } from '../auth-schema';
 import {
 	conferenceTable,
 	sessionFormatTable,
@@ -175,6 +176,17 @@ export const submissionTable = pgTable(
 			onDelete: 'set null'
 		}),
 		status: submissionStatus('status').notNull().default('draft'),
+		/**
+		 * A note on an accept, not a status (#445). "Accepted if you bring a
+		 * co-presenter" is still `accepted`: it takes a slot, it grows the
+		 * speaker tasks, it sits in the programme. The text is what the
+		 * committee actually decided; the owner is who will chase it. Null
+		 * is a clean accept, or a talk that was never accepted.
+		 */
+		acceptCondition: text('accept_condition'),
+		acceptConditionOwnerId: text('accept_condition_owner_id').references(() => user.id, {
+			onDelete: 'set null'
+		}),
 		contentApproval: contentApproval('content_approval').notNull().default('approved'),
 		submittedAt: timestamp('submitted_at', { withTimezone: true }),
 		decidedAt: timestamp('decided_at', { withTimezone: true }),

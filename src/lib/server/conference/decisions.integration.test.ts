@@ -4,7 +4,7 @@
  * conference in a second time. Notification is intentionally a separate action.
  */
 import { db } from '$lib/server/db';
-import { organization } from '$lib/server/db/auth-schema';
+import { member, organization, user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceSpeakerTable,
@@ -21,6 +21,7 @@ import { decideSubmissions } from './decisions';
 
 const suffix = `decide-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
+const OWNER = `owner-${suffix}`;
 
 let conference: Conference;
 let otherConference: Conference;
@@ -33,6 +34,22 @@ beforeAll(async () => {
 		id: organizationId,
 		name: 'Decision Org',
 		slug: organizationId,
+		createdAt: new Date()
+	});
+
+	await db.insert(user).values({
+		id: OWNER,
+		name: 'Ann Follows',
+		email: `${OWNER}@example.com`,
+		emailVerified: true,
+		createdAt: new Date(),
+		updatedAt: new Date()
+	});
+	await db.insert(member).values({
+		id: `m-${OWNER}`,
+		organizationId,
+		userId: OWNER,
+		role: 'owner',
 		createdAt: new Date()
 	});
 
@@ -96,6 +113,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
 	await db.delete(organization).where(eq(organization.id, organizationId));
+	await db.delete(user).where(eq(user.id, OWNER));
 });
 
 describe('decideSubmissions — accepting', () => {
@@ -333,5 +351,62 @@ describe('decideSubmissions — drafts', () => {
 		const result = await decideSubmissions(conference, [submissionId, draft.id], 'accepted');
 
 		expect(result).toMatchObject({ decided: 1, skippedDrafts: 1, sessionsCreated: 1 });
+	});
+});
+
+describe('decideSubmissions — a condition on the accept', () => {
+	it('keeps the talk accepted and writes the note', async () => {
+		const result = await decideSubmissions(conference, [submissionId], 'accepted', {
+			text: 'bring a co-presenter',
+			ownerId: OWNER
+		});
+
+		expect(result).toMatchObject({ decided: 1, sessionsCreated: 1, tasksCreated: 2 });
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('accepted');
+		expect(row.acceptCondition).toBe('bring a co-presenter');
+		expect(row.acceptConditionOwnerId).toBe(OWNER);
+
+		const placements = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, submissionId));
+		expect(placements).toHaveLength(1);
+	});
+
+	it('drops the note when the accept is taken back', async () => {
+		await decideSubmissions(conference, [submissionId], 'accepted', {
+			text: 'bring a co-presenter',
+			ownerId: OWNER
+		});
+		await decideSubmissions(conference, [submissionId], 'rejected');
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('rejected');
+		expect(row.acceptCondition).toBeNull();
+		expect(row.acceptConditionOwnerId).toBeNull();
+	});
+
+	it('refuses an owner who cannot chase the note, and writes nothing', async () => {
+		await expect(
+			decideSubmissions(conference, [submissionId], 'accepted', {
+				text: 'bring a co-presenter',
+				ownerId: 'nobody-here'
+			})
+		).rejects.toThrow('invalid_condition_owner');
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('submitted');
+		expect(row.acceptCondition).toBeNull();
 	});
 });

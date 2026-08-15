@@ -47,6 +47,8 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	track: null,
 	sessionFormat: null,
 	sponsorTier: null,
+	acceptCondition: null,
+	acceptConditionOwner: null,
 	speakers: [
 		{
 			id: id + 10,
@@ -420,5 +422,39 @@ describe('the still-to-review filter and the reviews column', () => {
 	 */
 	it('shows reviews handed in over reviews assigned', () => {
 		expect(renderPage()).toContain('data-testid="reviews-cell"');
+	});
+});
+
+describe('conditional accept on the list', () => {
+	it('names the note on the row, without opening the talk (#445)', () => {
+		currentUrl.value = new URL('https://example.test/manage/test-conf/submissions');
+		const row = {
+			...submission(1, 'accepted'),
+			acceptCondition: 'bring a co-presenter',
+			acceptConditionOwner: 'Ann Follows'
+		};
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					submissions: [row],
+					pagination: { matching: 1, page: 1, pageSize: 50, pageCount: 1 },
+					facets: { tracks: [], formats: [] },
+					filters: {},
+					sort: 'newest',
+					counts: { total: 1, undecided: 0, unreviewed: 0 },
+					notificationStatuses: { 1: null },
+					assignmentTargets
+				} as PageData,
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('data-testid="submission-condition"');
+		expect(body).toContain('bring a co-presenter · Ann Follows');
 	});
 });

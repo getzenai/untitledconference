@@ -45,6 +45,7 @@
 
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const t = $derived(data.totals);
+	const conditions = $derived(data.conditions ?? []);
 
 	const ordered = $derived(
 		[...data.speakers].sort(
@@ -132,7 +133,49 @@
 	length apart.
 -->
 <div class="mx-auto max-w-5xl space-y-6 px-6 py-5">
-	{#if ordered.length === 0}
+	{#if conditions.length > 0}
+		<section class="border-border bg-card rounded-lg border" data-testid="open-conditions">
+			<div class="border-border border-b px-4 py-3">
+				<h2 class="text-sm font-semibold">Conditions still open</h2>
+				<p class="text-muted-foreground mt-0.5 text-xs">
+					An accepted talk with a note still on it. Resolving clears the note; the talk stays
+					accepted.
+				</p>
+			</div>
+			<ul>
+				{#each conditions as item (item.submissionId)}
+					<li
+						class="border-border flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 last:border-0"
+						data-testid="condition-task"
+						data-owner={item.ownerName}
+					>
+						<div class="min-w-0">
+							<p class="text-muted-foreground text-xs">{item.ownerName}</p>
+							<a
+								class="font-medium underline-offset-4 hover:underline"
+								href="{base}/submissions/{item.submissionId}"
+							>
+								{item.title}
+							</a>
+							<p class="text-status-warn mt-1 text-sm">{item.condition}</p>
+						</div>
+						<form method="POST" action="?/resolveCondition">
+							<input type="hidden" name="id" value={item.submissionId} />
+							<Button type="submit" size="sm" variant="outline" data-testid="resolve-condition"
+								>Resolve</Button
+							>
+						</form>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
+	{#if form?.conditionMessage}
+		<p class="text-status-good text-sm" role="status">{form.conditionMessage}</p>
+	{/if}
+
+	{#if ordered.length === 0 && conditions.length === 0}
 		<p class="border-border bg-muted/40 rounded-lg border p-4 text-sm">
 			No speaker has any tasks yet. Tasks are created from the templates in
 			<a class="underline" href="{base}/settings">settings</a> when a talk is accepted.

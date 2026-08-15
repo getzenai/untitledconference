@@ -1,23 +1,29 @@
 /**
  * What the organizer is still waiting for, per speaker (CNT-06..09, SPK-10).
  */
+import {
+	openAcceptConditions,
+	resolveAcceptCondition
+} from '$lib/server/conference/accept-condition';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	queueDeliverableReminders,
 	type DeliverableReminderTally
 } from '$lib/server/conference/deliverable-reminders';
 import { contentOverview, contentTotals } from '$lib/server/conference/organizer-content';
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 
-	return {
-		conference,
-		speakers: await contentOverview(conference.id),
-		totals: await contentTotals(conference.id)
-	};
+	const [speakers, totals, conditions] = await Promise.all([
+		contentOverview(conference.id),
+		contentTotals(conference.id),
+		openAcceptConditions(conference.id)
+	]);
+
+	return { conference, speakers, totals, conditions };
 };
 
 /**
@@ -61,5 +67,17 @@ export const actions: Actions = {
 				await queueDeliverableReminders(conference, speakerProfileIds)
 			)
 		};
+	},
+
+	resolveCondition: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = Number((await request.formData()).get('id'));
+		if (!Number.isInteger(id) || id <= 0) {
+			return fail(400, { conditionMessage: 'Unknown submission.' });
+		}
+
+		const result = await resolveAcceptCondition(conference.id, id);
+		if (!result.ok) throw error(404, 'Submission not found');
+		return { conditionMessage: result.changed ? 'Condition resolved.' : 'Nothing to resolve.' };
 	}
 };

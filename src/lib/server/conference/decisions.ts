@@ -19,6 +19,7 @@ import {
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { isConferenceOrganizer, type AcceptCondition } from './accept-condition';
 import { taskDueDate } from './task-templates';
 
 export type Decision = 'accepted' | 'rejected' | 'waitlisted';
@@ -65,10 +66,19 @@ const NOTHING_HAPPENED: DecisionResult = {
 export async function decideSubmissions(
 	conference: Conference,
 	submissionIds: number[],
-	decision: Decision
+	decision: Decision,
+	condition: AcceptCondition | null = null
 ): Promise<DecisionResult> {
 	const result: DecisionResult = { ...NOTHING_HAPPENED };
 	if (submissionIds.length === 0) return result;
+
+	// A condition on a decline is leftover form state, not a decision. A
+	// condition whose owner cannot open the chase board would write a note
+	// nobody can resolve, so the accept itself does not go through.
+	const note = decision === 'accepted' ? condition : null;
+	if (note && !(await isConferenceOrganizer(conference, note.ownerId))) {
+		throw new Error('invalid_condition_owner');
+	}
 
 	await db.transaction(async (tx) => {
 		const selected = await tx
@@ -111,7 +121,16 @@ export async function decideSubmissions(
 			// any notification row committed by an earlier organizer action. A JS Date
 			// only has millisecond precision and can otherwise make two rapid actions
 			// appear simultaneous to Postgres.
-			.set({ status: decision, decidedAt: sql`clock_timestamp()` })
+			.set({
+				status: decision,
+				decidedAt: sql`clock_timestamp()`,
+				// A clean accept writes null; a decline or waitlist drops a leftover
+				// note. The talk is accepted either way — the note is not a second
+				// status, and it must not survive a decision that is no longer an
+				// accept (#445).
+				acceptCondition: note?.text ?? null,
+				acceptConditionOwnerId: note?.ownerId ?? null
+			})
 			.where(inArray(submissionTable.id, ids));
 		result.decided = ids.length;
 

@@ -785,6 +785,17 @@
 									>
 										{submission.title}
 									</a>
+									{#if submission.acceptCondition}
+										<span class="mt-1 block" data-testid="submission-condition">
+											<StatusBadge
+												status="open"
+												tone="warn"
+												label={submission.acceptConditionOwner
+													? `${submission.acceptCondition} · ${submission.acceptConditionOwner}`
+													: submission.acceptCondition}
+											/>
+										</span>
+									{/if}
 								</td>
 								<td class="text-muted-foreground py-2 pr-4">{speakerLine(submission.speakers)}</td>
 								<td class="text-muted-foreground py-2 pr-4">{submission.track ?? '—'}</td>

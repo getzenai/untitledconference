@@ -85,7 +85,8 @@ const renderWith = (count: number) =>
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
 				speakers: Array.from({ length: count }, (_, i) => speaker(i + 1)),
-				totals: { speakers: count, open: count, waiting: 0, done: 0, overdue: 0 }
+				totals: { speakers: count, open: count, waiting: 0, done: 0, overdue: 0 },
+				conditions: []
 			},
 			form: null
 		}
@@ -155,7 +156,8 @@ describe('organizer speaker content cards', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					speakers: [twoTalks],
-					totals: { speakers: 1, open: 1, waiting: 0, done: 1, overdue: 0 }
+					totals: { speakers: 1, open: 1, waiting: 0, done: 1, overdue: 0 },
+					conditions: []
 				},
 				form: null
 			}
@@ -192,7 +194,8 @@ describe('organizer speaker content cards', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					speakers: [priya],
-					totals: { speakers: 1, open: 2, waiting: 2, done: 1, overdue: 0 }
+					totals: { speakers: 1, open: 2, waiting: 2, done: 1, overdue: 0 },
+					conditions: []
 				},
 				form: null
 			}
@@ -262,7 +265,8 @@ describe('bulk deliverable reminders', () => {
 						waiting: 0,
 						done: 0,
 						overdue: 0
-					}
+					},
+					conditions: []
 				},
 				form: null
 			}
@@ -310,12 +314,47 @@ describe('bulk deliverable reminders', () => {
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					speakers: [speaker(1)],
-					totals: { speakers: 1, open: 1, waiting: 0, done: 0, overdue: 0 }
+					totals: { speakers: 1, open: 1, waiting: 0, done: 0, overdue: 0 },
+					conditions: []
 				},
 				form: { reminderMessage: '2 reminders queued · 1 already reminded' }
 			}
 		}).body;
 
 		expect(body).toContain('2 reminders queued · 1 already reminded');
+	});
+});
+
+describe('open accept conditions', () => {
+	it('lists the note under the owner and offers resolve (#445)', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [],
+					totals: { speakers: 0, open: 0, waiting: 0, done: 0, overdue: 0 },
+					conditions: [
+						{
+							submissionId: 11,
+							title: 'Bring a co-presenter',
+							condition: 'bring someone from the business side',
+							ownerId: 'ann',
+							ownerName: 'Ann Follows'
+						}
+					]
+				},
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('data-testid="open-conditions"');
+		expect(body).toContain('data-testid="condition-task"');
+		expect(body).toContain('Ann Follows');
+		expect(body).toContain('bring someone from the business side');
+		expect(body).toContain('data-testid="resolve-condition"');
 	});
 });
