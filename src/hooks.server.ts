@@ -119,11 +119,18 @@ const databaseScopeHandler: Handle = ({ event, resolve }) => {
 
 	// Closing is deferred with `waitUntil` so the socket teardown happens after
 	// the response has been handed back, not in front of it.
-	// Hyperdrive, when the binding is present. It pools connections at the edge, so
-	// the Worker's TLS handshake terminates near the visitor instead of at the
-	// database — the cost a page paying several queries pays several times.
-	// Absent (local `wrangler dev` without the binding, or any non-Worker run) the
-	// connection falls back to `DATABASE_URL`, unchanged.
+	//
+	// A response that still queries while its body streams asks for that close to
+	// wait — `holdUntilResponseComplete`, at the endpoint that streams (#684).
+	// Deliberately not applied to every response here: most bodies are bytes, and
+	// holding the connection until a slow client has downloaded a 200 MB file
+	// would tie a Postgres socket to the visitor's bandwidth.
+	//
+	// The address is Hyperdrive's, when the binding is present. It pools
+	// connections at the edge, so the Worker's TLS handshake terminates near the
+	// visitor instead of at the database — the cost a page paying several queries
+	// pays several times. Absent (local `wrangler dev` without the binding, or any
+	// non-Worker run) the connection falls back to `DATABASE_URL`, unchanged.
 	return withRequestScopedDb(
 		async () => resolve(event),
 		(closing) => ctx.waitUntil(closing),

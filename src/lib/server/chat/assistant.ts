@@ -3,6 +3,7 @@
  * the signed-in user's identity; authorization still lives in each shared
  * tool handler, exactly as it does for the bearer-token MCP route.
  */
+import { holdUntilResponseComplete } from '$lib/server/db/response-hold';
 import { ensureFeatureEnabled } from '$lib/server/feature-flags';
 import type { McpContext } from '$lib/server/mcp/context';
 import { SERVER_INSTRUCTIONS } from '$lib/server/mcp/server';
@@ -177,9 +178,13 @@ export async function streamAssistantChat(opts: {
 		experimental_transform: guardToolCallLeak()
 	});
 
-	return createUIMessageStreamResponse({
-		stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
-	});
+	// The tools query while this body streams, long after the request handler
+	// returned — the connection has to outlive the headers (#684).
+	return holdUntilResponseComplete(
+		createUIMessageStreamResponse({
+			stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
+		})
+	);
 }
 
 export async function handleAssistantChatRequest(

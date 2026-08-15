@@ -1,4 +1,5 @@
 import { requireOrganizer } from '$lib/server/conference/access';
+import { isHttpError } from '@sveltejs/kit';
 import type { McpContext } from './context';
 import { McpToolError } from './tool-helpers';
 
@@ -15,7 +16,12 @@ export async function organizerConference(slug: string, ctx: McpContext) {
 	try {
 		const { conference } = await requireOrganizer(ctx.userId, slug);
 		return conference;
-	} catch {
+	} catch (error) {
+		// Only the refusal `requireOrganizer` raises deliberately becomes a
+		// refusal here. A database failure caught by the same `catch` used to
+		// reach the model as "you do not organize that conference" — an answer
+		// the user has no reason to doubt and every reason to act on (#684).
+		if (!isHttpError(error)) throw error;
 		throw new McpToolError(
 			`No conference "${slug}" that you organize. ` +
 				'Call list_my_conferences to see the ones you can reach.'
