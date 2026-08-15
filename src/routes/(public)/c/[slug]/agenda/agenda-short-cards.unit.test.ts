@@ -110,6 +110,18 @@ describe('public agenda short cards', () => {
 		expect(source).toContain('speakers');
 	});
 
+	it('gives a 15-minute card one small line with no padding, because 22px holds nothing else', () => {
+		const html = card(15);
+
+		expect(html).toContain('data-density="tiny"');
+		expect(html).toMatch(/\bpy-0\b/);
+		expect(html).toMatch(/\btruncate\b/);
+		// text-sm would need 17.5px of the 22px the card has, before padding.
+		expect(html).toContain('text-[11px]');
+		expect(html).toContain('leading-none');
+		expect(html).not.toContain('line-clamp-2');
+	});
+
 	it('leaves a 45-minute card at the normal padding, unclamped, with its meta line', () => {
 		const html = card(45);
 
@@ -117,5 +129,99 @@ describe('public agenda short cards', () => {
 		expect(html).not.toMatch(/\bp-1\b/);
 		expect(html).not.toContain('line-clamp-2');
 		expect(html).toContain('Platform and Infra');
+	});
+
+	it('treats a 60-minute card as full, not compact', () => {
+		const html = card(60);
+
+		expect(html).toContain('data-density="full"');
+		expect(html).toMatch(/\bp-2\b/);
+		expect(html).toContain('Platform and Infra');
+	});
+});
+
+describe('public agenda, 15 / 30 / 60 minutes side by side', () => {
+	const three = () =>
+		({
+			id: 'conf-1',
+			slug: 'three-lengths',
+			name: 'Three Lengths',
+			venue: 'The Building',
+			startsOn: '2027-06-01',
+			endsOn: '2027-06-01',
+			days: [{ id: 'day-1', date: '2027-06-01', label: 'Day 1' }],
+			rooms: [
+				{ id: 'room-15', name: 'Lightning' },
+				{ id: 'room-30', name: 'Short' },
+				{ id: 'room-60', name: 'Keynote' }
+			],
+			tracks: [],
+			formats: [],
+			sessions: [
+				{
+					id: 's15',
+					title: 'A year of Gemini',
+					description: '',
+					dayId: 'day-1',
+					startsAt: '2027-06-01T09:00:00.000Z',
+					endsAt: '2027-06-01T09:15:00.000Z',
+					roomId: 'room-15',
+					trackId: null,
+					formatId: null,
+					speakerIds: [],
+					recordingUrl: null
+				},
+				{
+					id: 's30',
+					title: 'Four hundred engineers, one repository',
+					description: '',
+					dayId: 'day-1',
+					startsAt: '2027-06-01T09:00:00.000Z',
+					endsAt: '2027-06-01T09:30:00.000Z',
+					roomId: 'room-30',
+					trackId: null,
+					formatId: null,
+					speakerIds: [],
+					recordingUrl: null
+				},
+				{
+					id: 's60',
+					title: 'Containing agents',
+					description: '',
+					dayId: 'day-1',
+					startsAt: '2027-06-01T09:00:00.000Z',
+					endsAt: '2027-06-01T10:00:00.000Z',
+					roomId: 'room-60',
+					trackId: null,
+					formatId: null,
+					speakerIds: [],
+					recordingUrl: null
+				}
+			],
+			speakers: []
+		}) satisfies PublicConference;
+
+	const html = () =>
+		render(Page, {
+			props: { data: { conference: three(), embed: false } as never }
+		}).body;
+
+	it('draws three readable cards that do not share a column, on a regular gutter', () => {
+		const page = html();
+		const drawn = page.match(/<button[^>]*grid-column[^>]*>[\s\S]*?<\/button>/g) ?? [];
+
+		expect(drawn).toHaveLength(3);
+		expect(drawn.filter((card) => card.includes('data-density="tiny"'))).toHaveLength(1);
+		expect(drawn.filter((card) => card.includes('data-density="compact"'))).toHaveLength(1);
+		expect(drawn.filter((card) => card.includes('data-density="full"'))).toHaveLength(1);
+		// Same start, different rooms: a split would be the overlap bug coming back.
+		for (const card of drawn) {
+			expect(card).not.toContain('margin-left');
+			expect(card).not.toContain('width: calc');
+		}
+
+		const labels = [...page.matchAll(/tabular-nums"[^>]*>([\d:]+)</g)].map((m) => m[1]);
+		expect(labels).toEqual(['09:00', '09:30']);
+		expect(page).toContain('repeat(4, 1.5rem)');
 	});
 });

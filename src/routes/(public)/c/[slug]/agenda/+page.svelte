@@ -11,6 +11,12 @@
 		sessionColumnSpan
 	} from '$lib/conference/public-agenda-columns';
 	import {
+		assignLanes,
+		cardDensity,
+		floorToLabel,
+		laneStyle
+	} from '$lib/conference/public-agenda-layout';
+	import {
 		buildView,
 		firstScheduledDayIndex,
 		formatFullStamp,
@@ -76,18 +82,21 @@
 	// gutter readable without coarsening the placement underneath it.
 	const SLOT_MINUTES = 15;
 	const LABEL_EVERY = 2; // every 30 minutes
-	// Two rows is 30 minutes: the shortest card the grid draws, and the only one
-	// whose content does not fit at the normal padding.
-	const COMPACT_ROWS = 2;
 	const bounds = $derived.by(() => {
 		if (daySessions.length === 0) return null;
 		const starts = daySessions.map((s) => s.start.getTime());
 		const ends = daySessions.map((s) => s.end.getTime());
-		const floor = Math.min(...starts);
+		// Down to the previous label boundary: the earliest talk starting at 09:05
+		// must not make every line of the gutter read 09:05 / 09:35 / 10:05 (#588).
+		const floor = floorToLabel(Math.min(...starts), LABEL_EVERY * SLOT_MINUTES);
 		const ceil = Math.max(...ends);
 		const rows = Math.ceil((ceil - floor) / (SLOT_MINUTES * 60_000));
 		return { floor, ceil, rows };
 	});
+
+	// Two talks in one room at one minute are a clash the grid has to show, not
+	// hide: they split the column instead of drawing one title over the other.
+	const lanes = $derived(assignLanes(daySessions));
 
 	const rowOf = (t: Date) =>
 		bounds ? Math.round((t.getTime() - bounds.floor) / (SLOT_MINUTES * 60_000)) + 1 : 1;
@@ -275,17 +284,19 @@
 					{#each daySessions as session (session.id)}
 						{@const col = columnOf(session)}
 						{@const meta = [session.track, session.format].filter(Boolean).join(' · ')}
-						{@const compact = rowOf(session.end) - rowOf(session.start) <= COMPACT_ROWS}
+						{@const density = cardDensity(rowOf(session.end) - rowOf(session.start))}
+						{@const lane = laneStyle(lanes.get(session.id))}
 						{@const speakers = session.speakers.map((s) => s.name).join(', ')}
 						<!--
 							min-w-0 + overflow-hidden keep long titles inside narrow room
-							columns. A 30-minute card is two 1.5rem rows, so 47px: p-2 leaves
-							31px for content while two lines of leading-tight text-sm need 35px,
-							and the second line was cut mid-word with no ellipsis. Compact cards
-							therefore pad by 4px instead of 8, clamp the title, and drop the
-							meta line rather than clip it. The tooltip carries title, speakers
-							and time — shadcn Tooltip, not title= (#269). The axis stays 1.5rem
-							per quarter hour; we do not grow the row to fit the words.
+							columns. Beyond that the card has to fit the height its own length
+							bought it: a 30-minute card is 47px and holds two clamped text-sm
+							lines at 4px padding, a 15-minute card is 22px and holds one
+							smaller line with no padding at all — at text-sm it cut the glyphs
+							through the middle (#588). The tooltip and the detail page carry
+							title, speakers and time — shadcn Tooltip, not title= (#269). The
+							axis stays 1.5rem per quarter hour; we do not grow the row to fit
+							the words.
 						-->
 						<Tooltip>
 							<TooltipTrigger>
@@ -294,6 +305,7 @@
 									<button
 										{...props}
 										type="button"
+										data-density={density}
 										aria-label="{session.title}{speakers
 											? `, ${speakers}`
 											: ''}. {session.timeRange}{session.room ? ` · ${session.room}` : ''}"
@@ -301,19 +313,24 @@
 											tip.onclick?.(e);
 											openSession(session);
 										}}
-										class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none {compact
-											? 'p-1'
-											: 'p-2'}"
+										class="bg-muted/60 hover:bg-muted border-border focus-visible:ring-ring m-px flex min-w-0 flex-col overflow-hidden rounded-md border text-left transition-colors focus-visible:ring-2 focus-visible:outline-none {density ===
+										'tiny'
+											? 'justify-center px-1 py-0'
+											: density === 'compact'
+												? 'p-1'
+												: 'p-2'}"
 										style="grid-column: {col.start} / {col.end}; grid-row: {rowOf(
 											session.start
-										)} / {rowOf(session.end)};"
+										)} / {rowOf(session.end)};{lane ?? ''}"
 									>
 										<span
-											class="w-full min-w-0 text-sm leading-tight font-medium {compact
-												? 'line-clamp-2'
-												: 'block break-words'}">{session.title}</span
+											class="w-full min-w-0 font-medium {density === 'tiny'
+												? 'truncate text-[11px] leading-none'
+												: density === 'compact'
+													? 'line-clamp-2 text-sm leading-tight'
+													: 'block text-sm leading-tight break-words'}">{session.title}</span
 										>
-										{#if meta && !compact}
+										{#if meta && density === 'full'}
 											<span
 												class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs"
 											>
