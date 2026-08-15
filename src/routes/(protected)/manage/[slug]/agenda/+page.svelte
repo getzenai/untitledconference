@@ -847,8 +847,14 @@
 					am I in" while panning. Background + z-index so room cards do not
 					paint through the sticky labels.
 				-->
+				{#if visibleRooms.length > 1}
+					<p class="text-muted-foreground mb-2 text-xs" data-testid="agenda-scroll-hint">
+						Scroll sideways to see every room. Tap a slot to place or edit — you do not have to
+						drag.
+					</p>
+				{/if}
 				<TooltipProvider>
-					<div class="overflow-x-auto" data-testid="agenda-grid-scroll">
+					<div class="overscroll-x-contain overflow-x-auto" data-testid="agenda-grid-scroll">
 						<div class="flex w-full" bind:this={gridEl}>
 							<!-- The time axis. Its header spacer matches the room-head height so
 							     gutter labels line up with the columns without measuring. -->
@@ -872,12 +878,12 @@
 							<div class="relative flex min-w-0 flex-1">
 								{#each visibleRooms as room (room.id)}
 									<div
-										class="border-border min-w-36 flex-1 overflow-hidden border-l"
+										class="border-border min-w-48 flex-1 overflow-hidden border-l"
 										data-testid="agenda-room-card"
 										data-room-id={room.id}
 									>
 										<div
-											class="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
+											class="bg-background sticky top-0 z-10 flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
 											data-testid="agenda-room-head"
 										>
 											<Tooltip>

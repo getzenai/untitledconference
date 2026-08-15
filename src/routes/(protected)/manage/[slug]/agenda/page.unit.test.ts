@@ -113,6 +113,24 @@ describe('organizer agenda layout', () => {
 		// Class list is emitted before data-testid in SSR attribute order.
 		expect(body).toMatch(/sticky left-0[^>]*data-testid="agenda-time-gutter"/);
 	});
+
+	/**
+	 * #477: at 320 px two squeezed columns clipped cards mid-word and the
+	 * room name scrolled away. Columns refuse to shrink below 12rem, so the
+	 * existing overflow-x scroller takes over; the head sticks; a hint names
+	 * swipe and tap so drag is not the only verb.
+	 */
+	it('keeps room columns wide enough to scroll instead of clipping, and names the narrow path', () => {
+		const one = renderWith(1);
+		expect(one).not.toContain('data-testid="agenda-scroll-hint"');
+
+		const two = renderWith(2);
+		expect(two).toContain('data-testid="agenda-scroll-hint"');
+		expect(two).toContain('Scroll sideways to see every room');
+		expect(two).toContain('Tap a slot to place or edit');
+		expect(two).toMatch(/min-w-48[^>]*data-testid="agenda-room-card"/);
+		expect(two).toMatch(/sticky top-0[^>]*data-testid="agenda-room-head"/);
+	});
 });
 
 /**
