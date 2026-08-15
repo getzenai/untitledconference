@@ -55,6 +55,49 @@ describe('the three coverage shapes', () => {
 		]);
 	});
 
+	/**
+	 * The plain yes (#591). Before it existed the only way to say "we pay the
+	 * flight" was `up_to` with the amount written out as words, and the page
+	 * then read "Covered up to in full".
+	 */
+	it('says Covered without an amount, for travel and for a stay', () => {
+		expect(speakerSupportLines({ travel: { kind: 'covered' } })).toEqual([
+			{ key: 'travel', label: 'Travel', text: 'Covered' }
+		]);
+		expect(speakerSupportLines({ accommodation: { kind: 'covered', nights: 2 } })).toEqual([
+			{ key: 'accommodation', label: 'Accommodation', text: '2 nights, covered' }
+		]);
+		// It counts as coverage, so the split and the nights stay available.
+		expect(
+			speakerSupportLines({
+				travel: { kind: 'covered', domestic: { kind: 'covered' }, international: { kind: 'none' } }
+			})
+		).toEqual([
+			{ key: 'travel', label: 'Travel', text: 'Domestic: covered. International: not covered' }
+		]);
+	});
+
+	it('carries Covered through the form and drops an amount typed beside it', () => {
+		const form = new FormData();
+		form.set('travelKind', 'covered');
+		form.set('travelAmount', '€500');
+		form.set('supportConditions', 'Reimbursed after the event');
+
+		expect(speakerSupportFromForm(form)).toEqual({
+			travel: { kind: 'covered' },
+			conditions: 'Reimbursed after the event'
+		});
+	});
+
+	it('still reads a stored up_to value — covered does not rewrite the old shape', () => {
+		expect(parseSpeakerSupport('{"travel":{"kind":"up_to","amount":"in full"}}')).toEqual({
+			travel: { kind: 'up_to', amount: 'in full' }
+		});
+		expect(speakerSupportLines({ travel: { kind: 'up_to', amount: 'in full' } })).toEqual([
+			{ key: 'travel', label: 'Travel', text: 'Covered up to in full' }
+		]);
+	});
+
 	it('splits travel into domestic and international when both are set', () => {
 		const lines = speakerSupportLines({
 			travel: {

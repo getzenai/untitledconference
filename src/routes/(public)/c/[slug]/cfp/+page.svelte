@@ -165,12 +165,6 @@
 	{/if}
 
 	<!--
-		The first question a speaker asks, and the one that must survive the call
-		closing (#512). The description below is dropped then; this is not.
-	-->
-	<SpeakerSupportBlock support={call.support} />
-
-	<!--
 		What the organizer wants a submitter to know before starting (CFP-01). It
 		sits above the form and above the sign-in note, because it is what decides
 		whether someone fills the form in at all — and it is dropped once the call
@@ -182,6 +176,14 @@
 			<CallProse blocks={intro} />
 		</div>
 	{/if}
+
+	<!--
+		The first question a speaker asks after reading what the call is about, and
+		the one that must survive the call closing (#512): the description above is
+		dropped then, this is not, so on a closed call this is the first block.
+		Under the description rather than over it — the pitch comes before the money.
+	-->
+	<SpeakerSupportBlock support={call.support} />
 
 	{#if call.state === 'closed'}
 		<p class="border-border bg-muted/40 text-muted-foreground mt-4 rounded-lg border p-4 text-sm">

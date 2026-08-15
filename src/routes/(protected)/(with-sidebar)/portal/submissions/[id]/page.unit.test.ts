@@ -175,6 +175,10 @@ describe('speaker expenses in the portal (#512)', () => {
 		expect(body).toContain('Covered up to an economy flight');
 		expect(body).toContain('2 nights domestic, 3 nights international, covered case by case');
 		expect(body).toContain('for selected speakers');
+		// Under the talk text, not above it (#591).
+		expect(body.indexOf('A practical session.')).toBeLessThan(
+			body.indexOf('data-testid="speaker-support"')
+		);
 	});
 
 	it('renders nothing when the call never answered, and nothing to a speaker who was not accepted', () => {

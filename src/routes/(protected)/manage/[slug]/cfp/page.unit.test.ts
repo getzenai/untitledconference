@@ -421,19 +421,19 @@ describe('the preview shows what the call opens with', () => {
 		expect(preview).toContain('Talks that show the');
 	});
 
-	// Order, not just presence: on the public page the money answer comes first,
-	// the intro second, the questions last. A preview that shuffles them is
-	// answering a question the organizer did not ask.
-	it('keeps the public page order — expenses, intro, questions', () => {
+	// Order, not just presence: the pitch comes first, the money answer under
+	// it, the questions last (#591). A preview that shuffles them is answering
+	// a question the organizer did not ask.
+	it('keeps the public page order — intro, expenses, questions', () => {
 		const preview = previewOf('Our intro line.', support);
 
-		const expenses = preview.indexOf('data-testid="speaker-support"');
 		const intro = preview.indexOf('data-testid="cfp-preview-intro"');
+		const expenses = preview.indexOf('data-testid="speaker-support"');
 		const questions = preview.indexOf(labels[0]);
 
-		expect(expenses).toBeGreaterThan(-1);
-		expect(expenses).toBeLessThan(intro);
-		expect(intro).toBeLessThan(questions);
+		expect(intro).toBeGreaterThan(-1);
+		expect(intro).toBeLessThan(expenses);
+		expect(expenses).toBeLessThan(questions);
 	});
 
 	it('shows neither block when the organizer has set neither', () => {
