@@ -358,8 +358,7 @@ export async function reviewQueue(
 				eq(reviewTable.reviewerUserId, userId),
 				ne(reviewTable.status, 'recused'),
 				// A draft is still the speaker's. Assignments may already exist —
-				// they become the queue the moment the talk is submitted — but the
-				// speaker is told nobody has seen it (#614).
+				// they become the queue the moment the talk is submitted (#614).
 				ne(submissionTable.status, 'draft')
 			)
 		);

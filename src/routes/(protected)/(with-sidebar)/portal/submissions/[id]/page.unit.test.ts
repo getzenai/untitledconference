@@ -124,6 +124,15 @@ describe('speaker submission detail', () => {
 		expect(draft).toContain('any time before 15 Feb 2027, 23:59 UTC');
 	});
 
+	it('does not tell the speaker nobody has seen a draft (#614)', () => {
+		const body = draw({ status: 'draft' }, new Date('2027-02-15T23:59:00.000Z'));
+
+		expect(body).toContain('This is still a draft.');
+		expect(body).toContain('It has not been submitted.');
+		expect(body).not.toContain('nobody has seen it');
+		expect(body).not.toContain('Nobody has seen it');
+	});
+
 	it('does not link an archived conference to a 404 (#498)', () => {
 		const body = draw({ conferenceStatus: 'archived' });
 

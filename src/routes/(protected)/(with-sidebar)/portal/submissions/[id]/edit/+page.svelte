@@ -4,8 +4,8 @@
 	 * submitter sees the questions they left, not a second version of them.
 	 *
 	 * Two states arrive here and they are not the same errand: an unfinished draft
-	 * nobody has read, and a proposal already in front of the organizers. The
-	 * second one must not offer "save as draft", which would quietly withdraw it.
+	 * that has not been submitted, and a proposal already in front of the organizers.
+	 * The second one must not offer "save as draft", which would quietly withdraw it.
 	 */
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
 	import { formatInstant } from '$lib/conference/deadline';
@@ -50,8 +50,11 @@
 
 	<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
 		{#if isDraft}
-			This is still a draft — nobody has seen it. <strong>Submit proposal</strong> hands it to the
-			organizers; <strong>Save as draft</strong> keeps it here.
+			This is still a draft — it has not been submitted. Reviewers will not see it until you submit. <strong
+				>Submit proposal</strong
+			>
+			hands it to the organizers;
+			<strong>Save as draft</strong> keeps it here.
 		{:else}
 			This proposal is already with the organizers. <strong>Save changes</strong> updates what they read;
 			it stays in their list, and the date it arrived does not change.

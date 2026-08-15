@@ -427,8 +427,8 @@ async function ownProfile(
  * 404 rather than telling a stranger which of the three applied.
  *
  * `status` comes back with it because the two editable states read differently to
- * the person editing: an unfinished draft nobody has seen, and a proposal that is
- * already in front of the organizers and must stay there.
+ * the person editing: an unfinished draft that has not been submitted, and a
+ * proposal that is already in front of the organizers and must stay there.
  */
 export async function editableDraft(
 	userId: string,
