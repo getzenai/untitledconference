@@ -87,6 +87,17 @@
 	/** A restored local draft is worth saying out loud — see the banner below. */
 	const resumedLocal = $derived(Boolean(restored && !fromPending && restoredAt !== null));
 
+	/**
+	 * A stored profile fills the About-you fields until a local draft takes over.
+	 * The local copy is what they typed; claiming the profile wrote it would lie.
+	 */
+	const fromProfile = $derived(
+		data.speakerProfile
+			? { ...emptyProposal(), speaker: data.speakerProfile.speaker }
+			: emptyProposal()
+	);
+	const usingProfile = $derived(Boolean(data.speakerProfile && !restored));
+
 	function persistDraft(draft: ProposalDraft) {
 		const slug = data.call.conference.slug;
 		if (data.existing) return;
@@ -201,10 +212,29 @@
 		{/if}
 
 		{#if !signedIn}
-			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
-				You can read the whole form without an account. To submit — and to come back and edit it
-				before the call closes — you will need to
-				<a class="underline" href={signInHref}>sign in</a>.
+			<div
+				class="border-border bg-card mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"
+				data-testid="cfp-sign-in"
+			>
+				<div class="min-w-0">
+					<p class="text-sm font-medium">Sign in to submit — or to reuse a speaker profile.</p>
+					<p class="text-muted-foreground mt-1 text-sm">
+						If you have spoken for this organizer before, we will fill in your name, bio and the
+						rest. You can still read the form first.
+					</p>
+				</div>
+				<Button href={signInHref} variant="act">Sign in</Button>
+			</div>
+		{/if}
+
+		{#if usingProfile && data.speakerProfile}
+			<p
+				class="border-border bg-card mt-4 rounded-lg border p-4 text-sm"
+				data-testid="cfp-profile-source"
+				role="status"
+			>
+				Name, bio and the rest come from your speaker profile at {data.speakerProfile
+					.organizationName}.
 			</p>
 		{/if}
 
@@ -257,7 +287,7 @@
 				fixed={call.fixed}
 				formats={call.formats}
 				tracks={call.tracks}
-				initial={restored ?? emptyProposal()}
+				initial={restored ?? fromProfile}
 				{form}
 				{signedIn}
 				onSignIn={stashAndSignIn}

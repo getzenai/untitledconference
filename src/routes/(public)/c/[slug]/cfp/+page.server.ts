@@ -7,15 +7,28 @@
  * a proposal that nobody can come back and edit is not a proposal (CFP-07); the
  * coming-back half lives at `/portal/submissions/<id>/edit`.
  */
+import type { ProposalDraft } from '$lib/conference/proposal-draft';
 import { openCall, saveSubmission } from '$lib/server/conference/cfp-submission';
 import { readProposal } from '$lib/server/conference/proposal-input';
 import { submissionForConference } from '$lib/server/conference/speaker-portal';
+import { myProfiles } from '$lib/server/conference/speaker-profile';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+
+export type CfpSpeakerProfile = {
+	organizationName: string;
+	speaker: ProposalDraft['speaker'];
+};
 
 export const load: PageServerLoad = async ({ params, locals }) => {
 	const call = await openCall(params.slug);
 	if (!call) error(404, 'This conference is not accepting proposals');
+
+	// Profile first: `myProfiles` claims unclaimed rows that already carry this
+	// address, and `submissionForConference` only sees a row once `userId` is set.
+	const speakerProfile = locals.user
+		? await profileForThisCall(locals.user.id, call.conference.organizationId)
+		: null;
 
 	// Someone who already proposed here would otherwise be shown a blank form with
 	// no sign of it, and a second save would make a second proposal — which is
@@ -28,8 +41,35 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// The organization id is on the call for the write path; it has no business
 	// reaching the browser.
 	const { organizationId: _organizationId, ...conference } = call.conference;
-	return { call: { ...call, conference }, existing };
+	return { call: { ...call, conference }, existing, speakerProfile };
 };
+
+/**
+ * The profile this account already has at this organizer, or nothing.
+ *
+ * Scoped to the conference's organization on purpose. A bio written for org A
+ * must not land in org B's form — saving would then write it there. A first
+ * proposal at a new organizer starts blank; that is the honest empty state.
+ */
+async function profileForThisCall(
+	userId: string,
+	organizationId: string
+): Promise<CfpSpeakerProfile | null> {
+	const mine = (await myProfiles(userId)).find((row) => row.organizationId === organizationId);
+	if (!mine) return null;
+
+	return {
+		organizationName: mine.organizationName,
+		speaker: {
+			name: mine.name,
+			sortName: mine.sortName,
+			email: mine.email ?? '',
+			jobTitle: mine.jobTitle ?? '',
+			company: mine.company ?? '',
+			bio: mine.bio ?? ''
+		}
+	};
+}
 
 async function save(
 	userId: string | undefined,
