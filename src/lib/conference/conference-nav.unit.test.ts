@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	conferenceDateRange,
 	conferenceNav,
+	conferenceNavSections,
 	initialAppRail,
 	isConferenceNavCurrent,
 	isConferencePath,
@@ -15,17 +16,17 @@ describe('conferenceNav', () => {
 
 		expect(items.map((item) => item.href)).toEqual([
 			'/manage/devflow-2028/dashboard',
+			'/manage/devflow-2028/settings',
+			'/manage/devflow-2028/cfp',
 			'/manage/devflow-2028/submissions',
+			'/manage/devflow-2028/people',
+			'/manage/devflow-2028/rounds',
 			'/manage/devflow-2028/decisions',
 			'/manage/devflow-2028/carry-forward',
-			'/manage/devflow-2028/cfp',
-			'/manage/devflow-2028/agenda',
 			'/manage/devflow-2028/speakers',
 			'/manage/devflow-2028/content',
-			'/manage/devflow-2028/rounds',
-			'/manage/devflow-2028/people',
-			'/manage/devflow-2028/embed',
-			'/manage/devflow-2028/settings'
+			'/manage/devflow-2028/agenda',
+			'/manage/devflow-2028/embed'
 		]);
 		expect(items.find((item) => item.id === 'submissions')?.label).toBe('Talks');
 		expect(items.find((item) => item.id === 'rounds')?.label).toBe('Rounds & scorecards');
@@ -38,6 +39,31 @@ describe('conferenceNav', () => {
 		// The area holds files and the tasks that chase them, not "content" (#422).
 		expect(items.find((item) => item.id === 'content')?.label).toBe('Speaker materials');
 		expect(items.map((item) => item.label)).not.toContain('Speaker content');
+	});
+});
+
+describe('conferenceNavSections (#627)', () => {
+	const sections = conferenceNavSections('devflow-2028');
+
+	it('walks the conference from opening the call to publishing the programme', () => {
+		expect(sections.map((section) => [section.id, section.label])).toEqual([
+			['setup', 'Set up'],
+			['select', 'Review & decide'],
+			['programme', 'Programme']
+		]);
+	});
+
+	it('puts every door in the part of the job it belongs to', () => {
+		const ids = (id: string) =>
+			sections.find((section) => section.id === id)!.items.map((item) => item.id);
+
+		expect(ids('setup')).toEqual(['dashboard', 'settings', 'cfp']);
+		expect(ids('select')).toEqual(['submissions', 'people', 'rounds', 'decisions', 'carryForward']);
+		expect(ids('programme')).toEqual(['speakers', 'content', 'agenda', 'embed']);
+	});
+
+	it('is the same set of doors as the flat list, in the same order', () => {
+		expect(sections.flatMap((section) => section.items)).toEqual(conferenceNav('devflow-2028'));
 	});
 });
 
