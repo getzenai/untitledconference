@@ -281,6 +281,40 @@ export const submissionSpeakerTable = pgTable(
 	(t) => [uniqueIndex('submission_speaker_unique').on(t.submissionId, t.speakerProfileId)]
 );
 
+/**
+ * The carry-forward invite lane (#448).
+ *
+ * A disposition on *this* edition about a declined talk from the named
+ * predecessor. The talk itself stays on last year's conference; this row
+ * is only "invite them this year" or "leave them". Unique per
+ * (this conference, that submission) so a reload cannot invent a second
+ * answer, and so the two buttons write the same fact they read.
+ */
+export const carryForwardDisposition = pgEnum('carry_forward_disposition', [
+	'invited',
+	'discarded'
+]);
+
+export const carryForwardTable = pgTable(
+	'carry_forward',
+	{
+		id: serial('id').primaryKey(),
+		conferenceId: integer('conference_id')
+			.notNull()
+			.references(() => conferenceTable.id, { onDelete: 'cascade' }),
+		predecessorSubmissionId: integer('predecessor_submission_id')
+			.notNull()
+			.references(() => submissionTable.id, { onDelete: 'cascade' }),
+		disposition: carryForwardDisposition('disposition').notNull(),
+		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+		updatedAt: timestamp('updated_at', { withTimezone: true })
+			.notNull()
+			.defaultNow()
+			.$onUpdate(() => new Date())
+	},
+	(t) => [uniqueIndex('carry_forward_unique').on(t.conferenceId, t.predecessorSubmissionId)]
+);
+
 export const submissionRelations = relations(submissionTable, ({ one, many }) => ({
 	conference: one(conferenceTable, {
 		fields: [submissionTable.conferenceId],
@@ -316,3 +350,5 @@ export type SubmissionAnswer = typeof submissionAnswerTable.$inferSelect;
 export type NewSubmissionAnswer = typeof submissionAnswerTable.$inferInsert;
 export type SubmissionSpeaker = typeof submissionSpeakerTable.$inferSelect;
 export type NewSubmissionSpeaker = typeof submissionSpeakerTable.$inferInsert;
+export type CarryForward = typeof carryForwardTable.$inferSelect;
+export type NewCarryForward = typeof carryForwardTable.$inferInsert;

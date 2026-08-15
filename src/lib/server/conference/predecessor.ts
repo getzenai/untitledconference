@@ -1,9 +1,10 @@
 /**
  * Naming the previous edition of a conference (#448).
  *
- * The column is the whole feature for now: no talks, no scores, no invite
- * lane travel with the pointer. The rules that have to hold before any of
- * that can sit on top are here — same organization, not itself, no cycle.
+ * The pointer the carry-forward invite lane reads. Talks, scores and
+ * dispositions live on `carry_forward`; the rules that have to hold
+ * before that lane can sit on top are here — same organization, not
+ * itself, no cycle.
  *
  * The caller re-checks that the user organizes the conference, and the
  * predecessor too. This function re-checks the row in its own queries so a

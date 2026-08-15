@@ -359,6 +359,9 @@
 				-->
 				<a class="underline underline-offset-4" href="{base}/rounds">Scorecards &amp; weights</a>
 				<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>
+				<a class="underline underline-offset-4" href="{base}/carry-forward"
+					>Last year's near misses</a
+				>
 			</p>
 		</div>
 		<div class="flex gap-2">

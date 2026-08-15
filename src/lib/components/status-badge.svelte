@@ -38,6 +38,8 @@
 		confirmed: 'good',
 		declined: 'bad',
 		cancelled: 'bad',
+		// carry_forward_disposition (#448)
+		discarded: 'bad',
 		// task_status
 		open: 'neutral',
 		done: 'good',

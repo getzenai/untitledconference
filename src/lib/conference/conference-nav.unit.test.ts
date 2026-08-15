@@ -16,6 +16,7 @@ describe('conferenceNav', () => {
 			'/manage/devflow-2028/dashboard',
 			'/manage/devflow-2028/submissions',
 			'/manage/devflow-2028/decisions',
+			'/manage/devflow-2028/carry-forward',
 			'/manage/devflow-2028/cfp',
 			'/manage/devflow-2028/agenda',
 			'/manage/devflow-2028/speakers',
@@ -29,6 +30,9 @@ describe('conferenceNav', () => {
 		expect(items.find((item) => item.id === 'people')?.label).toBe('Reviewer pool');
 		// The acceptance call is a place, not a mode of the submissions table (#444).
 		expect(items.find((item) => item.id === 'decisions')?.label).toBe('Decision meeting');
+		// Last year's declined talks are a place too (#448) — not a filter on
+		// this year's pile, and not a lane you have to remember exists.
+		expect(items.find((item) => item.id === 'carryForward')?.label).toBe('Carry forward');
 	});
 });
 
