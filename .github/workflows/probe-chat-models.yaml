@@ -1,0 +1,66 @@
+name: Probe chat models
+
+# Asks several models the reviewer chat's question in the reviewer chat's shape
+# and prints which ones answer with a tool call (#660).
+#
+# It exists because the fault is in the model, not in our code: the same gateway
+# and the same key carry a tool call when the request forces one and does not
+# stream, and drop it when the chat streams and leaves the choice open. Picking
+# the replacement from a datasheet would repeat the mistake that shipped the
+# current one — this measures the candidates through the gateway we actually use.
+#
+# Runs on main only, like run-db-script.yaml: the Infisical identity is bound to
+# refs/heads/main, so a branch cannot mint a token and read production secrets.
+# Nothing here writes: it reads two secrets and makes a chat completion request.
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Comma- or space-separated model ids, e.g. workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct'
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # required for OIDC; without it the Infisical step fails
+
+concurrency:
+  group: probe-chat-models
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe the gateway in the shape the chat uses
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # `domain` is not optional for us: it defaults to app.infisical.com and our
+      # tenant is in the EU region. Omitting it fails authentication without saying why.
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: oidc
+          identity-id: e8e7dc26-6908-4548-bf57-32edd043e944
+          project-slug: untitled-conference
+          env-slug: prod
+          domain: https://eu.infisical.com
+
+      - name: Probe
+        env:
+          MODELS: ${{ inputs.models }}
+        run: |
+          set -euo pipefail
+          # A comma-separated input is what a person types; the script takes
+          # separate arguments. `xargs` also drops the stray whitespace around
+          # each entry, which would otherwise reach the gateway inside a model id.
+          read -r -a models <<< "$(printf '%s' "$MODELS" | tr ',' ' ' | xargs)"
+          node scripts/ai/probe-chat-tools.mjs "${models[@]}"

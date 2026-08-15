@@ -275,9 +275,14 @@ jobs:
       # several tools and leaves the choice to the model — and that is the request
       # that came back as JSON-in-a-sentence in production (#660).
       #
-      # Report-only on purpose, for now. The failing gate belongs in the same change
-      # that fixes the model: a hard gate added before the fix would only stop every
-      # unrelated deploy from shipping.
+      # The request body lives in scripts/ai/probe-chat-tools.mjs so that the
+      # candidate sweep (probe-chat-models.yaml) measures the same thing this
+      # does. A second copy of the shape would be a second definition of what the
+      # chat sends, and the shape is the whole point of the measurement.
+      #
+      # Report-only on purpose, for now: no `--strict`. The failing gate belongs
+      # in the same change that fixes the model — a hard gate added before the fix
+      # would only stop every unrelated deploy from shipping.
       - name: Probe the gateway in the shape the chat uses
         continue-on-error: true
         run: |
@@ -290,77 +295,7 @@ jobs:
             exit 0
           fi
 
-          # Same tools, same wording and the same `tool_choice: auto` the AI SDK sends
-          # from `streamText` (captured from the wire, src/lib/server/chat/request.ts).
-          MODEL="$model" node -e '
-          process.stdout.write(JSON.stringify({
-            model: process.env.MODEL,
-            max_tokens: 200,
-            stream: true,
-            tool_choice: "auto",
-            tools: [
-              {
-                type: "function",
-                function: {
-                  name: "list_my_review_assignments",
-                  description: "List the review assignments of the signed-in reviewer.",
-                  parameters: { type: "object", properties: {}, additionalProperties: false }
-                }
-              },
-              {
-                type: "function",
-                function: {
-                  name: "get_review_assignment",
-                  description: "Open one assigned scorecard.",
-                  parameters: {
-                    type: "object",
-                    properties: { submissionId: { type: "number", description: "Submission id." } },
-                    required: ["submissionId"],
-                    additionalProperties: false
-                  }
-                }
-              }
-            ],
-            messages: [
-              {
-                role: "system",
-                content: "You are a review assistant for \"DevFlow Conf\" (devflow-conf-2027). You can list assignments and open an assigned scorecard. When you use a tool, name it in the answer."
-              },
-              { role: "user", content: "Which reviews do I still have open?" }
-            ]
-          }));' > "$RUNNER_TEMP/chat-shape-payload.json"
-
-          base="${AI_GATEWAY_BASE_URL%/}"
-          curl -sS -N --max-time 60 \
-            -X POST "$base/chat/completions" \
-            -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
-            -H 'Content-Type: application/json' \
-            --data @"$RUNNER_TEMP/chat-shape-payload.json" > "$RUNNER_TEMP/chat-shape-response.txt" || true
-
-          RESPONSE="$RUNNER_TEMP/chat-shape-response.txt" MODEL="$model" node -e '
-          const { readFileSync } = require("node:fs");
-          const raw = readFileSync(process.env.RESPONSE, "utf8");
-          let calls = 0, text = "", finish = "(none)";
-          for (const line of raw.split("\n")) {
-            if (!line.startsWith("data: ")) continue;
-            const payload = line.slice(6).trim();
-            if (payload === "[DONE]") continue;
-            let event;
-            try { event = JSON.parse(payload); } catch { continue; }
-            const choice = event.choices?.[0] ?? {};
-            if (choice.delta?.tool_calls?.length) calls += choice.delta.tool_calls.length;
-            if (choice.delta?.content) text += choice.delta.content;
-            if (choice.finish_reason) finish = choice.finish_reason;
-          }
-          console.log(`finish_reason: ${finish}`);
-          console.log(`tool_call deltas: ${calls}`);
-          console.log(`text: ${JSON.stringify(text.slice(0, 300))}`);
-          if (calls === 0) {
-            console.log(`::warning::${process.env.MODEL} answered the chat-shaped request without a tool call. That is the live fault in #660 — the text above is what a reviewer is shown.`);
-          } else {
-            console.log("Streaming with tool_choice auto carries a tool call.");
-          }
-          '
+          node scripts/ai/probe-chat-tools.mjs "$model"
 
       # The way back. Drizzle migrations are forward-only, so the rollback path is
       # this dump plus `psql < dump.sql`, not a down-migration. Kept as an artifact
