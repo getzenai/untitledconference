@@ -99,17 +99,23 @@ jobs:
       # configured" state the flag guard was written to prevent, because nothing
       # fails loudly.
       #
-      # So this asks the gateway for one tool call, with the same three values
-      # the Worker will get. `2xx` alone is too weak a claim: the reviewer
-      # assistant is a tool-calling feature, and a model that talks but cannot
-      # call tools would sail through a status-code check and leave every tool
-      # silently dead.
+      # So this asks the gateway the reviewer chat's own question, in the shape
+      # the reviewer chat sends it: streaming, several tools, the model free to
+      # choose. That shape is the whole point. The gate that stood here until
+      # #674 asked with one tool, `tool_choice: required`, no streaming and a
+      # 64-token ceiling — a request the live chat never makes, and one that
+      # glm-4.7-flash cannot finish, because it narrates a sentence before it
+      # calls and the answer was cut off mid-JSON. Workers AI answered 400 and
+      # the deploy stopped a model that had been measured working (probe run
+      # 31910437582). A gate that fails a good model is worse than no gate.
+      #
+      # The body lives in scripts/ai/probe-chat-tools.mjs, shared with the
+      # candidate sweep (probe-chat-models.yaml): one definition of what the chat
+      # sends, because the shape is the entire measurement.
       #
       # It runs *before* the dump and the migration on purpose. Drizzle
       # migrations are forward-only, so failing here costs nothing, while
       # failing after them leaves the database moved on from the code.
-      #
-      # Roughly $0.00008 per deploy on the current model.
       - name: Prove the chat model and the gateway key fit each other
         run: |
           # Actions' default is `bash -e`, which leaves an unset variable as the
@@ -174,128 +180,9 @@ jobs:
 
           echo "Model under test: $model"
 
-          # Built with JSON.stringify rather than a heredoc so the model id cannot break
-          # out of the payload. `tool_choice: required` on purpose: with `auto` the answer
-          # depends on how persuasive the prompt is, and a deploy gate that sometimes
-          # passes is worse than no gate.
-          MODEL="$model" node -e '
-          process.stdout.write(JSON.stringify({
-            model: process.env.MODEL,
-            max_tokens: 64,
-            tool_choice: "required",
-            tools: [{
-              type: "function",
-              function: {
-                name: "deploy_smoke_test",
-                description: "Acknowledge the deploy smoke test.",
-                parameters: {
-                  type: "object",
-                  properties: { ok: { type: "boolean", description: "Always true." } },
-                  required: ["ok"]
-                }
-              }
-            }],
-            messages: [
-              { role: "system", content: "You verify tool calling. Call the tool you are given." },
-              { role: "user", content: "Call deploy_smoke_test with ok set to true." }
-            ]
-          }));' > "$RUNNER_TEMP/smoke-payload.json"
-
-          # Trailing slash would make this `//chat/completions`, which some gateways 404.
-          base="${AI_GATEWAY_BASE_URL%/}"
-
-          # Retries are only for faults that a retry can fix. A 401/403/404 is a wrong key,
-          # a wrong URL or a model the provider does not serve — retrying that just spends
-          # three times as long arriving at the same answer.
-          attempt=1
-          while :; do
-            # Emptied first: a failed connection never writes the file, and printing the
-            # previous attempt's body as if it were this one's is a wrong lead in exactly
-            # the moment somebody is reading these logs to find out what broke.
-            : > "$RUNNER_TEMP/smoke-response.json"
-            code="$(curl -sS -o "$RUNNER_TEMP/smoke-response.json" -w '%{http_code}' --max-time 45 \
-              -X POST "$base/chat/completions" \
-              -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
-              -H 'Content-Type: application/json' \
-              --data @"$RUNNER_TEMP/smoke-payload.json")" || code="000"
-
-            case "$code" in
-              2*) break ;;
-              000 | 408 | 429 | 5*)
-                if [ "$attempt" -ge 3 ]; then
-                  echo "::error::The AI Gateway did not answer after 3 attempts (last: HTTP $code). Deploy stopped before migrating."
-                  cat "$RUNNER_TEMP/smoke-response.json" 2>/dev/null || true
-                  exit 1
-                fi
-                echo "attempt $attempt: HTTP $code — transient, retrying"
-                attempt=$((attempt + 1))
-                sleep 5
-                ;;
-              *)
-                echo "::error::The AI Gateway rejected the request with HTTP $code. AI_GATEWAY_API_KEY does not fit AI_CHAT_MODEL ($model), or AI_GATEWAY_BASE_URL is wrong."
-                cat "$RUNNER_TEMP/smoke-response.json" 2>/dev/null || true
-                exit 1
-                ;;
-            esac
-          done
-
-          # The actual assertion. A 2xx only says something answered; the reviewer chat is
-          # useless unless the model calls tools, and not every model that talks can.
-          RESPONSE="$RUNNER_TEMP/smoke-response.json" MODEL="$model" node -e '
-          const { readFileSync } = require("node:fs");
-          let body;
-          try {
-            body = JSON.parse(readFileSync(process.env.RESPONSE, "utf8"));
-          } catch {
-            console.log("::error::The gateway returned 2xx with a body that is not JSON.");
-            console.log(readFileSync(process.env.RESPONSE, "utf8").slice(0, 500));
-            process.exit(1);
-          }
-          const choice = body.choices?.[0];
-          const calls = choice?.message?.tool_calls ?? [];
-          const finish = choice?.finish_reason;
-          console.log(`finish_reason: ${finish}`);
-          console.log(`tool_calls: ${calls.map((c) => c.function?.name).join(", ") || "(none)"}`);
-          if (calls.length === 0) {
-            console.log(`::error::${process.env.MODEL} answered but called no tool, so the reviewer chat cannot work. Its tools would never fire.`);
-            console.log(JSON.stringify(body).slice(0, 500));
-            process.exit(1);
-          }
-          // Asserting on the tool call rather than on the enum: providers disagree about
-          // what finish_reason says when a tool fires, and the call itself is the claim.
-          if (finish !== "tool_calls") {
-            console.log(`::warning::Tool call present but finish_reason is "${finish}", not "tool_calls".`);
-          }
-          console.log("The configured model reaches the gateway and calls tools.");
-          '
-
-      # The probe above proves the gateway can carry a tool call. It does not prove
-      # the *chat* can, because it asks in a shape the chat never uses: one tool,
-      # `tool_choice: required`, no streaming. The reviewer chat streams, offers
-      # several tools and leaves the choice to the model — and that is the request
-      # that came back as JSON-in-a-sentence in production (#660).
-      #
-      # The request body lives in scripts/ai/probe-chat-tools.mjs so that the
-      # candidate sweep (probe-chat-models.yaml) measures the same thing this
-      # does. A second copy of the shape would be a second definition of what the
-      # chat sends, and the shape is the whole point of the measurement.
-      #
-      # Report-only on purpose, for now: no `--strict`. The failing gate belongs
-      # in the same change that fixes the model — a hard gate added before the fix
-      # would only stop every unrelated deploy from shipping.
-      - name: Probe the gateway in the shape the chat uses
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-
-          chat_enabled="$(node "$RUNNER_TEMP/read-wrangler-var.mjs" FEATURE_INAPP_CHAT)"
-          model="$(node "$RUNNER_TEMP/read-wrangler-var.mjs" AI_CHAT_MODEL)"
-          if [ "$chat_enabled" != "true" ] || [ -z "$model" ]; then
-            echo "No chat ships — nothing to probe."
-            exit 0
-          fi
-
-          node scripts/ai/probe-chat-tools.mjs "$model"
+          # `--strict` now that a model measured to pass is configured: an answer
+          # without a tool call is the live fault of #660 and must not ship again.
+          node scripts/ai/probe-chat-tools.mjs "$model" --strict
 
       # The way back. Drizzle migrations are forward-only, so the rollback path is
       # this dump plus `psql < dump.sql`, not a down-migration. Kept as an artifact
