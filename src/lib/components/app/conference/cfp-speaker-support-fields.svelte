@@ -34,11 +34,14 @@
 		{ value: 'none', label: 'Not covered' }
 	];
 
+	// Covered first: that is how an organizer decides. "Covered" is its own
+	// answer, not `up_to` with the amount written out as words.
 	const EXPENSE_OPTIONS = [
 		{ value: 'unset', label: 'Not stated' },
-		{ value: 'none', label: 'Not covered' },
+		{ value: 'covered', label: 'Covered' },
 		{ value: 'up_to', label: 'Up to an amount' },
-		{ value: 'case_by_case', label: 'Case by case' }
+		{ value: 'case_by_case', label: 'Case by case' },
+		{ value: 'none', label: 'Not covered' }
 	];
 </script>
 

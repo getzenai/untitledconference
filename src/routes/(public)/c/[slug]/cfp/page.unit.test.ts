@@ -341,4 +341,28 @@ describe('speaker expenses on the public call (#512)', () => {
 		expect(closed).toContain('Free for speakers');
 		expect(closed).toContain('data-testid="speaker-support"');
 	});
+
+	it('puts the expenses under the description, not over it (#591)', () => {
+		const base = call('open', 'Talks that show the work.');
+		const body = render(Page, {
+			props: {
+				data: {
+					call: { ...base, support: { admission: 'free' } },
+					existing: null,
+					speakerProfile: null,
+					user: undefined,
+					conference: publicConference,
+					daysUntilClose: null,
+					embed: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined }
+				},
+				form: null
+			}
+		}).body;
+		const intro = body.indexOf('Talks that show the work.');
+		const expenses = body.indexOf('data-testid="speaker-support"');
+		expect(intro).toBeGreaterThan(-1);
+		expect(intro).toBeLessThan(expenses);
+	});
 });

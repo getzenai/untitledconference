@@ -169,11 +169,6 @@
 				Editing closed
 			</Button>
 		</div>
-		<!--
-			The same statement as on the public call, still here after the call
-			has closed (#512). The description is gone by then; this is not.
-		-->
-		<SpeakerSupportBlock support={data.support} />
 	{:else if s.status === 'rejected'}
 		<div class="border-status-bad/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
 			<p class="font-medium">Not accepted.</p>
@@ -233,6 +228,15 @@
 			<h2 class="text-sm font-medium">Key takeaway</h2>
 			<p class="mt-2 text-sm whitespace-pre-line">{s.keyTakeaway}</p>
 		</section>
+	{/if}
+
+	{#if s.status === 'accepted'}
+		<!--
+			Same statement as the public call, under the talk text (#591). Still
+			here after the call has closed (#512): the CFP description is gone
+			by then; this is not.
+		-->
+		<SpeakerSupportBlock support={data.support} />
 	{/if}
 
 	<section class="mt-8">

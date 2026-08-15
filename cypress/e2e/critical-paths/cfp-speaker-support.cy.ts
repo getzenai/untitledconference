@@ -48,6 +48,7 @@ describe('Speaker expenses on the call', () => {
 		cy.get('input[name="accommodationDomesticNights"]').clear().type('2');
 		cy.get('input[name="accommodationInternationalNights"]').clear().type('3');
 		cy.get('input[name="supportConditions"]').clear().type('for selected speakers');
+		cy.get('textarea[name="description"]').clear().type('What we are looking for this year.');
 
 		cy.contains('button', 'Save settings').click();
 		cy.contains('Call for papers updated.').should('exist');
@@ -71,6 +72,27 @@ describe('Speaker expenses on the call', () => {
 			'for selected speakers'
 		);
 
+		// The pitch decides whether someone submits at all, so it comes first and
+		// the money answer sits under it (#591).
+		cy.contains('What we are looking for this year.').then(($intro) => {
+			cy.get('[data-testid="speaker-support"]').then(($support) => {
+				expect(
+					$intro[0].compareDocumentPosition($support[0]) & Node.DOCUMENT_POSITION_FOLLOWING
+				).to.be.greaterThan(0);
+			});
+		});
+
+		// The plain promise, without an amount to write out in words (#591).
+		cy.visit(`/manage/${slug}/cfp`);
+		cy.waitForHydration();
+		cy.chooseFromAppSelect('app-select-travelKind', 'Covered');
+		cy.contains('button', 'Save settings').click();
+		cy.contains('Call for papers updated.').should('exist');
+
+		cy.visit(`/c/${slug}/cfp`);
+		cy.waitForHydration();
+		cy.get('[data-testid="speaker-support-travel"]').should('have.text', 'Covered');
+
 		cy.visit(`/manage/${slug}/cfp`);
 		cy.waitForHydration();
 		cy.get('[data-testid="cfp-close"]').click();
@@ -88,10 +110,7 @@ describe('Speaker expenses on the call', () => {
 		cy.location('pathname').should('match', /^\/portal\/submissions\/\d+$/);
 		cy.get('[data-testid="speaker-support"]').should('be.visible');
 		cy.get('[data-testid="speaker-support-admission"]').should('contain.text', 'Free for speakers');
-		cy.get('[data-testid="speaker-support-travel"]').should(
-			'contain.text',
-			'Covered up to an economy flight'
-		);
+		cy.get('[data-testid="speaker-support-travel"]').should('have.text', 'Covered');
 		cy.get('[data-testid="speaker-support-conditions"]').should(
 			'contain.text',
 			'for selected speakers'

@@ -553,13 +553,8 @@ We want talks that show the work — **the migration that failed first**, the nu
 				</p>
 
 				<div class="mt-3 space-y-3">
-					<!-- The public page's order: expenses, then the intro, then the
+					<!-- The public page's order: the intro, then expenses, then the
 					     questions. Both blocks render nothing when nothing is set. -->
-					<SpeakerSupportBlock
-						{support}
-						class="border-border bg-background rounded-lg border p-4"
-					/>
-
 					{#if previewIntro.length > 0}
 						<div
 							class="border-border bg-background rounded-lg border p-4"
@@ -568,6 +563,11 @@ We want talks that show the work — **the migration that failed first**, the nu
 							<CallProse blocks={previewIntro} />
 						</div>
 					{/if}
+
+					<SpeakerSupportBlock
+						{support}
+						class="border-border bg-background rounded-lg border p-4"
+					/>
 
 					<FixedQuestionsPreview
 						formats={data.formats}

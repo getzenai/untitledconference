@@ -30,21 +30,26 @@ describe('speaker-expense dependents stay out of the way (#557)', () => {
 
 	it('asks for the travel amount only once travel is up_to', () => {
 		const none = bodyOf({ travel: { kind: 'none' } });
+		const covered = bodyOf({ travel: { kind: 'covered' } });
 		const upTo = bodyOf({ travel: { kind: 'up_to', amount: '€500' } });
 		const caseByCase = bodyOf({ travel: { kind: 'case_by_case' } });
 
 		expect(none).not.toContain('name="travelAmount"');
+		expect(covered).not.toContain('name="travelAmount"');
+		expect(covered).toContain('name="travelDomesticKind"');
 		expect(upTo).toContain('name="travelAmount"');
 		expect(caseByCase).not.toContain('name="travelAmount"');
 		expect(caseByCase).toContain('name="travelDomesticKind"');
 	});
 
 	it('asks for nights once accommodation is covered, and the amount only for up_to', () => {
-		const covered = bodyOf({ accommodation: { kind: 'case_by_case' } });
+		const covered = bodyOf({ accommodation: { kind: 'covered' } });
+		const caseByCase = bodyOf({ accommodation: { kind: 'case_by_case' } });
 		const upTo = bodyOf({ accommodation: { kind: 'up_to', amount: '€200' } });
 
 		expect(covered).toContain('name="accommodationNights"');
 		expect(covered).not.toContain('name="accommodationAmount"');
+		expect(caseByCase).toContain('name="accommodationNights"');
 		expect(upTo).toContain('name="accommodationAmount"');
 		expect(upTo).toContain('name="accommodationNights"');
 	});

@@ -14,7 +14,7 @@
  */
 
 export const ADMISSION_KINDS = ['free', 'discounted', 'none'] as const;
-export const EXPENSE_KINDS = ['none', 'up_to', 'case_by_case'] as const;
+export const EXPENSE_KINDS = ['covered', 'up_to', 'case_by_case', 'none'] as const;
 
 export type AdmissionKind = (typeof ADMISSION_KINDS)[number];
 export type ExpenseKind = (typeof EXPENSE_KINDS)[number];
@@ -66,7 +66,7 @@ export function isExpenseKind(value: unknown): value is ExpenseKind {
 
 /** Amounts, nights and the domestic/international split only apply once travel or stay is actually covered. */
 export function expenseIsCovered(kind: string | undefined | null): boolean {
-	return kind === 'up_to' || kind === 'case_by_case';
+	return kind === 'covered' || kind === 'up_to' || kind === 'case_by_case';
 }
 
 function line(value: unknown): string | undefined {
@@ -241,6 +241,9 @@ const ADMISSION_TEXT: Record<AdmissionKind, string> = {
 function expenseText(kind: ExpenseKind | undefined, amount?: string): string | null {
 	if (!kind) return null;
 	if (kind === 'none') return 'Not covered';
+	// The reason `covered` exists: saying it with `up_to` forced the amount
+	// as words ("in full") and the page then read "Covered up to in full".
+	if (kind === 'covered') return 'Covered';
 	if (kind === 'case_by_case') return 'Covered case by case';
 	return amount ? `Covered up to ${amount}` : 'Covered up to a set amount';
 }
