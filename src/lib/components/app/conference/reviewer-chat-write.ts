@@ -17,11 +17,15 @@ export type ReviewWriteInput = {
 	comment?: string;
 };
 
-function talkName(input: ReviewWriteInput, title?: string): string {
+function talkName(input: ReviewWriteInput, title?: string, roundName?: string): string {
 	const named = title?.trim();
-	if (named) return named;
-	if (input.submissionId != null) return `submission ${input.submissionId}`;
-	return 'this review';
+	const talk = named
+		? named
+		: input.submissionId != null
+			? `submission ${input.submissionId}`
+			: 'this review';
+	const round = roundName?.trim();
+	return round ? `${talk} in ${round}` : talk;
 }
 
 function scores(input: ReviewWriteInput): string[] {
@@ -34,22 +38,30 @@ export function reviewWriteError(output: unknown): string | null {
 }
 
 /** Shown on the confirmation, before anything is written. */
-export function previewReviewWrite(input: ReviewWriteInput, title?: string): string {
+export function previewReviewWrite(
+	input: ReviewWriteInput,
+	title?: string,
+	roundName?: string
+): string {
 	const bits = [
 		scores(input).length ? `scores ${scores(input).join(', ')}` : null,
 		input.comment?.trim() ? `comment: ${input.comment.trim()}` : null
 	].filter(Boolean);
 	return bits.length
-		? `This will file a review of ${talkName(input, title)} (${bits.join('; ')}).`
-		: `This will file a review of ${talkName(input, title)}.`;
+		? `This will file a review of ${talkName(input, title, roundName)} (${bits.join('; ')}).`
+		: `This will file a review of ${talkName(input, title, roundName)}.`;
 }
 
 /** The history line after a confirmed write. */
-export function describeReviewWrite(input: ReviewWriteInput, title?: string): string {
+export function describeReviewWrite(
+	input: ReviewWriteInput,
+	title?: string,
+	roundName?: string
+): string {
 	const marks = scores(input);
 	return marks.length === 1
-		? `Saved review of ${talkName(input, title)}: ${marks[0]}`
+		? `Saved review of ${talkName(input, title, roundName)}: ${marks[0]}`
 		: marks.length > 1
-			? `Saved review of ${talkName(input, title)}: ${marks.join(', ')}`
-			: `Saved review of ${talkName(input, title)}`;
+			? `Saved review of ${talkName(input, title, roundName)}: ${marks.join(', ')}`
+			: `Saved review of ${talkName(input, title, roundName)}`;
 }

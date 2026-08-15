@@ -83,20 +83,24 @@ export function createMockChatModel(
  * Tests pass a new instance per request: the first HTTP turn emits the
  * tool call (approval stops it), the second is told `afterApproval`.
  */
+type MockSubmitReviewInput = {
+	conferenceSlug: string;
+	submissionId: number;
+	answers: Record<string, string>;
+	comment?: string;
+	roundId?: number;
+};
+
 export function createMockSubmitReviewModel(
-	input: {
-		conferenceSlug: string;
-		submissionId: number;
-		answers: Record<string, string>;
-		comment?: string;
-	},
+	input: MockSubmitReviewInput,
 	afterApproval = false
 ): LanguageModel {
 	const payload = JSON.stringify({
 		conferenceSlug: input.conferenceSlug,
 		submissionId: input.submissionId,
 		answers: input.answers,
-		comment: input.comment ?? ''
+		comment: input.comment ?? '',
+		...(input.roundId === undefined ? {} : { roundId: input.roundId })
 	});
 	const toolStep = [
 		{ type: 'stream-start' as const, warnings: [] },

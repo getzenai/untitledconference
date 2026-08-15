@@ -538,7 +538,15 @@
 </div>
 
 {#if data.chatEnabled}
-	<ReviewerChat slug={data.conference.slug} focus={{ submissionId: s.id, title: s.title }} />
+	<ReviewerChat
+		slug={data.conference.slug}
+		focus={{
+			submissionId: s.id,
+			title: s.title,
+			roundId: s.round.id,
+			roundName: s.round.name
+		}}
+	/>
 {/if}
 
 <AlertDialog bind:open={confirmRecuseOpen}>
