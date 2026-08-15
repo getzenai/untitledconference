@@ -92,8 +92,8 @@ describe('An organizer holds a slot for a sponsor', () => {
 		cy.get('[data-testid="agenda-hold-open"]').click();
 		cy.get('[data-testid="agenda-hold-kind-reservation"]').check();
 		cy.get('[data-testid="agenda-hold-title"]').type('Gold sponsor slot');
-		cy.get('[data-testid="agenda-hold-room"]').select('Hall 1');
-		cy.get('[data-testid="agenda-hold-minutes"]').select('120');
+		cy.chooseFromAppSelect('agenda-hold-room', 'Hall 1');
+		cy.chooseFromAppSelect('agenda-hold-minutes', '120 min');
 		cy.get('[data-testid="agenda-hold-submit"]').click();
 
 		cy.get('[data-testid="agenda-hold"][data-kind="reservation"]').should(
