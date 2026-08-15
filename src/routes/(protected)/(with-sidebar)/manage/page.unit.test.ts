@@ -11,7 +11,12 @@ import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
 
-const conference = (id: number, slug: string) => ({
+const conference = (
+	id: number,
+	slug: string,
+	predecessor: { id: number; name: string; slug: string } | null = null,
+	predecessorOptions: { id: number; name: string; slug: string }[] = []
+) => ({
 	id,
 	organizationId: 'org-test',
 	name: `Conference ${id}`,
@@ -22,6 +27,9 @@ const conference = (id: number, slug: string) => ({
 	endsOn: '2028-05-14',
 	cfpIntro: null,
 	reviewVisibility: 'open' as const,
+	predecessorConferenceId: predecessor?.id ?? null,
+	predecessor,
+	predecessorOptions,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
 });
@@ -35,7 +43,9 @@ const layoutData = {
 
 function body(conferences: ReturnType<typeof conference>[], canCreate: boolean) {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	return render(Page, { props: { data: { ...layoutData, conferences, canCreate } as any } }).body;
+	return render(Page, {
+		props: { data: { ...layoutData, conferences, canCreate } as any, form: null }
+	}).body;
 }
 
 describe('my conferences', () => {
@@ -80,5 +90,23 @@ describe('my conferences', () => {
 
 		expect(html).toContain('/manage/devflow-2028/dashboard');
 		expect(html).not.toContain('/manage/new');
+	});
+
+	it('names the previous edition on the list', () => {
+		// #448: the relationship is the fact this page has to show. Transferring
+		// talks comes later; the sentence is the whole visible product for now.
+		const previous = { id: 2, name: 'DevFlow 2027', slug: 'devflow-2027' };
+		const html = body([conference(1, 'devflow-2028', previous, [previous])], true);
+
+		expect(html).toContain('data-testid="predecessor-line"');
+		expect(html).toContain('Follows DevFlow 2027');
+		expect(html).toContain('data-testid="predecessor-select"');
+	});
+
+	it('does not invent a previous edition when none is named', () => {
+		const html = body([conference(1, 'devflow-2028')], true);
+
+		expect(html).not.toContain('data-testid="predecessor-line"');
+		expect(html).not.toContain('Follows ');
 	});
 });

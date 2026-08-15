@@ -30,6 +30,7 @@ const conference = {
 	statusBeforeArchive: null,
 	listedPublicly: false,
 	slotCapacity: null,
+	predecessorConferenceId: null,
 	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')
