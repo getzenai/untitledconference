@@ -50,10 +50,8 @@
 
 	<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
 		{#if isDraft}
-			This is still a draft — it has not been submitted. Reviewers will not see it until you submit. <strong
-				>Submit proposal</strong
-			>
-			hands it to the organizers;
+			This is still a draft — it has not been submitted. Reviewers will not see it until you submit.
+			<strong>Submit proposal</strong> hands it to the organizers;
 			<strong>Save as draft</strong> keeps it here.
 		{:else}
 			This proposal is already with the organizers. <strong>Save changes</strong> updates what they read;
