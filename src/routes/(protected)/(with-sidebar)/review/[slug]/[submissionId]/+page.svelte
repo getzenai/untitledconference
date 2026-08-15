@@ -16,6 +16,7 @@
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { formatScore } from '$lib/conference/scoring';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import {
 		AlertDialog,
@@ -213,6 +214,17 @@
 						</div>
 					{/each}
 				</dl>
+			</section>
+		{/if}
+
+		<!-- #451: the returning-speaker argument, in front of the reviewer while they
+		     score. Absent in an anonymised round — the server sends an empty list. -->
+		{#if s.speakerHistory.length > 0}
+			<section class="mt-6">
+				<h2 class="text-sm font-semibold">Speaker history</h2>
+				<div class="mt-2">
+					<SpeakerHistoryPanel history={s.speakerHistory} />
+				</div>
 			</section>
 		{/if}
 

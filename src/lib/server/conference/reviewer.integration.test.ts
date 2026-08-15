@@ -504,6 +504,8 @@ describe('one submission', () => {
 
 		const named = await reviewerSubmission(await conferenceNow(), ME, alsoMine);
 		expect(named?.speakers).toEqual(['Priya Raman']);
+		// #451 rides in the open round: one entry per speaker, even a first-timer.
+		expect(named?.speakerHistory.map((h) => h.name)).toEqual(['Priya Raman']);
 		expect(named?.answers).toEqual([
 			{
 				label: 'Kurzbio',
@@ -523,6 +525,9 @@ describe('one submission', () => {
 		expect(hidden?.anonymized).toBe(true);
 		expect(hidden?.speakers).toEqual([]);
 		expect(hidden?.answers).toEqual([]);
+		// The history is identity too (#451): "spoke here in 2024" points at the
+		// person harder than the name that was taken away. Same gate, same round.
+		expect(hidden?.speakerHistory).toEqual([]);
 		expect(JSON.stringify(hidden)).not.toContain('Priya Raman');
 	});
 });

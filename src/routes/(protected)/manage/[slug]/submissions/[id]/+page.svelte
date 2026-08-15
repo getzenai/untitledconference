@@ -20,6 +20,7 @@
 	} from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -670,6 +671,20 @@
 				</ul>
 			{/if}
 		</section>
+
+		<!-- #451: directly under the speakers, because it is a second sentence about
+		     the same people — "and this is what they did here last time". -->
+		{#if data.speakerHistory.length > 0}
+			<section
+				class="border-border bg-card rounded-lg border p-4"
+				data-testid="submission-speaker-history"
+			>
+				<h2 class="text-sm font-medium">Speaker history</h2>
+				<div class="mt-2">
+					<SpeakerHistoryPanel history={data.speakerHistory} />
+				</div>
+			</section>
+		{/if}
 
 		<section class="border-border bg-card rounded-lg border p-4" data-testid="submission-sponsor">
 			<div class="flex items-center justify-between gap-2">
