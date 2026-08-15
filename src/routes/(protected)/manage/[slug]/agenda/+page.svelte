@@ -46,16 +46,33 @@
 		untimedHolds,
 		type GridFrame
 	} from '$lib/conference/agenda-grid';
+	import {
+		applyBoardWrites,
+		involvedPlacementIds,
+		slotEditorWrite,
+		type BoardWrite
+	} from '$lib/conference/agenda-optimistic';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { agendaReadyLine, autoPlaceResult, PROGRAM_LEGEND } from '$lib/conference/program-states';
 	import { formatDayLong } from '$lib/conference/public-view';
+	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { DragController } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
 
 	let { data, form } = $props();
 
 	const base = $derived(`/manage/${data.conference.slug}`);
-	const board = $derived(data.board);
+	/**
+	 * In-flight writes sit on top of the last server board. Dropping one is the
+	 * rollback — the card is back where the server left it, in the same frame.
+	 */
+	type QueuedWrite = BoardWrite & { token: number };
+	let writes = $state<QueuedWrite[]>([]);
+	let writeToken = 0;
+	let writeError = $state<string | null>(null);
+	const board = $derived(applyBoardWrites(data.board, writes));
+	const savingIds = $derived(new Set(writes.flatMap(involvedPlacementIds)));
 
 	let busy = $state(false);
 	/** Which day the grid is showing. Days are tabs, not one endless column. */
@@ -324,15 +341,88 @@
 		editing = null;
 	};
 
-	/** Close on a successful write, so the grid behind the dialog is the answer. */
-	const submittingSlot = () => {
+	const formId = (value: string | File | null): number | null => {
+		const n = Number(value);
+		return Number.isInteger(n) && n > 0 ? n : null;
+	};
+
+	const actionName = (action: URL) =>
+		action.search.startsWith('?/') ? (action.search.slice(2).split('&')[0] ?? '') : '';
+
+	const failureMessage = (result: ActionResult): string => {
+		if (result.type === 'failure') {
+			const error = (result.data as { error?: unknown } | undefined)?.error;
+			if (typeof error === 'string' && error.length > 0) return error;
+			return 'That change could not be saved.';
+		}
+		if (result.type === 'error') return actionErrorCopy(result);
+		return 'That change could not be saved.';
+	};
+
+	const enqueueWrite = (write: BoardWrite): QueuedWrite => {
+		const queued = { ...write, token: ++writeToken };
+		writes = [...writes, queued];
+		return queued;
+	};
+
+	const dropWrite = (write: QueuedWrite | null) => {
+		if (!write) return;
+		// Token, not object identity: $state wraps each write in a proxy.
+		writes = writes.filter((item) => item.token !== write.token);
+	};
+
+	const settleWrite = (write: QueuedWrite | null, result: ActionResult) => {
+		if (result.type === 'success') {
+			writeError = null;
+			dropWrite(write);
+			return;
+		}
+		// Roll back first so the card is not sitting in a slot the server refused.
+		dropWrite(write);
+		writeError = failureMessage(result);
+	};
+
+	/**
+	 * Close on a successful write, so the grid behind the dialog is the answer.
+	 * A refused write rolls the card back and keeps the dialog shut so the
+	 * reason on the page is visible — a silent snap is worse than the wait.
+	 */
+	const submittingSlot: SubmitFunction = ({ action, formData }) => {
+		const placementId = formId(formData.get('placementId'));
+		const write =
+			placementId === null
+				? null
+				: slotEditorWrite(
+						actionName(action),
+						{
+							placementId,
+							withPlacementId: formId(formData.get('withPlacementId')) ?? undefined,
+							dayId: formId(formData.get('dayId')) ?? undefined,
+							roomId: formId(formData.get('roomId')) ?? undefined,
+							startMinutes: Number.isInteger(Number(formData.get('startMinutes')))
+								? Number(formData.get('startMinutes'))
+								: undefined
+						},
+						data.board.tray.some((item) => item.placementId === placementId)
+							? 'tray'
+							: data.board.placed.some((item) => item.placementId === placementId)
+								? 'grid'
+								: 'missing'
+					);
+		const queued = write ? enqueueWrite(write) : null;
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({ result, update }) => {
 			try {
-				await update(formUpdateOptions('edit'));
+				if (result.type === 'success') {
+					await update(formUpdateOptions('edit'));
+					settleWrite(queued, result);
+				} else {
+					settleWrite(queued, result);
+					if (result.type === 'failure') await update(formUpdateOptions('edit'));
+				}
 				closeSlot();
 			} finally {
-				busy = false;
+				if (writes.length === 0) busy = false;
 			}
 		};
 	};
@@ -349,6 +439,10 @@
 	let gridOverflows = $state(false);
 	let placeForm = $state<HTMLFormElement | null>(null);
 	let pending = $state<{ placementId: number; roomId: number; startMinutes: number } | null>(null);
+	/** The write the hidden form is currently posting — not the tail of the queue. */
+	let inFlightPlace = $state<QueuedWrite | null>(null);
+	let settlePlace: (() => void) | null = null;
+	let placeChain = Promise.resolve();
 
 	/**
 	 * #477: two rooms already overflow 320 px once a column is wide enough to
@@ -392,11 +486,18 @@
 			const room = board.rooms.find((r) => r.id === slot.roomId);
 			if (room) openSlot(room, slot.startMinutes);
 		},
-		place: async (placementId, slot) => {
+		place: (placementId, slot) => {
 			if (!day) return;
-			pending = { placementId, roomId: slot.roomId, startMinutes: slot.startMinutes };
-			await tick();
-			placeForm?.requestSubmit();
+			const queued = enqueueWrite({
+				kind: 'place',
+				placementId,
+				dayId: day.id,
+				roomId: slot.roomId,
+				startMinutes: slot.startMinutes
+			});
+			writeError = null;
+			busy = true;
+			placeChain = placeChain.then(() => submitPlace(queued));
 		}
 	});
 
@@ -405,6 +506,55 @@
 		if (drag.moved) return;
 		openSlot(room, startMinutes);
 	}
+
+	/**
+	 * One `?/place` at a time. The card has already moved; two overlapping posts
+	 * would apply the second reply against the first's board and leave a ghost.
+	 */
+	async function submitPlace(write: QueuedWrite) {
+		try {
+			if (!placeForm || write.kind !== 'place') {
+				dropWrite(write);
+				return;
+			}
+			pending = {
+				placementId: write.placementId,
+				roomId: write.roomId,
+				startMinutes: write.startMinutes
+			};
+			inFlightPlace = write;
+			await tick();
+			await new Promise<void>((resolve) => {
+				settlePlace = resolve;
+				placeForm?.requestSubmit();
+			});
+		} catch {
+			dropWrite(write);
+			writeError = 'That change could not be saved.';
+		} finally {
+			if (writes.length === 0) busy = false;
+		}
+	}
+
+	const submittingPlace: SubmitFunction = () => {
+		const write = inFlightPlace;
+		return async ({ result, update }) => {
+			try {
+				if (result.type === 'success') {
+					await update(formUpdateOptions('edit'));
+					settleWrite(write, result);
+				} else {
+					settleWrite(write, result);
+					if (result.type === 'failure') await update(formUpdateOptions('edit'));
+				}
+			} finally {
+				inFlightPlace = null;
+				settlePlace?.();
+				settlePlace = null;
+				if (writes.length === 0) busy = false;
+			}
+		};
+	};
 </script>
 
 <svelte:window
@@ -643,7 +793,7 @@
 	action="?/place"
 	class="hidden"
 	bind:this={placeForm}
-	use:enhance={submitting}
+	use:enhance={submittingPlace}
 	data-testid="agenda-drop-form"
 >
 	<input type="hidden" name="placementId" value={pending?.placementId ?? ''} />
@@ -656,8 +806,10 @@
      320 px (#477): the page pad drops to 1rem so a room column can be a
      whole card instead of a clipped half. -->
 <div class="space-y-6 px-4 py-5 sm:px-6">
-	{#if form?.error}
-		<p class="text-status-bad text-sm">{form.error}</p>
+	{#if writeError || form?.error}
+		<p class="text-status-bad text-sm" role="alert" data-testid="agenda-write-error">
+			{writeError ?? form?.error}
+		</p>
 	{/if}
 	{#if form?.autoPlaced !== undefined}
 		<p class="text-muted-foreground text-sm" data-testid="agenda-autoplace-result">
@@ -708,10 +860,13 @@
 						<li
 							data-testid="agenda-tray-item"
 							data-placement-id={item.placementId}
+							data-saving={savingIds.has(item.placementId) ? 'true' : undefined}
 							class="border-border min-w-0 cursor-grab touch-none overflow-hidden rounded-md border p-3 select-none {drag
 								.dragging?.placementId === item.placementId
 								? 'opacity-40'
-								: ''}"
+								: savingIds.has(item.placementId)
+									? 'opacity-70'
+									: ''}"
 							onpointerdown={(e) =>
 								drag.begin(e, { placementId: item.placementId, title: item.title, roomId: null })}
 						>
@@ -985,8 +1140,9 @@
 
 											{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
 												{@const rows = blockRows(frame, session)}
-												{@const clashes = clashesFor(session.placementId)}
-												{@const alternatives = alternativesFor(session.placementId)}
+												{@const saving = savingIds.has(session.placementId)}
+												{@const clashes = saving ? [] : clashesFor(session.placementId)}
+												{@const alternatives = saving ? [] : alternativesFor(session.placementId)}
 												{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
 												{@const published = session.status === 'confirmed'}
 												{@const decidedDown =
@@ -1018,6 +1174,8 @@
 														data-span={isHold ? 'room' : undefined}
 														data-placement-id={session.placementId}
 														data-publish-state={published ? 'published' : 'draft'}
+														data-saving={saving ? 'true' : undefined}
+														aria-busy={saving ? true : undefined}
 														class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
 														0
 															? 'border-status-bad bg-status-bad/10'
@@ -1032,7 +1190,9 @@
 																			: 'border-border bg-card'} {drag.dragging?.placementId ===
 														session.placementId
 															? 'opacity-40'
-															: ''}"
+															: saving
+																? 'opacity-70'
+																: ''}"
 														style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
 															ROW_REM}rem; left: calc({(lane / lanes) *
 															100}% + 0.125rem); width: calc({100 /

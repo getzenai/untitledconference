@@ -200,6 +200,59 @@ describe('Agenda drag and drop', () => {
 	 * makes dragging possible would have eaten the click path the eval harness and
 	 * the keyboard both use.
 	 */
+	/**
+	 * The card has to be in the new slot before the action replies (#597). A
+	 * timeout shorter than the intercept delay is the proof: if we still waited
+	 * on the round trip, this would time out while the request was in flight.
+	 */
+	it('paints the dropped talk in the new slot before the action replies', () => {
+		addRooms(['Hall 1']);
+
+		cy.intercept({ method: 'POST', url: new RegExp(`/manage/${slug}/agenda`) }, (req) => {
+			req.on('response', (res) => {
+				res.setDelay(2500);
+			});
+		}).as('slowPlace');
+
+		dragOnto('[data-testid="agenda-tray-item"]', 'Hall 1', 14 * 60 + 30, 'Fixture Talk A');
+
+		cy.contains('[data-testid="agenda-room-card"]', 'Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A', { timeout: 800 })
+			.should('contain', '14:30');
+		cy.get('[data-testid="agenda-placed-session"][data-saving="true"]').should('exist');
+		cy.contains('[data-testid="agenda-tray-item"]', 'Fixture Talk A').should('not.exist');
+
+		cy.wait('@slowPlace');
+		cy.get('[data-testid="agenda-placed-session"][data-saving="true"]').should('not.exist');
+		cy.contains('[data-testid="agenda-room-card"]', 'Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '14:30');
+	});
+
+	/**
+	 * A refused write must not leave the card in a slot the server never took.
+	 * The hidden form cannot show the banner, so the page-level reason is the
+	 * one the organizer can actually read.
+	 */
+	it('rolls the card back and shows the reason when the write is refused', () => {
+		addRooms(['Hall 1']);
+
+		cy.intercept(
+			{ method: 'POST', url: new RegExp(`/manage/${slug}/agenda`) },
+			{
+				statusCode: 500,
+				body: 'nope'
+			}
+		).as('failedPlace');
+
+		dragOnto('[data-testid="agenda-tray-item"]', 'Hall 1', 14 * 60 + 30, 'Fixture Talk A');
+
+		cy.wait('@failedPlace');
+		cy.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A').should('not.exist');
+		cy.contains('[data-testid="agenda-tray-item"]', 'Fixture Talk A').should('exist');
+		cy.get('[data-testid="agenda-write-error"]').should('be.visible');
+	});
+
 	it('still opens the editor when a block is clicked rather than dragged', () => {
 		addRooms(['Hall 1']);
 		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
