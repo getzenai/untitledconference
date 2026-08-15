@@ -138,7 +138,15 @@
 		// Changing this string therefore changes which key is correct, and the
 		// deploy only checks that a key is *present* (#598). Change the two
 		// together, or the chat ships green and answers every reviewer with an
-		// auth error.
-		"AI_CHAT_MODEL": "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+		// auth error. This one stays inside Workers AI, so the key does not change.
+		//
+		// Chosen by measurement, not by datasheet (#660): the candidate sweep of
+		// 2026-08-15 (probe-chat-models.yaml, run 31909991120) sent every model the
+		// exact body the chat sends — streamed, several tools, `tool_choice: auto`.
+		// `llama-3.3-70b-instruct-fp8-fast` was the only one that answered with the
+		// tool call written out as prose; scout, mistral-small-3.1 and this one all
+		// carried a real tool call. Both of those are the fallbacks if this model
+		// disappoints, and neither needs a different key.
+		"AI_CHAT_MODEL": "workers-ai/@cf/openai/gpt-oss-120b"
 	}
 }

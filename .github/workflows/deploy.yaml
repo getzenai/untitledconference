@@ -280,11 +280,13 @@ jobs:
       # does. A second copy of the shape would be a second definition of what the
       # chat sends, and the shape is the whole point of the measurement.
       #
-      # Report-only on purpose, for now: no `--strict`. The failing gate belongs
-      # in the same change that fixes the model — a hard gate added before the fix
-      # would only stop every unrelated deploy from shipping.
+      # Now a gate (`--strict`), in the same change that fixes the model: a model
+      # that answers the chat-shaped request without a tool call is exactly the
+      # live fault of #660, and shipping it green is how it reached production the
+      # first time. `--strict` fails on that answer only — a transport error still
+      # warns and passes, because an unreachable gateway is an outage, not a bad
+      # model, and it must not hold back a deploy that has nothing to do with chat.
       - name: Probe the gateway in the shape the chat uses
-        continue-on-error: true
         run: |
           set -euo pipefail
 
@@ -295,7 +297,7 @@ jobs:
             exit 0
           fi
 
-          node scripts/ai/probe-chat-tools.mjs "$model"
+          node scripts/ai/probe-chat-tools.mjs "$model" --strict
 
       # The way back. Drizzle migrations are forward-only, so the rollback path is
       # this dump plus `psql < dump.sql`, not a down-migration. Kept as an artifact
