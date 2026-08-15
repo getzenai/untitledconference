@@ -18,8 +18,9 @@
 	} from '$lib/conference/pending-proposal';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import CallProse from '$lib/components/app/conference/call-prose.svelte';
-	import { proseBlocks } from '$lib/conference/prose';
+	import { cfpDeadlinePath } from '$lib/conference/cfp-deadline';
 	import { formatInstant } from '$lib/conference/deadline';
+	import { proseBlocks } from '$lib/conference/prose';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { onMount } from 'svelte';
 
@@ -138,7 +139,18 @@
 		rather than beneath it.
 	-->
 	{#if closesLabel && call.state === 'open'}
-		<p class="text-muted-foreground mt-1 text-sm">Proposals close {closesLabel}.</p>
+		<p class="text-muted-foreground mt-1 text-sm">
+			Proposals close {closesLabel}.
+			<a
+				class="underline underline-offset-2 hover:no-underline"
+				href={cfpDeadlinePath(call.conference.slug)}
+				download
+				type="text/calendar"
+				data-testid="cfp-deadline-calendar"
+			>
+				Add to calendar
+			</a>
+		</p>
 	{/if}
 
 	<!--
