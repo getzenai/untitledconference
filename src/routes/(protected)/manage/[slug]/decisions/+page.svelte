@@ -218,6 +218,19 @@
 								>
 									{row.title}
 								</a>
+								{#if row.sponsorTier}
+									<!--
+										Name it, do not score it. A sponsor talk is a fact the
+										room must see before it accepts or rejects (#450).
+									-->
+									<span class="mt-1 block" data-testid="queue-sponsor">
+										<StatusBadge
+											status="internal"
+											tone="internal"
+											label="{row.sponsorTier} · internal"
+										/>
+									</span>
+								{/if}
 								{#if row.myComment}
 									<p class="text-muted-foreground mt-1 max-w-prose text-xs italic">
 										“{row.myComment}”

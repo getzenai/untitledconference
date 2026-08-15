@@ -68,3 +68,53 @@ describe('sponsor holds on the decision screen', () => {
 		expect(body).toContain('12 accepted, 8 left of 20');
 	});
 });
+
+const renderQueue = (sponsorTier: string | null) =>
+	render(Page, {
+		props: {
+			data: {
+				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
+				impersonating: null,
+				analytics: { apiKey: undefined, host: undefined },
+				conference,
+				board: {
+					total: { id: null, name: 'Test Conf', capacity: null, accepted: 0 },
+					tracks: [],
+					untracked: 0,
+					sponsorHolds: 0
+				},
+				seats: [{ userId: 'ada', name: 'Ada', queueLength: 1 }],
+				selectedUserId: 'ada',
+				queue: [
+					{
+						submissionId: 11,
+						title: 'A sponsored talk',
+						track: null,
+						trackId: null,
+						status: 'submitted',
+						myScore: 4,
+						overallScore: 4,
+						reviewsSubmitted: 1,
+						myComment: null,
+						sponsorTier
+					}
+				]
+			},
+			form: null
+		} as never
+	}).body;
+
+describe('sponsor affiliation on the decision list', () => {
+	it('names a sponsor talk on the row, without opening it', () => {
+		const body = renderQueue('Gold');
+
+		expect(body).toContain('A sponsored talk');
+		expect(body).toContain('data-testid="queue-sponsor"');
+		expect(body).toContain('Gold · internal');
+	});
+
+	it('says nothing when the talk is not a sponsor talk', () => {
+		expect(renderQueue(null)).not.toContain('data-testid="queue-sponsor"');
+	});
+});
