@@ -19,6 +19,7 @@
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import { parseSpeakerSupport } from '$lib/conference/speaker-support';
+	import { proseBlocks } from '$lib/conference/prose';
 	import {
 		FIELD_KINDS,
 		parseOptions,
@@ -28,8 +29,10 @@
 	} from '$lib/conference/form-definition';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
+	import CallProse from '$lib/components/app/conference/call-prose.svelte';
 	import CfpFieldEditor from '$lib/components/app/conference/cfp-field-editor.svelte';
 	import CfpSpeakerSupportFields from '$lib/components/app/conference/cfp-speaker-support-fields.svelte';
+	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
 	import FixedQuestionsList from '$lib/components/app/conference/fixed-questions-list.svelte';
 	import FixedQuestionsPreview from '$lib/components/app/conference/fixed-questions-preview.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -92,6 +95,17 @@ We want talks that show the work — **the migration that failed first**, the nu
 	 */
 	const fixedVisibility = $derived(fixedQuestionVisibility(data.form?.hiddenFixedFields));
 	const support = $derived(parseSpeakerSupport(data.form?.speakerSupport));
+
+	/**
+	 * The two things the public call shows above the questions (#556): the
+	 * expenses answer and the organizers' own intro. Same parse, same components,
+	 * same order as `(public)/c/[slug]/cfp` — a preview that re-renders them its
+	 * own way would be the demo this file's header warns about.
+	 *
+	 * Saved text, not the textarea: the preview answers "what will be published",
+	 * and the box next to it is already showing the unsaved words.
+	 */
+	const previewIntro = $derived(proseBlocks(data.form?.description ?? ''));
 
 	// Preview state. Deliberately not persisted: it is a what-if, not a draft.
 	let previewFormat = $state<number | null>(null);
@@ -539,6 +553,22 @@ We want talks that show the work — **the migration that failed first**, the nu
 				</p>
 
 				<div class="mt-3 space-y-3">
+					<!-- The public page's order: expenses, then the intro, then the
+					     questions. Both blocks render nothing when nothing is set. -->
+					<SpeakerSupportBlock
+						{support}
+						class="border-border bg-background rounded-lg border p-4"
+					/>
+
+					{#if previewIntro.length > 0}
+						<div
+							class="border-border bg-background rounded-lg border p-4"
+							data-testid="cfp-preview-intro"
+						>
+							<CallProse blocks={previewIntro} />
+						</div>
+					{/if}
+
 					<FixedQuestionsPreview
 						formats={data.formats}
 						tracks={data.tracks}
