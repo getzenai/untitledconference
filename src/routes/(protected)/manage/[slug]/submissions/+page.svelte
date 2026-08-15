@@ -796,6 +796,11 @@
 											/>
 										</span>
 									{/if}
+									{#if submission.editorialStand}
+										<span class="mt-1 block" data-testid="submission-editorial-stand">
+											<StatusBadge status={submission.editorialStand} />
+										</span>
+									{/if}
 								</td>
 								<td class="text-muted-foreground py-2 pr-4">{speakerLine(submission.speakers)}</td>
 								<td class="text-muted-foreground py-2 pr-4">{submission.track ?? '—'}</td>

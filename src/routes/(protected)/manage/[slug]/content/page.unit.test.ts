@@ -86,7 +86,8 @@ const renderWith = (count: number) =>
 				conference,
 				speakers: Array.from({ length: count }, (_, i) => speaker(i + 1)),
 				totals: { speakers: count, open: count, waiting: 0, done: 0, overdue: 0 },
-				conditions: []
+				conditions: [],
+				hanging: []
 			},
 			form: null
 		}
@@ -157,7 +158,8 @@ describe('organizer speaker content cards', () => {
 					conference,
 					speakers: [twoTalks],
 					totals: { speakers: 1, open: 1, waiting: 0, done: 1, overdue: 0 },
-					conditions: []
+					conditions: [],
+					hanging: []
 				},
 				form: null
 			}
@@ -195,7 +197,8 @@ describe('organizer speaker content cards', () => {
 					conference,
 					speakers: [priya],
 					totals: { speakers: 1, open: 2, waiting: 2, done: 1, overdue: 0 },
-					conditions: []
+					conditions: [],
+					hanging: []
 				},
 				form: null
 			}
@@ -266,7 +269,8 @@ describe('bulk deliverable reminders', () => {
 						done: 0,
 						overdue: 0
 					},
-					conditions: []
+					conditions: [],
+					hanging: []
 				},
 				form: null
 			}
@@ -315,7 +319,8 @@ describe('bulk deliverable reminders', () => {
 					conference,
 					speakers: [speaker(1)],
 					totals: { speakers: 1, open: 1, waiting: 0, done: 0, overdue: 0 },
-					conditions: []
+					conditions: [],
+					hanging: []
 				},
 				form: { reminderMessage: '2 reminders queued · 1 already reminded' }
 			}
@@ -345,7 +350,8 @@ describe('open accept conditions', () => {
 							ownerId: 'ann',
 							ownerName: 'Ann Follows'
 						}
-					]
+					],
+					hanging: []
 				},
 				form: null
 			}
@@ -356,5 +362,39 @@ describe('open accept conditions', () => {
 		expect(body).toContain('Ann Follows');
 		expect(body).toContain('bring someone from the business side');
 		expect(body).toContain('data-testid="resolve-condition"');
+	});
+});
+
+describe('hanging editorial stands', () => {
+	it('lists the hanging talks and offers advance (#446)', () => {
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [],
+					totals: { speakers: 0, open: 0, waiting: 0, done: 0, overdue: 0 },
+					conditions: [],
+					hanging: [
+						{
+							submissionId: 11,
+							title: 'The deck we have not seen',
+							stand: 'materials_requested'
+						}
+					]
+				},
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('data-testid="hanging-stands"');
+		expect(body).toContain('data-testid="hanging-stand"');
+		expect(body).toContain('The deck we have not seen');
+		expect(body).toContain('Materials requested');
+		expect(body).toContain('Advance to received');
+		expect(body).toContain('data-testid="advance-editorial-stand"');
 	});
 });

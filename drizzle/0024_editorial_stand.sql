@@ -1,0 +1,2 @@
+CREATE TYPE "public"."editorial_stand" AS ENUM('materials_requested', 'received', 'reviewed', 'revision_requested', 'final');--> statement-breakpoint
+ALTER TABLE "submission" ADD COLUMN "editorial_stand" "editorial_stand";

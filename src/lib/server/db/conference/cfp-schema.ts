@@ -60,6 +60,19 @@ export const submissionStatus = pgEnum('submission_status', [
  */
 export const contentApproval = pgEnum('content_approval', ['approved', 'pending', 'rejected']);
 
+/**
+ * Where an accepted talk sits in the editorial loop (#446). Named, not
+ * computed — a file on disk is not a stand. Null means the organizer has
+ * not started tracking. The talk stays `accepted` either way.
+ */
+export const editorialStand = pgEnum('editorial_stand', [
+	'materials_requested',
+	'received',
+	'reviewed',
+	'revision_requested',
+	'final'
+]);
+
 export const cfpFormTable = pgTable('cfp_form', {
 	id: serial('id').primaryKey(),
 	conferenceId: integer('conference_id')
@@ -187,6 +200,12 @@ export const submissionTable = pgTable(
 		acceptConditionOwnerId: text('accept_condition_owner_id').references(() => user.id, {
 			onDelete: 'set null'
 		}),
+		/**
+		 * The editorial stand on an accept, not a status (#446). Null is an
+		 * accepted talk the organizer has not started tracking. `final` is
+		 * done. The slot, the speaker tasks and the programme do not move.
+		 */
+		editorialStand: editorialStand('editorial_stand'),
 		contentApproval: contentApproval('content_approval').notNull().default('approved'),
 		submittedAt: timestamp('submitted_at', { withTimezone: true }),
 		decidedAt: timestamp('decided_at', { withTimezone: true }),

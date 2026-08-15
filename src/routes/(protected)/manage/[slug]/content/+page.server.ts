@@ -10,6 +10,10 @@ import {
 	queueDeliverableReminders,
 	type DeliverableReminderTally
 } from '$lib/server/conference/deliverable-reminders';
+import {
+	advanceEditorialStand,
+	hangingEditorialStands
+} from '$lib/server/conference/editorial-stand';
 import { contentOverview, contentTotals } from '$lib/server/conference/organizer-content';
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
@@ -17,13 +21,14 @@ import type { Actions, PageServerLoad } from './$types';
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 
-	const [speakers, totals, conditions] = await Promise.all([
+	const [speakers, totals, conditions, hanging] = await Promise.all([
 		contentOverview(conference.id),
 		contentTotals(conference.id),
-		openAcceptConditions(conference.id)
+		openAcceptConditions(conference.id),
+		hangingEditorialStands(conference.id)
 	]);
 
-	return { conference, speakers, totals, conditions };
+	return { conference, speakers, totals, conditions, hanging };
 };
 
 /**
@@ -79,5 +84,23 @@ export const actions: Actions = {
 		const result = await resolveAcceptCondition(conference.id, id);
 		if (!result.ok) throw error(404, 'Submission not found');
 		return { conditionMessage: result.changed ? 'Condition resolved.' : 'Nothing to resolve.' };
+	},
+
+	advanceStand: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const id = Number((await request.formData()).get('id'));
+		if (!Number.isInteger(id) || id <= 0) {
+			return fail(400, { standMessage: 'Unknown submission.' });
+		}
+
+		const result = await advanceEditorialStand(conference.id, id);
+		if (!result.ok) {
+			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'already_final') {
+				return { standMessage: 'This talk is already final.' };
+			}
+			return fail(400, { standMessage: 'Only an accepted talk can carry a stand.' });
+		}
+		return { standMessage: 'Stand advanced.' };
 	}
 };

@@ -1,4 +1,5 @@
 import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
+import { parseEditorialStand } from '$lib/conference/editorial-stand';
 import { normalizeRecordingUrl } from '$lib/conference/recording-url';
 import { SUBMITTED_REVIEW_UNASSIGN_REASON } from '$lib/conference/review-assignment';
 import {
@@ -12,6 +13,7 @@ import {
 	notifySubmissionDecisions
 } from '$lib/server/conference/decision-notifications';
 import { decideSubmissions, type Decision } from '$lib/server/conference/decisions';
+import { advanceEditorialStand, setEditorialStand } from '$lib/server/conference/editorial-stand';
 import { submissionDetail } from '$lib/server/conference/organizer-submissions';
 import { setRecordingUrl } from '$lib/server/conference/recordings';
 import {
@@ -249,5 +251,35 @@ export const actions: Actions = {
 		const result = await resolveAcceptCondition(conference.id, submissionId(params.id));
 		if (!result.ok) throw error(404, 'Submission not found');
 		return { conditionMessage: result.changed ? 'Condition resolved.' : 'Nothing to resolve.' };
+	},
+
+	/**
+	 * Names where an accepted talk sits in the editorial loop. The talk stays
+	 * accepted; only the stand moves (#446).
+	 */
+	setEditorialStand: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const parsed = parseEditorialStand(await request.formData());
+		if (!parsed.ok) return fail(400, { standMessage: parsed.message });
+
+		const result = await setEditorialStand(conference.id, submissionId(params.id), parsed.stand);
+		if (!result.ok) {
+			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			return fail(400, { standMessage: 'Only an accepted talk can carry a stand.' });
+		}
+		return { standMessage: 'Stand saved.' };
+	},
+
+	advanceEditorialStand: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const result = await advanceEditorialStand(conference.id, submissionId(params.id));
+		if (!result.ok) {
+			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'already_final') {
+				return { standMessage: 'This talk is already final.' };
+			}
+			return fail(400, { standMessage: 'Only an accepted talk can carry a stand.' });
+		}
+		return { standMessage: 'Stand advanced.' };
 	}
 };

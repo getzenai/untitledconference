@@ -38,6 +38,13 @@ type Extras = {
 	sponsorTiers?: { id: number; name: string; note: string | null; position: number }[];
 	acceptCondition?: string | null;
 	acceptConditionOwner?: string | null;
+	editorialStand?:
+		| 'materials_requested'
+		| 'received'
+		| 'reviewed'
+		| 'revision_requested'
+		| 'final'
+		| null;
 	organizers?: { userId: string; name: string }[];
 	/** #451: what these speakers held at our earlier editions. */
 	speakerHistory?: SpeakerHistory[];
@@ -86,6 +93,7 @@ function renderPage(
 					sponsorNote: extras.sponsorNote ?? null,
 					acceptCondition: extras.acceptCondition ?? null,
 					acceptConditionOwner: extras.acceptConditionOwner ?? null,
+					editorialStand: extras.editorialStand ?? null,
 					speakers: extras.speakers ?? [],
 					answers: [],
 					reviews: [],
@@ -475,6 +483,33 @@ describe('the organizer talk editor', () => {
 		expect(body).toContain('bring a co-presenter · Ann Follows');
 		expect(body).toContain('data-testid="resolve-condition"');
 		expect(body).not.toContain('data-testid="accept-condition"');
+	});
+
+	it('lets an accepted talk carry a named stand and advance it (#446)', () => {
+		const unset = renderPage('accepted');
+		expect(unset).toContain('data-testid="editorial-stand"');
+		expect(unset).toContain('data-testid="set-editorial-stand"');
+		expect(unset).toContain('data-testid="advance-editorial-stand"');
+		expect(unset).toContain('Advance to materials requested');
+		expect(unset).not.toContain('data-testid="submission-editorial-stand"');
+
+		const named = renderPage('accepted', null, null, null, 'one', null, {
+			editorialStand: 'received'
+		});
+		expect(named).toContain('data-testid="submission-editorial-stand"');
+		expect(named).toContain('Advance to reviewed');
+
+		const done = renderPage('accepted', null, null, null, 'one', null, {
+			editorialStand: 'final'
+		});
+		expect(done).toContain('data-testid="submission-editorial-stand"');
+		expect(done).not.toContain('data-testid="advance-editorial-stand"');
+	});
+
+	it('does not offer a stand on a talk that is not accepted', () => {
+		const body = renderPage('submitted');
+		expect(body).not.toContain('data-testid="editorial-stand"');
+		expect(body).not.toContain('data-testid="advance-editorial-stand"');
 	});
 });
 

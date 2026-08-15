@@ -49,6 +49,7 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	sponsorTier: null,
 	acceptCondition: null,
 	acceptConditionOwner: null,
+	editorialStand: null,
 	speakers: [
 		{
 			id: id + 10,
@@ -456,5 +457,36 @@ describe('conditional accept on the list', () => {
 
 		expect(body).toContain('data-testid="submission-condition"');
 		expect(body).toContain('bring a co-presenter · Ann Follows');
+	});
+
+	it('names the editorial stand on the row, without opening the talk (#446)', () => {
+		currentUrl.value = new URL('https://example.test/manage/test-conf/submissions');
+		const row = {
+			...submission(1, 'accepted'),
+			editorialStand: 'materials_requested' as const
+		};
+		const body = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					submissions: [row],
+					pagination: { matching: 1, page: 1, pageSize: 50, pageCount: 1 },
+					facets: { tracks: [], formats: [] },
+					filters: {},
+					sort: 'newest',
+					counts: { total: 1, undecided: 0, unreviewed: 0 },
+					notificationStatuses: { 1: null },
+					assignmentTargets
+				} as PageData,
+				form: null
+			}
+		}).body;
+
+		expect(body).toContain('data-testid="submission-editorial-stand"');
+		expect(body).toContain('Materials requested');
 	});
 });

@@ -12,6 +12,7 @@
 	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { enhance } from '$lib/forms/enhance';
+	import { EDITORIAL_STAND_LABELS, nextEditorialStand } from '$lib/conference/editorial-stand';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -46,6 +47,7 @@
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const t = $derived(data.totals);
 	const conditions = $derived(data.conditions ?? []);
+	const hanging = $derived(data.hanging ?? []);
 
 	const ordered = $derived(
 		[...data.speakers].sort(
@@ -133,6 +135,51 @@
 	length apart.
 -->
 <div class="mx-auto max-w-5xl space-y-6 px-6 py-5">
+	{#if hanging.length > 0}
+		<section class="border-border bg-card rounded-lg border" data-testid="hanging-stands">
+			<div class="border-border border-b px-4 py-3">
+				<h2 class="text-sm font-semibold">Editorial work still open</h2>
+				<p class="text-muted-foreground mt-0.5 text-xs">
+					An accepted talk that is not yet final. Advancing names the next stand; the talk stays
+					accepted.
+				</p>
+			</div>
+			<ul>
+				{#each hanging as item (item.submissionId)}
+					{@const next = nextEditorialStand(item.stand)}
+					<li
+						class="border-border flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3 last:border-0"
+						data-testid="hanging-stand"
+						data-stand={item.stand}
+					>
+						<div class="min-w-0">
+							<StatusBadge status={item.stand} />
+							<a
+								class="mt-1 block font-medium underline-offset-4 hover:underline"
+								href="{base}/submissions/{item.submissionId}"
+							>
+								{item.title}
+							</a>
+						</div>
+						{#if next}
+							<form method="POST" action="?/advanceStand">
+								<input type="hidden" name="id" value={item.submissionId} />
+								<Button
+									type="submit"
+									size="sm"
+									variant="outline"
+									data-testid="advance-editorial-stand"
+								>
+									Advance to {EDITORIAL_STAND_LABELS[next].toLowerCase()}
+								</Button>
+							</form>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
 	{#if conditions.length > 0}
 		<section class="border-border bg-card rounded-lg border" data-testid="open-conditions">
 			<div class="border-border border-b px-4 py-3">
@@ -175,7 +222,11 @@
 		<p class="text-status-good text-sm" role="status">{form.conditionMessage}</p>
 	{/if}
 
-	{#if ordered.length === 0 && conditions.length === 0}
+	{#if form?.standMessage}
+		<p class="text-status-good text-sm" role="status">{form.standMessage}</p>
+	{/if}
+
+	{#if ordered.length === 0 && conditions.length === 0 && hanging.length === 0}
 		<p class="border-border bg-muted/40 rounded-lg border p-4 text-sm">
 			No speaker has any tasks yet. Tasks are created from the templates in
 			<a class="underline" href="{base}/settings">settings</a> when a talk is accepted.
