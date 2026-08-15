@@ -215,10 +215,20 @@ describe('pointing a returning submitter at what they already sent', () => {
 	});
 
 	it('words an unfinished draft differently', () => {
-		const body = renderCfp('open', null, { id: 43, title: 'Half a thought', status: 'draft' });
+		const body = renderCfp(
+			'open',
+			null,
+			{ id: 43, title: 'Half a thought', status: 'draft' },
+			null,
+			{ user: { id: 'speaker-1' } }
+		);
 
-		expect(body).toContain('You already have an unfinished proposal here');
+		expect(body).toContain('data-testid="cfp-existing-draft"');
+		expect(body).toContain('Continue your draft');
+		expect(body).toContain('Half a thought is still private');
 		expect(body).toContain('/portal/submissions/43/edit');
+		expect(body).toContain('data-testid="cfp-start-another"');
+		expect(body).not.toContain('<form');
 	});
 
 	it('says nothing when there is nothing to point at', () => {
