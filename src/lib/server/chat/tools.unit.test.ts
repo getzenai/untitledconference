@@ -3,15 +3,39 @@
  * database — the handlers do — so the shape of each list is a unit question.
  */
 import type { McpContext } from '$lib/server/mcp/context';
+import { allTools } from '$lib/server/mcp/server';
 import { describe, expect, it } from 'vitest';
 import {
 	AGENDA_CHAT_TOOL_NAMES,
 	agendaChatToolDefinitions,
+	assistantChatToolDefinitions,
+	assistantChatWriteToolNames,
 	bindReviewerFocus,
 	reviewerChatToolDefinitions
 } from './tools';
 
 const organizer: McpContext = { userId: 'organizer-1', organizationId: 'org-1' };
+
+describe('assistantChatToolDefinitions', () => {
+	it('offers every tool in the MCP registry', () => {
+		const registry = allTools(organizer)
+			.map((tool) => tool.name)
+			.sort();
+		const assistant = assistantChatToolDefinitions(organizer)
+			.map((tool) => tool.name)
+			.sort();
+		expect(assistant).toEqual(registry);
+	});
+
+	it('derives its write set from the registry metadata', () => {
+		const registryWrites = allTools(organizer)
+			.filter((tool) => tool.writes)
+			.map((tool) => tool.name)
+			.sort();
+		expect(assistantChatWriteToolNames(organizer).sort()).toEqual(registryWrites);
+		expect(registryWrites).toHaveLength(30);
+	});
+});
 
 describe('agendaChatToolDefinitions', () => {
 	it('offers the board reads and the four placement writes', () => {

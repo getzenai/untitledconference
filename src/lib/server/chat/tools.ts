@@ -13,9 +13,30 @@
  */
 import type { McpContext } from '$lib/server/mcp/context';
 import { allTools } from '$lib/server/mcp/server';
-import type { AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
+import { writingToolNames, type AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
 import type { Tool } from 'ai';
 import { toLanguageModelTool } from './adapter';
+
+/**
+ * The global assistant is deliberately the opposite trade-off from the
+ * focused surfaces below: it follows the user throughout the application, so
+ * it must expose the complete MCP capability instead of guessing which page
+ * is allowed to need which tool. Authorization remains inside each shared
+ * registry handler.
+ */
+export function assistantChatToolDefinitions(ctx: McpContext): AnyMcpToolDefinition[] {
+	return allTools(ctx);
+}
+
+export function assistantChatWriteToolNames(ctx: McpContext): string[] {
+	return writingToolNames(assistantChatToolDefinitions(ctx));
+}
+
+export function assistantChatTools(ctx: McpContext): Record<string, Tool> {
+	return Object.fromEntries(
+		assistantChatToolDefinitions(ctx).map((def) => [def.name, toLanguageModelTool(def)])
+	);
+}
 
 export const REVIEWER_READ_TOOL_NAMES = [
 	'list_my_review_assignments',
