@@ -22,8 +22,13 @@
  * `review`, `submission_answer`, `deliverable`, `placement`, carry-forward),
  * so the delete is one statement. The `speaker_profile` rows do not: they are
  * organization-scoped and would stay in DevFlow's speaker directory with no
- * talk attached, so an orphaned "Grok Juror" profile is removed after — and
- * only if it holds no other submission.
+ * talk attached, so a profile is removed after — but only the profiles that
+ * hung on exactly these submissions, and only if the delete left them with no
+ * talk at all. A same-named profile this script never touched stays.
+ *
+ * Read, classify and both deletes share one transaction: if the profile delete
+ * fails after the submissions are gone, a retry would find no candidate left,
+ * return early, and strand the profiles forever.
  *
  * Idempotent: a second run finds nothing and says so.
  *
@@ -56,10 +61,11 @@ const log = (message) => console.log(`[remove-juror-eval-fixtures] ${message}`);
  * that a row matching the title but carrying somebody else's name shows up in
  * the log instead of being silently skipped.
  */
-function findCandidates() {
+function findCandidates(sql) {
 	return sql`
 		SELECT s.id, s.title, s.status,
 			coalesce(array_agg(DISTINCT sp.name) FILTER (WHERE sp.name IS NOT NULL), '{}') AS speakers,
+			coalesce(array_agg(DISTINCT sp.id) FILTER (WHERE sp.id IS NOT NULL), '{}') AS speaker_ids,
 			count(DISTINCT r.id) AS reviews
 		FROM submission s
 		JOIN conference c ON c.id = s.conference_id
@@ -72,65 +78,74 @@ function findCandidates() {
 	`;
 }
 
-/** Logs every candidate and returns the ids that pass the speaker check. */
+/**
+ * Logs every candidate and returns the submission ids that pass the speaker
+ * check, plus the profile ids those submissions hang on — nothing else is a
+ * deletion candidate later.
+ */
 function classify(candidates) {
 	const doomed = [];
+	const profileIds = new Set();
 	for (const row of candidates) {
 		const onlyJuror = row.speakers.length > 0 && row.speakers.every((n) => n === SPEAKER_NAME);
 		const detail = `#${row.id} "${row.title}" [${row.status}] speakers=${row.speakers.join(', ') || 'none'} reviews=${row.reviews}`;
 		if (onlyJuror) {
 			doomed.push(row.id);
+			for (const id of row.speaker_ids) profileIds.add(id);
 			log(`  remove ${detail}`);
 		} else {
 			log(`  KEEP   ${detail} — not a "${SPEAKER_NAME}" fixture`);
 		}
 	}
-	return doomed;
+	return { doomed, profileIds: [...profileIds] };
 }
 
 async function main() {
 	log(`${dryRun ? 'DRY RUN — ' : ''}conference '${CONFERENCE_SLUG}'`);
 
-	const candidates = await findCandidates();
-	if (candidates.length === 0) {
-		log('nothing to remove — no juror eval submission in this conference');
-		return;
-	}
+	// Read, classify and both deletes in one transaction: a half-applied run
+	// would leave no candidate for the retry to find and strand the profiles.
+	await sql.begin(async (tx) => {
+		const candidates = await findCandidates(tx);
+		if (candidates.length === 0) {
+			log('nothing to remove — no juror eval submission in this conference');
+			return;
+		}
 
-	const doomed = classify(candidates);
-	if (doomed.length === 0) {
-		log('nothing matched all three conditions; no row deleted');
-		return;
-	}
+		const { doomed, profileIds } = classify(candidates);
+		if (doomed.length === 0) {
+			log('nothing matched all three conditions; no row deleted');
+			return;
+		}
 
-	if (dryRun) {
+		if (dryRun) {
+			log(
+				`done (dry-run): would delete ${doomed.length} submission(s) and up to ${profileIds.length} profile(s) left orphaned`
+			);
+			return;
+		}
+
+		const deleted = await tx`
+			DELETE FROM submission WHERE id IN ${tx(doomed)} RETURNING id
+		`;
+
+		// Only the profiles that hung on exactly the submissions we just deleted,
+		// and only those the delete left with no talk at all. Asked after the
+		// delete, so "orphaned" is about the state it leaves behind. A same-named
+		// profile this run never touched stays.
+		const profiles = profileIds.length
+			? await tx`
+					DELETE FROM speaker_profile sp
+					WHERE sp.id IN ${tx(profileIds)}
+						AND NOT EXISTS (SELECT 1 FROM submission_speaker ss WHERE ss.speaker_profile_id = sp.id)
+					RETURNING sp.id
+				`
+			: [];
+
 		log(
-			`done (dry-run): would delete ${doomed.length} submission(s) and any profile left orphaned`
+			`done: ${deleted.length} submission(s) deleted, ${profiles.length} orphaned "${SPEAKER_NAME}" profile(s) removed`
 		);
-		return;
-	}
-
-	const deleted = await sql`
-		DELETE FROM submission WHERE id IN ${sql(doomed)} RETURNING id
-	`;
-
-	// Deleted after the submissions, so "no other submission" is asked of the
-	// state the delete leaves behind, not the one it started from. Scoped to the
-	// organization that owns this conference: a profile of the same name in the
-	// juror org is not ours to remove.
-	const profiles = await sql`
-		DELETE FROM speaker_profile sp
-		WHERE sp.name = ${SPEAKER_NAME}
-			AND sp.organization_id = (
-				SELECT organization_id FROM conference WHERE slug = ${CONFERENCE_SLUG}
-			)
-			AND NOT EXISTS (SELECT 1 FROM submission_speaker ss WHERE ss.speaker_profile_id = sp.id)
-		RETURNING sp.id
-	`;
-
-	log(
-		`done: ${deleted.length} submission(s) deleted, ${profiles.length} orphaned "${SPEAKER_NAME}" profile(s) removed`
-	);
+	});
 }
 
 main()
