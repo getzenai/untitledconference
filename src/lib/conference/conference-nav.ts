@@ -19,6 +19,7 @@ export type ConferenceNavId =
 	| 'dashboard'
 	| 'submissions'
 	| 'decisions'
+	| 'carryForward'
 	| 'cfp'
 	| 'agenda'
 	| 'speakers'
@@ -40,6 +41,7 @@ export function conferenceNav(slug: string): ConferenceNavItem[] {
 		{ id: 'dashboard', href: `${base}/dashboard`, label: 'Dashboard' },
 		{ id: 'submissions', href: `${base}/submissions`, label: 'Submissions' },
 		{ id: 'decisions', href: `${base}/decisions`, label: 'Decision meeting' },
+		{ id: 'carryForward', href: `${base}/carry-forward`, label: 'Carry forward' },
 		{ id: 'cfp', href: `${base}/cfp`, label: 'Call for papers' },
 		{ id: 'agenda', href: `${base}/agenda`, label: 'Agenda' },
 		{ id: 'speakers', href: `${base}/speakers`, label: 'Speakers' },

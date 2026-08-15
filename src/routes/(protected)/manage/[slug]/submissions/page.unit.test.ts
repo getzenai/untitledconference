@@ -232,6 +232,8 @@ describe('organizer submission decisions', () => {
 		expect(body).toContain('href="/manage/test-conf/rounds"');
 		expect(body).toContain('Reviewer pool');
 		expect(body).toContain('href="/manage/test-conf/people"');
+		expect(body).toContain("Last year's near misses");
+		expect(body).toContain('href="/manage/test-conf/carry-forward"');
 		expect(body).toContain('Export scores (CSV)');
 		expect(body).toContain('data-testid="export-csv"');
 	});

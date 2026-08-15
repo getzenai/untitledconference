@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * The eleven conference destinations, as a shadcn sidebar group.
+	 * The conference destinations, as a shadcn sidebar group.
 	 *
 	 * Desktop puts this in `ConferenceSidebar`; the mobile sheet puts the same
 	 * group inside `AppSidebar`. One list, one active-state rule.
@@ -13,6 +13,7 @@
 	import GavelIcon from '@lucide/svelte/icons/gavel';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import FolderIcon from '@lucide/svelte/icons/folder';
+	import HistoryIcon from '@lucide/svelte/icons/history';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import MicIcon from '@lucide/svelte/icons/mic';
@@ -32,6 +33,7 @@
 		dashboard: LayoutDashboardIcon,
 		submissions: InboxIcon,
 		decisions: GavelIcon,
+		carryForward: HistoryIcon,
 		cfp: FileTextIcon,
 		agenda: CalendarDaysIcon,
 		speakers: MicIcon,

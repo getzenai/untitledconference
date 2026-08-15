@@ -137,8 +137,8 @@ export const conferenceTable = pgTable(
 		 *
 		 * Recurring conferences are the norm, and without this column there is no
 		 * fact that 2026 follows 2025 — only two rows that happen to share an
-		 * organization. The near-miss invite lane sits on this later; this column
-		 * names the relationship and transfers nothing.
+		 * organization. The near-miss invite lane (`carry_forward`) reads this
+		 * pointer; the column itself transfers nothing.
 		 *
 		 * Directed and cycle-free: a conference names at most one predecessor, and
 		 * walking the chain must not return to itself. Same organization only —
