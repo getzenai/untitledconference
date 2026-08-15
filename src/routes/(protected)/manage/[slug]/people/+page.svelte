@@ -78,8 +78,8 @@
 	>
 		<h2 class="text-sm font-semibold">What reviewers see of each other</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			A reviewer cannot read other people’s scores before they submit their own. A saved draft is
-			not a submission — they still cannot peek.
+			This is whether a reviewer can read other people’s scores before they file their own. A saved
+			draft is not filed.
 		</p>
 
 		<form
