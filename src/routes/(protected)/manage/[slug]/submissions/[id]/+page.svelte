@@ -168,7 +168,7 @@
 		href="{base}/submissions"
 		class="text-muted-foreground hover:text-foreground text-xs underline underline-offset-4"
 	>
-		← All submissions
+		← All talks
 	</a>
 	<div class="mt-2 flex flex-wrap items-start justify-between gap-4">
 		<div class="min-w-0">
@@ -620,7 +620,7 @@
 			</div>
 
 			{#if s.reviews.length === 0}
-				<p class="text-muted-foreground mt-3 text-sm">Nobody is assigned to this submission yet.</p>
+				<p class="text-muted-foreground mt-3 text-sm">Nobody is assigned to this talk yet.</p>
 			{:else}
 				<ul>
 					{#each s.reviews as review (review.id)}
@@ -644,8 +644,10 @@
 								<span class="text-muted-foreground text-sm tabular-nums">
 									{#if review.status === 'submitted'}
 										{formatScore(review.score)}
+									{:else if review.status === 'recused'}
+										<StatusBadge status="recused" />
 									{:else}
-										<StatusBadge status={review.status} />
+										<StatusBadge status={review.status} label="To review" />
 									{/if}
 								</span>
 							</div>
@@ -684,8 +686,8 @@
 					<div class="flex flex-wrap items-center justify-between gap-3">
 						<p class="text-sm">
 							{data.ownReview.status === 'submitted'
-								? 'You have reviewed this submission.'
-								: 'This submission is assigned to you for review.'}
+								? 'You have reviewed this talk.'
+								: 'This talk is assigned to you for review.'}
 						</p>
 						<Button
 							href="/review/{data.conference.slug}/{s.id}"
@@ -725,7 +727,7 @@
 						<a class="underline" href="/manage/{data.conference.slug}/rounds">
 							Create a review round
 						</a>
-						before assigning submissions.
+						before assigning talks.
 					</p>
 				{:else}
 					<div class="mt-3 space-y-3">
@@ -807,7 +809,7 @@
 		<section class="border-border bg-card rounded-lg border p-4" data-testid="submission-speakers">
 			<h2 class="text-sm font-medium">{s.speakers.length === 1 ? 'Speaker' : 'Speakers'}</h2>
 			{#if s.speakers.length === 0}
-				<p class="text-muted-foreground mt-2 text-sm">No speaker on this submission.</p>
+				<p class="text-muted-foreground mt-2 text-sm">No speaker on this talk.</p>
 			{:else}
 				<ul class="mt-2 space-y-3">
 					{#each s.speakers as speaker (speaker.id)}
@@ -935,7 +937,7 @@
 			</p>
 			<h3 class="mt-3 text-xs font-medium">Accepting also</h3>
 			<ul class="text-muted-foreground mt-2 space-y-1 text-sm">
-				<li>· put the talk in the agenda tray as an unscheduled session</li>
+				<li>· put the talk on the agenda as unscheduled</li>
 				<li>· confirm the speakers for this conference</li>
 				<li>· create their tasks from the conference's task template</li>
 				<li>
@@ -944,9 +946,8 @@
 				</li>
 			</ul>
 			<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
-				Declining or waitlisting an accepted talk takes the session back out of the tray and
-				withdraws the tasks nobody has started. A slot you already confirmed stays — that one is
-				yours to move.
+				Declining or waitlisting an accepted talk takes it off the agenda and withdraws the tasks
+				nobody has started. A slot you already confirmed stays — that one is yours to move.
 			</p>
 			{#if inTray && (s.status === 'rejected' || s.status === 'waitlisted' || s.status === 'resubmit_with_guidance')}
 				<p

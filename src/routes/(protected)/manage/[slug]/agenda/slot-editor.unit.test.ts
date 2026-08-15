@@ -243,7 +243,7 @@ describe('the slot editor', () => {
 	it('says so when nothing is waiting, rather than showing an empty dropdown', () => {
 		const html = body({ rooms, tray: [] });
 
-		expect(html).toContain('Nothing is waiting for a slot');
+		expect(html).toContain('Nothing is unscheduled');
 		expect(html).not.toContain('data-testid="agenda-slot-place"');
 	});
 });

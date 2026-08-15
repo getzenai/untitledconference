@@ -207,8 +207,8 @@
 			: liveTalks.length === 0
 				? 'The public cannot see these slots yet.'
 				: liveTalks.length === placedTalks.length
-					? `The public agenda shows ${liveTalks.length} ${liveTalks.length === 1 ? 'session' : 'sessions'}.`
-					: `The public agenda shows ${liveTalks.length} of ${placedTalks.length} sessions.`
+					? `The public agenda shows ${liveTalks.length} ${liveTalks.length === 1 ? 'talk' : 'talks'}.`
+					: `The public agenda shows ${liveTalks.length} of ${placedTalks.length} talks.`
 	);
 
 	/**
@@ -672,7 +672,7 @@
 						// decision on the talk, and naming the wrong reason sends the
 						// organizer to the grid to look for a placement problem.
 						'Nothing went live — a slot only appears publicly once its talk is accepted.'
-					: `The public agenda now shows ${liveTalks.length} ${liveTalks.length === 1 ? 'session' : 'sessions'}.`
+					: `The public agenda now shows ${liveTalks.length} ${liveTalks.length === 1 ? 'talk' : 'talks'}.`
 				: 'Taken off the public agenda. These slots are only visible to you.'}
 		</p>
 	{/if}
@@ -695,12 +695,12 @@
 		<!-- The tray -->
 		<section class="border-border bg-card h-fit rounded-lg border p-4">
 			<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-				Waiting for a slot
+				Unscheduled
 			</h2>
 
 			{#if board.tray.length === 0}
 				<p class="text-muted-foreground mt-3 text-sm">
-					Nothing is waiting. Accepted talks arrive here automatically.
+					Nothing is unscheduled. Accepted talks arrive here automatically.
 				</p>
 			{:else}
 				<ul class="mt-3 space-y-3">
@@ -1299,8 +1299,8 @@
 				</TooltipProvider>
 
 				<p class="text-muted-foreground mt-3 text-xs">
-					Drag a session to move it. Click a slot to open it — that is also how a session swaps
-					places with another, or comes off the grid.
+					Drag a talk to move it. Click a slot to open it — that is also how a talk swaps places
+					with another, or comes off the grid.
 				</p>
 			{/if}
 		</section>

@@ -74,11 +74,11 @@ describe('Publishing the agenda', () => {
 
 		cy.get('[data-testid="agenda-publish-result"]', { timeout: 20000 }).should(
 			'contain.text',
-			'The public agenda now shows 1 session.'
+			'The public agenda now shows 1 talk.'
 		);
 		cy.get('[data-testid="agenda-public-state"]').should(
 			'contain.text',
-			'The public agenda shows 1 session.'
+			'The public agenda shows 1 talk.'
 		);
 		cy.get('[data-testid="agenda-publish"]').should('contain.text', 'Unpublish the agenda');
 

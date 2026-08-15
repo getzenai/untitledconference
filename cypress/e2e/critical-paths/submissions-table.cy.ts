@@ -23,7 +23,7 @@ const uniqueSlug = () => `subs-${Date.now()}-${Math.random().toString(36).slice(
 const WIDE = { width: 1600, height: 900 };
 const PHONE = { width: 390, height: 844 };
 
-describe('Submissions table', () => {
+describe('Talks table', () => {
 	let slug: string;
 
 	beforeEach(() => {

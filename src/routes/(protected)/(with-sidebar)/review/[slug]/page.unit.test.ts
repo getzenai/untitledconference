@@ -108,7 +108,7 @@ describe('the review queue sorts from its column headers', () => {
 		// The tab row is gone; its label survives once, as the sentence that explains
 		// what the reader is looking at.
 		expect(body.match(/Fewest reviews first/g) ?? []).toHaveLength(1);
-		expect(body).toContain('The working list');
+		expect(body).toContain('What still needs somebody.');
 	});
 
 	it('does not render a domain-less pathname as a permalink', () => {
@@ -160,7 +160,7 @@ describe('a withdrawn talk', () => {
 
 		expect(body).toContain('Withdrawn');
 		// The exact regression: it must not still read as work owed.
-		expect(body).not.toContain('To do');
+		expect(body).not.toContain('To review');
 	});
 
 	it('is out of the count, so a finished queue reads finished', () => {
@@ -201,7 +201,7 @@ describe('the window of the rounds a row sits in', () => {
 		]);
 
 		expect(closed).toContain('Closed');
-		expect(closed).not.toContain('To do');
+		expect(closed).not.toContain('To review');
 
 		const soon = renderQueue([
 			row(
@@ -214,7 +214,7 @@ describe('the window of the rounds a row sits in', () => {
 		]);
 
 		expect(soon).toContain('Opens in 2 days');
-		expect(soon).not.toContain('To do');
+		expect(soon).not.toContain('To review');
 	});
 
 	it('keeps a filed review reading as Reviewed after the round closes', () => {
@@ -229,8 +229,8 @@ describe('the window of the rounds a row sits in', () => {
 		expect(body).not.toContain('Closed');
 	});
 
-	it('says To do while the round is running', () => {
-		expect(renderQueue([row(1, 'A talk', 0)])).toContain('To do');
+	it('says To review while the round is running', () => {
+		expect(renderQueue([row(1, 'A talk', 0)])).toContain('To review');
 	});
 });
 
@@ -306,22 +306,22 @@ describe('what can actually be filed today', () => {
 		const waiting = { ...row(1, 'Open now', 0) };
 		const later = { ...row(2, 'Opens later', 0), window: soon };
 
-		expect(counts(renderQueue([waiting, later]))).toContain('1 you can file now');
+		expect(counts(renderQueue([waiting, later]))).toContain('1 you can review now');
 	});
 
 	it('says so plainly when the queue is full but nothing can be filed', () => {
 		const later = { ...row(1, 'Opens later', 0), window: soon };
 		const line = counts(renderQueue([later]));
 
-		expect(line).toContain('nothing you can file today');
-		expect(line).not.toContain('you can file now');
+		expect(line).toContain('nothing you can review today');
+		expect(line).not.toContain('you can review now');
 	});
 
 	it('claims nothing when every assignment is answered', () => {
 		const done = { ...row(1, 'Filed', 0), ownReviewSubmitted: true };
 		const line = counts(renderQueue([done]));
 
-		expect(line).not.toContain('you can file now');
-		expect(line).not.toContain('nothing you can file today');
+		expect(line).not.toContain('you can review now');
+		expect(line).not.toContain('nothing you can review today');
 	});
 });

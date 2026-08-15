@@ -199,7 +199,7 @@ describe('the form outside the round window', () => {
 
 		expect(body).toContain('data-testid="round-window-notice"');
 		expect(body).toContain('This review round opens in 2 days');
-		expect(body).toContain('Nothing can be filed until then.');
+		expect(body).toContain('Nothing can be reviewed until then.');
 		// Submit and save progress, both dead; recuse stays live because the server
 		// still accepts it.
 		expect(body).toMatch(/disabled=""[^>]*name="intent"/);
@@ -212,7 +212,7 @@ describe('the form outside the round window', () => {
 		});
 
 		expect(body).toContain('This review round closed on');
-		expect(body).toContain('Reviews can no longer be filed or changed.');
+		expect(body).toContain('Reviews can no longer be submitted or changed.');
 		expect(body).toMatch(/disabled=""[^>]*name="intent"/);
 	});
 

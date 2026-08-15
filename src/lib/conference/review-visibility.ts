@@ -67,13 +67,13 @@ export const QUEUE_SORTS: { value: QueueSort; label: string; hint: string }[] = 
 	 */
 	{
 		value: 'mine',
-		label: 'Mine to do',
-		hint: 'What you can file now, then what you are waiting on.'
+		label: 'Mine to review',
+		hint: 'What you can review now, then what you are waiting on.'
 	},
 	{
 		value: 'coverage',
 		label: 'Fewest reviews first',
-		hint: 'The working list — what still needs somebody.'
+		hint: 'What still needs somebody.'
 	},
 	{
 		value: 'score',
@@ -83,7 +83,7 @@ export const QUEUE_SORTS: { value: QueueSort; label: string; hint: string }[] = 
 	{
 		value: 'title',
 		label: 'Title A–Z',
-		hint: 'Alphabetical by submission title.'
+		hint: 'Alphabetical by talk title.'
 	},
 	{
 		value: 'track',

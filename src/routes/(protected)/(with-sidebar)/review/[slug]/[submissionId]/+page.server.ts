@@ -20,7 +20,7 @@ import type { Actions, PageServerLoad } from './$types';
 function saveFailure(saved: Extract<SaveReviewResult, { ok: false }>) {
 	switch (saved.reason) {
 		case 'not_assigned':
-			return fail(404, { message: 'This submission is not assigned to you.' });
+			return fail(404, { message: 'This talk is not assigned to you.' });
 		// Withdrawn is neither a permission problem nor a validation one: the talk
 		// left while this form was open, and the reviewer needs to know that rather
 		// than be told to write more. 409, because nothing about the POST was
@@ -33,11 +33,11 @@ function saveFailure(saved: Extract<SaveReviewResult, { ok: false }>) {
 		// "you are too late" ask opposite things of the reader.
 		case 'round_not_open':
 			return fail(409, {
-				message: 'This review round has not opened yet, so nothing can be filed in it.'
+				message: 'This review round has not opened yet, so nothing can be reviewed in it.'
 			});
 		case 'round_closed':
 			return fail(409, {
-				message: 'This review round is closed. Reviews can no longer be filed or changed.'
+				message: 'This review round is closed. Reviews can no longer be submitted or changed.'
 			});
 		// A number off its own scale, in a sentence that names the criterion and the
 		// scale (#477). Not "before submitting": this refusal happens to a draft too,
@@ -96,7 +96,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		: null;
 	// Not assigned to me is a 404, not an empty page — the queue and the detail answer
 	// the same question about who may read what.
-	if (!submission) throw error(404, 'Submission not found');
+	if (!submission) throw error(404, 'Talk not found');
 
 	return { submission, chatEnabled: isFeatureEnabled('inAppChat') };
 };

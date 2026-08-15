@@ -594,7 +594,7 @@ describe('day one is a different screen', () => {
 		expect(body).toContain('Add rooms');
 		expect(body).not.toContain('data-testid="dashboard-metrics"');
 		expect(body).not.toContain('Nothing is waiting on you right now.');
-		expect(body).not.toContain('Open the submissions table');
+		expect(body).not.toContain('Open the talks table');
 	});
 
 	it('keeps the dashboard once something is waiting', () => {
@@ -605,7 +605,7 @@ describe('day one is a different screen', () => {
 
 		expect(body).toContain('data-testid="dashboard-metrics"');
 		expect(body).not.toContain('data-testid="dashboard-setup"');
-		expect(body).toContain('Open the submissions table');
+		expect(body).toContain('Open the talks table');
 	});
 
 	it('names each step from the counts the server sent', () => {

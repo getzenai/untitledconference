@@ -43,9 +43,9 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * `decideSubmissions` is one line here and cannot be half-added.
  */
 const SIDE_EFFECTS: [keyof DecisionResult, (n: number) => string][] = [
-	['sessionsCreated', (n) => `${plural(n, 'session')} added to the agenda tray.`],
+	['sessionsCreated', (n) => `${plural(n, 'talk')} added to the agenda as unscheduled.`],
 	['tasksCreated', (n) => `${plural(n, 'speaker task')} created.`],
-	['sessionsRemoved', (n) => `${plural(n, 'session')} taken out of the agenda tray.`],
+	['sessionsRemoved', (n) => `${plural(n, 'talk')} taken off the agenda.`],
 	['tasksRemoved', (n) => `${plural(n, 'open speaker task')} withdrawn.`]
 ];
 
@@ -53,7 +53,7 @@ export function describeDecision(decision: string, result: DecisionResult): stri
 	const parts: string[] = [];
 
 	if (result.decided > 0) {
-		parts.push(`${plural(result.decided, 'submission')} ${PAST_TENSE[decision] ?? decision}.`);
+		parts.push(`${plural(result.decided, 'talk')} ${PAST_TENSE[decision] ?? decision}.`);
 	}
 
 	// Saying nothing when nothing happened would look like a failed click.
@@ -98,23 +98,23 @@ export function describeNotification(result: NotificationResult): string {
 	const parts: string[] = [];
 	if (result.notified > 0) {
 		parts.push(
-			`${plural(result.emailsQueued, 'email')} queued for ${plural(result.notified, 'submission')}.`
+			`${plural(result.emailsQueued, 'email')} queued for ${plural(result.notified, 'talk')}.`
 		);
 		parts.push(...describeDispatch(result.dispatch));
 	}
 	if (result.alreadyNotified > 0) {
 		parts.push(
-			`${plural(result.alreadyNotified, 'submission')} already had an active notification, left untouched.`
+			`${plural(result.alreadyNotified, 'talk')} already had an active notification, left untouched.`
 		);
 	}
 	if (result.notDecided > 0) {
 		parts.push(
-			`${plural(result.notDecided, 'submission')} ${result.notDecided === 1 ? 'has' : 'have'} no decision yet, skipped.`
+			`${plural(result.notDecided, 'talk')} ${result.notDecided === 1 ? 'has' : 'have'} no decision yet, skipped.`
 		);
 	}
 	if (result.withoutEmail > 0) {
 		parts.push(
-			`${plural(result.withoutEmail, 'submission')} ${result.withoutEmail === 1 ? 'has' : 'have'} no speaker email, skipped.`
+			`${plural(result.withoutEmail, 'talk')} ${result.withoutEmail === 1 ? 'has' : 'have'} no speaker email, skipped.`
 		);
 	}
 	return parts.join(' ');
@@ -186,7 +186,7 @@ export function describeBulkAssign(result: {
 	if ((result.recused ?? 0) > 0) {
 		// Tell the organizer what they can still do — single-cell reassign overrides.
 		parts.push(
-			`${result.recused} recused seats left alone — flip each on the submission if you mean to override.`
+			`${result.recused} recused seats left alone — flip each on the talk if you mean to override.`
 		);
 	}
 	if (result.skipped > 0) {

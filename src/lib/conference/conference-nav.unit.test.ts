@@ -27,9 +27,10 @@ describe('conferenceNav', () => {
 			'/manage/devflow-2028/embed',
 			'/manage/devflow-2028/settings'
 		]);
+		expect(items.find((item) => item.id === 'submissions')?.label).toBe('Talks');
 		expect(items.find((item) => item.id === 'rounds')?.label).toBe('Rounds & scorecards');
 		expect(items.find((item) => item.id === 'people')?.label).toBe('Reviewer pool');
-		// The acceptance call is a place, not a mode of the submissions table (#444).
+		// The acceptance call is a place, not a mode of the talks table (#444).
 		expect(items.find((item) => item.id === 'decisions')?.label).toBe('Decision meeting');
 		// Last year's declined talks are a place too (#448) — not a filter on
 		// this year's pile, and not a lane you have to remember exists.
@@ -41,21 +42,21 @@ describe('isConferenceNavCurrent', () => {
 	const items = conferenceNav('devflow-2028');
 	const href = (id: (typeof items)[number]['id']) => items.find((item) => item.id === id)!.href;
 
-	it('marks Decision meeting on /decisions and leaves Submissions dark', () => {
+	it('marks Decision meeting on /decisions and leaves Talks dark', () => {
 		const path = '/manage/devflow-2028/decisions';
 
 		expect(isConferenceNavCurrent(path, href('decisions'))).toBe(true);
 		expect(isConferenceNavCurrent(path, href('submissions'))).toBe(false);
 	});
 
-	it('marks Submissions on /submissions and leaves Decision meeting dark', () => {
+	it('marks Talks on /submissions and leaves Decision meeting dark', () => {
 		const path = '/manage/devflow-2028/submissions';
 
 		expect(isConferenceNavCurrent(path, href('submissions'))).toBe(true);
 		expect(isConferenceNavCurrent(path, href('decisions'))).toBe(false);
 	});
 
-	it('keeps a submission detail on Submissions, not Decision meeting', () => {
+	it('keeps a talk detail on Talks, not Decision meeting', () => {
 		const path = '/manage/devflow-2028/submissions/12';
 
 		expect(isConferenceNavCurrent(path, href('submissions'))).toBe(true);

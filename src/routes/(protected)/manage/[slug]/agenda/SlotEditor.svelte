@@ -315,19 +315,19 @@
 			{/if}
 		{:else if !placeable}
 			<p class="text-muted-foreground mt-4 text-sm">
-				Nothing is waiting for a slot. Take a session out of another slot first.
+				Nothing is unscheduled. Take a talk out of another slot first.
 			</p>
 		{:else}
 			<form method="POST" action="?/place" use:enhance={submit} class="mt-4 space-y-3">
 				<div class="block text-sm">
-					<span class="text-muted-foreground text-xs">Session</span>
+					<span class="text-muted-foreground text-xs">Talk</span>
 					<!-- Same seeding rule as "Swap with": the native element posted the
 					     first tray item without anyone picking it. -->
 					<AppSelect
 						name="placementId"
 						required
 						testId="agenda-slot-session"
-						aria-label="Session"
+						aria-label="Talk"
 						class="mt-1"
 						value={String((tray[0] ?? alsoOnGrid[0]).placementId)}
 						options={sessionOptions}

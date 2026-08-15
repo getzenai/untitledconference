@@ -25,15 +25,15 @@ describe('describeDecision', () => {
 	it('names every consequence that happened', () => {
 		expect(
 			describeDecision('accepted', result({ decided: 2, sessionsCreated: 2, tasksCreated: 8 }))
-		).toBe('2 submissions accepted. 2 sessions added to the agenda tray. 8 speaker tasks created.');
+		).toBe(
+			'2 talks accepted. 2 talks added to the agenda as unscheduled. 8 speaker tasks created.'
+		);
 	});
 
 	it('says what was undone when an acceptance is taken back', () => {
 		expect(
 			describeDecision('rejected', result({ decided: 1, sessionsRemoved: 1, tasksRemoved: 4 }))
-		).toBe(
-			'1 submission declined. 1 session taken out of the agenda tray. 4 open speaker tasks withdrawn.'
-		);
+		).toBe('1 talk declined. 1 talk taken off the agenda. 4 open speaker tasks withdrawn.');
 	});
 
 	it('does not stay silent when the click changed nothing', () => {
@@ -45,13 +45,13 @@ describe('describeDecision', () => {
 
 	it('separates the rows it changed from the ones it skipped', () => {
 		expect(describeDecision('accepted', result({ decided: 2, unchanged: 3 }))).toBe(
-			'2 submissions accepted. 3 already accepted, left untouched.'
+			'2 talks accepted. 3 already accepted, left untouched.'
 		);
 	});
 
 	it('names drafts it left rather than letting the count go quietly short', () => {
 		expect(describeDecision('accepted', result({ decided: 1, skippedDrafts: 2 }))).toBe(
-			'1 submission accepted. 2 drafts not submitted yet, left for the speaker.'
+			'1 talk accepted. 2 drafts not submitted yet, left for the speaker.'
 		);
 	});
 });
@@ -99,7 +99,7 @@ describe('describeNotification', () => {
 				})
 			)
 		).toBe(
-			'3 emails queued for 2 submissions. 1 submission already had an active notification, left untouched. 1 submission has no decision yet, skipped. 1 submission has no speaker email, skipped.'
+			'3 emails queued for 2 talks. 1 talk already had an active notification, left untouched. 1 talk has no decision yet, skipped. 1 talk has no speaker email, skipped.'
 		);
 	});
 
@@ -113,7 +113,7 @@ describe('describeNotification', () => {
 				})
 			)
 		).toBe(
-			'3 emails queued for 2 submissions. 2 emails sent now. 1 email failed to send; use Notify again to retry.'
+			'3 emails queued for 2 talks. 2 emails sent now. 1 email failed to send; use Notify again to retry.'
 		);
 	});
 
@@ -126,9 +126,7 @@ describe('describeNotification', () => {
 					dispatch: { sent: 0, failed: 0, remaining: 0, disabled: true }
 				})
 			)
-		).toBe(
-			'1 email queued for 1 submission. Delivery is not configured; the emails remain queued.'
-		);
+		).toBe('1 email queued for 1 talk. Delivery is not configured; the emails remain queued.');
 	});
 
 	it('uses failure, queue and delivery tones that match the dispatch result', () => {
@@ -227,7 +225,7 @@ describe('describeBulkAssign', () => {
 
 	it('names recusals bulk left alone so the organizer sees the override that did not happen', () => {
 		expect(describeBulkAssign({ created: 40, already: 0, skipped: 0, recused: 3 })).toBe(
-			'40 assignments created. 3 recused seats left alone — flip each on the submission if you mean to override.'
+			'40 assignments created. 3 recused seats left alone — flip each on the talk if you mean to override.'
 		);
 	});
 });

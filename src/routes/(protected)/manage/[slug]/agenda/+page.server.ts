@@ -111,7 +111,7 @@ export const actions: Actions = {
 		const placementId = id(form.get('placementId'));
 		const withPlacementId = id(form.get('withPlacementId'));
 		if (!placementId || !withPlacementId) {
-			return fail(400, { error: 'Pick the session to swap with.' });
+			return fail(400, { error: 'Pick the talk to swap with.' });
 		}
 
 		const result = await swapPlacements(conference.id, placementId, withPlacementId);
@@ -123,10 +123,10 @@ export const actions: Actions = {
 	unplace: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const placementId = id((await request.formData()).get('placementId'));
-		if (!placementId) return fail(400, { error: 'Unknown session.' });
+		if (!placementId) return fail(400, { error: 'Unknown talk.' });
 
 		if (!(await unplaceSession(conference.id, placementId))) {
-			return fail(404, { error: 'No such session.' });
+			return fail(404, { error: 'No such talk.' });
 		}
 		return { unplaced: true };
 	},
@@ -146,9 +146,9 @@ export const actions: Actions = {
 		const placementId = id(form.get('placementId'));
 		const status = form.get('status') === 'confirmed' ? 'confirmed' : 'tentative';
 
-		if (!placementId) return fail(400, { error: 'Unknown session.' });
+		if (!placementId) return fail(400, { error: 'Unknown talk.' });
 		if (!(await setPlacementStatus(conference.id, placementId, status))) {
-			return fail(404, { error: 'No such session.' });
+			return fail(404, { error: 'No such talk.' });
 		}
 		return { toggled: true };
 	},

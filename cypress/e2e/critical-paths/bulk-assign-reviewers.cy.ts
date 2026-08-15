@@ -48,7 +48,7 @@ describe('Bulk assign several reviewers', () => {
 					cy.visit(`/manage/${slug}/submissions`);
 					cy.waitForHydration();
 					cy.get('tbody tr').should('have.length', 5);
-					cy.get('input[aria-label="Select every submission in view"]').check();
+					cy.get('input[aria-label="Select every talk in view"]').check();
 
 					// #413: round, committee and counts moved into a dialog; the strip
 					// keeps decide and notify. The selection travels as hidden fields.
