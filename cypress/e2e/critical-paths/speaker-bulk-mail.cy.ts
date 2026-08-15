@@ -57,7 +57,10 @@ describe('Speaker bulk mail', () => {
 		// All four exist before filtering. Otherwise two queued rows could be a
 		// fixture accident rather than proof that the recipient set is correct.
 		cy.get('[data-testid="speaker-row"]').should('have.length', 4);
-		cy.contains('[data-testid="speakers-status-chips"] a', 'confirmed (3)').click();
+		// One filter control, not a chip row beside it (#552): pick the status and
+		// it applies itself.
+		cy.get('[data-testid="speakers-status-filter"]').click();
+		cy.get('[role="option"]').contains('Confirmed (3)').click();
 		cy.url().should('include', 'status=confirmed');
 		cy.get('[data-testid="speaker-row"]').should('have.length', 3);
 
@@ -173,18 +176,18 @@ describe('Speaker bulk mail', () => {
 		cy.waitForHydration();
 
 		// The speaker's own name carries the word "Invited", so the status is read
-		// from the badge rather than from the row's text.
+		// from the one control that shows it (#552 removed the badge beside it).
 		cy.contains('[data-testid="speaker-row"]', 'Ivan Invited')
-			.should('contain.text', 'Invited')
 			.find('[data-testid="speaker-status-select"]')
+			.should('contain.text', 'Invited')
 			.click();
 
 		// The listbox is portalled to the body, so it is picked outside the row.
-		cy.get('[role="option"]').contains('confirmed').click();
+		cy.get('[role="option"]').contains('Confirmed').click();
 
-		// A reload, not the badge on the spot: the trigger and the optimistic badge
-		// both show what was picked either way. Only re-reading the row from the
-		// database can tell a real save from a POST that carried the old value.
+		// A reload, not the trigger on the spot: it shows what was picked either
+		// way. Only re-reading the row from the database can tell a real save from
+		// a POST that carried the old value.
 		cy.reload();
 		cy.contains('[data-testid="speaker-row"]', 'Ivan Invited').should('contain.text', 'Confirmed');
 	});

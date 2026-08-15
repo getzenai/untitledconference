@@ -7,18 +7,16 @@
 	 * per-row forms rather than a drawer: organizers change one field and move on.
 	 */
 	import { enhance } from '$lib/forms/enhance';
-	import { page as currentPage } from '$app/state';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
-	import StatusBadge from '$lib/components/status-badge.svelte';
+	import { humanise } from '$lib/components/status-badge.svelte';
 	import { tick } from 'svelte';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
-	import { SvelteURLSearchParams } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
@@ -43,8 +41,47 @@
 	let addOpen = $state(false);
 	let importOpen = $state(false);
 
+	/**
+	 * The row control and the Add dialog: the status in the product's own casing.
+	 *
+	 * `humanise` is the same function the badge used, so `confirmed` reads
+	 * `Confirmed` here exactly as it did there — the raw enum was only ever
+	 * visible because this list passed the database value through as its label.
+	 */
 	const statusOptions = $derived(
-		data.statuses.map((status: string) => ({ value: status, label: status }))
+		data.statuses.map((status: string) => ({ value: status, label: humanise(status) }))
+	);
+
+	/**
+	 * The filter's own list, with the counts the removed chip row used to carry.
+	 *
+	 * Same values, one extra job: `Confirmed (14)` answers "how many are there"
+	 * while you are choosing. The counts are of the whole roster, not of the
+	 * current filter — that is what makes them useful while a filter is on.
+	 */
+	const statusFilterOptions = $derived([
+		{ value: '', label: `All statuses (${data.counts.total})` },
+		...data.statuses.map((status) => ({
+			value: status,
+			label: `${humanise(status)} (${data.counts[status] ?? 0})`
+		}))
+	]);
+
+	/**
+	 * The counts at a glance, in the subtitle rather than in a row of filter pills.
+	 *
+	 * The pills were a second filter; the numbers on them were not — that part was
+	 * worth keeping, so it moved to the one place on this page that is prose. Empty
+	 * statuses are left out: "0 declined" is a fact about nothing.
+	 */
+	const breakdown = $derived(
+		data.statuses
+			.map((status) => ({
+				status,
+				count: Number(data.counts[status] ?? 0),
+				label: status.replace(/_/g, ' ')
+			}))
+			.filter((entry) => entry.count > 0)
 	);
 
 	/**
@@ -91,12 +128,30 @@
 		};
 	};
 
-	const statusHref = (status: string | null) => {
-		const params = new SvelteURLSearchParams(currentPage.url.searchParams);
-		if (status) params.set('status', status);
-		else params.delete('status');
-		const query = params.toString();
-		return `${base}/speakers${query ? `?${query}` : ''}`;
+	let filterForm: HTMLFormElement;
+
+	/**
+	 * Apply the moment a filter changes — the same contract `/manage/:conf/submissions`
+	 * already has (#552).
+	 *
+	 * `change` rather than `input`: this is a GET form and submitting it navigates,
+	 * so firing per keystroke would reload the page under the organizer's caret. On
+	 * the search box `change` means blur or Enter.
+	 */
+	const applyFilters = (event: Event) => {
+		(event.currentTarget as HTMLFormElement).requestSubmit();
+	};
+
+	/**
+	 * The app-drawn dropdown applies itself, because nothing else will: a shadcn
+	 * select writes its hidden input programmatically and dispatches no bubbling
+	 * `change`, so the form's own handler never hears it. `tick()` first, for the
+	 * same reason `submitOwnForm` needs one — the hidden input lands on the next
+	 * flush, and submitting before it does would post the previous choice.
+	 */
+	const applyFiltersAfterFlush = async () => {
+		await tick();
+		filterForm?.requestSubmit();
 	};
 
 	const roleLine = (speaker: { jobTitle: string | null; company: string | null }) => {
@@ -114,8 +169,9 @@
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Speakers</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
-				{data.counts.total} on the roster · {data.counts.confirmed} confirmed ·
-				{data.counts.invited} invited
+				{data.counts.total} on the roster{#each breakdown as entry (entry.status)}&nbsp;·
+					{entry.count}
+					{entry.label}{/each}
 				{#if filtered}
 					<span class="text-foreground">· {data.speakers.length} match the filter</span>
 				{/if}
@@ -222,12 +278,22 @@
 		</p>
 	{/if}
 
-	<!-- Search + status filter (GET so the URL is the source of truth). -->
+	<!--
+		Search + status filter (GET so the URL is the source of truth).
+
+		One filter mechanism, not two (#552). This row used to sit above a second
+		row of status pills that filtered the same column by a different route, with
+		nothing on screen saying whether the two combined or overrode each other —
+		they overrode, which is the reading nobody makes. The pills' counts moved
+		into the options of the control that survived.
+	-->
 	<form
+		bind:this={filterForm}
 		method="GET"
 		action="{base}/speakers"
 		class="flex flex-wrap items-end gap-3"
 		data-testid="speakers-filters"
+		onchange={applyFilters}
 	>
 		<div class="min-w-[12rem] flex-1">
 			<label class="text-muted-foreground mb-1 block text-xs font-medium" for="speakers-q">
@@ -249,39 +315,38 @@
 			<AppSelect
 				id="speakers-status"
 				name="status"
-				class="w-44"
+				class="w-56"
 				testId="speakers-status-filter"
 				value={data.filters.status ?? ''}
-				options={[{ value: '', label: 'All statuses' }, ...statusOptions]}
+				options={statusFilterOptions}
+				onValueChange={applyFiltersAfterFlush}
 			/>
 		</div>
-		<Button type="submit" size="sm" variant="secondary">Apply</Button>
+
+		<!--
+			No "Apply": both controls apply themselves, so the button was a second
+			step that only ever meant "yes, I meant it". Without JavaScript nothing
+			would apply at all, so the fallback is a real submit that only exists
+			in that case.
+		-->
+		<noscript>
+			<button
+				type="submit"
+				class="border-input bg-background hover:bg-muted h-9 rounded-md border px-3 text-sm"
+			>
+				Filter
+			</button>
+		</noscript>
+
 		{#if filtered}
-			<Button href="{base}/speakers" size="sm" variant="ghost">Clear</Button>
+			<a
+				href="{base}/speakers"
+				class="text-muted-foreground hover:text-foreground pb-1.5 text-sm underline underline-offset-4"
+			>
+				Clear
+			</a>
 		{/if}
 	</form>
-
-	<!-- Quick status chips for one-click filtering. -->
-	<div class="flex flex-wrap gap-2 text-xs" data-testid="speakers-status-chips">
-		<a
-			href={statusHref(null)}
-			class="rounded-full border px-2.5 py-1 {data.filters.status
-				? 'border-border text-muted-foreground'
-				: 'border-primary bg-primary text-primary-foreground'}"
-		>
-			All ({data.counts.total})
-		</a>
-		{#each data.statuses as status (status)}
-			<a
-				href={statusHref(status)}
-				class="rounded-full border px-2.5 py-1 {data.filters.status === status
-					? 'border-primary bg-primary text-primary-foreground'
-					: 'border-border text-muted-foreground hover:text-foreground'}"
-			>
-				{status} ({data.counts[status]})
-			</a>
-		{/each}
-	</div>
 
 	<!-- The compose, add and import forms live in the header dialogs above; at
 		 rest this list is a list. -->
@@ -336,7 +401,13 @@
 									data-testid="speaker-status-form"
 								>
 									<input type="hidden" name="speakerProfileId" value={speaker.speakerProfileId} />
-									<StatusBadge status={speaker.status} />
+									<!--
+										One control, not two (#552). A read-only badge used to sit above
+										this select showing the same word in a different casing, which
+										doubled every row's height and made the organizer look for a
+										distinction that was not there. The select already shows the
+										status, and it is the one you can act on.
+									-->
 									<AppSelect
 										name="status"
 										size="sm"
