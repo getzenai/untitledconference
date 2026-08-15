@@ -75,7 +75,8 @@ function page(
 					contacts: false,
 					reviewing: true,
 					reviewSlug: 'test-conf',
-					speakerProfile: false
+					speakerProfile: false,
+					organization: true
 				},
 				impersonating: null,
 				analytics: { apiKey: undefined, host: undefined },

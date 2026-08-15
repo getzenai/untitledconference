@@ -5,7 +5,16 @@
 	import MicIcon from '@lucide/svelte/icons/mic';
 	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
 	import { REPO_URL } from '$lib/constants';
-	import type { NavGate } from '$lib/conference/nav-access';
+	import type { NavGate, NavLock } from '$lib/conference/nav-access';
+
+	/**
+	 * Both organizer destinations are one form away for someone with no
+	 * organization, so both are shown locked rather than withheld (#439).
+	 */
+	const CREATE_ORGANIZATION: NavLock = {
+		reason: 'Create an organization to manage events and contacts',
+		href: '/settings/organization/new'
+	};
 
 	const data = {
 		// `gate` names the flag that has to be true for the item to appear (#239).
@@ -19,7 +28,8 @@
 				title: 'Events',
 				url: '/manage',
 				icon: CalendarIcon,
-				gate: 'conferences' as NavGate
+				gate: 'conferences' as NavGate,
+				unlock: CREATE_ORGANIZATION
 			},
 			{
 				// CRM-01: org-wide speaker directory, outside any single event — and
@@ -28,7 +38,8 @@
 				title: 'Contacts',
 				url: '/contacts',
 				icon: UsersRoundIcon,
-				gate: 'contacts' as NavGate
+				gate: 'contacts' as NavGate,
+				unlock: CREATE_ORGANIZATION
 			},
 			{
 				// No gate: anyone may submit a proposal, so `/portal` is everyone's.
@@ -66,7 +77,7 @@
 		type ConferenceRail
 	} from '$lib/conference/conference-nav';
 	import { conferenceBadge, publicSiteLink } from '$lib/conference/conference-status';
-	import { reviewQueueHref, visibleNavItems, type NavAccess } from '$lib/conference/nav-access';
+	import { navDestinations, reviewQueueHref, type NavAccess } from '$lib/conference/nav-access';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import type { ComponentProps } from 'svelte';
 	import NavAdmin from './nav-admin.svelte';
@@ -90,7 +101,7 @@
 	} = $props();
 
 	const navMain = $derived(
-		visibleNavItems(data.navMain, navAccess).map((item) =>
+		navDestinations(data.navMain, navAccess).map((item) =>
 			item.gate === 'reviewing' ? { ...item, url: reviewQueueHref(navAccess.reviewSlug) } : item
 		)
 	);
