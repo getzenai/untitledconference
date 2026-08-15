@@ -41,6 +41,9 @@
 	let members = $derived(data.members || []);
 	let invitations = $derived(data.invitations || []);
 	let currentMember = $derived(data.currentMember);
+	let pageTitle = $derived(
+		organization?.name ? `${organization.name} — Organization settings` : 'Organization settings'
+	);
 
 	$effect(() => {
 		if (form?.success && (form as Record<string, unknown>).renamed) {
@@ -69,6 +72,10 @@
 		toast.success('Invitation link copied to clipboard');
 	}
 </script>
+
+<svelte:head>
+	<title>{pageTitle}</title>
+</svelte:head>
 
 <div class="container mx-auto max-w-6xl py-8">
 	<h1 class="mb-8 text-3xl font-bold">{organization?.name || 'Organization'}</h1>

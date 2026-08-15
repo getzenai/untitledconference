@@ -31,6 +31,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Your invitations</title>
+</svelte:head>
+
 <div class="container flex min-h-screen items-center justify-center py-8">
 	<Card class="w-full max-w-md">
 		<CardHeader>

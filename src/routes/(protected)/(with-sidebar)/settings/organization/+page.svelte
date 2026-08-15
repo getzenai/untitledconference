@@ -11,6 +11,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>Organization settings</title>
+</svelte:head>
+
 <div class="container mx-auto max-w-6xl py-8">
 	<p>Redirecting...</p>
 </div>
