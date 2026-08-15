@@ -12,6 +12,7 @@
 	import type { PageData } from './$types';
 	import { page } from '$app/state';
 	import { safeReturnTo } from '$lib/safe-return-to';
+	import { emailVerifiedContinueLabel } from './continue-label';
 
 	interface Props {
 		data: PageData;
@@ -19,6 +20,8 @@
 
 	let { data }: Props = $props();
 	const returnTo = $derived(safeReturnTo(page.url.searchParams.get('returnTo'), page.url.origin));
+	const continueLabel = $derived(emailVerifiedContinueLabel(returnTo));
+	const skipLabel = $derived(emailVerifiedContinueLabel(returnTo, 'Go'));
 
 	function handleContinue() {
 		goto(returnTo);
@@ -50,7 +53,7 @@
 				</CardHeader>
 				<CardContent class="space-y-4">
 					<div class="flex flex-col gap-2">
-						<Button onclick={handleContinue} class="w-full">Continue to Dashboard</Button>
+						<Button onclick={handleContinue} class="w-full">{continueLabel}</Button>
 						<Button variant="outline" onclick={() => goto('/settings/account')} class="w-full">
 							View Account Settings
 						</Button>
@@ -72,7 +75,7 @@
 					<div class="flex flex-col gap-2">
 						<Button onclick={handleVerifyEmail} class="w-full">Verify Email</Button>
 						<Button variant="outline" onclick={handleContinue} class="w-full">
-							Go to Dashboard
+							{skipLabel}
 						</Button>
 					</div>
 				</CardContent>
