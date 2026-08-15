@@ -25,9 +25,10 @@
 		describeNotification,
 		notificationTone
 	} from '$lib/conference/decision-summary';
+	import { chipOverflow, reviewerTitle } from '$lib/conference/assigned-reviewers';
 	import { formatDayShort, formatTime, isoDay } from '$lib/conference/public-view';
 	// Type only — erased at build, so the server module never reaches the browser.
-	import type { AgendaSlot } from '$lib/server/conference/organizer-submissions';
+	import type { AgendaSlot, SubmissionRow } from '$lib/server/conference/organizer-submissions';
 	import { formatScore } from '$lib/conference/scoring';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
@@ -627,6 +628,46 @@
 				</th>
 			{/snippet}
 
+			<!--
+				#414: who is on the talk, next to how many of them are done.
+				Initials rather than names — a full list per row does not survive
+				two rounds — with the name, the rounds and the state in the title,
+				and the same sentence in `sr-only` text so the chips are not a
+				hover-only fact.
+
+				Someone who still owes us their review carries the border; someone
+				who has handed in fades back. That is the difference the organizer
+				is scanning for when they open this column at all.
+			-->
+			{#snippet reviewerChips(reviewers: SubmissionRow['reviewers'])}
+				{#if reviewers.length > 0}
+					{@const split = chipOverflow(reviewers)}
+					<span class="mt-1 flex flex-wrap items-center gap-1" data-testid="row-reviewers">
+						{#each split.shown as reviewer (reviewer.userId)}
+							<span
+								title={reviewerTitle(reviewer)}
+								class="inline-flex size-6 items-center justify-center rounded-full text-[10px] font-medium {reviewer.outstanding
+									? 'border-border text-foreground border'
+									: 'bg-muted text-muted-foreground'}"
+							>
+								<span aria-hidden="true">{reviewer.initials}</span>
+								<span class="sr-only">{reviewerTitle(reviewer)}</span>
+							</span>
+						{/each}
+						{#if split.hidden.length > 0}
+							<span
+								class="text-muted-foreground text-xs"
+								title={split.hidden.map(reviewerTitle).join('\n')}
+								data-testid="row-reviewers-overflow"
+							>
+								<span aria-hidden="true">+{split.hidden.length}</span>
+								<span class="sr-only">{split.hidden.map(reviewerTitle).join('; ')}</span>
+							</span>
+						{/if}
+					</span>
+				{/if}
+			{/snippet}
+
 			<ScrollTable label="Scroll sideways for score, reviews, status and notification">
 				<table class="w-full min-w-3xl text-left text-sm">
 					<!--
@@ -741,8 +782,11 @@
 									reviewers sitting on a talk, 0/0 is a talk nobody has been asked
 									about. The first needs a nudge, the second needs an assignment.
 								-->
-								<td class="py-2 pr-4 tabular-nums" data-testid="reviews-cell">
-									{submission.reviewsSubmitted}/{submission.reviewsAssigned}
+								<td class="py-2 pr-4" data-testid="reviews-cell">
+									<span class="tabular-nums"
+										>{submission.reviewsSubmitted}/{submission.reviewsAssigned}</span
+									>
+									{@render reviewerChips(submission.reviewers)}
 								</td>
 								<td class="py-2 pr-4"><StatusBadge status={submission.status} /></td>
 								<td class="text-muted-foreground py-2 pr-4">
@@ -847,7 +891,7 @@
 				<AppSelect
 					name="roundId"
 					size="sm"
-					class="w-40"
+					class="w-48"
 					placeholder="Round"
 					aria-label="Review round for bulk assignment"
 					testId="bulk-assign-round"

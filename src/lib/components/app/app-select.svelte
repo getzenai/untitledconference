@@ -60,10 +60,13 @@
 		 */
 		testId?: string;
 		/**
-		 * Native tooltip on the trigger. The one caller that needs it is a control
-		 * disabled for a reason the organizer cannot otherwise see (a criterion
-		 * with scores hanging off it), and a disabled control with no explanation
-		 * is the version of this that reads as a bug.
+		 * Native tooltip on the trigger, overriding the default.
+		 *
+		 * The default is the selected option's own label, so a name too long for
+		 * the control is still readable where it was truncated (#414). The one
+		 * caller that passes its own is a control disabled for a reason the
+		 * organizer cannot otherwise see (a criterion with scores hanging off
+		 * it), and a disabled control with no explanation reads as a bug.
 		 */
 		title?: string;
 		onValueChange?: (value: string) => void;
@@ -88,13 +91,25 @@
 	<Select.Trigger
 		{id}
 		{size}
-		{title}
 		aria-label={ariaLabel}
 		aria-invalid={ariaInvalid ? true : undefined}
 		data-testid={testId ?? (name ? `app-select-${name}` : undefined)}
+		title={title ?? (label || undefined)}
 		class={cn('w-full justify-between font-normal', !label && 'text-muted-foreground', className)}
 	>
-		{label || placeholder}
+		<!--
+			#414: a long option name used to run straight out of the trigger.
+			The trigger is `whitespace-nowrap` and its `line-clamp` rule only
+			applies to a `[data-slot=select-value]` child, which a bare string is
+			not — so on any width-constrained select (the round picker next to two
+			number fields, a round named "Programme committee, second pass") the
+			text simply overflowed the box.
+
+			One span with `truncate` and `min-w-0` — the second is what lets a flex
+			child shrink below its content at all — puts the ellipsis inside the
+			control. The full name stays reachable in the trigger's title.
+		-->
+		<span class="min-w-0 truncate">{label || placeholder}</span>
 	</Select.Trigger>
 
 	<Select.Content>

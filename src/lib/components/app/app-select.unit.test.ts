@@ -77,3 +77,43 @@ describe('what the select shows', () => {
 		);
 	});
 });
+
+/**
+ * #414. A long option name used to run out of the trigger, because the
+ * trigger sets `whitespace-nowrap` and its own clamp only reaches a
+ * `[data-slot=select-value]` child — which a bare string never was.
+ */
+describe('a label longer than the control', () => {
+	const LONG = 'Programme committee, second pass';
+	const ROUNDS = [{ value: '10', label: LONG }];
+
+	it('truncates inside the box instead of spilling out of it', () => {
+		const body = html({ name: 'roundId', value: '10', options: ROUNDS });
+
+		expect(body).toMatch(/class="[^"]*truncate[^"]*"[^>]*>Programme committee, second pass/);
+	});
+
+	it('keeps the whole name reachable in the trigger title', () => {
+		expect(html({ name: 'roundId', value: '10', options: ROUNDS })).toContain(`title="${LONG}"`);
+	});
+
+	it('lets a caller with its own reason for a tooltip keep it', () => {
+		// The disabled-criterion select explains why it cannot be changed. That
+		// sentence outranks the label it is already showing.
+		const body = html({
+			name: 'roundId',
+			value: '10',
+			options: ROUNDS,
+			title: 'Scores hang off this criterion'
+		});
+
+		expect(body).toContain('title="Scores hang off this criterion"');
+	});
+
+	it('says nothing at all when there is nothing chosen', () => {
+		// A tooltip repeating the placeholder is noise on every empty control.
+		expect(html({ name: 'roundId', options: ROUNDS, placeholder: 'Round' })).not.toContain(
+			'title='
+		);
+	});
+});

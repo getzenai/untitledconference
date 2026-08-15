@@ -9,6 +9,11 @@
  * is the one view that must show it. Reviewer and public loaders never call these
  * functions.
  */
+import {
+	assignedReviewers,
+	type AssignedReviewer,
+	type ReviewSeat
+} from '$lib/conference/assigned-reviewers';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
@@ -96,6 +101,11 @@ export type SubmissionRow = SubmissionBase & {
 	score: number | null;
 	reviewsSubmitted: number;
 	reviewsAssigned: number;
+	/**
+	 * Who those assigned reviews belong to (#414). The count says how many are
+	 * outstanding; this says whom to ask.
+	 */
+	reviewers: AssignedReviewer[];
 	/** Null when the talk is not on the grid (#412). */
 	agenda: AgendaSlot | null;
 };
@@ -244,9 +254,12 @@ function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
 	return and(...where);
 }
 
+/** One review, with the seat behind it: who was asked, and in which round (#414). */
+type ReviewWithSeat = ReviewScores & { id: number; seat: ReviewSeat };
+
 /** Review rows plus their per-criterion scores, grouped per submission. */
 async function reviewsFor(conferenceId: number, submissionIds: number[]) {
-	const empty = new Map<number, (ReviewScores & { id: number })[]>();
+	const empty = new Map<number, ReviewWithSeat[]>();
 	if (submissionIds.length === 0) return empty;
 
 	const rows = await db
@@ -254,6 +267,13 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 			reviewId: reviewTable.id,
 			submissionId: reviewTable.submissionId,
 			status: reviewTable.status,
+			// The reviewer and the round ride along on the query that was already
+			// reading these rows for the score (#414). A second query per page to
+			// name four people is the shape this file's comments keep warning about.
+			reviewerUserId: reviewTable.reviewerUserId,
+			reviewerName: user.name,
+			reviewerEmail: user.email,
+			round: reviewRoundTable.name,
 			value: reviewScoreTable.valueNumber,
 			weight: scorecardCriterionTable.weight,
 			scaleMax: scorecardCriterionTable.scaleMax
@@ -261,6 +281,7 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
 		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
 		.leftJoin(reviewScoreTable, eq(reviewScoreTable.reviewId, reviewTable.id))
 		.leftJoin(
 			scorecardCriterionTable,
@@ -271,9 +292,12 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 				eq(evaluationPlanTable.conferenceId, conferenceId),
 				inArray(reviewTable.submissionId, submissionIds)
 			)
-		);
+		)
+		// Chips in round order, so two organizers looking at the same row see the
+		// same row. Without this the names shuffle between page loads.
+		.orderBy(asc(reviewRoundTable.position), asc(reviewRoundTable.id), asc(reviewTable.id));
 
-	const byReview = new Map<number, ReviewScores & { id: number; submissionId: number }>();
+	const byReview = new Map<number, ReviewWithSeat & { submissionId: number }>();
 	for (const row of rows) {
 		let review = byReview.get(row.reviewId);
 		if (!review) {
@@ -281,7 +305,14 @@ async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 				id: row.reviewId,
 				submissionId: row.submissionId,
 				submitted: row.status === 'submitted',
-				scores: []
+				scores: [],
+				seat: {
+					userId: row.reviewerUserId,
+					name: row.reviewerName,
+					email: row.reviewerEmail,
+					round: row.round,
+					submitted: row.status === 'submitted'
+				}
 			};
 			byReview.set(row.reviewId, review);
 		}
@@ -359,6 +390,7 @@ async function withSpeakersAndScores(
 			score: submissionScore(rowReviews),
 			reviewsSubmitted: rowReviews.filter((r) => r.submitted).length,
 			reviewsAssigned: rowReviews.length,
+			reviewers: assignedReviewers(rowReviews.map((r) => r.seat)),
 			agenda: agenda.get(row.id) ?? null
 		};
 	});
