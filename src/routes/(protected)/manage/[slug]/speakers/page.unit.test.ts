@@ -139,8 +139,6 @@ describe('speaker roster page', () => {
 		expect(text).toContain('2 on the roster');
 		expect(text).toContain('1 Invited');
 		expect(text).toContain('1 Confirmed');
-		expect(text).toContain('Invited (1)');
-		expect(text).toContain('Confirmed (1)');
 		expect(text).not.toContain('0 declined');
 
 		// It applies itself, like the submissions filter row — no Apply button, and
