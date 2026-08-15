@@ -96,7 +96,6 @@
 			? { ...emptyProposal(), speaker: data.speakerProfile.speaker }
 			: emptyProposal()
 	);
-	const usingProfile = $derived(Boolean(data.speakerProfile && !restored));
 
 	function persistDraft(draft: ProposalDraft) {
 		const slug = data.call.conference.slug;
