@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeReviewWrite, previewReviewWrite } from './reviewer-chat-write';
+import { describeReviewWrite, previewReviewWrite, reviewWriteError } from './reviewer-chat-write';
 
 describe('reviewer chat write copy (#302)', () => {
 	const input = { submissionId: 42, answers: { '7': '4' }, comment: 'Clear fit.' };
@@ -15,5 +15,21 @@ describe('reviewer chat write copy (#302)', () => {
 			'Saved review of Observability for agents: 4'
 		);
 		expect(describeReviewWrite({ submissionId: 42 })).toBe('Saved review of submission 42');
+	});
+});
+
+describe('reviewWriteError (#302)', () => {
+	it('reads the refusal off a finished call', () => {
+		expect(reviewWriteError({ error: 'This talk is still a draft.' })).toBe(
+			'This talk is still a draft.'
+		);
+	});
+
+	it('is null for a real write, and for anything that is not a refusal', () => {
+		expect(reviewWriteError({ submissionId: 42, submitted: true })).toBeNull();
+		expect(reviewWriteError({ error: '  ' })).toBeNull();
+		expect(reviewWriteError({ error: 7 })).toBeNull();
+		expect(reviewWriteError(null)).toBeNull();
+		expect(reviewWriteError('error')).toBeNull();
 	});
 });

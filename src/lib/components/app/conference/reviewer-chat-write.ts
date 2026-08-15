@@ -4,7 +4,13 @@
  * The MCP tool returns `{ submissionId, submitted }`. The title and scores
  * live on the call the reviewer is about to approve — that is what the
  * confirmation and the history line have to name (#302).
+ *
+ * A refusal — a draft, a talk the reviewer is not assigned — comes back as
+ * `{ error }` on a finished tool part, so `reviewWriteError` is what tells a
+ * filed review from a rejected one.
  */
+import { chatWriteError } from './chat-write-error';
+
 export type ReviewWriteInput = {
 	submissionId?: number;
 	answers?: Record<string, string>;
@@ -20,6 +26,11 @@ function talkName(input: ReviewWriteInput, title?: string): string {
 
 function scores(input: ReviewWriteInput): string[] {
 	return Object.values(input.answers ?? {}).filter((value) => value.trim() !== '');
+}
+
+/** The refusal on a finished `submit_review`, or null when it wrote. */
+export function reviewWriteError(output: unknown): string | null {
+	return chatWriteError(output);
 }
 
 /** Shown on the confirmation, before anything is written. */
