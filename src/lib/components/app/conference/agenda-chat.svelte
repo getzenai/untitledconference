@@ -47,7 +47,10 @@
 	// Deliberately not `$state`: this only remembers which calls have already
 	// reloaded the board. Four write tools mean several finished calls can sit
 	// in the history at once, and a reactive tracker the effect both reads and
-	// writes would re-run itself with every new id.
+	// writes would re-run itself with every new id. That is why this is a plain
+	// Set and not the SvelteSet the rule below asks for: the effect already has
+	// its dependency in `chat.messages`, and reactivity here is the bug.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
 	const reloadedFor = new Set<string>();
 
 	// The transport is built once; `day` rides on each request instead, so
