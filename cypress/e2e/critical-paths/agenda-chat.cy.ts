@@ -47,7 +47,13 @@ describe('Agenda chat', () => {
 	it('shows the panel and names the tool it used when the flag is on', function () {
 		if (!chatEnabled) this.skip();
 
-		openAgendaBoard();
+		openAgendaBoard().then((slug) => {
+			// Same reason as the reviewer spec: the pending line lasts exactly as
+			// long as the request, and the mock answers faster than Cypress looks.
+			cy.intercept('POST', `/manage/${slug}/agenda/chat`, (req) => {
+				req.on('response', (res) => res.setDelay(700));
+			});
+		});
 		cy.get('[data-testid="agenda-chat"]').should('exist');
 		cy.get('[data-testid="agenda-chat-input"]').type('What is on the board?');
 		cy.get('[data-testid="agenda-chat"] [aria-label="Send"]').click();

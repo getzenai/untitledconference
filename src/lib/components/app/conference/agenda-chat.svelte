@@ -23,6 +23,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { chatErrorMessage } from './reviewer-chat-error';
 	import {
+		agendaWriteError,
 		describeAgendaWrite,
 		isAgendaWriteTool,
 		previewAgendaWrite,
@@ -43,7 +44,11 @@
 
 	let input = $state('');
 	let chat = $state<Chat | null>(null);
-	let invalidatedFor = $state<string | null>(null);
+	// Deliberately not `$state`: this only remembers which calls have already
+	// reloaded the board. Four write tools mean several finished calls can sit
+	// in the history at once, and a reactive tracker the effect both reads and
+	// writes would re-run itself with every new id.
+	const reloadedFor = new Set<string>();
 
 	// The transport is built once; `day` rides on each request instead, so
 	// switching day tabs mid-conversation does not drop the history.
@@ -66,8 +71,10 @@
 				if (!isToolUIPart(part)) continue;
 				if (!isAgendaWriteTool(getToolName(part))) continue;
 				if (part.state !== 'output-available') continue;
-				if (invalidatedFor === part.toolCallId) continue;
-				invalidatedFor = part.toolCallId;
+				// A refusal reaches this state too, and nothing changed behind it.
+				if (agendaWriteError(part.output)) continue;
+				if (reloadedFor.has(part.toolCallId)) continue;
+				reloadedFor.add(part.toolCallId);
 				void invalidateAll();
 			}
 		}
@@ -137,6 +144,13 @@
 										</Button>
 									</div>
 								</div>
+							{:else if isToolUIPart(part) && isAgendaWriteTool(getToolName(part)) && part.state === 'output-available' && agendaWriteError(part.output)}
+								<p
+									class="bg-status-bad-bg text-status-bad w-fit rounded-md px-2 py-0.5 text-xs"
+									data-testid="chat-agenda-refused"
+								>
+									Board unchanged: {agendaWriteError(part.output)}
+								</p>
 							{:else if isToolUIPart(part) && isAgendaWriteTool(getToolName(part)) && part.state === 'output-available'}
 								{@const done = getToolName(part) as AgendaWriteTool}
 								<p

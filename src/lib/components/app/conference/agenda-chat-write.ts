@@ -64,7 +64,10 @@ function dayName(names: BoardNames, input: AgendaWriteInput, openDay?: string): 
 		return day === openDay?.trim() ? null : day;
 	}
 	if (input.dayId == null) return null;
-	return names.day(input.dayId)?.trim() || `day ${input.dayId}`;
+	const named = names.day(input.dayId)?.trim();
+	if (!named) return `day ${input.dayId}`;
+	// The board stores a date, the panel hands in a date: same day, say nothing.
+	return named.slice(0, 10) === openDay?.trim().slice(0, 10) ? null : named;
 }
 
 /** "Room 1 at 09:00 on 2026-09-02", with whatever parts the call carries. */
@@ -126,4 +129,18 @@ const WRITE_TOOLS = new Set<string>([
 
 export function isAgendaWriteTool(name: string): name is AgendaWriteTool {
 	return WRITE_TOOLS.has(name);
+}
+
+/**
+ * A refused write still finishes: `runMcpTool` turns a recognized refusal —
+ * a collision, a talk that is not on this board — into `{ error }` and the
+ * tool part reaches `output-available` like any success. Reading only the
+ * state would paint "Placed X" over a board that did not change, so the
+ * panel asks the output what happened (#302).
+ */
+export function agendaWriteError(output: unknown): string | null {
+	if (typeof output !== 'object' || output === null) return null;
+	const error = (output as { error?: unknown }).error;
+	if (typeof error !== 'string' || error.trim() === '') return null;
+	return error.trim();
 }

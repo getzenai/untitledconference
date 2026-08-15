@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	agendaWriteError,
 	describeAgendaWrite,
 	isAgendaWriteTool,
 	previewAgendaWrite,
@@ -77,6 +78,27 @@ describe('agenda chat write copy (#302)', () => {
 		expect(describeAgendaWrite('swap_talks', { placementId: 7, withPlacementId: 9 }, names)).toBe(
 			'Swapped Observability for agents with Rust at the edge'
 		);
+	});
+
+	it('stays quiet about a dayId that is the day on screen', () => {
+		expect(
+			previewAgendaWrite(
+				'move_talk',
+				{ placementId: 7, roomId: 3, start: '14:00', dayId: 5 },
+				names,
+				'2026-09-03'
+			)
+		).toBe('This will move Observability for agents to Main Hall at 14:00.');
+	});
+
+	it('reads a refusal out of a finished tool call', () => {
+		expect(agendaWriteError({ error: 'That slot is taken by Rust at the edge.' })).toBe(
+			'That slot is taken by Rust at the edge.'
+		);
+		expect(agendaWriteError({ placement: { id: 7 } })).toBeNull();
+		expect(agendaWriteError({ error: '   ' })).toBeNull();
+		expect(agendaWriteError(null)).toBeNull();
+		expect(agendaWriteError('error')).toBeNull();
 	});
 
 	it('knows which tool names are writes', () => {
