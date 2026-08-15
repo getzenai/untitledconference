@@ -42,7 +42,7 @@ import {
 	reviewTable
 } from '$lib/server/db/conference/review-schema';
 import { json, type RequestHandler } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 type FixtureRequest = {
 	/** Whose organization the conference belongs to. */
@@ -113,11 +113,12 @@ type FixtureRequest = {
 	 */
 	textAnswers?: { label: string; value: string }[];
 	/**
-	 * Files already handed in on speaker materials (#423).
+	 * Files already handed in on speaker materials (#423, #626).
 	 *
 	 * A deliverable cannot be produced through the UI without walking
-	 * acceptance → task template → portal upload, and the organizer preview
-	 * spec only needs the rows sitting on `/content/files`.
+	 * acceptance → task template → portal upload. The organizer preview
+	 * spec needs the rows on `/content/files`; the speaker-task spec needs
+	 * the same rows on the named speaker's portal when `speakerUserId` is set.
 	 */
 	contentFiles?: { filename: string; contentType: string }[];
 };
@@ -424,21 +425,41 @@ async function addAnswers(
 async function addContentFiles(
 	conferenceId: number,
 	organizationId: string,
-	files: { filename: string; contentType: string }[]
+	files: { filename: string; contentType: string }[],
+	speakerUserId?: string | null
 ): Promise<void> {
 	if (files.length === 0) return;
 
-	const [speaker] = await db
-		.insert(speakerProfileTable)
-		.values({ organizationId, name: 'Ada Bennett', sortName: 'Bennett, Ada' })
-		.returning({ id: speakerProfileTable.id });
+	const existing = speakerUserId
+		? (
+				await db
+					.select({ id: speakerProfileTable.id })
+					.from(speakerProfileTable)
+					.where(
+						and(
+							eq(speakerProfileTable.organizationId, organizationId),
+							eq(speakerProfileTable.userId, speakerUserId)
+						)
+					)
+					.limit(1)
+			)[0]?.id
+		: undefined;
+
+	const profileId =
+		existing ??
+		(
+			await db
+				.insert(speakerProfileTable)
+				.values({ organizationId, name: 'Ada Bennett', sortName: 'Bennett, Ada' })
+				.returning({ id: speakerProfileTable.id })
+		)[0].id;
 
 	for (const [index, file] of files.entries()) {
 		const [task] = await db
 			.insert(taskTable)
 			.values({
 				conferenceId,
-				speakerProfileId: speaker.id,
+				speakerProfileId: profileId,
 				title: `Upload ${file.filename}`,
 				kind: 'file_request',
 				status: 'submitted'
@@ -495,9 +516,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		]);
 	}
 
-	if (fixture.contentFiles.length > 0) {
-		await addContentFiles(conference.id, organizationId, fixture.contentFiles);
-	}
+	await addContentFiles(conference.id, organizationId, fixture.contentFiles, fixture.speakerUserId);
 
 	if (fixture.reviewed.length > 0) {
 		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed, fixture.blindReview);

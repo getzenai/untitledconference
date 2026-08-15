@@ -7,9 +7,13 @@
  * that. `ownDeliverable` answers "is this their task", inside the query, so a
  * stranger's id simply selects nothing.
  *
- * Served as an attachment with the stored content type. Nothing here renders in
- * the browser's origin, so an uploaded file cannot become script on our domain.
+ * PDF and ordinary images are inlined so the speaker's own task page can show
+ * them (#626). The type we send is one we chose — an uploaded `text/html`
+ * named `slides.pdf` must not execute here. Everything else stays an
+ * attachment. Same rule as the organizer download route; the two stay
+ * separate because they answer different questions at the door.
  */
+import { inlineContentType } from '$lib/conference/file-preview';
 import { safeFilename, uploadsBucket } from '$lib/server/conference/deliverable-storage';
 import { ownDeliverable } from '$lib/server/conference/deliverables';
 import { error } from '@sveltejs/kit';
@@ -36,19 +40,14 @@ export const GET: RequestHandler = async ({ params, locals, platform }) => {
 	// two type packages that each think they own the name.
 	const body = object.body as unknown as ReadableStream;
 
+	const inlineType = inlineContentType(file.filename, file.contentType);
+
 	return new Response(body, {
 		headers: {
-			'Content-Type': file.contentType ?? 'application/octet-stream',
-			// `attachment` rather than `inline`: a document rendered in our origin
-			// is a scripting surface, and nothing here needs viewing in place.
-			//
-			// The name is re-sanitised here rather than trusted from the row.
-			// `safeFilename` already ran at write time, but a header built from
-			// stored data should not depend on every past writer having been
-			// careful — a stray CR/LF is a second header.
-			'Content-Disposition': `attachment; filename="${safeFilename(file.filename)}"`,
-			// Without this, a browser may sniff past the declared type. Paired with
-			// `attachment` it is belt and braces; alone, neither is enough.
+			'Content-Type': inlineType ?? file.contentType ?? 'application/octet-stream',
+			// Re-sanitised here rather than trusted from the row: a header built from
+			// stored data should not depend on every past writer having been careful.
+			'Content-Disposition': `${inlineType ? 'inline' : 'attachment'}; filename="${safeFilename(file.filename)}"`,
 			'X-Content-Type-Options': 'nosniff',
 			'Cache-Control': 'private, no-store'
 		}
