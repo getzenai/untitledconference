@@ -100,46 +100,56 @@ export async function setConferencePredecessor(
 			return { ok: true, predecessorId: null };
 		}
 
-		if (predecessorId === conferenceId) return { ok: false, reason: 'self' };
-
-		const [predecessor] = await tx
-			.select(editionColumns)
-			.from(conferenceTable)
-			.where(eq(conferenceTable.id, predecessorId))
-			.limit(1);
-
-		// Another org is not_found, not a distinct reason: confirming the row
-		// exists would leak a conference the caller has no business seeing.
-		if (!predecessor || predecessor.organizationId !== conference.organizationId) {
-			return { ok: false, reason: 'not_found' };
-		}
-
-		const orgLinks = await tx
-			.select({
-				id: conferenceTable.id,
-				predecessorConferenceId: conferenceTable.predecessorConferenceId
-			})
-			.from(conferenceTable)
-			.where(eq(conferenceTable.organizationId, conference.organizationId));
-
-		const links = new Map(orgLinks.map((row) => [row.id, row.predecessorConferenceId] as const));
-		if (predecessorWouldCycle(conferenceId, predecessorId, links)) {
-			return { ok: false, reason: 'cycle' };
-		}
-
-		const [updated] = await tx
-			.update(conferenceTable)
-			.set({ predecessorConferenceId: predecessorId })
-			.where(
-				and(
-					eq(conferenceTable.id, conferenceId),
-					eq(conferenceTable.organizationId, conference.organizationId)
-				)
-			)
-			.returning({ id: conferenceTable.id });
-
-		if (!updated) return { ok: false, reason: 'not_found' };
-
-		return { ok: true, predecessorId };
+		return writePredecessor(tx, conference, predecessorId);
 	});
+}
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type ConferenceRef = { id: number; organizationId: string };
+
+async function writePredecessor(
+	tx: Tx,
+	conference: ConferenceRef,
+	predecessorId: number
+): Promise<PredecessorResult> {
+	if (predecessorId === conference.id) return { ok: false, reason: 'self' };
+
+	const [predecessor] = await tx
+		.select(editionColumns)
+		.from(conferenceTable)
+		.where(eq(conferenceTable.id, predecessorId))
+		.limit(1);
+
+	// Another org is not_found, not a distinct reason: confirming the row
+	// exists would leak a conference the caller has no business seeing.
+	if (!predecessor || predecessor.organizationId !== conference.organizationId) {
+		return { ok: false, reason: 'not_found' };
+	}
+
+	const orgLinks = await tx
+		.select({
+			id: conferenceTable.id,
+			predecessorConferenceId: conferenceTable.predecessorConferenceId
+		})
+		.from(conferenceTable)
+		.where(eq(conferenceTable.organizationId, conference.organizationId));
+
+	const links = new Map(orgLinks.map((row) => [row.id, row.predecessorConferenceId] as const));
+	if (predecessorWouldCycle(conference.id, predecessorId, links)) {
+		return { ok: false, reason: 'cycle' };
+	}
+
+	const [updated] = await tx
+		.update(conferenceTable)
+		.set({ predecessorConferenceId: predecessorId })
+		.where(
+			and(
+				eq(conferenceTable.id, conference.id),
+				eq(conferenceTable.organizationId, conference.organizationId)
+			)
+		)
+		.returning({ id: conferenceTable.id });
+
+	if (!updated) return { ok: false, reason: 'not_found' };
+	return { ok: true, predecessorId };
 }

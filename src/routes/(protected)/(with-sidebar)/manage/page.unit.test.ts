@@ -9,6 +9,7 @@
  */
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
+import type { PageData } from './$types';
 import Page from './+page.svelte';
 
 const conference = (
@@ -42,9 +43,11 @@ const layoutData = {
 };
 
 function body(conferences: ReturnType<typeof conference>[], canCreate: boolean) {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	return render(Page, {
-		props: { data: { ...layoutData, conferences, canCreate } as any, form: null }
+		props: {
+			data: { ...layoutData, conferences, canCreate } as PageData,
+			form: null
+		}
 	}).body;
 }
 

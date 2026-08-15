@@ -31,6 +31,13 @@ function predecessorError(reason: 'not_found' | 'self' | 'cycle'): string {
 	return 'That conference is not an earlier edition you can name.';
 }
 
+function editionId(value: FormDataEntryValue | null): number | null {
+	const raw = String(value ?? '').trim();
+	if (raw === '' || raw === 'none') return null;
+	const id = Number(raw);
+	return Number.isInteger(id) && id > 0 ? id : NaN;
+}
+
 export const actions: Actions = {
 	/**
 	 * Name or clear the previous edition (#448). Empty `predecessorId` is the
@@ -39,14 +46,10 @@ export const actions: Actions = {
 	 */
 	predecessor: async ({ locals, request }) => {
 		const form = await request.formData();
-		const conferenceId = Number(form.get('conferenceId'));
-		const raw = String(form.get('predecessorId') ?? '').trim();
-		const predecessorId = raw === '' || raw === 'none' ? null : Number(raw);
+		const conferenceId = editionId(form.get('conferenceId'));
+		const predecessorId = editionId(form.get('predecessorId'));
 
-		if (!Number.isInteger(conferenceId) || conferenceId <= 0) {
-			return fail(400, { conferenceId, error: predecessorError('not_found') });
-		}
-		if (predecessorId !== null && (!Number.isInteger(predecessorId) || predecessorId <= 0)) {
+		if (conferenceId === null || Number.isNaN(conferenceId) || Number.isNaN(predecessorId)) {
 			return fail(400, { conferenceId, error: predecessorError('not_found') });
 		}
 
