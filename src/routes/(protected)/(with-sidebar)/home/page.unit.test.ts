@@ -124,6 +124,8 @@ describe('home hub', () => {
 		// No single conference to name — the queue link stays the list.
 		expect(queueHref(html)).toBe('/review');
 		expect(html).toContain('Your proposals');
+		expect(html).not.toContain('Your tasks');
+		expect(html).not.toContain('Your proposals and tasks');
 		expect(html).toContain('My draft talk');
 		expect(html).toContain('href="/portal/submissions/7"');
 	});
@@ -189,6 +191,8 @@ describe('home hub', () => {
 			]
 		});
 
+		expect(html).toContain('Your tasks');
+		expect(html).not.toContain('Your proposals');
 		expect(html).toContain('DevFlow Summit · Serving 70B models on a budget');
 		expect(html).toContain('DevFlow Summit · The hallway track is the product');
 		expect(html).toContain('Upload your headshot');
@@ -219,6 +223,56 @@ describe('home hub', () => {
 		// The block form of this line ate its own leading space — "DevFlow Summit·
 		// due 2 May" — and printed a day with no year and no zone.
 		expect(html).toContain('DevFlow Summit · due 2 May 2027, 21:59 UTC');
+	});
+
+	it("names tasks and proposals as two lists, so a card's kind is visible (#615)", () => {
+		const html = body(null, {
+			...emptyHub,
+			canCreateEvent: false,
+			openTasks: [
+				{
+					id: 31,
+					submissionId: 9,
+					title: 'Upload final slides',
+					instructions: null,
+					status: 'open',
+					dueOn: null,
+					conference: { slug: 'devflow', name: 'DevFlow Conf 2027' },
+					submissionTitle: 'Notes towards a talk on batching'
+				} as never
+			],
+			openSubmissions: [
+				{
+					id: 9,
+					title: 'Notes towards a talk on batching',
+					status: 'draft',
+					submittedAt: null,
+					decidedAt: null,
+					isPrimary: true,
+					conference: { slug: 'devflow', name: 'DevFlow Conf 2027' }
+				} as never,
+				{
+					id: 10,
+					title: 'What we got wrong about long context',
+					status: 'submitted',
+					submittedAt: new Date('2026-03-02'),
+					decidedAt: null,
+					isPrimary: true,
+					conference: { slug: 'devflow', name: 'DevFlow Conf 2027' }
+				} as never
+			]
+		});
+
+		// Two headings, in this order, with the cards under the heading that
+		// names their kind. One "Your proposals" over a mixed list was the bug.
+		expect(html).toContain('Your tasks');
+		expect(html).toContain('Your proposals');
+		expect(html).not.toContain('Your proposals and tasks');
+		expect(html.indexOf('Your tasks')).toBeLessThan(html.indexOf('Upload final slides'));
+		expect(html.indexOf('Upload final slides')).toBeLessThan(html.indexOf('Your proposals'));
+		expect(html.indexOf('Your proposals')).toBeLessThan(
+			html.indexOf('What we got wrong about long context')
+		);
 	});
 
 	it('surfaces unfinished onboarding without burying the hub', () => {
