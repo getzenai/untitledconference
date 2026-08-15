@@ -27,6 +27,7 @@
 	import { enhance } from '$lib/forms/enhance';
 	import { tick } from 'svelte';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Popover from '$lib/components/ui/popover';
@@ -154,9 +155,39 @@
 
 	/** The length options for a hold, in minutes — the lengths people actually book. */
 	const HOLD_LENGTHS = [15, 30, 45, 60, 90, 120];
+	const holdDayOptions = $derived(
+		board.days.map((d) => ({ value: String(d.id), label: formatDayLong(d.date) }))
+	);
+	const holdRoomOptions = $derived([
+		{ value: '', label: 'All rooms' },
+		...board.rooms.map((room) => ({ value: String(room.id), label: room.name }))
+	]);
+	const holdStartOptions = $derived(
+		data.slots.map((slot) => ({ value: String(slot.minutes), label: slot.label }))
+	);
+	const holdLengthOptions = HOLD_LENGTHS.map((length) => ({
+		value: String(length),
+		label: `${length} min`
+	}));
+	const holdDayValue = $derived(
+		day?.id !== undefined ? String(day.id) : (holdDayOptions[0]?.value ?? '')
+	);
+	const holdStartValue = $derived(holdStartOptions[0]?.value ?? '');
 
 	let holdOpen = $state(false);
 	let holdKind = $state<'block' | 'reservation'>('block');
+
+	/**
+	 * The app select listbox portals to the body. A click there is "outside" the
+	 * hold popover, and without this the popover would close before the pick
+	 * lands (#629).
+	 */
+	const keepHoldOpenForSelect = (event: Event) => {
+		const target = event.target;
+		if (target instanceof Element && target.closest('[data-slot="select-content"]')) {
+			event.preventDefault();
+		}
+	};
 
 	/**
 	 * Twenty rooms is twenty columns, and the one you are looking at is somewhere
@@ -678,7 +709,12 @@
 						</Button>
 					{/snippet}
 				</Popover.Trigger>
-				<Popover.Content class="w-80 p-4" align="end">
+				<Popover.Content
+					class="w-80 p-4"
+					align="end"
+					onInteractOutside={keepHoldOpenForSelect}
+					onFocusOutside={keepHoldOpenForSelect}
+				>
 					<p class="mb-3 text-sm font-medium">Block this slot</p>
 					<p class="text-muted-foreground mb-3 text-xs">
 						Keeps talks out of this time. Use it for a break, or for a sponsor slot you have already
@@ -742,56 +778,54 @@
 						</label>
 
 						<div class="grid grid-cols-2 gap-2">
-							<label class="block text-sm">
+							<div class="block text-sm">
 								<span class="font-medium">Day</span>
-								<select
+								<AppSelect
 									name="dayId"
-									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-									data-testid="agenda-hold-day"
-								>
-									{#each board.days as d (d.id)}
-										<option value={d.id} selected={d.id === day?.id}>{formatDayLong(d.date)}</option
-										>
-									{/each}
-								</select>
-							</label>
-							<label class="block text-sm">
+									size="sm"
+									testId="agenda-hold-day"
+									aria-label="Day"
+									class="mt-1"
+									value={holdDayValue}
+									options={holdDayOptions}
+								/>
+							</div>
+							<div class="block text-sm">
 								<span class="font-medium">Room</span>
-								<select
+								<AppSelect
 									name="roomId"
-									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-									data-testid="agenda-hold-room"
-								>
-									<option value="">All rooms</option>
-									{#each board.rooms as room (room.id)}
-										<option value={room.id}>{room.name}</option>
-									{/each}
-								</select>
-							</label>
-							<label class="block text-sm">
+									size="sm"
+									testId="agenda-hold-room"
+									aria-label="Room"
+									class="mt-1"
+									value=""
+									options={holdRoomOptions}
+								/>
+							</div>
+							<div class="block text-sm">
 								<span class="font-medium">Starts</span>
-								<select
+								<AppSelect
 									name="startMinutes"
-									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-									data-testid="agenda-hold-start"
-								>
-									{#each data.slots as slot (slot.minutes)}
-										<option value={slot.minutes}>{slot.label}</option>
-									{/each}
-								</select>
-							</label>
-							<label class="block text-sm">
+									size="sm"
+									testId="agenda-hold-start"
+									aria-label="Starts"
+									class="mt-1"
+									value={holdStartValue}
+									options={holdStartOptions}
+								/>
+							</div>
+							<div class="block text-sm">
 								<span class="font-medium">Length</span>
-								<select
+								<AppSelect
 									name="minutes"
-									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-									data-testid="agenda-hold-minutes"
-								>
-									{#each HOLD_LENGTHS as length (length)}
-										<option value={length} selected={length === 60}>{length} min</option>
-									{/each}
-								</select>
-							</label>
+									size="sm"
+									testId="agenda-hold-minutes"
+									aria-label="Length"
+									class="mt-1"
+									value="60"
+									options={holdLengthOptions}
+								/>
+							</div>
 						</div>
 
 						{#if form?.error}
