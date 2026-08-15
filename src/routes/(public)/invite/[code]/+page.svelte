@@ -159,6 +159,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>Your invitation</title>
+</svelte:head>
+
 <div class="container flex min-h-screen items-center justify-center">
 	<Card class="w-full max-w-md">
 		{#if isLoading}

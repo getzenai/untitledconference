@@ -98,6 +98,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>New organization</title>
+</svelte:head>
+
 <UnsavedGuard {dirty} />
 
 <div class="container mx-auto max-w-6xl py-8">
