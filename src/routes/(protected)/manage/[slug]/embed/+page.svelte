@@ -34,14 +34,28 @@
 	<title>Embed &amp; share — {data.conference.name}</title>
 </svelte:head>
 
+<!--
+	The bar keeps its rule across the whole width; the words inside it sit on the
+	same column as the page below (#424).
+-->
 <div class="border-border bg-card border-b px-6 py-5">
-	<h1 class="text-lg font-semibold tracking-tight">Embed &amp; share</h1>
-	<p class="text-muted-foreground mt-0.5 text-sm">
-		Your programme, on your own website — or as a link anyone can open.
-	</p>
+	<div class="mx-auto max-w-3xl">
+		<h1 class="text-lg font-semibold tracking-tight">Embed &amp; share</h1>
+		<p class="text-muted-foreground mt-0.5 text-sm">
+			Your programme, on your own website — or as a link anyone can open.
+		</p>
+	</div>
 </div>
 
-<div class="max-w-3xl px-6 py-5">
+<!--
+	`w-full` before the cap, and on this page it fixes a defect older than #424:
+	the column is a flex item, an auto margin in the cross axis turns off the
+	stretch, and the addresses and snippets here do not break. Sized by its own
+	content the column came out 764px wide inside a 390px window and the whole
+	page scrolled sideways. Each code box already owns its own sideways scroll;
+	the page must not.
+-->
+<div class="mx-auto w-full max-w-3xl px-6 py-5" data-testid="page-column">
 	{#if !published}
 		<!--
 			Said before the URLs rather than after them: these addresses answer 404
