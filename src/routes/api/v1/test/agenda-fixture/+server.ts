@@ -35,7 +35,7 @@ import {
 	speakerProfileTable,
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
-import { taskTable } from '$lib/server/db/conference/content-schema';
+import { deliverableTable, taskTable } from '$lib/server/db/conference/content-schema';
 import {
 	evaluationPlanTable,
 	reviewRoundTable,
@@ -105,6 +105,14 @@ type FixtureRequest = {
 	 * answers already sitting on a talk the reviewer can open.
 	 */
 	attachments?: { label: string; url: string }[];
+	/**
+	 * Files already handed in on speaker content (#423).
+	 *
+	 * A deliverable cannot be produced through the UI without walking
+	 * acceptance → task template → portal upload, and the organizer preview
+	 * spec only needs the rows sitting on `/content/files`.
+	 */
+	contentFiles?: { filename: string; contentType: string }[];
 };
 
 const DEFAULT_DAYS = ['2028-05-10', '2028-05-11'];
@@ -274,7 +282,12 @@ type Fixture = {
 	blindReview: boolean;
 	tracks: string[];
 	attachments: { label: string; url: string }[];
+	contentFiles: { filename: string; contentType: string }[];
 };
+
+function orEmpty<T>(items: T[] | undefined): T[] {
+	return items ?? [];
+}
 
 /** Everything defaulted, so the handler below reads as a sequence of writes. */
 function withDefaults(body: FixtureRequest): Fixture | null {
@@ -288,10 +301,11 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		sessions: body.sessions ?? DEFAULT_SESSIONS,
 		sessionStatus: body.sessionStatus ?? 'accepted',
 		speakerUserId: body.speakerUserId ?? null,
-		reviewed: body.reviewed ?? [],
+		reviewed: orEmpty(body.reviewed),
 		blindReview: body.blindReview ?? false,
-		tracks: body.tracks ?? [],
-		attachments: body.attachments ?? []
+		tracks: orEmpty(body.tracks),
+		attachments: orEmpty(body.attachments),
+		contentFiles: orEmpty(body.contentFiles)
 	};
 }
 
@@ -388,6 +402,48 @@ async function addAttachments(
 	);
 }
 
+/**
+ * One speaker, one file-request per file, so the organizer library has
+ * something to open without walking the portal (#423).
+ *
+ * Two files on one task would be versions of each other; the library hides
+ * superseded rows by default, and the spec needs both names on the page.
+ */
+async function addContentFiles(
+	conferenceId: number,
+	organizationId: string,
+	files: { filename: string; contentType: string }[]
+): Promise<void> {
+	if (files.length === 0) return;
+
+	const [speaker] = await db
+		.insert(speakerProfileTable)
+		.values({ organizationId, name: 'Ada Bennett', sortName: 'Bennett, Ada' })
+		.returning({ id: speakerProfileTable.id });
+
+	for (const [index, file] of files.entries()) {
+		const [task] = await db
+			.insert(taskTable)
+			.values({
+				conferenceId,
+				speakerProfileId: speaker.id,
+				title: `Upload ${file.filename}`,
+				kind: 'file_request',
+				status: 'submitted'
+			})
+			.returning({ id: taskTable.id });
+
+		await db.insert(deliverableTable).values({
+			taskId: task.id,
+			fileUrl: `fixture/${conferenceId}/${index}/${file.filename}`,
+			filename: file.filename,
+			contentType: file.contentType,
+			sizeBytes: 2048,
+			version: 1
+		});
+	}
+}
+
 export const POST: RequestHandler = async ({ request }) => {
 	const fixture = withDefaults((await request.json()) as FixtureRequest);
 	if (!fixture) {
@@ -422,6 +478,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	const firstSubmissionId = await addSessions(conference.id, organizationId, fixture, trackIds);
 	if (firstSubmissionId && fixture.attachments.length > 0) {
 		await addAttachments(conference.id, firstSubmissionId, fixture.attachments);
+	}
+
+	if (fixture.contentFiles.length > 0) {
+		await addContentFiles(conference.id, organizationId, fixture.contentFiles);
 	}
 
 	if (fixture.reviewed.length > 0) {

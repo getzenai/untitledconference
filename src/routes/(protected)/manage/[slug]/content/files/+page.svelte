@@ -12,13 +12,21 @@
 	 * form action can only answer with a page.
 	 */
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import ContentFileLink from '$lib/components/content-file-link.svelte';
+	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import type { FilePreviewKind } from '$lib/conference/file-preview';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data } = $props();
 
 	const base = $derived(`/manage/${data.conference.slug}`);
+	let preview = $state<{ title: string; src: string; kind: FilePreviewKind } | null>(null);
+
+	const openFile = (src: string, title: string, kind: FilePreviewKind) => {
+		preview = { src, title, kind };
+	};
 
 	let latestOnly = $state(true);
 	let query = $state('');
@@ -140,9 +148,12 @@
 									/>
 								</td>
 								<td class="px-3 py-2 align-top">
-									<a class="font-medium hover:underline" href="{base}/content/files/{file.id}">
-										{file.filename}
-									</a>
+									<ContentFileLink
+										filename={file.filename}
+										contentType={file.contentType}
+										href="{base}/content/files/{file.id}"
+										onOpen={openFile}
+									/>
 									<div class="text-muted-foreground text-xs">{file.approvalStatus}</div>
 								</td>
 								<td class="px-3 py-2 align-top">{file.speakerName}</td>
@@ -193,3 +204,5 @@
 		</form>
 	{/if}
 </div>
+
+<FilePreviewSheet bind:preview />

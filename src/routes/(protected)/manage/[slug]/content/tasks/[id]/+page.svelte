@@ -8,9 +8,12 @@
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import ContentFileLink from '$lib/components/content-file-link.svelte';
+	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import type { FilePreviewKind } from '$lib/conference/file-preview';
 
 	let { data, form } = $props();
 
@@ -18,6 +21,11 @@
 	const task = $derived(data.task);
 	const files = $derived(data.files);
 	let busy = $state(false);
+	let preview = $state<{ title: string; src: string; kind: FilePreviewKind } | null>(null);
+
+	const openFile = (src: string, title: string, kind: FilePreviewKind) => {
+		preview = { src, title, kind };
+	};
 
 	const submitting = () => {
 		busy = true;
@@ -91,30 +99,18 @@
 			{#each files as file, i (file.id)}
 				<li class="py-4">
 					<div class="flex flex-wrap items-start justify-between gap-2">
-						<div class="flex items-start gap-3">
-							{#if file.contentType?.startsWith('image/')}
-								<a href="{base}/content/files/{file.id}">
-									<img
-										src="{base}/content/files/{file.id}"
-										alt="Preview of {file.filename}"
-										loading="lazy"
-										class="border-border size-24 shrink-0 rounded-md border object-cover"
-									/>
-								</a>
-							{/if}
-							<div>
-								<a
-									class="text-sm font-medium hover:underline"
-									href="{base}/content/files/{file.id}"
-								>
-									{file.filename}
-								</a>
-								<span class="text-muted-foreground ml-2 text-sm">
-									v{file.version}{#if file.sizeBytes}<span class="px-1.5">·</span>{sizeLabel(
-											file.sizeBytes
-										)}{/if}
-								</span>
-							</div>
+						<div>
+							<ContentFileLink
+								filename={file.filename}
+								contentType={file.contentType}
+								href="{base}/content/files/{file.id}"
+								onOpen={openFile}
+							/>
+							<span class="text-muted-foreground ml-2 text-sm">
+								v{file.version}{#if file.sizeBytes}<span class="px-1.5">·</span>{sizeLabel(
+										file.sizeBytes
+									)}{/if}
+							</span>
 						</div>
 						<div class="flex items-center gap-2">
 							{#if i === 0}<Badge variant="secondary">Latest</Badge>{/if}
@@ -212,3 +208,5 @@
 		</ul>
 	{/if}
 </div>
+
+<FilePreviewSheet bind:preview />

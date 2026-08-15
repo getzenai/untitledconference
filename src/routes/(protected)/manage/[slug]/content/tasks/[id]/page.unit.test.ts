@@ -60,20 +60,28 @@ const renderWith = (files: ReturnType<typeof file>[]) =>
 		}
 	}).body;
 
-describe('organizer headshot preview', () => {
-	it('renders an inline thumbnail for an image file, downloaded from the same URL as the link', () => {
-		const body = renderWith([file(201, 1, 'image/png')]);
+describe('organizer file preview', () => {
+	it('opens a PDF or image from a button, with download still there', () => {
+		const pdf = renderWith([file(202, 1, 'application/pdf')]);
+		expect(pdf).toContain('data-testid="file-open"');
+		expect(pdf).toContain('/manage/test-conf/content/files/202');
+		expect(pdf).not.toContain('<img');
 
-		expect(body).toContain('<img');
-		expect(body).toMatch(/<img[^>]*src="\/manage\/test-conf\/content\/files\/201"/);
-		expect(body).toContain('loading="lazy"');
+		const image = renderWith([file(201, 1, 'image/png')]);
+		expect(image).toContain('data-testid="file-open"');
+		expect(image).toContain('/manage/test-conf/content/files/201');
+		expect(image).not.toContain('<img');
 	});
 
-	it('shows only the download link for a non-image file, no broken thumbnail', () => {
-		const body = renderWith([file(202, 1, 'application/pdf')]);
+	it('leaves a type we cannot render as a download, with the sentence saying why', () => {
+		const body = renderWith([
+			file(203, 1, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+		]);
 
-		expect(body).not.toContain('<img');
-		expect(body).toContain('/manage/test-conf/content/files/202');
+		expect(body).not.toContain('data-testid="file-open"');
+		expect(body).toContain('data-testid="file-download"');
+		expect(body).toContain('We cannot show this type here — download it instead.');
+		expect(body).toContain('/manage/test-conf/content/files/203');
 	});
 });
 

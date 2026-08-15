@@ -8,13 +8,16 @@
  * asking.
  *
  * Sharing one route behind a role flag would put both answers in one branch, and the
- * branch that is wrong by default is the one that leaks. What IS shared is everything
- * about how the bytes leave: attachment, re-sanitised filename, nosniff, no-store.
+ * branch that is wrong by default is the one that leaks. The portal stays
+ * attachment-only. This route inlines PDF and ordinary images so the sheet can
+ * render them; everything else stays attachment. The type we send is one we
+ * chose — an uploaded `text/html` named `slides.pdf` must not execute here.
  *
  * The reason it exists at all: a speaker profile created by an organizer has no
  * account, so its uploads are unreachable through the ownership route — on the demo
  * tenant, Ada Bennett's headshot could be downloaded by nobody at all.
  */
+import { inlineContentType } from '$lib/conference/file-preview';
 import { requireOrganizer } from '$lib/server/conference/access';
 import { safeFilename, uploadsBucket } from '$lib/server/conference/deliverable-storage';
 import { conferenceDeliverable } from '$lib/server/conference/organizer-content';
@@ -42,13 +45,14 @@ export const GET: RequestHandler = async ({ params, locals, platform }) => {
 	if (!object) error(410, 'That file is no longer in storage');
 
 	const body = object.body as unknown as ReadableStream;
+	const inlineType = inlineContentType(file.filename, file.contentType);
 
 	return new Response(body, {
 		headers: {
-			'Content-Type': file.contentType ?? 'application/octet-stream',
+			'Content-Type': inlineType ?? file.contentType ?? 'application/octet-stream',
 			// Re-sanitised here rather than trusted from the row: a header built from
 			// stored data should not depend on every past writer having been careful.
-			'Content-Disposition': `attachment; filename="${safeFilename(file.filename)}"`,
+			'Content-Disposition': `${inlineType ? 'inline' : 'attachment'}; filename="${safeFilename(file.filename)}"`,
 			'X-Content-Type-Options': 'nosniff',
 			'Cache-Control': 'private, no-store'
 		}
