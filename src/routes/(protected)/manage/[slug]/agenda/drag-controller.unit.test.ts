@@ -29,7 +29,7 @@ const pointerAt = (x: number, y: number, target: HTMLElement = element) =>
 		currentTarget: element
 	}) as unknown as PointerEvent;
 
-function harness(occupied: { slot: SlotRef; placementId: number }[] = []) {
+function harness(occupied: { slot: SlotRef; placementId: number; status?: string }[] = []) {
 	const place = vi.fn();
 	const openSlot = vi.fn();
 
@@ -87,13 +87,12 @@ describe('DragController', () => {
 	});
 
 	/**
-	 * A drop onto a taken slot is a question, not a write. `placeSession` is
-	 * permissive about conflicts, so placing here would neither swap nor refuse —
-	 * it would double-book and report the clash afterwards.
+	 * A published occupant is still a question. Two drafts in one slot are
+	 * alternatives (#559), so that drop writes.
 	 */
-	it('opens the editor instead of placing onto a taken slot', () => {
+	it('opens the editor instead of placing onto a published slot', () => {
 		const { controller, place, openSlot } = harness([
-			{ slot: { roomId: 22, startMinutes: 11 * 60 + 30 }, placementId: 7 }
+			{ slot: { roomId: 22, startMinutes: 11 * 60 + 30 }, placementId: 7, status: 'confirmed' }
 		]);
 
 		controller.begin(pointerAt(0, 0), TRAY_ITEM);
@@ -102,6 +101,19 @@ describe('DragController', () => {
 
 		expect(place).not.toHaveBeenCalled();
 		expect(openSlot).toHaveBeenCalledWith({ roomId: 22, startMinutes: 11 * 60 + 30 });
+	});
+
+	it('places onto a draft occupant so both talks stay as alternatives', () => {
+		const { controller, place, openSlot } = harness([
+			{ slot: { roomId: 22, startMinutes: 11 * 60 + 30 }, placementId: 7, status: 'tentative' }
+		]);
+
+		controller.begin(pointerAt(0, 0), TRAY_ITEM);
+		controller.move(pointerAt(150, 105));
+		controller.end();
+
+		expect(openSlot).not.toHaveBeenCalled();
+		expect(place).toHaveBeenCalledWith(1, { roomId: 22, startMinutes: 11 * 60 + 30 });
 	});
 
 	// Dropping a session back on itself is the same slot it already occupies, so it

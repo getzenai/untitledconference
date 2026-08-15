@@ -784,3 +784,41 @@ describe('holding a slot', () => {
 		expect(body).not.toContain('data-testid="agenda-hold-release-7"');
 	});
 });
+
+describe('draft alternatives (#559)', () => {
+	const draft = (placementId: number, roomId: number, start: number): BoardSession => ({
+		placementId,
+		submissionId: 1,
+		title: 'Alpha',
+		kind: 'session',
+		status: 'tentative',
+		submissionStatus: 'accepted',
+		trackName: null,
+		formatName: 'Talk',
+		minutes: 30,
+		dayId: 1,
+		roomId,
+		startMinutes: start,
+		endMinutes: start + 30,
+		speakers: ['Ada']
+	});
+
+	it('marks competing drafts as alternatives, not clashes', () => {
+		const body = renderWith(2, 1, {
+			placed: [draft(1, 1, 540), draft(2, 2, 660)],
+			conflicts: [
+				{
+					kind: 'alternative',
+					placementIds: [1, 2],
+					detail: 'Alpha is also in Room 2 at 11:00'
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="agenda-alternative"');
+		expect(body).toContain('data-testid="agenda-alternatives-count"');
+		expect(body).toContain('Choose');
+		expect(body).not.toContain('clash');
+		expect(body).not.toContain('data-testid="agenda-conflict"');
+	});
+});

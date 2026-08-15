@@ -32,6 +32,8 @@ import {
 	autoPlace,
 	backfillTray,
 	conflicts,
+	placeAlternative,
+	placeOnBoard,
 	placeSession,
 	setAgendaPublished,
 	setPlacementStatus,
@@ -366,6 +368,18 @@ describe('conflicts (AIA-05)', () => {
 			startMinutes: 9 * 60 + 45
 		});
 
+		// Draft × draft is an alternative (#559). The clash is a published overlap.
+		// Status is written directly: `setPlacementStatus(..., confirmed)` now chooses
+		// one option and would unplace the other.
+		await db
+			.update(placementTable)
+			.set({ status: 'confirmed' })
+			.where(eq(placementTable.id, placementOf['Talk one']));
+		await db
+			.update(placementTable)
+			.set({ status: 'confirmed' })
+			.where(eq(placementTable.id, placementOf['Talk two']));
+
 		const found = await conflicts(conferenceId);
 		const room = found.filter((c) => c.kind === 'room');
 		expect(room).toHaveLength(1);
@@ -375,6 +389,15 @@ describe('conflicts (AIA-05)', () => {
 		// explicit UTC cast this label drifts by the server's offset while the grid above
 		// it does not — two different times for one session, on one screen.
 		expect(room[0].detail).toContain('09:30');
+
+		await db
+			.update(placementTable)
+			.set({ status: 'tentative' })
+			.where(eq(placementTable.id, placementOf['Talk one']));
+		await db
+			.update(placementTable)
+			.set({ status: 'tentative' })
+			.where(eq(placementTable.id, placementOf['Talk two']));
 	});
 
 	it('reports one speaker in two rooms at once', async () => {
@@ -408,8 +431,9 @@ describe('conflicts (AIA-05)', () => {
 
 describe('publishing', () => {
 	it('publishes what is on the grid and leaves the tray alone', async () => {
-		const changed = await setAgendaPublished(conferenceId, true);
-		expect(changed).toBeGreaterThan(0);
+		const result = await setAgendaPublished(conferenceId, true);
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.changed).toBeGreaterThan(0);
 
 		const board = await agendaBoard(conferenceId);
 		expect(board.placed.every((p) => p.status === 'confirmed')).toBe(true);
@@ -419,11 +443,13 @@ describe('publishing', () => {
 	});
 
 	it('is idempotent — publishing twice changes nothing the second time', async () => {
-		expect(await setAgendaPublished(conferenceId, true)).toBe(0);
+		expect(await setAgendaPublished(conferenceId, true)).toEqual({ ok: true, changed: 0 });
 	});
 
 	it('pulls the whole agenda back', async () => {
-		expect(await setAgendaPublished(conferenceId, false)).toBeGreaterThan(0);
+		const result = await setAgendaPublished(conferenceId, false);
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.changed).toBeGreaterThan(0);
 		const board = await agendaBoard(conferenceId);
 		expect(board.placed.every((p) => p.status === 'tentative')).toBe(true);
 	});
@@ -646,5 +672,202 @@ describe('tray order', () => {
 	it('lists waiting talks by title, even when the rows were inserted backwards', async () => {
 		const board = await agendaBoard(ownConferenceId);
 		expect(board.tray.map((t) => t.title)).toEqual(['Apple', 'Zebra']);
+	});
+});
+
+describe('draft alternatives (#559)', () => {
+	const own = `alts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	let altConferenceId = 0;
+	let altDayId = 0;
+	let altRooms: number[] = [];
+	const altPlacement: Record<string, number> = {};
+
+	beforeAll(async () => {
+		const [conference] = await db
+			.insert(conferenceTable)
+			.values({
+				organizationId,
+				name: 'Alternatives Conf',
+				slug: `conf-${own}`,
+				startsOn: '2027-08-01',
+				endsOn: '2027-08-01',
+				status: 'published'
+			})
+			.returning();
+		altConferenceId = conference.id;
+
+		const [day] = await db
+			.insert(conferenceDayTable)
+			.values({ conferenceId: altConferenceId, date: '2027-08-01', position: 0 })
+			.returning();
+		altDayId = day.id;
+
+		const rooms = await db
+			.insert(roomTable)
+			.values([
+				{ conferenceId: altConferenceId, name: 'Hall 1', position: 0 },
+				{ conferenceId: altConferenceId, name: 'Hall 2', position: 1 }
+			])
+			.returning();
+		altRooms = rooms.map((r) => r.id);
+
+		const [format] = await db
+			.insert(sessionFormatTable)
+			.values({ conferenceId: altConferenceId, name: 'Talk', minutes: 30, position: 0 })
+			.returning();
+
+		for (const title of ['Alpha', 'Beta']) {
+			const [submission] = await db
+				.insert(submissionTable)
+				.values({
+					conferenceId: altConferenceId,
+					title,
+					sessionFormatId: format.id,
+					status: 'accepted'
+				})
+				.returning();
+			const [placement] = await db
+				.insert(placementTable)
+				.values({
+					conferenceId: altConferenceId,
+					kind: 'session',
+					status: 'tentative',
+					submissionId: submission.id
+				})
+				.returning();
+			altPlacement[title] = placement.id;
+		}
+	});
+
+	afterAll(async () => {
+		await db.delete(conferenceTable).where(eq(conferenceTable.id, altConferenceId));
+	});
+
+	it('keeps a draft talk in two rooms at once', async () => {
+		await placeSession(altConferenceId, altPlacement.Alpha, {
+			dayId: altDayId,
+			roomId: altRooms[0],
+			startMinutes: 9 * 60
+		});
+
+		const also = await placeAlternative(altConferenceId, altPlacement.Alpha, {
+			dayId: altDayId,
+			roomId: altRooms[1],
+			startMinutes: 11 * 60
+		});
+		expect(also.ok).toBe(true);
+		if (also.ok) expect(also.placementId).not.toBe(altPlacement.Alpha);
+
+		const board = await agendaBoard(altConferenceId);
+		const alphas = board.placed.filter((p) => p.title === 'Alpha');
+		expect(alphas).toHaveLength(2);
+		expect(alphas.map((p) => p.roomId).sort()).toEqual([...altRooms].sort());
+		expect(board.conflicts.filter((c) => c.kind === 'room')).toHaveLength(0);
+		expect(board.conflicts.some((c) => c.kind === 'alternative')).toBe(true);
+	});
+
+	it('treats two drafts in one slot as options, not a clash', async () => {
+		await placeSession(altConferenceId, altPlacement.Beta, {
+			dayId: altDayId,
+			roomId: altRooms[0],
+			startMinutes: 9 * 60
+		});
+
+		const found = await conflicts(altConferenceId);
+		expect(found.filter((c) => c.kind === 'room')).toHaveLength(0);
+		expect(found.some((c) => c.kind === 'alternative' && c.detail.includes('Hall 1'))).toBe(true);
+	});
+
+	it('refuses to publish while a slot still has alternatives, and names the slot', async () => {
+		const refused = await setAgendaPublished(altConferenceId, true);
+		expect(refused.ok).toBe(false);
+		if (!refused.ok) {
+			expect(refused.reason).toContain('Hall 1');
+			expect(refused.reason).toContain('09:00');
+			expect(refused.reason).toContain('alternatives');
+		}
+	});
+
+	it('choosing one talk in a shared slot drops the other talk’s extra candidate', async () => {
+		const board = await agendaBoard(altConferenceId);
+		const beta = board.placed.find((p) => p.title === 'Beta');
+		expect(beta).toBeTruthy();
+
+		expect(await setPlacementStatus(altConferenceId, beta!.placementId, 'confirmed')).toBe(true);
+
+		const after = await agendaBoard(altConferenceId);
+		expect(after.placed.find((p) => p.title === 'Beta')?.status).toBe('confirmed');
+		expect(after.placed.find((p) => p.title === 'Beta')?.roomId).toBe(altRooms[0]);
+		// Alpha still has Hall 2; the Hall 1 copy was the extra option, not a tray item.
+		const alphas = after.placed.filter((p) => p.title === 'Alpha');
+		expect(alphas).toHaveLength(1);
+		expect(alphas[0].roomId).toBe(altRooms[1]);
+		expect(after.tray.map((t) => t.title)).not.toContain('Alpha');
+	});
+
+	it('choosing one slot for a talk drops the other placement', async () => {
+		const board = await agendaBoard(altConferenceId);
+		const hall2 = board.placed.find((p) => p.title === 'Alpha' && p.roomId === altRooms[1]);
+		expect(hall2).toBeTruthy();
+
+		expect(await setPlacementStatus(altConferenceId, hall2!.placementId, 'confirmed')).toBe(true);
+
+		const after = await agendaBoard(altConferenceId);
+		const alphas = after.placed.filter((p) => p.title === 'Alpha');
+		expect(alphas).toHaveLength(1);
+		expect(alphas[0].roomId).toBe(altRooms[1]);
+		expect(alphas[0].status).toBe('confirmed');
+		expect(after.tray.map((t) => t.title)).not.toContain('Alpha');
+	});
+
+	it('publishes once every alternative is resolved', async () => {
+		const result = await setAgendaPublished(altConferenceId, true);
+		expect(result).toEqual({ ok: true, changed: 0 });
+	});
+
+	it('placeOnBoard copies a draft already on the grid and moves a tray item', async () => {
+		const { placementId } = await (async () => {
+			const [format] = await db
+				.select({ id: sessionFormatTable.id })
+				.from(sessionFormatTable)
+				.where(eq(sessionFormatTable.conferenceId, altConferenceId))
+				.limit(1);
+			const [submission] = await db
+				.insert(submissionTable)
+				.values({
+					conferenceId: altConferenceId,
+					title: 'Gamma',
+					sessionFormatId: format!.id,
+					status: 'accepted'
+				})
+				.returning();
+			const [placement] = await db
+				.insert(placementTable)
+				.values({
+					conferenceId: altConferenceId,
+					kind: 'session',
+					status: 'tentative',
+					submissionId: submission.id
+				})
+				.returning();
+			return { placementId: placement.id };
+		})();
+
+		await placeOnBoard(altConferenceId, placementId, {
+			dayId: altDayId,
+			roomId: altRooms[0],
+			startMinutes: 14 * 60
+		});
+		let board = await agendaBoard(altConferenceId);
+		expect(board.placed.filter((p) => p.title === 'Gamma')).toHaveLength(1);
+		expect(board.tray.map((t) => t.title)).not.toContain('Gamma');
+
+		await placeOnBoard(altConferenceId, placementId, {
+			dayId: altDayId,
+			roomId: altRooms[1],
+			startMinutes: 15 * 60
+		});
+		board = await agendaBoard(altConferenceId);
+		expect(board.placed.filter((p) => p.title === 'Gamma')).toHaveLength(2);
 	});
 });

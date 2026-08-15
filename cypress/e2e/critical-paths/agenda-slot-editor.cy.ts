@@ -160,7 +160,7 @@ describe('Agenda slot editor', () => {
 		cy.wrap(shown).should('include', 'Hall 2');
 	});
 
-	it('reports a clash when two talks overlap in one room', () => {
+	it('reports two drafts in one slot as alternatives, not a clash', () => {
 		// Two rooms, and the second one is scaffolding rather than subject. A room
 		// card's "Open a slot" always opens that room's first slot, and once
 		// something sits there the dialog switches to its occupied shape — it
@@ -178,12 +178,11 @@ describe('Agenda slot editor', () => {
 		// same mistake in a different costume.
 		cy.get('[data-testid="agenda-placed-session"]').should('have.length', 2);
 
-		// The wording `agenda.ts` produces for a room clash, named rather than
-		// pattern-matched: a loose regex would also pass on some unrelated warning
-		// that happened to say "conflict". The minute is left out on purpose —
-		// `roomConflicts` reports the start of whichever placement has the lower
-		// id, which is an ordering detail this test has no business pinning.
-		cy.contains('[data-testid="agenda-conflict"]', 'Two sessions in Hall 1 at').should('exist');
+		// Draft × draft is an alternative (#559). A published overlap is the clash.
+		cy.contains('[data-testid="agenda-alternative"]', 'Two draft options in Hall 1 at').should(
+			'exist'
+		);
+		cy.get('[data-testid="agenda-conflict"]').should('not.exist');
 
 		// And both of them are on screen, next to each other (#121). On a calendar
 		// two overlapping blocks occupy the same rows, so drawn full width the second

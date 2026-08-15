@@ -34,7 +34,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, ne, sql } from 'drizzle-orm';
 
 /** The working day the grid offers slots across. */
 export const DAY_STARTS_AT = 9 * 60;
@@ -268,7 +268,7 @@ export async function agendaBoard(conferenceId: number): Promise<AgendaBoard> {
 }
 
 export type Conflict = {
-	kind: 'room' | 'speaker' | 'break';
+	kind: 'room' | 'speaker' | 'break' | 'alternative';
 	placementIds: [number, number];
 	detail: string;
 };
@@ -293,7 +293,8 @@ async function roomConflicts(conferenceId: number): Promise<Conflict[]> {
 		JOIN room r ON r.id = a.room_id
 		WHERE a.conference_id = ${conferenceId}
 			AND b.conference_id = ${conferenceId}
-			AND a.room_id IS NOT NULL`);
+			AND a.room_id IS NOT NULL
+			AND (a.status = 'confirmed' OR b.status = 'confirmed')`);
 
 	return rows.map((r) => ({
 		kind: 'room' as const,
@@ -317,7 +318,8 @@ async function speakerConflicts(conferenceId: number): Promise<Conflict[]> {
 			ON sb.submission_id = b.submission_id
 			AND sb.speaker_profile_id = sa.speaker_profile_id
 		JOIN speaker_profile sp ON sp.id = sa.speaker_profile_id
-		WHERE a.conference_id = ${conferenceId} AND b.conference_id = ${conferenceId}`);
+		WHERE a.conference_id = ${conferenceId} AND b.conference_id = ${conferenceId}
+			AND a.submission_id IS DISTINCT FROM b.submission_id`);
 
 	return rows.map((r) => ({
 		kind: 'speaker' as const,
@@ -363,13 +365,73 @@ async function breakConflicts(conferenceId: number): Promise<Conflict[]> {
 	}));
 }
 
+/**
+ * Two drafts competing on purpose (#559).
+ *
+ * Tentative × tentative is not a clash: the schema has always allowed one talk
+ * on several draft slots, and two talks in one draft slot, so the organizer can
+ * hold options open. Those pairs are alternatives. A real double-booking is
+ * confirmed × anything, and `roomConflicts` reports that.
+ *
+ * Two shapes, one kind: the same submission on two slots, or two submissions
+ * overlapping in one room. Choosing one later drops the siblings.
+ */
+async function alternativeConflicts(conferenceId: number): Promise<Conflict[]> {
+	const rows = await db.execute<{
+		a: number;
+		b: number;
+		detail: string;
+	}>(sql`
+		SELECT a.id AS a, b.id AS b,
+			CASE
+				WHEN a.submission_id IS NOT DISTINCT FROM b.submission_id THEN
+					COALESCE(sa.title, 'A talk') || ' is also in ' || rb.name || ' at ' ||
+					to_char(b.starts_at AT TIME ZONE 'UTC', 'HH24:MI')
+				ELSE
+					'Two draft options in ' || ra.name || ' at ' ||
+					to_char(a.starts_at AT TIME ZONE 'UTC', 'HH24:MI')
+			END AS detail
+		FROM placement a
+		JOIN placement b
+			ON a.id < b.id
+			AND a.conference_id = b.conference_id
+			AND a.status = 'tentative'
+			AND b.status = 'tentative'
+			AND a.kind = 'session'
+			AND b.kind = 'session'
+			AND a.starts_at IS NOT NULL
+			AND b.starts_at IS NOT NULL
+			AND a.room_id IS NOT NULL
+			AND b.room_id IS NOT NULL
+			AND (
+				a.submission_id IS NOT DISTINCT FROM b.submission_id
+				OR (
+					a.conference_day_id = b.conference_day_id
+					AND a.room_id = b.room_id
+					AND a.starts_at < b.ends_at
+					AND b.starts_at < a.ends_at
+				)
+			)
+		JOIN room ra ON ra.id = a.room_id
+		JOIN room rb ON rb.id = b.room_id
+		LEFT JOIN submission sa ON sa.id = a.submission_id
+		WHERE a.conference_id = ${conferenceId}`);
+
+	return rows.map((r) => ({
+		kind: 'alternative' as const,
+		placementIds: [r.a, r.b] as [number, number],
+		detail: r.detail
+	}));
+}
+
 export async function conflicts(conferenceId: number): Promise<Conflict[]> {
-	const [rooms, speakers, breaks] = await Promise.all([
+	const [rooms, speakers, breaks, alternatives] = await Promise.all([
 		roomConflicts(conferenceId),
 		speakerConflicts(conferenceId),
-		breakConflicts(conferenceId)
+		breakConflicts(conferenceId),
+		alternativeConflicts(conferenceId)
 	]);
-	return [...rooms, ...speakers, ...breaks];
+	return [...rooms, ...speakers, ...breaks, ...alternatives];
 }
 
 /** One placement of this conference's, or null. Scoping lives in the query. */
@@ -380,6 +442,10 @@ async function ownPlacement(conferenceId: number, placementId: number) {
 			submissionId: placementTable.submissionId,
 			kind: placementTable.kind,
 			status: placementTable.status,
+			conferenceDayId: placementTable.conferenceDayId,
+			roomId: placementTable.roomId,
+			startsAt: placementTable.startsAt,
+			endsAt: placementTable.endsAt,
 			formatMinutes: sessionFormatTable.minutes
 		})
 		.from(placementTable)
@@ -389,6 +455,13 @@ async function ownPlacement(conferenceId: number, placementId: number) {
 		.limit(1);
 
 	return row ?? null;
+}
+
+function alreadyOnGrid(placement: {
+	conferenceDayId: number | null;
+	startsAt: Date | null;
+}): boolean {
+	return placement.conferenceDayId !== null && placement.startsAt !== null;
 }
 
 export type PlaceResult = { ok: true; endMinutes: number } | { ok: false; reason: string };
@@ -472,6 +545,152 @@ export async function placeSession(
 
 		return { ok: true, endMinutes };
 	});
+}
+
+export type PlaceAlsoResult =
+	| { ok: true; endMinutes: number; placementId: number }
+	| { ok: false; reason: string };
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type SlotTimes =
+	| { ok: true; endMinutes: number; startsAt: Date; endsAt: Date }
+	| { ok: false; reason: string };
+
+/** Day, room, and clock for a write — the day is locked so a shrink cannot race it. */
+async function slotTimesFor(
+	tx: Tx,
+	conferenceId: number,
+	slot: { dayId: number; roomId: number; startMinutes: number },
+	formatMinutes: number | null
+): Promise<SlotTimes> {
+	const [day] = await tx
+		.select({ date: conferenceDayTable.date })
+		.from(conferenceDayTable)
+		.where(
+			and(eq(conferenceDayTable.id, slot.dayId), eq(conferenceDayTable.conferenceId, conferenceId))
+		)
+		.limit(1)
+		.for('key share');
+	if (!day) return { ok: false, reason: 'No such day' };
+
+	const [room] = await tx
+		.select({ id: roomTable.id })
+		.from(roomTable)
+		.where(and(eq(roomTable.id, slot.roomId), eq(roomTable.conferenceId, conferenceId)))
+		.limit(1);
+	if (!room) return { ok: false, reason: 'No such room' };
+
+	if (slot.startMinutes < DAY_STARTS_AT || slot.startMinutes >= DAY_ENDS_AT) {
+		return { ok: false, reason: 'That start time is outside the conference day' };
+	}
+
+	const minutes = formatMinutes ?? DEFAULT_MINUTES;
+	const endMinutes = slot.startMinutes + minutes;
+	return {
+		ok: true,
+		endMinutes,
+		startsAt: slotInstant(day.date, slot.startMinutes),
+		endsAt: slotInstant(day.date, endMinutes)
+	};
+}
+
+async function insertAlternativeRow(
+	tx: Tx,
+	conferenceId: number,
+	submissionId: number,
+	slot: { dayId: number; roomId: number; startMinutes: number },
+	times: Extract<SlotTimes, { ok: true }>
+): Promise<PlaceAlsoResult> {
+	const [existing] = await tx
+		.select({ id: placementTable.id })
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				eq(placementTable.submissionId, submissionId),
+				eq(placementTable.conferenceDayId, slot.dayId),
+				eq(placementTable.roomId, slot.roomId),
+				eq(placementTable.startsAt, times.startsAt)
+			)
+		)
+		.limit(1);
+	if (existing) return { ok: true, endMinutes: times.endMinutes, placementId: existing.id };
+
+	const [created] = await tx
+		.insert(placementTable)
+		.values({
+			conferenceId,
+			kind: 'session',
+			status: 'tentative',
+			submissionId,
+			conferenceDayId: slot.dayId,
+			roomId: slot.roomId,
+			startsAt: times.startsAt,
+			endsAt: times.endsAt
+		})
+		.returning({ id: placementTable.id });
+
+	return { ok: true, endMinutes: times.endMinutes, placementId: created.id };
+}
+
+/**
+ * Parks the same talk on a second draft slot without moving the first (#559).
+ *
+ * `placeSession` updates the existing row — that is a move, and it is what
+ * dragging out of the tray still is. A talk that is already on the grid has
+ * used that row. Another candidate slot is another row: the unique index only
+ * forbids two *confirmed* placements, which is the whole point of tentative.
+ *
+ * Same day/room/start as an existing placement of this submission is a no-op
+ * rather than a duplicate row. A confirmed source is refused — publishing is
+ * choosing, and a published talk does not sprout draft twins.
+ */
+export async function placeAlternative(
+	conferenceId: number,
+	sourcePlacementId: number,
+	slot: { dayId: number; roomId: number; startMinutes: number }
+): Promise<PlaceAlsoResult> {
+	const source = await ownPlacement(conferenceId, sourcePlacementId);
+	if (!source) return { ok: false, reason: 'No such session' };
+	if (source.kind !== 'session') return { ok: false, reason: HOLD_IS_NOT_A_SESSION };
+	const submissionId = source.submissionId;
+	if (submissionId === null) return { ok: false, reason: 'No such session' };
+	if (source.status !== 'tentative') {
+		return { ok: false, reason: 'A published session is moved, not copied onto another slot' };
+	}
+	if (!alreadyOnGrid(source)) {
+		return { ok: false, reason: 'Put it on the grid first, then add another slot' };
+	}
+
+	return db.transaction(async (tx) => {
+		const times = await slotTimesFor(tx, conferenceId, slot, source.formatMinutes);
+		if (!times.ok) return times;
+		return insertAlternativeRow(tx, conferenceId, submissionId, slot, times);
+	});
+}
+
+/**
+ * The `?/place` write: a tray item moves, a draft already on the grid grows
+ * another candidate slot. Confirmed sessions still move — they are published.
+ */
+export async function placeOnBoard(
+	conferenceId: number,
+	placementId: number,
+	slot: { dayId: number; roomId: number; startMinutes: number }
+): Promise<PlaceResult> {
+	const placement = await ownPlacement(conferenceId, placementId);
+	if (!placement) return { ok: false, reason: 'No such session' };
+	if (
+		placement.status === 'tentative' &&
+		alreadyOnGrid(placement) &&
+		(placement.conferenceDayId !== slot.dayId ||
+			placement.roomId !== slot.roomId ||
+			(placement.startsAt && slotMinutes(placement.startsAt) !== slot.startMinutes))
+	) {
+		return placeAlternative(conferenceId, placementId, slot);
+	}
+	return placeSession(conferenceId, placementId, slot);
 }
 
 /**
@@ -637,17 +856,80 @@ function moveTo(
 		.where(eq(placementTable.id, placementId));
 }
 
+export type PublishResult = { ok: true; changed: number } | { ok: false; reason: string };
+
+/**
+ * Why the agenda cannot go live yet: an unresolved pair of draft options (#559).
+ *
+ * Publishing confirms every slotted row. Two tentative placements of the same
+ * talk would trip the unique index; two talks in one slot would become a live
+ * double-booking. Either way the public page would show a programme nobody
+ * finished choosing. Name the slot so the organizer knows where to click.
+ */
+export async function publishBlocker(conferenceId: number): Promise<string | null> {
+	const [row] = await db.execute<{ detail: string }>(sql`
+		SELECT detail FROM (
+			SELECT 1 AS rank,
+				ra.name || ' at ' || to_char(a.starts_at AT TIME ZONE 'UTC', 'HH24:MI') AS slot,
+				'Cannot publish while ' || ra.name || ' at ' ||
+					to_char(a.starts_at AT TIME ZONE 'UTC', 'HH24:MI') ||
+					' still has alternatives' AS detail
+			FROM placement a
+			JOIN placement b
+				ON a.id < b.id
+				AND a.conference_id = b.conference_id
+				AND a.conference_day_id = b.conference_day_id
+				AND a.room_id = b.room_id
+				AND a.starts_at < b.ends_at
+				AND b.starts_at < a.ends_at
+			JOIN room ra ON ra.id = a.room_id
+			WHERE a.conference_id = ${conferenceId}
+				AND a.status = 'tentative' AND b.status = 'tentative'
+				AND a.kind = 'session' AND b.kind = 'session'
+				AND a.room_id IS NOT NULL
+			UNION ALL
+			SELECT 2 AS rank,
+				ra.name || ' at ' || to_char(a.starts_at AT TIME ZONE 'UTC', 'HH24:MI') AS slot,
+				'Cannot publish while ' || COALESCE(s.title, 'a talk') ||
+					' is still in more than one slot (' || ra.name || ' at ' ||
+					to_char(a.starts_at AT TIME ZONE 'UTC', 'HH24:MI') || ')' AS detail
+			FROM placement a
+			JOIN placement b
+				ON a.id < b.id
+				AND a.submission_id = b.submission_id
+				AND a.conference_id = b.conference_id
+			JOIN room ra ON ra.id = a.room_id
+			LEFT JOIN submission s ON s.id = a.submission_id
+			WHERE a.conference_id = ${conferenceId}
+				AND a.status = 'tentative' AND b.status = 'tentative'
+				AND a.starts_at IS NOT NULL AND b.starts_at IS NOT NULL
+				AND a.room_id IS NOT NULL AND b.room_id IS NOT NULL
+		) options
+		ORDER BY rank, slot
+		LIMIT 1`);
+
+	return row?.detail ?? null;
+}
+
 /**
  * Publishes every scheduled session, or pulls them all back to tentative.
  *
  * Only placements with a slot are published. A tray item promoted to confirmed would
  * satisfy the unique index and then be invisible on the agenda, which is a worse
  * outcome than staying honestly unscheduled.
+ *
+ * Unresolved draft alternatives refuse the write: confirming them all would
+ * either trip the unique index or publish a double-booking.
  */
 export async function setAgendaPublished(
 	conferenceId: number,
 	published: boolean
-): Promise<number> {
+): Promise<PublishResult> {
+	if (published) {
+		const blocker = await publishBlocker(conferenceId);
+		if (blocker) return { ok: false, reason: blocker };
+	}
+
 	const rows = await db
 		.update(placementTable)
 		.set({ status: published ? 'confirmed' : 'tentative' })
@@ -660,7 +942,7 @@ export async function setAgendaPublished(
 		)
 		.returning({ id: placementTable.id });
 
-	return rows.length;
+	return { ok: true, changed: rows.length };
 }
 
 export type BlockInput = {
@@ -786,8 +1068,113 @@ export async function setPlacementStatus(
 	const placement = await ownPlacement(conferenceId, placementId);
 	if (!placement) return false;
 
-	await db.update(placementTable).set({ status }).where(eq(placementTable.id, placementId));
+	if (status === 'confirmed') {
+		await choosePlacement(conferenceId, placement);
+	} else {
+		await db.update(placementTable).set({ status }).where(eq(placementTable.id, placementId));
+	}
 	return true;
+}
+
+type Chosen = NonNullable<Awaited<ReturnType<typeof ownPlacement>>>;
+
+async function dropSiblingDrafts(tx: Tx, conferenceId: number, placement: Chosen) {
+	if (placement.submissionId === null) return;
+	await tx
+		.delete(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				eq(placementTable.submissionId, placement.submissionId),
+				ne(placementTable.id, placement.id)
+			)
+		);
+}
+
+function clearSlot(tx: Tx, placementId: number) {
+	return tx
+		.update(placementTable)
+		.set({
+			conferenceDayId: null,
+			roomId: null,
+			startsAt: null,
+			endsAt: null,
+			status: 'tentative'
+		})
+		.where(eq(placementTable.id, placementId));
+}
+
+async function vacateOverlappingDraft(tx: Tx, other: { id: number; submissionId: number | null }) {
+	if (other.submissionId === null) {
+		await clearSlot(tx, other.id);
+		return;
+	}
+
+	const extras = await tx
+		.select({ id: placementTable.id })
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.submissionId, other.submissionId),
+				ne(placementTable.id, other.id),
+				isNotNull(placementTable.startsAt)
+			)
+		);
+
+	if (extras.length > 0) {
+		// This row was a candidate slot; the talk still sits elsewhere.
+		await tx.delete(placementTable).where(eq(placementTable.id, other.id));
+		return;
+	}
+	await clearSlot(tx, other.id);
+}
+
+async function vacateOverlappingDrafts(tx: Tx, conferenceId: number, placement: Chosen) {
+	if (!placement.conferenceDayId || !placement.roomId || !placement.startsAt || !placement.endsAt) {
+		return;
+	}
+
+	const overlapping = await tx
+		.select({
+			id: placementTable.id,
+			submissionId: placementTable.submissionId
+		})
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				ne(placementTable.id, placement.id),
+				eq(placementTable.kind, 'session'),
+				eq(placementTable.status, 'tentative'),
+				eq(placementTable.conferenceDayId, placement.conferenceDayId),
+				eq(placementTable.roomId, placement.roomId),
+				lt(placementTable.startsAt, placement.endsAt),
+				gt(placementTable.endsAt, placement.startsAt)
+			)
+		);
+
+	for (const other of overlapping) {
+		await vacateOverlappingDraft(tx, other);
+	}
+}
+
+/**
+ * Confirm this option and drop its siblings (#559).
+ *
+ * Same-submission extras were inserted as candidate slots — deleting them is
+ * how "this one, not those" is expressed. A different talk overlapping this
+ * slot goes back to the tray: it still needs a place, just not this one.
+ * Confirmed neighbours are left alone; those are real clashes, not options.
+ */
+async function choosePlacement(conferenceId: number, placement: Chosen) {
+	await db.transaction(async (tx) => {
+		await dropSiblingDrafts(tx, conferenceId, placement);
+		await vacateOverlappingDrafts(tx, conferenceId, placement);
+		await tx
+			.update(placementTable)
+			.set({ status: 'confirmed' })
+			.where(eq(placementTable.id, placement.id));
+	});
 }
 
 /** @deprecated Prefer `$lib/server/conference/config` — rooms live in settings (#63). */

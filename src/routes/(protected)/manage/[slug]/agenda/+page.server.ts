@@ -12,7 +12,7 @@ import {
 	autoPlace,
 	backfillTray,
 	createBlock,
-	placeSession,
+	placeOnBoard,
 	removeBlock,
 	setAgendaPublished,
 	setPlacementStatus,
@@ -87,7 +87,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Pick a day, a time and a room.' });
 		}
 
-		const result = await placeSession(conference.id, placementId, {
+		const result = await placeOnBoard(conference.id, placementId, {
 			dayId,
 			roomId,
 			startMinutes
@@ -135,8 +135,9 @@ export const actions: Actions = {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const published = (await request.formData()).get('published') === 'true';
 
-		const changed = await setAgendaPublished(conference.id, published);
-		return { published, changed };
+		const result = await setAgendaPublished(conference.id, published);
+		if (!result.ok) return fail(400, { error: result.reason });
+		return { published, changed: result.changed };
 	},
 
 	toggleOne: async ({ locals, params, request }) => {

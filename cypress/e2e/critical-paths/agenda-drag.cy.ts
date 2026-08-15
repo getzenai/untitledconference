@@ -118,6 +118,12 @@ describe('Agenda drag and drop', () => {
 			});
 	};
 
+	/** The column headed by this room — not a card whose alternative label mentions it. */
+	const roomCard = (name: string) =>
+		cy
+			.contains('[data-testid="agenda-room-name"]', name)
+			.closest('[data-testid="agenda-room-card"]');
+
 	/** Put a tray talk on the grid through the editor, so the drag tests start placed. */
 	const placeFromTray = (title: string, room: string, start: string) => {
 		cy.contains('[data-testid="agenda-room-card"]', room)
@@ -132,26 +138,24 @@ describe('Agenda drag and drop', () => {
 		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 	};
 
-	it('moves a placed session into another room and time', () => {
+	it('keeps a draft talk in both rooms when dragged to a second slot', () => {
 		addRooms(['Hall 1', 'Hall 2']);
 		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
 
-		// Preconditions, both of them: the talk is on the grid, and it is in the
-		// room the drag is supposed to take it out of. Without the second, a test
-		// that never moved anything would still find it in Hall 2 if it started there.
 		cy.contains('[data-testid="agenda-room-card"]', 'Hall 1')
 			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
 			.should('contain', '09:00');
 
 		dragOnto('[data-testid^="agenda-edit-slot-"]', 'Hall 2', 11 * 60);
 
-		cy.contains('[data-testid="agenda-room-card"]', 'Hall 2')
+		roomCard('Hall 2')
 			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
 			.should('contain', '11:00');
-		// And gone from where it was. A move that copies is the failure this pins.
-		cy.contains('[data-testid="agenda-room-card"]', 'Hall 1')
-			.find('[data-testid="agenda-placed-session"]')
-			.should('not.exist');
+		// The first slot stays. A move that erases it is the failure this pins (#559).
+		roomCard('Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '09:00');
+		cy.get('[data-testid="agenda-alternative"]').should('exist');
 	});
 
 	it('takes a talk out of the tray onto the slot it is dropped on', () => {
@@ -170,26 +174,24 @@ describe('Agenda drag and drop', () => {
 	});
 
 	/**
-	 * Dropping on a taken slot opens the editor instead of writing.
-	 *
-	 * `placeSession` is permissive about conflicts, so a plain place here would
-	 * double-book rather than swap or refuse — the editor is where the two honest
-	 * readings of the gesture (trade, or empty it first) are offered.
+	 * Dropping a draft onto a draft slot keeps both as alternatives (#559).
 	 */
-	it('opens the slot editor instead of double-booking an occupied slot', () => {
+	it('keeps both drafts when one is dropped onto the other', () => {
 		addRooms(['Hall 1', 'Hall 2']);
 		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
 		placeFromTray('Fixture Talk B', 'Hall 2', '10:00');
 
 		cy.get('[data-testid="agenda-placed-session"]').should('have.length', 2);
 
-		dragOnto('[data-testid^="agenda-edit-slot-"]', 'Hall 2', 10 * 60);
+		dragOnto('[data-testid="agenda-placed-session"]', 'Hall 2', 10 * 60, 'Fixture Talk A');
 
-		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
-		// Nothing was written: B is still the one in Hall 2 at 10:00, and A has not
-		// moved out of Hall 1.
-		cy.get('[data-testid="agenda-slot-editor"]').should('contain', 'Fixture Talk B');
-		cy.get('[data-testid="agenda-slot-editor"] [data-testid="agenda-slot-remove"]').should('exist');
+		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
+		roomCard('Hall 2').find('[data-testid="agenda-placed-session"]').should('have.length', 2);
+		roomCard('Hall 2').should('contain', 'Fixture Talk A').and('contain', 'Fixture Talk B');
+		roomCard('Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('exist');
+		cy.get('[data-testid="agenda-alternative"]').should('exist');
 	});
 
 	/**

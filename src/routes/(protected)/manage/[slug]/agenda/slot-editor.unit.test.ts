@@ -64,6 +64,7 @@ function body(props: {
 			occupant: props.occupant ?? null,
 			swapWith: props.swapWith ?? [],
 			tray: props.tray ?? [waiting(1)],
+			alsoOnGrid: [],
 			days: [{ id: 1, date: '2027-05-10' }],
 			rooms: props.rooms,
 			slots: [{ minutes: 540, label: '09:00' }],
@@ -120,6 +121,7 @@ describe('the slot editor', () => {
 				occupant: null,
 				swapWith: [],
 				tray: [waiting(1)],
+				alsoOnGrid: [],
 				days: [{ id: 4, date: '2027-05-10' }],
 				rooms,
 				slots: [{ minutes: 540, label: '09:00' }],
@@ -142,14 +144,20 @@ describe('the slot editor', () => {
 		expect(html).toContain('Room 1');
 	});
 
-	it('offers no way to place onto a taken slot', () => {
-		// The double-book path. `placeSession` is permissive about conflicts, so a
-		// place form here would silently overlap rather than swap or refuse.
-		const html = body({ rooms, occupant: placed(7), tray: [waiting(1)] });
+	it('offers no way to overwrite a published slot', () => {
+		const html = body({ rooms, occupant: placed(7, 'confirmed'), tray: [waiting(1)] });
 
 		expect(html).toContain('data-testid="agenda-slot-remove"');
 		expect(html).not.toContain('data-testid="agenda-slot-place"');
-		expect(html).not.toContain('name="roomId"');
+		expect(html).not.toContain('data-testid="agenda-slot-also-place"');
+	});
+
+	it('offers to add a second draft to an occupied draft slot', () => {
+		const html = body({ rooms, occupant: placed(7), tray: [waiting(1)] });
+
+		expect(html).toContain('data-testid="agenda-slot-also-place"');
+		expect(html).toContain('Keep both as alternatives');
+		expect(posted(html, 'placementId')).toBe('1');
 	});
 
 	it('posts to ?/swap with both ids, the partner seeded the way the browser used to', () => {
