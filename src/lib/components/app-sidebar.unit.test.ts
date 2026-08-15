@@ -7,10 +7,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const source = readFileSync(
-	join(dirname(fileURLToPath(import.meta.url)), 'app-sidebar.svelte'),
-	'utf8'
-);
+const here = dirname(fileURLToPath(import.meta.url));
+const source = readFileSync(join(here, 'app-sidebar.svelte'), 'utf8');
 
 describe('app sidebar starter cleanup', () => {
 	it('renders a product home link instead of the starter team switcher', () => {
@@ -22,6 +20,19 @@ describe('app sidebar starter cleanup', () => {
 		expect(source).toContain('data-testid="sidebar-home-link"');
 		expect(source).toContain('href="/home"');
 		expect(source).toContain('untitledconference');
+	});
+
+	it('wears the same goose as the landing page (#562)', () => {
+		// Signing in must not change the bird. Both surfaces render one component,
+		// so there is a single drawing and nothing to keep in sync by hand.
+		expect(source).toContain("import Goose from '$lib/components/goose.svelte'");
+		expect(source).toContain('<Goose silent');
+		// A honking button inside the home link would be a control nobody can use.
+		expect(source).not.toContain('/mascot/');
+
+		// The body path the front door pins in its own test — one drawing, two places.
+		const goose = readFileSync(join(here, 'goose.svelte'), 'utf8');
+		expect(goose).toContain('M50 4C60 4 66 11 66 21');
 	});
 
 	it('is icon-collapsible and pins the account menu in the footer (#410)', () => {

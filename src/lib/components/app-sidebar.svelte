@@ -79,6 +79,7 @@
 	import { conferenceBadge, publicSiteLink } from '$lib/conference/conference-status';
 	import { navDestinations, reviewQueueHref, type NavAccess } from '$lib/conference/nav-access';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import Goose from '$lib/components/goose.svelte';
 	import type { ComponentProps } from 'svelte';
 	import NavAdmin from './nav-admin.svelte';
 	import NavConference from './nav-conference.svelte';
@@ -148,7 +149,13 @@
 				<Sidebar.MenuButton size="lg" tooltipContent="Home">
 					{#snippet child({ props })}
 						<a href="/home" data-testid="sidebar-home-link" {...props}>
-							<img src="/mascot/goose-signet.svg" alt="" class="size-6 shrink-0" />
+							<!--
+								The same bird as the landing page and every empty state: one
+								component, not a second file (#562). Silent here — the header is
+								a link, and a button inside a link is not a control anyone can
+								use. The honk lives where the goose is the page's own subject.
+							-->
+							<Goose silent class="h-6 w-5 shrink-0" />
 							<span class="truncate font-semibold tracking-tight">untitledconference</span>
 						</a>
 					{/snippet}
