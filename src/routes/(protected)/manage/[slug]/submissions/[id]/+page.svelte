@@ -728,10 +728,13 @@
 						before assigning submissions.
 					</p>
 				{:else}
-					<div class="mt-3 space-y-4">
+					<div class="mt-3 space-y-3">
 						{#each data.assignmentRounds as round (round.id)}
-							<div>
-								<h4 class="text-xs font-medium">{round.name}</h4>
+							<section
+								class="border-border bg-background rounded-lg border p-3"
+								data-testid="assignment-round"
+							>
+								<h4 class="text-sm font-semibold">{round.name}</h4>
 								{#if round.reviewers.length === 0}
 									<p class="text-muted-foreground mt-1 text-sm">
 										No eligible reviewers in this round —
@@ -792,7 +795,7 @@
 										{/each}
 									</ul>
 								{/if}
-							</div>
+							</section>
 						{/each}
 					</div>
 				{/if}
