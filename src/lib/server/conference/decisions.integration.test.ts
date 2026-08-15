@@ -378,6 +378,41 @@ describe('decideSubmissions — a condition on the accept', () => {
 		expect(placements).toHaveLength(1);
 	});
 
+	it('leaves an existing note alone when a later bulk accept includes the row', async () => {
+		const [other] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Also good', status: 'submitted' })
+			.returning();
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: other.id,
+			speakerProfileId,
+			isPrimary: true,
+			position: 0
+		});
+
+		await decideSubmissions(conference, [submissionId], 'accepted', {
+			text: 'bring a co-presenter',
+			ownerId: OWNER
+		});
+		// The write would null the note if the already-accepted row were not
+		// filtered out of `targets` first. The clean accept on the second talk
+		// is the shot that would have wiped the first.
+		const second = await decideSubmissions(conference, [submissionId, other.id], 'accepted');
+
+		expect(second).toMatchObject({ decided: 1, unchanged: 1 });
+
+		const [kept] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(kept.acceptCondition).toBe('bring a co-presenter');
+		expect(kept.acceptConditionOwnerId).toBe(OWNER);
+
+		const [fresh] = await db.select().from(submissionTable).where(eq(submissionTable.id, other.id));
+		expect(fresh.status).toBe('accepted');
+		expect(fresh.acceptCondition).toBeNull();
+	});
+
 	it('drops the note when the accept is taken back', async () => {
 		await decideSubmissions(conference, [submissionId], 'accepted', {
 			text: 'bring a co-presenter',
