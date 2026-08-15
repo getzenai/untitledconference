@@ -129,6 +129,16 @@
 		// refuses to ship with this on and either of them missing — a chat box that
 		// answers "AI Gateway is not configured" is worse than no chat box.
 		"FEATURE_INAPP_CHAT": "true",
-		"AI_CHAT_MODEL": "openai/gpt-4o-mini"
+		// Workers AI, reached through the same AI Gateway `/compat` endpoint as any
+		// other provider. The model id carries the provider, and the provider
+		// decides which key `AI_GATEWAY_API_KEY` has to be: this one bills against
+		// the Cloudflare account, so the key is the CLOUDFLARE_API_TOKEN already in
+		// Infisical and no third-party account is involved.
+		//
+		// Changing this string therefore changes which key is correct, and the
+		// deploy only checks that a key is *present* (#598). Change the two
+		// together, or the chat ships green and answers every reviewer with an
+		// auth error.
+		"AI_CHAT_MODEL": "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast"
 	}
 }
