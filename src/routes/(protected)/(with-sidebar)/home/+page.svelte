@@ -80,7 +80,11 @@
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Home</h1>
-			{#if data.user?.email}
+			<!-- Name first: the same email already sits truncated in the rail
+			     footer, so greeting with it is not news (#621). -->
+			{#if data.user?.name?.trim()}
+				<p class="text-muted-foreground mt-1 text-sm">Welcome, {data.user.name}</p>
+			{:else if data.user?.email}
 				<p class="text-muted-foreground mt-1 text-sm">Welcome, {data.user.email}</p>
 			{:else}
 				<p class="text-muted-foreground mt-1 text-sm">Welcome</p>

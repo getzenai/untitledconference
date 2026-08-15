@@ -36,10 +36,11 @@ function body(
 		hasOrganization: boolean;
 		href: string;
 	},
-	hub: typeof emptyHub | null = emptyHub
+	hub: typeof emptyHub | null = emptyHub,
+	user: typeof layoutData.user = layoutData.user
 ) {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	return render(Page, { props: { data: { ...layoutData, onboarding, hub } as any } }).body;
+	return render(Page, { props: { data: { ...layoutData, user, onboarding, hub } as any } }).body;
 }
 
 describe('home hub', () => {
@@ -47,7 +48,8 @@ describe('home hub', () => {
 		const html = body(null);
 
 		expect(html).toContain('data-testid="home-dashboard"');
-		expect(html).toContain('Welcome, jordan@example.test');
+		expect(html).toContain('Welcome, Jordan');
+		expect(html).not.toContain('Welcome, jordan@example.test');
 		expect(html).toContain('Your events');
 		expect(html).toContain('Create an event');
 
@@ -59,6 +61,13 @@ describe('home hub', () => {
 		expect(html).not.toContain('>Organizing<');
 		expect(html).not.toContain('>Speaking<');
 		expect(html).not.toContain('>Reviewing<');
+	});
+
+	it('falls back to email when the account has no name (#621)', () => {
+		const html = body(null, emptyHub, { ...layoutData.user, name: '' });
+
+		expect(html).toContain('Welcome, jordan@example.test');
+		expect(html).not.toContain('Welcome, Jordan');
 	});
 
 	it('lists events without forcing a single-conference redirect target', () => {
