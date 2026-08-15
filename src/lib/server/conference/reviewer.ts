@@ -356,7 +356,11 @@ export async function reviewQueue(
 			and(
 				eq(evaluationPlanTable.conferenceId, conference.id),
 				eq(reviewTable.reviewerUserId, userId),
-				ne(reviewTable.status, 'recused')
+				ne(reviewTable.status, 'recused'),
+				// A draft is still the speaker's. Assignments may already exist —
+				// they become the queue the moment the talk is submitted — but the
+				// speaker is told nobody has seen it (#614).
+				ne(submissionTable.status, 'draft')
 			)
 		);
 
@@ -565,6 +569,9 @@ export async function reviewerSubmission(
 
 	const submission = await submissionFor(conference.id, submissionId);
 	if (!submission) return null;
+	// Same promise as the queue (#614): a draft has not been handed in, so the
+	// scorecard must not name the speaker or take a verdict.
+	if (submission.status === 'draft') return null;
 
 	const [criteria, speakers, everyReview, answers, speakerHistory] = await Promise.all([
 		criteriaWithOwnAnswers(own.roundId, own.reviewId),
@@ -839,11 +846,22 @@ export type SaveReviewResult =
 	| { ok: false; reason: 'rating_off_scale'; message: string }
 	/** The speaker took the talk back while this form was open. */
 	| { ok: false; reason: 'withdrawn' }
+	/** The speaker has not handed this in yet. A stale tab must not file on it. */
+	| { ok: false; reason: 'proposal_draft' }
 	/**
 	 * The round is not taking answers (ABS-01). Two reasons rather than one, because
 	 * "come back on Monday" and "you are too late" ask opposite things of the reader.
 	 */
 	| { ok: false; reason: 'round_not_open' | 'round_closed' };
+
+/** Withdrawn and unsubmitted drafts refuse a POST the same way the page hides them. */
+function refuseIfUnreviewable(
+	status: string | undefined
+): Extract<SaveReviewResult, { ok: false; reason: 'withdrawn' | 'proposal_draft' }> | null {
+	if (status === 'withdrawn') return { ok: false, reason: 'withdrawn' };
+	if (status === 'draft') return { ok: false, reason: 'proposal_draft' };
+	return null;
+}
 
 /**
  * Saves this reviewer's answers.
@@ -888,7 +906,8 @@ export async function saveReview(
 	// withdrawn talk, but a tab opened before the speaker pulled it still holds a
 	// working form, and a POST does not care what the page currently draws.
 	const submission = await submissionFor(conference.id, submissionId);
-	if (submission?.status === 'withdrawn') return { ok: false, reason: 'withdrawn' };
+	const unreviewable = refuseIfUnreviewable(submission?.status);
+	if (unreviewable) return unreviewable;
 
 	// The round's window (ABS-01), asked here and not only drawn on the form. A date
 	// a POST can go straight through is a note, not a deadline. It gates the DRAFT

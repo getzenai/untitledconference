@@ -112,6 +112,8 @@ export async function loadHomeDashboard(userId: string): Promise<HomeDashboard> 
  *
  * Built from `review` rows so a submission they were never assigned cannot appear.
  * Withdrawn talks stay out: the speaker took them back and no answer is wanted.
+ * Drafts stay out too (#614): they have not been handed in, even if a review
+ * row already exists for when they are.
  */
 async function openReviewsFor(userId: string): Promise<HomeOpenReview[]> {
 	const rows = await db
@@ -133,7 +135,8 @@ async function openReviewsFor(userId: string): Promise<HomeOpenReview[]> {
 			and(
 				eq(reviewTable.reviewerUserId, userId),
 				eq(reviewTable.status, 'assigned'),
-				ne(submissionTable.status, 'withdrawn')
+				ne(submissionTable.status, 'withdrawn'),
+				ne(submissionTable.status, 'draft')
 			)
 		)
 		.orderBy(desc(reviewTable.id));

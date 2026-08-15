@@ -244,6 +244,36 @@ describe('loadHomeDashboard', () => {
 		}
 	});
 
+	it('leaves an assigned draft off Reviews waiting (#614)', async () => {
+		const [draft] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId,
+				title: 'Still typing',
+				status: 'draft',
+				submittedAt: null
+			})
+			.returning();
+		const [seat] = await db
+			.insert(reviewTable)
+			.values({
+				reviewRoundId: roundId,
+				submissionId: draft.id,
+				reviewerUserId: reviewerId,
+				status: 'assigned'
+			})
+			.returning();
+
+		try {
+			const hub = await loadHomeDashboard(reviewerId);
+			expect(hub.openReviews.map((r) => r.submissionId)).not.toContain(draft.id);
+			expect(hub.openReviews.map((r) => r.submissionId)).toContain(submissionId);
+		} finally {
+			await db.delete(reviewTable).where(eq(reviewTable.id, seat.id));
+			await db.delete(submissionTable).where(eq(submissionTable.id, draft.id));
+		}
+	});
+
 	it('returns a real empty state for a stranger with no seats', async () => {
 		const strangerId = `stranger-${suffix}`;
 		await db.insert(user).values({

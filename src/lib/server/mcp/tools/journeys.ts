@@ -658,6 +658,8 @@ function submitReviewTool(ctx: McpContext): AnyMcpToolDefinition {
 					not_assigned: `No assignment for submission ${submissionId} on "${conferenceSlug}".`,
 					empty_submit: 'A review needs at least a score or a comment.',
 					withdrawn: 'The speaker withdrew this talk. It cannot be reviewed.',
+					proposal_draft:
+						'This talk is still a draft. It cannot be reviewed until the speaker submits it.',
 					round_not_open: 'This review round has not opened yet.',
 					round_closed: 'This review round has closed.'
 				};
