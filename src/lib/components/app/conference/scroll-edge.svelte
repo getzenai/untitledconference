@@ -36,6 +36,11 @@
 	 * reach, so each edge that has something behind it also carries a button. They
 	 * are real buttons, so a keyboard and a screenreader get the same reach as a
 	 * trackpad — the scrolling box itself is not focusable and never announced.
+	 *
+	 * Those buttons say what they move (#604). A phone can overflow the tab strip
+	 * and the room grid at the same time, and "Scroll right" twice is no answer to
+	 * "which one?" — the eye gets the answer from where the button sits, and a
+	 * screenreader has nothing but the name.
 	 */
 	import { cn } from '$lib/utils.js';
 	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
@@ -47,6 +52,7 @@
 		class: className,
 		viewportClass,
 		label,
+		name,
 		...rest
 	}: {
 		children: Snippet;
@@ -56,8 +62,17 @@
 		viewportClass?: string;
 		/** What the hint says. Name the rooms when the screen has a better word. */
 		label?: string;
+		/**
+		 * What the buttons move, in the plural: `rooms` makes "Scroll rooms right".
+		 * Set it wherever two strips can share a screen (#604). Unset is the bare
+		 * "Scroll right", which is honest as long as it is the only one.
+		 */
+		name?: string;
 		[key: string]: unknown;
 	} = $props();
+
+	const scrollLabel = (direction: 'left' | 'right') =>
+		name ? `Scroll ${name} ${direction}` : `Scroll ${direction}`;
 
 	let viewport = $state<HTMLDivElement | null>(null);
 	let more = $state(false);
@@ -78,8 +93,8 @@
 
 	/**
 	 * A click moves by most of the box, not by a column: this component is a strip
-	 * of rooms on one page, a table on another and a tab bar on a third, and it does
-	 * not know what a column is on any of them. Keeping a fifth of the view means
+	 * of rooms on one page and a bar of tabs on another, and it does not know what a
+	 * column is on either of them. Keeping a fifth of the view means
 	 * the reader always has something they just saw to anchor on, and repeated
 	 * clicks still reach the far end.
 	 */
@@ -128,7 +143,7 @@
 		<button
 			type="button"
 			data-testid="scroll-back"
-			aria-label="Scroll left"
+			aria-label={scrollLabel('left')}
 			onclick={() => nudge(-1)}
 			class="bg-background/80 text-muted-foreground hover:text-foreground focus-visible:ring-ring border-border absolute top-1/2 left-1 z-10 -translate-y-1/2 rounded-full border p-1 shadow-sm backdrop-blur-sm focus-visible:ring-2 focus-visible:outline-none"
 		>
@@ -149,7 +164,7 @@
 		<button
 			type="button"
 			data-testid="scroll-on"
-			aria-label="Scroll right"
+			aria-label={scrollLabel('right')}
 			onclick={() => nudge(1)}
 			class="bg-background/80 text-muted-foreground hover:text-foreground focus-visible:ring-ring border-border absolute top-1/2 right-1 z-10 -translate-y-1/2 rounded-full border p-1 shadow-sm backdrop-blur-sm focus-visible:ring-2 focus-visible:outline-none"
 		>

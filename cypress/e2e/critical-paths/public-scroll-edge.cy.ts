@@ -139,6 +139,8 @@ describe('Sideways scrolling on the public site', () => {
 		const GRID_BOX = '[data-testid="agenda-room-grid"]';
 		const onward = `${GRID_BOX} [data-testid="scroll-on"]`;
 		const back = `${GRID_BOX} [data-testid="scroll-back"]`;
+		/** How far the grid has actually travelled, retried until the smooth scroll lands. */
+		const offset = () => cy.get(`${GRID_BOX} > div`).first().invoke('scrollLeft');
 
 		// Nothing has moved yet, so there is nothing behind us to go back to. A
 		// button offering the trip anyway is the same lie as a permanent fade.
@@ -146,13 +148,20 @@ describe('Sideways scrolling on the public site', () => {
 
 		// A mouse, and only a mouse. Each click moves most of a box; four rooms in
 		// 342 px take two or three, so keep clicking while the button is still there.
+		//
+		// Each step waits for the strip to have moved rather than for a number of
+		// milliseconds: `behavior: 'smooth'` has no promised duration, so a fixed
+		// wait is either slower than the scroll or — on a loaded CI box — shorter
+		// than it, and the second kind of flake only shows up in somebody else's PR.
 		const toTheEnd = (left = 6) => {
 			if (left === 0) return;
 			cy.get('body').then(($body) => {
 				if ($body.find(onward).length === 0) return;
-				cy.get(onward).click();
-				cy.wait(400); // the scroll is smooth; let it land before re-measuring
-				toTheEnd(left - 1);
+				offset().then((before) => {
+					cy.get(onward).click();
+					offset().should('be.greaterThan', Number(before));
+					toTheEnd(left - 1);
+				});
 			});
 		};
 		toTheEnd();
@@ -164,15 +173,46 @@ describe('Sideways scrolling on the public site', () => {
 			if (left === 0) return;
 			cy.get('body').then(($body) => {
 				if ($body.find(back).length === 0) return;
-				cy.get(back).click();
-				cy.wait(400);
-				toTheStart(left - 1);
+				offset().then((before) => {
+					cy.get(back).click();
+					offset().should('be.lessThan', Number(before));
+					toTheStart(left - 1);
+				});
 			});
 		};
 		toTheStart();
 
 		cy.contains(ROOMS[0]).should('be.visible');
 		cy.get(back).should('not.exist');
+	});
+
+	it('gives the two strips on one screen two different button names (#604)', () => {
+		cy.viewport(PHONE.width, PHONE.height);
+		cy.visit(`/c/${slug}/agenda`);
+		cy.waitForHydration();
+
+		// The agenda is the page where both strips overflow at once. The eye tells
+		// them apart by where they sit; a screenreader has only the name, and two
+		// buttons called "Scroll right" leave it with no way to say which.
+		cy.get('[data-testid="conference-tabs"] [data-testid="scroll-on"]').should(
+			'have.attr',
+			'aria-label',
+			'Scroll sections right'
+		);
+		cy.get('[data-testid="agenda-room-grid"] [data-testid="scroll-on"]').should(
+			'have.attr',
+			'aria-label',
+			'Scroll rooms right'
+		);
+
+		// The back button carries the same name, so the pair stays consistent once
+		// the reader has moved either strip.
+		cy.get('[data-testid="agenda-room-grid"] [data-testid="scroll-on"]').click();
+		cy.get('[data-testid="agenda-room-grid"] [data-testid="scroll-back"]').should(
+			'have.attr',
+			'aria-label',
+			'Scroll rooms left'
+		);
 	});
 
 	it('leaves the desktop agenda alone', () => {
@@ -211,9 +251,10 @@ describe('Sideways scrolling on the public site', () => {
 		// click on it has to move the strip rather than open whatever is underneath
 		// (#589). Staying on the page is the assertion.
 		cy.get('[data-testid="conference-tabs"] [data-testid="scroll-on"]').click();
-		cy.wait(400);
-		cy.location('pathname').should('eq', `/c/${slug}`);
+		// The back button only appears once the strip has really moved, so waiting
+		// for it is waiting for the scroll — no clock involved.
 		cy.get('[data-testid="conference-tabs"] [data-testid="scroll-back"]').should('exist');
+		cy.location('pathname').should('eq', `/c/${slug}`);
 
 		// The tab furthest right is the one the edge lies over. Reaching it is the
 		// whole point of leaving the strip scrollable.

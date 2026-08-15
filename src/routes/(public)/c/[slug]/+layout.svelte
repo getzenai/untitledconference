@@ -98,7 +98,9 @@
 			     for the person the whole site is trying to attract. The banner above is
 			     a second way there and it has a dismiss button, so once it is gone this
 			     strip is the only one. -->
-			<ScrollEdge class="mx-auto max-w-6xl" data-testid="conference-tabs">
+			<!-- "sections" is the word the nav below already uses for itself, so the
+			     button and the landmark agree (#604). -->
+			<ScrollEdge class="mx-auto max-w-6xl" data-testid="conference-tabs" name="sections">
 				<nav aria-label="Conference sections" class="px-6">
 					<ul class="-mb-px flex gap-6 text-sm whitespace-nowrap">
 						{#each surfaces as surface (surface.path)}
