@@ -16,11 +16,38 @@ vi.mock('$app/state', () => ({
 	page: { url: new URL('https://example.test/c/many-rooms/agenda') }
 }));
 
-const conference = (roomCount: number, extra: Partial<PublicConference> = {}) => {
+const session = (
+	id: string,
+	title: string,
+	roomId: string | null,
+	startsAt: string,
+	endsAt: string,
+	dayId = 'day-1'
+) => ({
+	id,
+	title,
+	description: '',
+	dayId,
+	startsAt,
+	endsAt,
+	roomId,
+	trackId: null,
+	formatId: null,
+	speakerIds: [],
+	recordingUrl: null
+});
+
+const conference = (
+	roomCount: number,
+	extra: Partial<PublicConference> = {},
+	occupy: 'all' | 'last' = 'all'
+) => {
 	const rooms = Array.from({ length: roomCount }, (_, i) => ({
 		id: `room-${i + 1}`,
 		name: `Hall ${i + 1}`
 	}));
+
+	const occupied = occupy === 'all' ? rooms : [rooms[rooms.length - 1]];
 
 	return {
 		id: 'conf-1',
@@ -34,32 +61,22 @@ const conference = (roomCount: number, extra: Partial<PublicConference> = {}) =>
 		tracks: [],
 		formats: [],
 		sessions: [
-			{
-				id: 'session-1',
-				title: 'Opening keynote',
-				description: 'Everyone is in the same place for this one.',
-				dayId: 'day-1',
-				startsAt: '2027-06-01T09:00:00.000Z',
-				endsAt: '2027-06-01T09:30:00.000Z',
-				roomId: null,
-				trackId: null,
-				formatId: null,
-				speakerIds: [],
-				recordingUrl: null
-			},
-			{
-				id: 'session-2',
-				title: 'A talk in the last room',
-				description: 'Only reachable by scrolling once the rooms outgrow the screen.',
-				dayId: 'day-1',
-				startsAt: '2027-06-01T10:00:00.000Z',
-				endsAt: '2027-06-01T10:45:00.000Z',
-				roomId: rooms[rooms.length - 1].id,
-				trackId: null,
-				formatId: null,
-				speakerIds: [],
-				recordingUrl: null
-			}
+			session(
+				'session-plenary',
+				'Opening keynote',
+				null,
+				'2027-06-01T09:00:00.000Z',
+				'2027-06-01T09:30:00.000Z'
+			),
+			...occupied.map((room, i) =>
+				session(
+					`session-${room.id}`,
+					i === occupied.length - 1 ? 'A talk in the last room' : `A talk in ${room.name}`,
+					room.id,
+					'2027-06-01T10:00:00.000Z',
+					'2027-06-01T10:45:00.000Z'
+				)
+			)
 		],
 		speakers: [],
 		...extra
@@ -69,9 +86,10 @@ const conference = (roomCount: number, extra: Partial<PublicConference> = {}) =>
 // `data` on a page also carries the layout's half — session, analytics, the open
 // call — and the grid reads none of it. The cast keeps the fixture to what the
 // component actually touches instead of a page of unused nulls.
-const agenda = (roomCount: number) =>
-	render(Page, { props: { data: { conference: conference(roomCount), embed: false } as never } })
-		.body;
+const agenda = (roomCount: number, occupy: 'all' | 'last' = 'all') =>
+	render(Page, {
+		props: { data: { conference: conference(roomCount, {}, occupy), embed: false } as never }
+	}).body;
 
 /** Every `grid-template-columns` the page rendered, in document order. */
 const columnDefinitions = (html: string) =>
@@ -110,5 +128,54 @@ describe('the public agenda grid', () => {
 
 		expect(html).toContain('grid-column: 2 / 33');
 		expect(html).toContain('Opening keynote');
+	});
+
+	it('does not draw a column for a room with no talk on the day', () => {
+		const html = agenda(3, 'last');
+
+		expect(html).not.toContain('Hall 1');
+		expect(html).not.toContain('Hall 2');
+		expect(html).toContain('Hall 3');
+		expect(columnDefinitions(html)[0]).toContain('repeat(1, minmax(9rem, 1fr))');
+	});
+
+	it('does not let a room used only on day 2 widen day 1', () => {
+		const html = render(Page, {
+			props: {
+				data: {
+					conference: conference(2, {
+						days: [
+							{ id: 'day-1', date: '2027-06-01', label: 'Day 1' },
+							{ id: 'day-2', date: '2027-06-02', label: 'Day 2' }
+						],
+						sessions: [
+							session(
+								'session-day-1',
+								'Day 1 talk',
+								'room-1',
+								'2027-06-01T10:00:00.000Z',
+								'2027-06-01T10:45:00.000Z',
+								'day-1'
+							),
+							session(
+								'session-day-2',
+								'Day 2 talk',
+								'room-2',
+								'2027-06-02T10:00:00.000Z',
+								'2027-06-02T10:45:00.000Z',
+								'day-2'
+							)
+						]
+					}),
+					embed: false
+				} as never
+			}
+		}).body;
+
+		expect(html).toContain('Hall 1');
+		expect(html).not.toContain('Hall 2');
+		expect(html).toContain('Day 1 talk');
+		expect(html).not.toContain('Day 2 talk');
+		expect(columnDefinitions(html)[0]).toContain('repeat(1, minmax(9rem, 1fr))');
 	});
 });
