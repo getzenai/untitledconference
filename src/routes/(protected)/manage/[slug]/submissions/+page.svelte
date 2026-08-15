@@ -13,7 +13,11 @@
 	import ChevronsUpDownIcon from '@lucide/svelte/icons/chevrons-up-down';
 	import { enhance } from '$lib/forms/enhance';
 	import { page as currentPage } from '$app/state';
-	import { bulkToolbarBlockReason, type BulkToolbarFacts } from '$lib/conference/bulk-toolbar';
+	import {
+		BULK_SELECT_REASON,
+		bulkToolbarBlockReason,
+		type BulkToolbarFacts
+	} from '$lib/conference/bulk-toolbar';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import {
 		describeBulkAssign,
@@ -40,6 +44,7 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
+	import * as Dialog from '$lib/components/ui/dialog';
 	import { untrack } from 'svelte';
 	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 
@@ -58,6 +63,8 @@
 	let allowDecision = false;
 	/** Round for bulk assignment; empty until the organizer picks one. */
 	let assignRoundId = $state('');
+	/** The assignment dialog (#413) — staffing a round is not deciding a programme. */
+	let assignOpen = $state(false);
 	const assignReviewerIds = new SvelteSet<string>();
 	let reviewsPerSubmission = $state('2');
 	let capPerReviewer = $state('10');
@@ -547,138 +554,33 @@
 					</div>
 					{#if data.assignmentTargets.length > 0}
 						<!--
-							ABS-06 part A: same selection as decide/notify. Round first,
-							then any subset of that round's committee. Each pair still
-							validates (speaker / track / recusal); existing seats are
-							counted as skipped, not rewritten.
+							#413: staffing a review round and deciding a programme happen in
+							different weeks. The strip keeps the decisions; assignment is one
+							button that opens its own dialog (and its own form — a nested one
+							would post the round under `?/decide`).
 						-->
 						<span class="bg-border mx-1 hidden h-5 w-px sm:block" aria-hidden="true"></span>
-						<div class="flex min-w-0 flex-col gap-2" data-testid="bulk-assign">
-							<div class="flex flex-wrap items-center gap-2">
-								<AppSelect
-									name="roundId"
-									size="sm"
-									class="w-40"
-									placeholder="Round"
-									aria-label="Review round for bulk assignment"
-									testId="bulk-assign-round"
-									value={assignRoundId}
-									options={assignRoundOptions}
-									onValueChange={(value) => {
-										assignRoundId = value;
-										// A reviewer from the previous round must not post under
-										// the new one just because their id string still sits in state.
-										assignReviewerIds.clear();
-									}}
-								/>
-								<div class="flex flex-col items-start gap-1">
-									<Button
-										type="submit"
-										formaction="?/assign"
-										variant="secondary"
-										size="sm"
-										disabled={busy || Boolean(assignBlockReason)}
-										data-testid="bulk-assign-submit"
-										aria-describedby={assignBlockReason ? 'assign-block-reason' : undefined}
-									>
-										Assign reviewers
-									</Button>
-									{#if assignBlockReason}
-										<p
-											id="assign-block-reason"
-											class="text-muted-foreground max-w-48 text-xs"
-											data-testid="assign-block-reason"
-										>
-											{assignBlockReason}
-										</p>
-									{/if}
-								</div>
-								<label class="text-muted-foreground flex items-center gap-1 text-sm">
-									<input
-										type="number"
-										name="reviewsPerSubmission"
-										min="1"
-										step="1"
-										class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
-										bind:value={reviewsPerSubmission}
-										data-testid="bulk-assign-per-talk"
-										aria-label="Reviewers per talk"
-									/>
-									each
-								</label>
-								<label class="text-muted-foreground flex items-center gap-1 text-sm">
-									cap
-									<input
-										type="number"
-										name="capPerReviewer"
-										min="1"
-										step="1"
-										class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
-										bind:value={capPerReviewer}
-										data-testid="bulk-assign-cap"
-										aria-label="Cap per reviewer"
-									/>
-								</label>
-								<div class="flex flex-col items-start gap-1">
-									<Button
-										type="submit"
-										formaction="?/distribute"
-										variant="secondary"
-										size="sm"
-										disabled={busy || Boolean(distributeBlockReason)}
-										data-testid="bulk-distribute-submit"
-										aria-describedby={distributeBlockReason ? 'distribute-block-reason' : undefined}
-									>
-										Auto-distribute
-									</Button>
-									{#if distributeBlockReason}
-										<p
-											id="distribute-block-reason"
-											class="text-muted-foreground max-w-48 text-xs"
-											data-testid="distribute-block-reason"
-										>
-											{distributeBlockReason}
-										</p>
-									{/if}
-								</div>
-							</div>
-							<p class="text-muted-foreground text-xs">
-								Auto-distribute fills from the checked reviewers, or the whole committee if none are
-								checked.
-							</p>
-							<!--
-								Remount when the round changes so a checked box from the
-								previous committee cannot post under the new roundId.
-							-->
-							{#key assignRoundId}
-								{#if assignRoundId !== '' && assignReviewers.length > 0}
-									<fieldset
-										class="flex flex-wrap items-center gap-x-3 gap-y-1"
-										data-testid="bulk-assign-reviewers"
-									>
-										<legend class="sr-only">Reviewers to assign or auto-distribute among</legend>
-										{#each assignReviewers as reviewer (reviewer.userId)}
-											<label class="flex items-center gap-1.5 text-sm">
-												<input
-													type="checkbox"
-													name="reviewerUserId"
-													value={reviewer.userId}
-													class="border-input size-4 rounded"
-													checked={assignReviewerIds.has(reviewer.userId)}
-													onchange={(event) => {
-														if (event.currentTarget.checked) {
-															assignReviewerIds.add(reviewer.userId);
-														} else {
-															assignReviewerIds.delete(reviewer.userId);
-														}
-													}}
-												/>
-												<span>{reviewer.name}</span>
-											</label>
-										{/each}
-									</fieldset>
-								{/if}
-							{/key}
+						<div class="flex flex-col items-start gap-1" data-testid="bulk-assign">
+							<Button
+								type="button"
+								variant="secondary"
+								size="sm"
+								disabled={busy || selected.size === 0}
+								onclick={() => (assignOpen = true)}
+								data-testid="bulk-assign-open"
+								aria-describedby={selected.size === 0 ? 'assign-block-reason' : undefined}
+							>
+								Assign reviewers…
+							</Button>
+							{#if selected.size === 0}
+								<p
+									id="assign-block-reason"
+									class="text-muted-foreground max-w-48 text-xs"
+									data-testid="assign-block-reason"
+								>
+									{BULK_SELECT_REASON}
+								</p>
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -904,3 +806,168 @@
 		</AlertDialogFooter>
 	</AlertDialogContent>
 </AlertDialog>
+
+<!--
+	#413: the assignment form, with its own `<form>` outside the decide form.
+	It carries the selection as hidden fields — the row checkboxes live in the
+	other form and a dialog cannot borrow them. The server actions are
+	unchanged: same `id`, `roundId`, `reviewerUserId`, `reviewsPerSubmission`
+	and `capPerReviewer` as before.
+-->
+<Dialog.Root bind:open={assignOpen}>
+	<Dialog.Content class="sm:max-w-lg" data-testid="bulk-assign-dialog">
+		<Dialog.Header>
+			<Dialog.Title>Assign reviewers to {selected.size} {pendingNoun}</Dialog.Title>
+			<Dialog.Description>
+				Round first, then any subset of that round's committee. Each pair is still checked for
+				speaker, track and recusal conflicts; seats that already exist are skipped, not rewritten.
+			</Dialog.Description>
+		</Dialog.Header>
+		<form
+			method="POST"
+			action="?/assign"
+			class="flex flex-col gap-3"
+			use:enhance={() => {
+				busy = true;
+				return async ({ update }) => {
+					try {
+						await update(formUpdateOptions('edit'));
+						// The result line sits above the table, behind this dialog.
+						assignOpen = false;
+					} finally {
+						busy = false;
+					}
+				};
+			}}
+		>
+			{#each [...selected] as id (id)}
+				<input type="hidden" name="id" value={id} />
+			{/each}
+			<div class="flex flex-wrap items-center gap-2">
+				<AppSelect
+					name="roundId"
+					size="sm"
+					class="w-40"
+					placeholder="Round"
+					aria-label="Review round for bulk assignment"
+					testId="bulk-assign-round"
+					value={assignRoundId}
+					options={assignRoundOptions}
+					onValueChange={(value) => {
+						assignRoundId = value;
+						// A reviewer from the previous round must not post under
+						// the new one just because their id string still sits in state.
+						assignReviewerIds.clear();
+					}}
+				/>
+				<label class="text-muted-foreground flex items-center gap-1 text-sm">
+					<input
+						type="number"
+						name="reviewsPerSubmission"
+						min="1"
+						step="1"
+						class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
+						bind:value={reviewsPerSubmission}
+						data-testid="bulk-assign-per-talk"
+						aria-label="Reviewers per talk"
+					/>
+					each
+				</label>
+				<label class="text-muted-foreground flex items-center gap-1 text-sm">
+					cap
+					<input
+						type="number"
+						name="capPerReviewer"
+						min="1"
+						step="1"
+						class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
+						bind:value={capPerReviewer}
+						data-testid="bulk-assign-cap"
+						aria-label="Cap per reviewer"
+					/>
+				</label>
+			</div>
+			<!--
+				Remount when the round changes so a checked box from the
+				previous committee cannot post under the new roundId.
+			-->
+			{#key assignRoundId}
+				{#if assignRoundId !== '' && assignReviewers.length > 0}
+					<fieldset
+						class="flex flex-wrap items-center gap-x-3 gap-y-1"
+						data-testid="bulk-assign-reviewers"
+					>
+						<legend class="sr-only">Reviewers to assign or auto-distribute among</legend>
+						{#each assignReviewers as reviewer (reviewer.userId)}
+							<label class="flex items-center gap-1.5 text-sm">
+								<input
+									type="checkbox"
+									name="reviewerUserId"
+									value={reviewer.userId}
+									class="border-input size-4 rounded"
+									checked={assignReviewerIds.has(reviewer.userId)}
+									onchange={(event) => {
+										if (event.currentTarget.checked) {
+											assignReviewerIds.add(reviewer.userId);
+										} else {
+											assignReviewerIds.delete(reviewer.userId);
+										}
+									}}
+								/>
+								<span>{reviewer.name}</span>
+							</label>
+						{/each}
+					</fieldset>
+				{/if}
+			{/key}
+			<p class="text-muted-foreground text-xs">
+				Auto-distribute fills from the checked reviewers, or the whole committee if none are
+				checked.
+			</p>
+			<Dialog.Footer class="flex-col items-stretch gap-2 sm:flex-row sm:items-end sm:justify-end">
+				<div class="flex flex-col items-start gap-1">
+					<Button
+						type="submit"
+						formaction="?/distribute"
+						variant="secondary"
+						size="sm"
+						disabled={busy || Boolean(distributeBlockReason)}
+						data-testid="bulk-distribute-submit"
+						aria-describedby={distributeBlockReason ? 'distribute-block-reason' : undefined}
+					>
+						Auto-distribute
+					</Button>
+					{#if distributeBlockReason}
+						<p
+							id="distribute-block-reason"
+							class="text-muted-foreground max-w-48 text-xs"
+							data-testid="distribute-block-reason"
+						>
+							{distributeBlockReason}
+						</p>
+					{/if}
+				</div>
+				<div class="flex flex-col items-start gap-1">
+					<Button
+						type="submit"
+						size="sm"
+						disabled={busy || Boolean(assignBlockReason)}
+						data-testid="bulk-assign-submit"
+						aria-describedby={assignBlockReason ? 'assign-dialog-block-reason' : undefined}
+					>
+						Assign reviewers
+					</Button>
+					{#if assignBlockReason}
+						<p
+							id="assign-dialog-block-reason"
+							class="text-muted-foreground max-w-48 text-xs"
+							data-testid="assign-dialog-block-reason"
+						>
+							{assignBlockReason}
+						</p>
+					{/if}
+				</div>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>

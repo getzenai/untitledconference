@@ -50,6 +50,11 @@ describe('Bulk assign several reviewers', () => {
 					cy.get('tbody tr').should('have.length', 5);
 					cy.get('input[aria-label="Select every submission in view"]').check();
 
+					// #413: round, committee and counts moved into a dialog; the strip
+					// keeps decide and notify. The selection travels as hidden fields.
+					cy.get('[data-testid="bulk-assign-open"]').should('not.be.disabled').click();
+					cy.get('[data-testid="bulk-assign-dialog"]').should('be.visible');
+
 					cy.get('[data-testid="bulk-assign-round"]').click();
 					cy.get('[role="option"]').contains('Screening').click();
 					cy.get('[data-testid="bulk-assign-reviewers"]').should('exist');

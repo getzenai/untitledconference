@@ -147,46 +147,68 @@ describe('organizer submission decisions', () => {
 	});
 
 	/**
-	 * ABS-06: selection already exists for decide/notify; bulk assign rides the
-	 * same checkboxes with a third action. Without a round there is nothing to
-	 * assign to, so the controls stay off the page rather than offering a dead form.
+	 * ABS-06 + #413: bulk assign rides the same checkboxes, but staffing a round
+	 * and deciding a programme happen in different weeks — so the strip only
+	 * carries the door, and round, committee and counts live behind it. The
+	 * dialog is closed on first paint, so only the trigger is in the SSR markup.
+	 * Without a round there is nothing to assign to and even the door stays off.
 	 */
-	it('offers bulk reviewer assignment next to the decision buttons', () => {
+	it('puts bulk reviewer assignment behind one button, not on the strip', () => {
 		const body = renderPage();
 
 		expect(body).toContain('data-testid="bulk-assign"');
-		expect(body).toContain('formaction="?/assign"');
+		expect(body).toContain('data-testid="bulk-assign-open"');
 		expect(body).toContain('Assign reviewers');
-		expect(body).toContain('formaction="?/distribute"');
-		expect(body).toContain('Auto-distribute');
-		expect(body).toContain('data-testid="bulk-assign-round"');
-		expect(body).toContain('data-testid="bulk-assign-per-talk"');
-		expect(body).toContain('data-testid="bulk-assign-cap"');
-		expect(body).toContain('name="roundId"');
-		expect(body).toContain('whole committee');
-		// Reviewer checkboxes mount after a round is chosen — the E2E owns that.
+
+		// The controls moved into the dialog; the decide form must not carry them.
+		expect(body).not.toContain('formaction="?/assign"');
+		expect(body).not.toContain('formaction="?/distribute"');
+		expect(body).not.toContain('data-testid="bulk-assign-round"');
+		expect(body).not.toContain('data-testid="bulk-assign-per-talk"');
+		expect(body).not.toContain('data-testid="bulk-assign-cap"');
+		expect(body).not.toContain('name="roundId"');
+	});
+
+	/**
+	 * The trigger is a plain button. Inside the decide form a submit button
+	 * would decide the selection instead of opening anything.
+	 */
+	it('opens the assignment dialog without submitting the decide form', () => {
+		const body = renderPage();
+
+		const trigger = body.slice(
+			body.lastIndexOf('<button', body.indexOf('data-testid="bulk-assign-open"')),
+			body.indexOf('</button>', body.indexOf('data-testid="bulk-assign-open"'))
+		);
+		expect(trigger).toContain('type="button"');
+		expect(trigger).not.toContain('formaction');
 	});
 
 	it('hides bulk assign when the conference has no review rounds yet', () => {
 		const body = renderPage(null, 'newest', '', {}, null, []);
 
 		expect(body).not.toContain('data-testid="bulk-assign"');
-		expect(body).not.toContain('formaction="?/assign"');
+		expect(body).not.toContain('data-testid="bulk-assign-open"');
 	});
 
 	/**
-	 * #453: first paint has no selection, so all three are dead for that reason —
-	 * not "nothing decided", not a closed round. After a selection the other
-	 * gates surface; SSR can only pin the first one.
+	 * #453: first paint has no selection, so both are dead for that reason —
+	 * not "nothing decided", not a closed round. Auto-distribute's own gates
+	 * are inside the dialog now; the door names the one that comes first.
 	 */
-	it('names why Assign, Auto-distribute and Notify are grey on first paint', () => {
+	it('names why Assign and Notify are grey on first paint', () => {
 		const body = renderPage();
 
 		expect(body).toContain('data-testid="notify-block-reason"');
 		expect(body).toContain('data-testid="assign-block-reason"');
-		expect(body).toContain('data-testid="distribute-block-reason"');
 		expect(body).toContain(BULK_SELECT_REASON);
 		expect(body).not.toMatch(/nothing has been decided/i);
+
+		const assign = body.slice(
+			body.lastIndexOf('<button', body.indexOf('data-testid="bulk-assign-open"')),
+			body.indexOf('</button>', body.indexOf('data-testid="bulk-assign-open"'))
+		);
+		expect(assign).toContain('disabled');
 
 		const notify = body.slice(
 			body.lastIndexOf('<button', body.indexOf('formaction="?/notify"')),
