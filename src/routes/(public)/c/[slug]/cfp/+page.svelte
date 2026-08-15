@@ -45,6 +45,10 @@
 	let fromPending = $state(false);
 	let pendingIntent = $state<'draft' | 'submit' | null>(null);
 	let listening = $state(false);
+	let startingAnother = $state(false);
+
+	const existingDraft = $derived(data.existing?.status === 'draft' ? data.existing : null);
+	const showNewProposal = $derived(!existingDraft || startingAnother);
 
 	/**
 	 * Whose parked draft this page may open (#505).
@@ -198,23 +202,46 @@
 			This call has not opened yet. Check back nearer the date.
 		</p>
 	{:else}
-		{#if data.existing}
+		{#if existingDraft}
+			<div
+				class="border-border bg-card mt-4 rounded-lg border p-4"
+				data-testid="cfp-existing-draft"
+			>
+				<h3 class="font-semibold">Continue your draft</h3>
+				<p class="text-muted-foreground mt-1 text-sm">
+					{existingDraft.title} is still private. Finish it before starting over.
+				</p>
+				<div class="mt-4 flex flex-wrap items-center gap-2">
+					<Button
+						href="/portal/submissions/{existingDraft.id}/edit"
+						variant={startingAnother ? 'outline' : 'act'}
+						data-testid="cfp-continue-draft"
+					>
+						Continue draft
+					</Button>
+					{#if !startingAnother}
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							data-testid="cfp-start-another"
+							onclick={() => (startingAnother = true)}
+						>
+							Start another proposal
+						</Button>
+					{/if}
+				</div>
+			</div>
+		{:else if data.existing}
 			<p class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm">
-				{#if data.existing.status !== 'draft'}
-					You already sent a proposal to this call —
-					<a class="underline" href="/portal/submissions/{data.existing.id}/edit">
-						{data.existing.title}
-					</a>. Edit that one instead; filling this form in again would send a second.
-				{:else}
-					You already have an unfinished proposal here —
-					<a class="underline" href="/portal/submissions/{data.existing.id}/edit">
-						{data.existing.title}
-					</a>. Filling this form in again would create a second one.
-				{/if}
+				You already sent a proposal to this call —
+				<a class="underline" href="/portal/submissions/{data.existing.id}/edit">
+					{data.existing.title}
+				</a>. Edit that one instead; filling this form in again would send a second.
 			</p>
 		{/if}
 
-		{#if !signedIn}
+		{#if showNewProposal && !signedIn}
 			<div
 				class="border-border bg-card mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4"
 				data-testid="cfp-sign-in"
@@ -230,7 +257,7 @@
 			</div>
 		{/if}
 
-		{#if data.speakerProfile}
+		{#if showNewProposal && data.speakerProfile}
 			<!--
 				The profile is org-wide (#558). A correction here is not "for this
 				talk" — EMB-01 reads these columns on every talk this person gives
@@ -254,7 +281,7 @@
 			whose typing it is: on a shared machine the honest answer is "this
 			browser", and the useful control is throwing it away.
 		-->
-		{#if resumedLocal}
+		{#if showNewProposal && resumedLocal}
 			<div
 				class="border-border bg-muted/40 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm"
 				data-testid="cfp-resumed-local-draft"
@@ -277,7 +304,7 @@
 			</div>
 		{/if}
 
-		{#if resume}
+		{#if showNewProposal && resume}
 			<p
 				class="border-border bg-muted/40 mt-4 rounded-lg border p-4 text-sm"
 				data-testid="cfp-resume-after-signin"
@@ -293,20 +320,22 @@
 			</p>
 		{/if}
 
-		{#key restored}
-			<ProposalForm
-				fields={call.fields}
-				fixed={call.fixed}
-				formats={call.formats}
-				tracks={call.tracks}
-				initial={restored ?? fromProfile}
-				{form}
-				{signedIn}
-				onSignIn={stashAndSignIn}
-				autoAction={resume ? pendingIntent : null}
-				onDraftChange={listening ? persistDraft : undefined}
-				onCommitted={clearDraft}
-			/>
-		{/key}
+		{#if showNewProposal}
+			{#key restored}
+				<ProposalForm
+					fields={call.fields}
+					fixed={call.fixed}
+					formats={call.formats}
+					tracks={call.tracks}
+					initial={restored ?? fromProfile}
+					{form}
+					{signedIn}
+					onSignIn={stashAndSignIn}
+					autoAction={resume ? pendingIntent : null}
+					onDraftChange={listening ? persistDraft : undefined}
+					onCommitted={clearDraft}
+				/>
+			{/key}
+		{/if}
 	{/if}
 </div>

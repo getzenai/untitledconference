@@ -120,6 +120,55 @@ describe('Signing in from the public call', () => {
 		cy.contains('a', title).should('exist');
 	});
 
+	it('leads a returning speaker back to their draft before offering a second proposal', () => {
+		const slug = uniqueSlug();
+		const title = `Notes towards a talk ${Date.now()}`;
+
+		cy.createAndLogin().then((user) => {
+			cy.request({
+				method: 'POST',
+				url: `${Cypress.config('baseUrl')}/api/v1/test/agenda-fixture`,
+				body: { userId: user.id, slug, days: ['2028-05-10'], sessions: [] }
+			})
+				.its('status')
+				.should('eq', 200);
+		});
+
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="settings-visibility"] [data-testid="visibility-submit"]').click();
+		cy.get('[data-testid="visibility-state"]', { timeout: 20000 }).should('contain.text', 'Live');
+		cy.visit(`/manage/${slug}/cfp`);
+		cy.waitForHydration();
+		cy.contains('button', 'Create the call for papers').click();
+		cy.get('[data-testid="cfp-publish"]').click();
+		cy.get('[data-testid="cfp-live-banner"]', { timeout: 20000 }).should('exist');
+
+		cy.logout();
+		cy.createAndLogin().then((speaker) => {
+			cy.visit(`/c/${slug}/cfp`);
+			cy.waitForHydration();
+			cy.get('input[name="title"]').clear().type(title);
+			cy.get('input[name="speakerName"]').clear().type('Priya Shah');
+			cy.get('input[name="speakerEmail"]').clear().type(speaker.email);
+			cy.contains('button', /^Save as draft$/).click();
+			cy.location('pathname', { timeout: 30000 }).should('match', /\/portal\/submissions\/\d+$/);
+
+			cy.visit(`/c/${slug}/cfp`);
+			cy.waitForHydration();
+			cy.get('[data-testid="cfp-existing-draft"]').should('contain.text', title);
+			cy.get('[data-testid="cfp-continue-draft"]')
+				.should('have.attr', 'href')
+				.and('match', /\/portal\/submissions\/\d+\/edit$/);
+			cy.get('input[name="title"]').should('not.exist');
+
+			cy.get('[data-testid="cfp-start-another"]').click();
+			cy.get('input[name="title"]').should('be.visible').and('have.value', '');
+			cy.get('input[name="speakerName"]').should('have.value', 'Priya Shah');
+			cy.get('input[name="speakerEmail"]').should('have.value', speaker.email);
+		});
+	});
+
 	/**
 	 * The JS path cancels the POST and parks the draft. Without JS the same
 	 * click is a native submit, and a button without `formaction` posts to
