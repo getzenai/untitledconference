@@ -1,4 +1,7 @@
 import type { SubmissionFilters } from '$lib/server/conference/organizer-submissions';
+import { submissionStatus } from '$lib/server/db/conference/cfp-schema';
+
+const STATUSES = new Set<string>(submissionStatus.enumValues);
 
 /**
  * Filters live in the URL, not in component state: a filtered table is a view the
@@ -22,7 +25,7 @@ export function parseSubmissionFilters(url: URL): SubmissionFilters {
 
 	return {
 		q: url.searchParams.get('q') ?? undefined,
-		status: url.searchParams.getAll('status').filter(Boolean),
+		status: parseStatus(url),
 		trackId: number('track'),
 		sessionFormatId: number('format'),
 		agenda: agenda === 'scheduled' || agenda === 'unscheduled' ? agenda : undefined,
@@ -36,4 +39,23 @@ export function parseSubmissionFilters(url: URL): SubmissionFilters {
 		// shape that fails to apply it.
 		needsReview: url.searchParams.has('needsReview')
 	};
+}
+
+/**
+ * Unknown `?status=` values are dropped, same rule as `?sort=` and `?agenda=`: the
+ * filter is part of a URL organizers paste to each other, and a broken link should
+ * still show the table (#670). `declined` is the word on the Decline button; the
+ * column is `rejected`.
+ */
+function parseStatus(url: URL): string[] {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const raw of url.searchParams.getAll('status')) {
+		const key = raw.trim().toLowerCase();
+		const value = key === 'declined' ? 'rejected' : key;
+		if (!STATUSES.has(value) || seen.has(value)) continue;
+		seen.add(value);
+		out.push(value);
+	}
+	return out;
 }
