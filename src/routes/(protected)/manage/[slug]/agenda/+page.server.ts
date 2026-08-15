@@ -87,11 +87,17 @@ export const actions: Actions = {
 			return fail(400, { error: 'Pick a day, a time and a room.' });
 		}
 
-		const result = await placeOnBoard(conference.id, placementId, {
-			dayId,
-			roomId,
-			startMinutes
-		});
+		// Anything but the explicit word is a move. A dropped or garbled field must
+		// not silently duplicate a talk — the destructive-looking outcome is the
+		// one that has to be asked for by name (#596).
+		const intent = form.get('intent') === 'alternative' ? 'alternative' : 'move';
+
+		const result = await placeOnBoard(
+			conference.id,
+			placementId,
+			{ dayId, roomId, startMinutes },
+			intent
+		);
 		if (!result.ok) return fail(400, { error: result.reason });
 
 		return { placed: true };

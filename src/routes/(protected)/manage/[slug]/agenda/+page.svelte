@@ -57,7 +57,7 @@
 	import { formatDayLong } from '$lib/conference/public-view';
 	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
 	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
-	import { DragController } from './drag-controller.svelte';
+	import { DragController, type PlaceIntent } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
 
 	let { data, form } = $props();
@@ -407,7 +407,10 @@
 							? 'tray'
 							: data.board.placed.some((item) => item.placementId === placementId)
 								? 'grid'
-								: 'missing'
+								: 'missing',
+						// Carried by the submitting button on the empty-slot form and by a
+						// hidden field on the occupant's; absent means move (#596).
+						formData.get('intent') === 'alternative' ? 'alternative' : 'move'
 					);
 		const queued = write ? enqueueWrite(write) : null;
 		busy = true;
@@ -438,7 +441,12 @@
 	let gridScrollEl = $state<HTMLDivElement | null>(null);
 	let gridOverflows = $state(false);
 	let placeForm = $state<HTMLFormElement | null>(null);
-	let pending = $state<{ placementId: number; roomId: number; startMinutes: number } | null>(null);
+	let pending = $state<{
+		placementId: number;
+		roomId: number;
+		startMinutes: number;
+		intent: PlaceIntent;
+	} | null>(null);
 	/** The write the hidden form is currently posting — not the tail of the queue. */
 	let inFlightPlace = $state<QueuedWrite | null>(null);
 	let settlePlace: (() => void) | null = null;
@@ -486,10 +494,14 @@
 			const room = board.rooms.find((r) => r.id === slot.roomId);
 			if (room) openSlot(room, slot.startMinutes);
 		},
-		place: (placementId, slot) => {
+		place: (placementId, slot, intent) => {
 			if (!day) return;
+			// A move paints at once (#597). An alternative cannot: it is a *new*
+			// placement row and only the server can hand out its id, so the copy
+			// appears with the reply. The card the organizer dragged stays put
+			// meanwhile, which is exactly what an alternative leaves behind.
 			const queued = enqueueWrite({
-				kind: 'place',
+				kind: intent === 'alternative' ? 'alternative' : 'place',
 				placementId,
 				dayId: day.id,
 				roomId: slot.roomId,
@@ -513,14 +525,15 @@
 	 */
 	async function submitPlace(write: QueuedWrite) {
 		try {
-			if (!placeForm || write.kind !== 'place') {
+			if (!placeForm || (write.kind !== 'place' && write.kind !== 'alternative')) {
 				dropWrite(write);
 				return;
 			}
 			pending = {
 				placementId: write.placementId,
 				roomId: write.roomId,
-				startMinutes: write.startMinutes
+				startMinutes: write.startMinutes,
+				intent: write.kind === 'alternative' ? 'alternative' : 'move'
 			};
 			inFlightPlace = write;
 			await tick();
@@ -561,7 +574,11 @@
 	onpointermove={drag.move}
 	onpointerup={drag.end}
 	onpointercancel={drag.cancel}
+	onkeyup={(e) => drag.modifier(e.altKey)}
 	onkeydown={(e) => {
+		// Held on a still pointer, Alt fires no pointer event — the badge would
+		// only appear once the hand moved again (#596).
+		drag.modifier(e.altKey);
 		if (e.key !== 'Escape') return;
 		// An open app-select listbox eats Escape on document and marks it handled.
 		// A native <select> swallowed the key outright; without this guard closing
@@ -800,6 +817,9 @@
 	<input type="hidden" name="dayId" value={day?.id ?? ''} />
 	<input type="hidden" name="roomId" value={pending?.roomId ?? ''} />
 	<input type="hidden" name="startMinutes" value={pending?.startMinutes ?? ''} />
+	<!-- Move unless the drop asked for a copy (#596). The server reads the same
+	     way round: only the explicit word duplicates a talk. -->
+	<input type="hidden" name="intent" value={pending?.intent ?? 'move'} />
 </form>
 
 <!-- Wide on purpose — this is the grid — but never flush against the rail.
@@ -1472,10 +1492,19 @@
 	     exactly where the drop is measured, so anything else would make it its
 	     own drop target. -->
 	<div
-		class="border-border bg-card pointer-events-none fixed z-50 max-w-48 truncate rounded-md border px-2 py-1 text-xs shadow-md"
+		class="border-border bg-card pointer-events-none fixed z-50 flex max-w-56 items-center gap-1.5 rounded-md border px-2 py-1 text-xs shadow-md"
 		style="left: {drag.pointer.x + 12}px; top: {drag.pointer.y + 12}px"
 	>
-		{drag.dragging.title}
+		<span class="truncate">{drag.dragging.title}</span>
+		<!-- The modifier has to be visible before the drop, or it is as invisible
+		     as the rule it replaced (#596). Naming the outcome, not the key: what
+		     the organizer needs to know is that this one keeps the old slot. -->
+		{#if drag.intent === 'alternative'}
+			<span
+				class="bg-status-warn/15 text-status-warn shrink-0 rounded px-1 font-medium"
+				data-testid="agenda-drag-intent">+ Alternative</span
+			>
+		{/if}
 	</div>
 {/if}
 

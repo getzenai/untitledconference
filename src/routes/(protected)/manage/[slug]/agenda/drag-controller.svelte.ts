@@ -28,6 +28,9 @@ export type Dragged = {
 
 export type SlotRef = { roomId: number; startMinutes: number };
 
+/** What a drop means. `Alt`/`Option` is the copy modifier everywhere else (#596). */
+export type PlaceIntent = 'move' | 'alternative';
+
 type Options = {
 	/** The frame as it is now — rooms and rows both change under the room filter. */
 	frame: () => GridFrame;
@@ -40,7 +43,7 @@ type Options = {
 	/** What already *starts* in a slot, if anything. */
 	occupantAt: (slot: SlotRef) => { placementId: number; status?: string } | null;
 	/** A drop onto a free slot: the one write this gesture makes. */
-	place: (placementId: number, slot: SlotRef) => void;
+	place: (placementId: number, slot: SlotRef, intent: PlaceIntent) => void;
 	/** A drop onto a taken slot, which is a question rather than a write. */
 	openSlot: (slot: SlotRef) => void;
 };
@@ -56,6 +59,16 @@ export class DragController {
 	pointer = $state<{ x: number; y: number } | null>(null);
 	/** The slot the drop would land in, so the page can light it up. */
 	hover = $state<SlotRef | null>(null);
+	/**
+	 * What this drop would do if it landed now, so the page can say so before the
+	 * organizer lets go. A modifier nobody can see is as invisible as the rule it
+	 * replaced (#596).
+	 *
+	 * Only a talk that is already on the grid can grow an alternative: from the
+	 * tray there is nothing to leave behind, so `Alt` there is a move like any
+	 * other and promising a copy would be a lie.
+	 */
+	intent = $state<PlaceIntent>('move');
 
 	#origin: { x: number; y: number } | null = null;
 	#moved = false;
@@ -80,12 +93,29 @@ export class DragController {
 		this.#moved = false;
 		this.dragging = item;
 		this.pointer = { x: event.clientX, y: event.clientY };
+		this.#readModifier(event.altKey);
+	};
+
+	/**
+	 * The key can be pressed or released mid-drag, and a held key on a still
+	 * pointer fires no pointer event at all — so the page hands us the keyboard
+	 * too. `Alt` on a tray card stays a move; see `intent`.
+	 */
+	#readModifier = (alt: boolean) => {
+		const onGrid = this.dragging?.roomId != null;
+		this.intent = alt && onGrid ? 'alternative' : 'move';
+	};
+
+	modifier = (alt: boolean) => {
+		if (!this.dragging) return;
+		this.#readModifier(alt);
 	};
 
 	move = (event: PointerEvent) => {
 		if (!this.dragging || !this.#origin) return;
 
 		this.pointer = { x: event.clientX, y: event.clientY };
+		this.#readModifier(event.altKey);
 		if (Math.hypot(event.clientX - this.#origin.x, event.clientY - this.#origin.y) < THRESHOLD) {
 			return;
 		}
@@ -97,10 +127,15 @@ export class DragController {
 			: null;
 	};
 
-	end = () => {
+	end = (event?: PointerEvent) => {
+		// Read at the release, not at the press: the organizer can decide halfway
+		// through, and the last thing they did with the key is the answer (#596).
+		if (event) this.#readModifier(event.altKey);
+
 		const item = this.dragging;
 		const target = this.hover;
 		const moved = this.#moved;
+		const intent = this.intent;
 		this.cancel();
 
 		// The click that follows this pointerup must not also open a slot, and the
@@ -123,13 +158,14 @@ export class DragController {
 			return;
 		}
 
-		this.#options.place(item.placementId, target);
+		this.#options.place(item.placementId, target, intent);
 	};
 
 	cancel = () => {
 		this.dragging = null;
 		this.pointer = null;
 		this.hover = null;
+		this.intent = 'move';
 		this.#origin = null;
 	};
 }
