@@ -257,45 +257,58 @@ function submissionWhere(conferenceId: number, filters: SubmissionFilters) {
 /** One review, with the seat behind it: who was asked, and in which round (#414). */
 type ReviewWithSeat = ReviewScores & { id: number; seat: ReviewSeat };
 
+/**
+ * One row per (review, criterion) for a whole page of the table.
+ *
+ * Sibling of `reviewRowsFor`, which asks the same question for a single
+ * submission on the detail page. Split out of `reviewsFor` so that the query
+ * and the regrouping can each be read on one screen.
+ */
+async function tableReviewRows(conferenceId: number, submissionIds: number[]) {
+	return (
+		db
+			.select({
+				reviewId: reviewTable.id,
+				submissionId: reviewTable.submissionId,
+				status: reviewTable.status,
+				// The reviewer and the round ride along on the query that was already
+				// reading these rows for the score (#414). A second query per page to
+				// name four people is the shape this file's comments keep warning about.
+				reviewerUserId: reviewTable.reviewerUserId,
+				reviewerName: user.name,
+				reviewerEmail: user.email,
+				round: reviewRoundTable.name,
+				value: reviewScoreTable.valueNumber,
+				weight: scorecardCriterionTable.weight,
+				scaleMax: scorecardCriterionTable.scaleMax
+			})
+			.from(reviewTable)
+			.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
+			.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+			.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
+			.leftJoin(reviewScoreTable, eq(reviewScoreTable.reviewId, reviewTable.id))
+			.leftJoin(
+				scorecardCriterionTable,
+				eq(scorecardCriterionTable.id, reviewScoreTable.scorecardCriterionId)
+			)
+			.where(
+				and(
+					eq(evaluationPlanTable.conferenceId, conferenceId),
+					inArray(reviewTable.submissionId, submissionIds)
+				)
+			)
+			// Chips in round order, so two organizers looking at the same row see the
+			// same row. Without this the names shuffle between page loads.
+			.orderBy(asc(reviewRoundTable.position), asc(reviewRoundTable.id), asc(reviewTable.id))
+	);
+}
+
 /** Review rows plus their per-criterion scores, grouped per submission. */
 async function reviewsFor(conferenceId: number, submissionIds: number[]) {
 	const empty = new Map<number, ReviewWithSeat[]>();
 	if (submissionIds.length === 0) return empty;
 
-	const rows = await db
-		.select({
-			reviewId: reviewTable.id,
-			submissionId: reviewTable.submissionId,
-			status: reviewTable.status,
-			// The reviewer and the round ride along on the query that was already
-			// reading these rows for the score (#414). A second query per page to
-			// name four people is the shape this file's comments keep warning about.
-			reviewerUserId: reviewTable.reviewerUserId,
-			reviewerName: user.name,
-			reviewerEmail: user.email,
-			round: reviewRoundTable.name,
-			value: reviewScoreTable.valueNumber,
-			weight: scorecardCriterionTable.weight,
-			scaleMax: scorecardCriterionTable.scaleMax
-		})
-		.from(reviewTable)
-		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
-		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
-		.innerJoin(user, eq(user.id, reviewTable.reviewerUserId))
-		.leftJoin(reviewScoreTable, eq(reviewScoreTable.reviewId, reviewTable.id))
-		.leftJoin(
-			scorecardCriterionTable,
-			eq(scorecardCriterionTable.id, reviewScoreTable.scorecardCriterionId)
-		)
-		.where(
-			and(
-				eq(evaluationPlanTable.conferenceId, conferenceId),
-				inArray(reviewTable.submissionId, submissionIds)
-			)
-		)
-		// Chips in round order, so two organizers looking at the same row see the
-		// same row. Without this the names shuffle between page loads.
-		.orderBy(asc(reviewRoundTable.position), asc(reviewRoundTable.id), asc(reviewTable.id));
+	const rows = await tableReviewRows(conferenceId, submissionIds);
 
 	const byReview = new Map<number, ReviewWithSeat & { submissionId: number }>();
 	for (const row of rows) {
