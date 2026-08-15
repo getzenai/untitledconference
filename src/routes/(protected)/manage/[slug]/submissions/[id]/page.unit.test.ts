@@ -68,7 +68,7 @@ function renderPage(
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
-	rounds: 'one' | 'none' = 'one',
+	rounds: 'one' | 'none' | 'two' = 'one',
 	notificationResult: NotificationResult | null = null,
 	extras: Extras = {}
 ) {
@@ -125,7 +125,25 @@ function renderPage(
 											unassignBlockReason: unassignBlockReason(reviewerStatus)
 										}
 									]
-								}
+								},
+								...(rounds === 'two'
+									? [
+											{
+												id: 20,
+												name: 'Committee pass',
+												reviewers: [
+													{
+														userId: 'reviewer-2',
+														name: 'Casey Committee',
+														email: 'casey@example.com',
+														status: reviewerStatus,
+														eligible: true,
+														unassignBlockReason: unassignBlockReason(reviewerStatus)
+													}
+												]
+											}
+										]
+									: [])
 							],
 				ownReview,
 				contentEdit: extras.contentEdit ?? null,
@@ -250,6 +268,39 @@ describe('organizer submission detail decision workflow', () => {
 		const row = body.slice(body.indexOf('Riley Reviewer'), body.indexOf('value="unassign"'));
 		expect(row).toContain('data-status="assigned"');
 		expect(body).not.toContain('data-testid="unassign-block-reason"');
+	});
+});
+
+/**
+ * Two rounds with similar reviewer lists used to read as one list (#417).
+ *
+ * Each round is a bounded container, and the test slices those containers —
+ * presence of both names on the page would still pass if they sat in one
+ * undivided stack.
+ */
+describe('review-round grouping on the assignment block (#417)', () => {
+	it('gives each round its own container so two lists cannot be read as one', () => {
+		const body = renderPage('submitted', null, null, null, 'two');
+		const assignments = body.slice(body.indexOf('data-testid="review-assignments"'));
+
+		const first = assignments.indexOf('data-testid="assignment-round"');
+		const second = assignments.indexOf('data-testid="assignment-round"', first + 1);
+		const third = assignments.indexOf('data-testid="assignment-round"', second + 1);
+
+		expect(first).toBeGreaterThan(-1);
+		expect(second).toBeGreaterThan(first);
+		expect(third).toBe(-1);
+
+		const firstRound = assignments.slice(first, second);
+		const secondRound = assignments.slice(second);
+
+		expect(firstRound).toContain('Round 1');
+		expect(firstRound).toContain('Riley Reviewer');
+		expect(firstRound).not.toContain('Casey Committee');
+
+		expect(secondRound).toContain('Committee pass');
+		expect(secondRound).toContain('Casey Committee');
+		expect(secondRound).not.toContain('Riley Reviewer');
 	});
 });
 
