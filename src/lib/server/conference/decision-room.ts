@@ -18,6 +18,7 @@ import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable, trackTable } from '$lib/server/db/conference/conference-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import {
 	evaluationPlanTable,
 	reviewRoundTable,
@@ -25,7 +26,7 @@ import {
 	reviewTable,
 	scorecardCriterionTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 /** The one status the arithmetic counts. Waitlisted is not a slot spent. */
 const ACCEPTED = 'accepted';
@@ -57,14 +58,40 @@ export type LobbyRow = {
 
 export type CommitteeSeat = { userId: string; name: string; queueLength: number };
 
+/**
+ * Slots on the grid held for a sponsor and still empty (#450).
+ *
+ * Counted, never subtracted. The committee's capacity is a number an organizer
+ * typed, and we do not know whether they typed it with the sponsor slots in or out
+ * — quietly taking these off the remainder would invent an answer. What the room
+ * actually asks is whether there is anything to backfill: "we have four open
+ * sponsor slots on day three, do you want to fill them with talks?"
+ *
+ * A hold with a submission in it is not counted: it is a talk now, not inventory.
+ */
+function sponsorHoldCount(conferenceId: number) {
+	return db
+		.select({ held: sql<number>`count(*)` })
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				eq(placementTable.kind, 'reservation'),
+				isNull(placementTable.submissionId)
+			)
+		);
+}
+
 /** Accepted counts, overall and per track, straight from the status column. */
 export async function slotBoard(conferenceId: number): Promise<{
 	total: SlotLine;
 	tracks: SlotLine[];
 	/** Accepted talks with no track set — otherwise they vanish between the lines. */
 	untracked: number;
+	/** Empty sponsor holds on the grid — see `sponsorHoldCount`. */
+	sponsorHolds: number;
 }> {
-	const [[conference], tracks, accepted] = await Promise.all([
+	const [[conference], tracks, accepted, [holds]] = await Promise.all([
 		db
 			.select({ name: conferenceTable.name, slotCapacity: conferenceTable.slotCapacity })
 			.from(conferenceTable)
@@ -84,7 +111,8 @@ export async function slotBoard(conferenceId: number): Promise<{
 			.where(
 				and(eq(submissionTable.conferenceId, conferenceId), eq(submissionTable.status, ACCEPTED))
 			)
-			.groupBy(submissionTable.trackId)
+			.groupBy(submissionTable.trackId),
+		sponsorHoldCount(conferenceId)
 	]);
 
 	const byTrack = new Map(accepted.map((row) => [row.trackId, Number(row.accepted)]));
@@ -103,7 +131,8 @@ export async function slotBoard(conferenceId: number): Promise<{
 			capacity: track.slotCapacity,
 			accepted: byTrack.get(track.id) ?? 0
 		})),
-		untracked: byTrack.get(null) ?? 0
+		untracked: byTrack.get(null) ?? 0,
+		sponsorHolds: Number(holds?.held ?? 0)
 	};
 }
 

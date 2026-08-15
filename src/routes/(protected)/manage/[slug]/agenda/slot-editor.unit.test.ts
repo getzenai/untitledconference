@@ -196,6 +196,42 @@ describe('the slot editor', () => {
 		expect(live).toMatch(/name="status"[^>]*value="tentative"/);
 	});
 
+	/**
+	 * A room-bound sponsor hold opens this dialog like any other card, and every
+	 * button in the taken-slot shape is wrong for it (#450). Swap and "take it out"
+	 * read a length off a format a hold does not have, and "take it out" parks it
+	 * where only talks are shown — the slot leaves the screen while the decision
+	 * count still counts it. Release is the one move that means anything.
+	 */
+	it('offers a hold release instead of swap, remove and publish', () => {
+		const hold = { ...placed(7, 'confirmed'), kind: 'reservation', speakers: [], title: 'Gold' };
+		const html = body({ rooms, occupant: hold, swapWith: [candidate(8, 600, 'Room 2')] });
+
+		expect(html).toContain('action="?/release"');
+		expect(html).toContain('data-testid="agenda-slot-release"');
+		expect(html).toMatch(/name="placementId"[^>]*value="7"/);
+		expect(html).toContain('Release this hold');
+		expect(html).toContain('Sponsor hold');
+
+		expect(html).not.toContain('action="?/swap"');
+		expect(html).not.toContain('data-testid="agenda-slot-remove"');
+		expect(html).not.toContain('data-testid="agenda-slot-status"');
+		// "No speaker" under a sponsor slot reads as a talk missing its speaker.
+		expect(html).not.toContain('No speaker');
+	});
+
+	it('calls a break a break, and a talk without a kind a talk', () => {
+		const brk = { ...placed(7), kind: 'block', speakers: [], title: 'Lunch' };
+		expect(body({ rooms, occupant: brk })).toContain('Remove this break');
+
+		// Every existing caller passes a talk with no `kind` at all; it has to keep
+		// its swap and remove buttons rather than fall into the hold shape.
+		const talk = body({ rooms, occupant: placed(7), swapWith: [candidate(8, 600, 'Room 2')] });
+		expect(talk).toContain('action="?/swap"');
+		expect(talk).toContain('data-testid="agenda-slot-remove"');
+		expect(talk).not.toContain('action="?/release"');
+	});
+
 	it('says so when nothing is waiting, rather than showing an empty dropdown', () => {
 		const html = body({ rooms, tray: [] });
 

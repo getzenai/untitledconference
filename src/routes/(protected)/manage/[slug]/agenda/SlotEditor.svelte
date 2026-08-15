@@ -38,6 +38,13 @@
 		speakers: string[];
 		/** `confirmed` once it is on the public agenda; `tentative` while it is a draft. */
 		status: string;
+		/**
+		 * `session` is a talk. `block` is a break and `reservation` a sponsor hold —
+		 * both are slots the programme has already spent, and neither can be swapped
+		 * or taken out here (#450). Optional so the tray items, which are always
+		 * talks, can be passed as they are.
+		 */
+		kind?: string;
 	};
 
 	/** A session already on the grid, offered as the other half of a swap. */
@@ -85,6 +92,15 @@
 		close,
 		submit
 	}: Props = $props();
+
+	/**
+	 * The hold in this slot, if the slot holds one — `block` for a break,
+	 * `reservation` for a sponsor slot, and null for a talk (#450). Missing `kind`
+	 * reads as a talk, which is what every caller that omits it means.
+	 */
+	const hold = $derived(
+		occupant && occupant.kind && occupant.kind !== 'session' ? occupant.kind : null
+	);
 
 	/**
 	 * The five option lists (#167).
@@ -157,66 +173,100 @@
 			-->
 			<p class="mt-4 text-sm font-medium">{occupant.title}</p>
 			<p class="text-muted-foreground mt-0.5 text-xs">
-				{occupant.speakers.join(', ') || 'No speaker'}
+				{#if hold}
+					{hold === 'reservation' ? 'Sponsor hold' : 'Break'}
+				{:else}
+					{occupant.speakers.join(', ') || 'No speaker'}
+				{/if}
 				<span class="px-1">·</span>
 				{timeLabel(occupant.startMinutes)}–{timeLabel(occupant.endMinutes)}
 			</p>
 
-			{#if swapWith.length > 0}
-				<form method="POST" action="?/swap" use:enhance={submit} class="mt-4 space-y-3">
+			{#if hold}
+				<!--
+					A hold is not a session, and the three session moves are not offered for
+					it (#450). Swapping or taking it out would read its length off a format
+					it does not have and hand a two-hour sponsor slot back as thirty minutes;
+					taking it out would also park it where only talks are shown, so the slot
+					would disappear from the screen while the decision count still counts it.
+					Releasing is the one honest move, and it is the same `?/release` the strip
+					above the grid posts.
+				-->
+				<form method="POST" action="?/release" use:enhance={submit} class="mt-4">
 					<input type="hidden" name="placementId" value={occupant.placementId} />
-					<div class="block text-sm">
-						<span class="text-muted-foreground text-xs">Swap with</span>
-						<!-- Seeded with the first candidate, because that is what the native
+					<Button type="submit" variant="outline" disabled={busy} data-testid="agenda-slot-release">
+						{hold === 'reservation' ? 'Release this hold' : 'Remove this break'}
+					</Button>
+				</form>
+				<p class="text-muted-foreground mt-2 text-xs">
+					{hold === 'reservation'
+						? 'Releasing gives the slot back to the programme. To move it, release it and hold the slot you want.'
+						: 'To move it, remove it and put the break on the slot you want.'}
+				</p>
+			{:else}
+				{#if swapWith.length > 0}
+					<form method="POST" action="?/swap" use:enhance={submit} class="mt-4 space-y-3">
+						<input type="hidden" name="placementId" value={occupant.placementId} />
+						<div class="block text-sm">
+							<span class="text-muted-foreground text-xs">Swap with</span>
+							<!-- Seeded with the first candidate, because that is what the native
 						     element posted: a `<select required>` with no empty option always
 						     has a value. An app select starts empty unless told otherwise, so
 						     leaving `value` off would turn "Trade places" into a submit that
 						     posts nothing. -->
-						<AppSelect
-							name="withPlacementId"
-							required
-							testId="agenda-slot-swap-with"
-							aria-label="Swap with"
-							class="mt-1"
-							value={String(swapWith[0].placementId)}
-							options={swapWithOptions}
-						/>
-					</div>
-					<Button type="submit" disabled={busy} data-testid="agenda-slot-swap">Trade places</Button>
-				</form>
-			{/if}
+							<AppSelect
+								name="withPlacementId"
+								required
+								testId="agenda-slot-swap-with"
+								aria-label="Swap with"
+								class="mt-1"
+								value={String(swapWith[0].placementId)}
+								options={swapWithOptions}
+							/>
+						</div>
+						<Button type="submit" disabled={busy} data-testid="agenda-slot-swap"
+							>Trade places</Button
+						>
+					</form>
+				{/if}
 
-			<div class="mt-4 flex flex-wrap gap-2">
-				<form method="POST" action="?/unplace" use:enhance={submit}>
-					<input type="hidden" name="placementId" value={occupant.placementId} />
-					<Button type="submit" variant="outline" disabled={busy} data-testid="agenda-slot-remove">
-						Take it out of this slot
-					</Button>
-				</form>
+				<div class="mt-4 flex flex-wrap gap-2">
+					<form method="POST" action="?/unplace" use:enhance={submit}>
+						<input type="hidden" name="placementId" value={occupant.placementId} />
+						<Button
+							type="submit"
+							variant="outline"
+							disabled={busy}
+							data-testid="agenda-slot-remove"
+						>
+							Take it out of this slot
+						</Button>
+					</form>
 
-				<!--
+					<!--
 					Publishing one session lives here rather than on the block. A calendar
 					block is as tall as the talk is long, so a 15-minute one has room for
 					a time and a title and nothing else — hanging buttons off it would
 					either overflow the block or make every block the same height, which
 					is the thing the calendar exists to stop doing.
 				-->
-				<form method="POST" action="?/toggleOne" use:enhance={submit}>
-					<input type="hidden" name="placementId" value={occupant.placementId} />
-					<input
-						type="hidden"
-						name="status"
-						value={occupant.status === 'confirmed' ? 'tentative' : 'confirmed'}
-					/>
-					<Button type="submit" variant="ghost" disabled={busy} data-testid="agenda-slot-status">
-						{occupant.status === 'confirmed' ? 'Hold it back' : 'Publish it'}
-					</Button>
-				</form>
-			</div>
-			<p class="text-muted-foreground mt-2 text-xs">
-				To move it, drag it to an empty slot on the grid — or take it out here and open the one you
-				want.
-			</p>
+					<form method="POST" action="?/toggleOne" use:enhance={submit}>
+						<input type="hidden" name="placementId" value={occupant.placementId} />
+						<input
+							type="hidden"
+							name="status"
+							value={occupant.status === 'confirmed' ? 'tentative' : 'confirmed'}
+						/>
+						<Button type="submit" variant="ghost" disabled={busy} data-testid="agenda-slot-status">
+							{occupant.status === 'confirmed' ? 'Hold it back' : 'Publish it'}
+						</Button>
+					</form>
+				</div>
+				<p class="text-muted-foreground mt-2 text-xs">
+					To move it, drag it to an empty slot on the grid — or take it out here and open the one
+					you want.
+				</p>
+			{/if}
 		{:else if tray.length === 0}
 			<p class="text-muted-foreground mt-4 text-sm">
 				Nothing is waiting for a slot. Take a session out of another slot first.

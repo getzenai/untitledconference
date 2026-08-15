@@ -378,6 +378,7 @@ async function ownPlacement(conferenceId: number, placementId: number) {
 		.select({
 			id: placementTable.id,
 			submissionId: placementTable.submissionId,
+			kind: placementTable.kind,
 			status: placementTable.status,
 			formatMinutes: sessionFormatTable.minutes
 		})
@@ -391,6 +392,20 @@ async function ownPlacement(conferenceId: number, placementId: number) {
 }
 
 export type PlaceResult = { ok: true; endMinutes: number } | { ok: false; reason: string };
+
+/**
+ * Why the three session moves refuse a break or a sponsor hold (#450).
+ *
+ * A hold has no submission, so it has no format, so `placeSession` would read its
+ * length as `DEFAULT_MINUTES` — a two-hour sponsor slot dragged one row down comes
+ * back as thirty minutes, and nobody asked for that. `unplaceSession` is worse in
+ * a quieter way: it parks the row with no slot, where the tray only shows talks, so
+ * the hold vanishes from the screen while the decision count still counts it.
+ *
+ * The mirror of `removeBlock` refusing sessions. A hold leaves the grid through
+ * `?/release`, which deletes it; a talk leaves through `?/unplace`, which keeps it.
+ */
+const HOLD_IS_NOT_A_SESSION = 'A break or hold is released, not moved like a session';
 
 /**
  * Puts a session on the grid, or moves one that is already there.
@@ -415,6 +430,7 @@ export async function placeSession(
 ): Promise<PlaceResult> {
 	const placement = await ownPlacement(conferenceId, placementId);
 	if (!placement) return { ok: false, reason: 'No such session' };
+	if (placement.kind !== 'session') return { ok: false, reason: HOLD_IS_NOT_A_SESSION };
 
 	return db.transaction(async (tx) => {
 		const [day] = await tx
@@ -468,6 +484,7 @@ export async function placeSession(
 export async function unplaceSession(conferenceId: number, placementId: number): Promise<boolean> {
 	const placement = await ownPlacement(conferenceId, placementId);
 	if (!placement) return false;
+	if (placement.kind !== 'session') return false;
 
 	await db
 		.update(placementTable)
@@ -527,6 +544,9 @@ export async function swapPlacements(
 		ownPlacement(conferenceId, withPlacementId)
 	]);
 	if (!first || !second) return { ok: false, reason: 'No such session' };
+	if (first.kind !== 'session' || second.kind !== 'session') {
+		return { ok: false, reason: HOLD_IS_NOT_A_SESSION };
+	}
 
 	// Ascending id, so every swap in this conference queues on the same order.
 	const lockOrder = [placementId, withPlacementId].sort((a, b) => a - b);
