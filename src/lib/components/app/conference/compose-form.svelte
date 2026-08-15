@@ -38,12 +38,13 @@
 		subject?: string;
 		body?: string;
 	} = $props();
+
+	const recipientLine = $derived(
+		`${recipients} recipient${recipients === 1 ? '' : 's'} with an email address${filtered ? ' in the current filter' : ''}.`
+	);
 </script>
 
-<p class="text-muted-foreground text-xs">
-	{recipients} recipient{recipients === 1 ? '' : 's'} with an email address
-	{#if filtered}in the current filter{/if}. Delivery is recorded in the conference mail log.
-</p>
+<p class="text-muted-foreground text-xs">{recipientLine}</p>
 <form method="POST" action="?/compose" use:enhance={enhanceForm} class="mt-3 grid gap-3">
 	<input type="hidden" name="q" value={filters.q ?? ''} />
 	<input type="hidden" name="status" value={filters.status ?? ''} />
