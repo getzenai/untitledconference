@@ -35,7 +35,7 @@ const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted', 'resubmit_w
 
 function submissionId(raw: string): number {
 	const id = Number(raw);
-	if (!Number.isInteger(id) || id <= 0) throw error(404, 'Submission not found');
+	if (!Number.isInteger(id) || id <= 0) throw error(404, 'Talk not found');
 	return id;
 }
 
@@ -49,7 +49,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
-	if (!submission) throw error(404, 'Submission not found');
+	if (!submission) throw error(404, 'Talk not found');
 	const [
 		notificationStatuses,
 		assignmentRounds,
@@ -148,7 +148,7 @@ export const actions: Actions = {
 			intent === 'assign'
 		);
 		if (result === 'invalid') {
-			return fail(400, { assignmentMessage: 'That reviewer cannot review this submission.' });
+			return fail(400, { assignmentMessage: 'That reviewer cannot review this talk.' });
 		}
 		if (result === 'complete') {
 			return fail(400, { assignmentMessage: SUBMITTED_REVIEW_UNASSIGN_REASON });
@@ -187,7 +187,7 @@ export const actions: Actions = {
 		);
 
 		if (!result.ok) {
-			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'not_found') throw error(404, 'Talk not found');
 			// The rejected text comes back with the errors. Without it the re-render reads
 			// the fields from the database again, and the organizer's rewrite — the thing
 			// they came to do — is gone at the moment they are told to fix it.
@@ -241,7 +241,7 @@ export const actions: Actions = {
 
 		const result = await setSubmissionSponsorTier(conference.id, submissionId(params.id), tierId);
 		if (!result.ok) {
-			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'not_found') throw error(404, 'Talk not found');
 			return fail(400, { sponsorError: 'That sponsor tier is not on this conference.' });
 		}
 
@@ -256,7 +256,7 @@ export const actions: Actions = {
 	resolveCondition: async ({ locals, params }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const result = await resolveAcceptCondition(conference.id, submissionId(params.id));
-		if (!result.ok) throw error(404, 'Submission not found');
+		if (!result.ok) throw error(404, 'Talk not found');
 		return { conditionMessage: result.changed ? 'Condition resolved.' : 'Nothing to resolve.' };
 	},
 
@@ -271,7 +271,7 @@ export const actions: Actions = {
 
 		const result = await setEditorialStand(conference.id, submissionId(params.id), parsed.stand);
 		if (!result.ok) {
-			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'not_found') throw error(404, 'Talk not found');
 			return fail(400, { standMessage: 'Only an accepted talk can carry a stand.' });
 		}
 		return { standMessage: 'Stand saved.' };
@@ -281,7 +281,7 @@ export const actions: Actions = {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const result = await advanceEditorialStand(conference.id, submissionId(params.id));
 		if (!result.ok) {
-			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'not_found') throw error(404, 'Talk not found');
 			if (result.reason === 'already_final') {
 				return { standMessage: 'This talk is already final.' };
 			}
@@ -308,7 +308,7 @@ export const actions: Actions = {
 			parsed.condition
 		);
 		if (!result.ok) {
-			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'not_found') throw error(404, 'Talk not found');
 			if (result.reason === 'invalid_owner') {
 				return fail(400, { conditionMessage: 'That person cannot follow this up.' });
 			}

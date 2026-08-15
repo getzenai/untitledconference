@@ -16,7 +16,7 @@
 		<EmptyState
 			class="mt-8"
 			title="Nothing to review yet"
-			description="You are not on a review committee. An organizer adds you to a review round, and the submissions assigned to you appear here."
+			description="You are not on a review committee. An organizer adds you to a review round, and the talks assigned to you appear here."
 			action={{ href: '/home', label: 'Back to the dashboard' }}
 		/>
 	{:else}

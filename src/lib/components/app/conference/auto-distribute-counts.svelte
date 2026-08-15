@@ -1,7 +1,7 @@
 <script module lang="ts">
-	export const EACH_HINT = 'How many reviewers each selected submission gets';
+	export const EACH_HINT = 'How many reviewers each selected talk gets';
 	export const CAP_HINT =
-		'Most submissions any one reviewer may end up with, including what they already have';
+		'Most talks any one reviewer may end up with, including what they already have';
 </script>
 
 <script lang="ts">

@@ -116,7 +116,7 @@
 		decision === 'accepted' ? 'Accept' : decision === 'rejected' ? 'Decline' : 'Waitlist';
 
 	const pendingVerb = $derived(pendingDecision ? decisionVerb(pendingDecision) : '');
-	const pendingNoun = $derived(selected.size === 1 ? 'submission' : 'submissions');
+	const pendingNoun = $derived(selected.size === 1 ? 'talk' : 'talks');
 
 	/**
 	 * Bulk Accept / Decline / Waitlist used to fire on the first click.
@@ -171,12 +171,12 @@
 	 *
 	 * Day, room and time in that order, and only the parts that exist — a slot on a
 	 * conference with one room and one day would otherwise read as two em dashes and
-	 * a clock. "Not scheduled" covers both no placement at all and one still waiting
-	 * in the tray: neither is in the programme, which is the question this column
+	 * a clock. "Unscheduled" covers both no placement at all and one still waiting
+	 * for a slot: neither is in the programme, which is the question this column
 	 * answers.
 	 */
 	const agendaLine = (slot: AgendaSlot | null) => {
-		if (!slot) return 'Not scheduled';
+		if (!slot) return 'Unscheduled';
 		const day = slot.day ?? isoDay(slot.startsAt);
 		return [formatDayShort(day), slot.room, formatTime(slot.startsAt)].filter(Boolean).join(' · ');
 	};
@@ -316,13 +316,13 @@
 </script>
 
 <svelte:head>
-	<title>Submissions — {data.conference.name}</title>
+	<title>Talks — {data.conference.name}</title>
 </svelte:head>
 
 <div class="border-border bg-card border-b px-6 py-5">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
-			<h1 class="text-lg font-semibold tracking-tight">Submissions</h1>
+			<h1 class="text-lg font-semibold tracking-tight">Talks</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
 				{data.counts.total} total ·
 				<!-- The number and the way to act on it are the same thing (#122). Reading
@@ -438,14 +438,14 @@
 		     way an inverted default turns into a support question. -->
 		<EmptyState
 			title={filtered
-				? 'No submission matches these filters'
+				? 'No talk matches these filters'
 				: data.counts.total > 0
 					? 'Nothing handed in yet'
-					: 'No submissions yet'}
+					: 'No talks yet'}
 			description={filtered
 				? 'Widen the filters, or clear them to see the whole pile again.'
 				: data.counts.total > 0
-					? 'Every proposal so far is still a draft on its speaker’s desk. Tick “Include drafts” to look at them.'
+					? 'Every talk so far is still a draft on its speaker’s desk. Tick “Include drafts” to look at them.'
 					: 'Nothing has come in through the call for papers. Share the link and the table fills itself.'}
 			action={{ href: `/c/${data.conference.slug}`, label: 'Open the public conference page' }}
 		/>
@@ -489,8 +489,8 @@
 						are sent separately after the programme is checked.
 					{:else}
 						<span class="text-foreground font-medium tabular-nums">{selected.size} selected</span> ·
-						accepting also creates the session in the agenda tray and the speaker's tasks.
-						Notifications are sent separately after the programme is checked.
+						accepting also puts the talk on the agenda as unscheduled and creates the speaker's
+						tasks. Notifications are sent separately after the programme is checked.
 						{#if data.pagination.pageCount > 1}
 							<!-- Said out loud because the alternative is worse: a selection that
 							     survived a page change would decide rows nobody can see. -->
@@ -502,8 +502,8 @@
 					<p class="text-status-warn w-full text-sm" role="status">
 						<span class="font-medium tabular-nums">{selectedDecided}</span>
 						of them {selectedDecided === 1 ? 'is' : 'are'} already decided. Deciding again the same way
-						changes nothing; deciding differently takes the talk back out of the agenda tray and withdraws
-						the speaker tasks nobody has touched yet.
+						changes nothing; deciding differently takes the talk off the agenda and withdraws the speaker
+						tasks nobody has touched yet.
 					</p>
 				{/if}
 				<div class="flex flex-wrap items-center gap-2">
@@ -687,7 +687,7 @@
 								<input
 									type="checkbox"
 									class="border-input accent-primary size-4 rounded"
-									aria-label="Select every submission in view"
+									aria-label="Select every talk in view"
 									checked={allVisibleSelected}
 									onchange={toggleAll}
 								/>

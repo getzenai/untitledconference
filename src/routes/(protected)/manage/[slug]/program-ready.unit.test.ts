@@ -139,7 +139,7 @@ describe('dashboard vs agenda (#466)', () => {
 
 		expect(dashLine).toBe('2 accepted not yet published');
 		expect(dashSplit).toBe('1 draft · 1 unplaced');
-		expect(agendaLine).toBe('1 unplaced talk needs a slot.');
+		expect(agendaLine).toBe('1 talk is unscheduled.');
 
 		expect(dashboard).toContain(dashLine);
 		expect(dashboard).toContain(dashSplit);
@@ -154,12 +154,15 @@ describe('dashboard vs agenda (#466)', () => {
 		expect(agenda).not.toContain('Every accepted talk has a published slot.');
 		expect(agenda).not.toContain('Every accepted talk has a slot.</');
 
-		// Same three words on both screens. Agenda's lead counts only unplaced;
-		// the legend names draft and published so the three stay in view.
+		// Dashboard still uses #466's three words. Agenda names the same
+		// unplaced set as Unscheduled — the noun the other three surfaces
+		// agreed on (#476). Draft and published stay on the legend.
 		for (const word of Object.values(PROGRAM_WORDS)) {
 			expect(dashboard.toLowerCase()).toContain(word);
-			expect(agenda.toLowerCase()).toContain(word);
 		}
+		expect(agenda.toLowerCase()).toContain('unscheduled');
+		expect(agenda.toLowerCase()).toContain(PROGRAM_WORDS.draft);
+		expect(agenda.toLowerCase()).toContain(PROGRAM_WORDS.published);
 	});
 
 	it('after accept, both screens count the tray as unplaced — not draft', () => {
@@ -184,7 +187,7 @@ describe('dashboard vs agenda (#466)', () => {
 		expect(dashboard).toContain('0 drafts · 2 unplaced');
 		expect(dashboard).toContain('Unplaced');
 		expect(dashboard).not.toContain('Draft');
-		expect(agenda).toContain('2 unplaced talks need a slot.');
+		expect(agenda).toContain('2 talks are unscheduled.');
 		expect(agenda).not.toContain('still drafts');
 	});
 

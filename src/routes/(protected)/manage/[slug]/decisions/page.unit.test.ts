@@ -42,9 +42,9 @@ describe('empty state before anyone ranks (#555)', () => {
 		expect(body).toContain('data-testid="slot-board"');
 		expect(body).toContain('data-testid="decisions-empty"');
 		expect(body).toContain('No reviewer has ranked yet');
-		expect(body).toContain('The pile is on Submissions');
+		expect(body).toContain('The pile is on Talks');
 		expect(body).toContain('href="/manage/test-conf/submissions"');
-		expect(body).toContain('Open Submissions');
+		expect(body).toContain('Open Talks');
 		expect(body).not.toContain('data-testid="lobbying-queue"');
 		expect(body).not.toContain('data-testid="committee-tabs"');
 	});

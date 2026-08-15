@@ -424,14 +424,14 @@ describe('the still-to-review filter and the reviews column', () => {
 		expect(body).toContain('14:30');
 		// The undecided fixture has no placement — the cell has to say that rather
 		// than leave a blank an organizer reads as "nobody has looked yet".
-		expect(body).toContain('Not scheduled');
+		expect(body).toContain('Unscheduled');
 	});
 
 	it('filters by agenda status and offers drafts as an opt-in rather than a status box', () => {
 		const body = renderPage();
 
 		expect(body).toContain('name="agenda"');
-		expect(body).toContain('Not scheduled');
+		expect(body).toContain('Unscheduled');
 		expect(body).toContain('data-testid="filter-include-drafts"');
 		// The old seventh status box is gone: a draft is not a decision.
 		expect(body).not.toContain('value="draft"');

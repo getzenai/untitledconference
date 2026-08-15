@@ -59,7 +59,7 @@ describe('the wording that replaces the form', () => {
 		expect(roundWindowNotice(roundWindow(at(DAY), null, now), now)).toContain('opens tomorrow');
 		expect(roundWindowNotice(roundWindow(at(-DAY), null, now), now)).toBeNull();
 		expect(roundWindowNotice(roundWindow(null, at(-DAY), now), now)).toContain(
-			'Reviews can no longer be filed or changed.'
+			'Reviews can no longer be submitted or changed.'
 		);
 	});
 

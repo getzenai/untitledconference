@@ -54,7 +54,7 @@
 		The room where talks get accepted one at a time. Each committee member's own ranking is a tab,
 		best first, and the slot count above updates as you decide. The pile itself — filters, bulk
 		decisions, export — stays on
-		<a class="underline underline-offset-4" href="{base}/submissions">Submissions</a>.
+		<a class="underline underline-offset-4" href="{base}/submissions">Talks</a>.
 	</p>
 </div>
 
@@ -182,8 +182,8 @@
 		<div data-testid="decisions-empty">
 			<EmptyState
 				title="No reviewer has ranked yet"
-				description="The pile is on Submissions. This room is the acceptance call — slots left, then each member's ranking as a tab — and it stays empty until someone hands in a review."
-				action={{ href: `${base}/submissions`, label: 'Open Submissions' }}
+				description="The pile is on Talks. This room is the acceptance call — slots left, then each member's ranking as a tab — and it stays empty until someone hands in a review."
+				action={{ href: `${base}/submissions`, label: 'Open Talks' }}
 				goose={false}
 			/>
 		</div>

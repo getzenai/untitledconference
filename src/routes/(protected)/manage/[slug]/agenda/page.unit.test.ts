@@ -526,12 +526,12 @@ describe('agenda public state (#497)', () => {
 	it('says how many sessions the public can already see, including a mixed board', () => {
 		const mixed = renderWith(1, 1, { placed: [talk(1, 'confirmed'), talk(2, 'tentative')] });
 		expect(mixed).toContain('data-testid="agenda-public-state"');
-		expect(mixed).toContain('The public agenda shows 1 of 2 sessions.');
+		expect(mixed).toContain('The public agenda shows 1 of 2 talks.');
 		expect(mixed).toContain('Publish the agenda');
 		expect(mixed).not.toContain('Unpublish the agenda');
 
 		const live = renderWith(1, 1, { placed: [talk(1, 'confirmed'), talk(2, 'confirmed')] });
-		expect(live).toContain('The public agenda shows 2 sessions.');
+		expect(live).toContain('The public agenda shows 2 talks.');
 		expect(live).toContain('Unpublish the agenda');
 
 		const draft = renderWith(1, 1, { placed: [talk(1, 'tentative')] });
@@ -562,10 +562,10 @@ describe('agenda public state (#497)', () => {
 
 		const alone = renderWith(1, 1, { placed: [declined] });
 		expect(alone).toContain('The public cannot see these slots yet.');
-		expect(alone).not.toContain('The public agenda shows 1 session.');
+		expect(alone).not.toContain('The public agenda shows 1 talk.');
 
 		const beside = renderWith(1, 1, { placed: [talk(2, 'confirmed'), declined] });
-		expect(beside).toContain('The public agenda shows 1 of 2 sessions.');
+		expect(beside).toContain('The public agenda shows 1 of 2 talks.');
 	});
 
 	/**
@@ -586,7 +586,7 @@ describe('agenda public state (#497)', () => {
 
 		const beside = renderWith(1, 1, { placed: [talk(2, 'confirmed'), declined] });
 		expect(beside).toContain('Unpublish the agenda');
-		expect(beside).toContain('The public agenda shows 1 of 2 sessions.');
+		expect(beside).toContain('The public agenda shows 1 of 2 talks.');
 
 		// A tentative talk beside it still has publishing left to do.
 		const half = renderWith(1, 1, { placed: [talk(2, 'tentative'), declined] });
@@ -635,7 +635,7 @@ describe('agenda public state (#497)', () => {
 		}).body;
 
 		expect(body).toContain('data-testid="agenda-publish-result"');
-		expect(body).toContain('The public agenda now shows 1 session.');
+		expect(body).toContain('The public agenda now shows 1 talk.');
 	});
 
 	it('does not dress a declined talk in the published green, and does not stack the clock on the label', () => {
@@ -714,7 +714,7 @@ describe('agenda draft legend (#466)', () => {
 		}).body;
 
 		expect(body).toContain('data-testid="agenda-autoplace-result"');
-		expect(body).toContain('Placed 2 sessions as drafts.');
+		expect(body).toContain('Placed 2 talks as drafts.');
 		expect(body).toContain('invisible to the public until you publish');
 	});
 });

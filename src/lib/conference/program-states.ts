@@ -111,8 +111,8 @@ export type AgendaReady = {
 export function agendaReadyLine(ready: AgendaReady): string {
 	if (ready.unplaced > 0) {
 		return ready.unplaced === 1
-			? '1 unplaced talk needs a slot.'
-			: `${ready.unplaced} unplaced talks need a slot.`;
+			? '1 talk is unscheduled.'
+			: `${ready.unplaced} talks are unscheduled.`;
 	}
 	if (ready.placed === 0) {
 		return 'Nothing has been accepted yet, so there is nothing to schedule.';
@@ -127,11 +127,11 @@ export function agendaReadyLine(ready: AgendaReady): string {
 
 export function autoPlaceResult(count: number): string {
 	if (count === 0) {
-		return 'Nothing could be placed — every room is full for the length of those sessions.';
+		return 'Nothing could be placed — every room is full for the length of those talks.';
 	}
-	const sessions = count === 1 ? 'session' : 'sessions';
+	const talks = count === 1 ? 'talk' : 'talks';
 	const pronoun = count === 1 ? 'It is' : 'They are';
-	return `Placed ${count} ${sessions} as drafts. ${pronoun} invisible to the public until you publish. Move anything you disagree with.`;
+	return `Placed ${count} ${talks} as drafts. ${pronoun} invisible to the public until you publish. Move anything you disagree with.`;
 }
 
 export const PROGRAM_LEGEND = {

@@ -70,7 +70,7 @@ describe('Review round window', () => {
 	 * The other half of ABS-01, and the one the rubric calls a `rule`: a date that a
 	 * POST goes straight through is a note. The service test pins `saveReview`'s
 	 * refusal; this spec proves the whole chain in a browser — the organizer sees the
-	 * round as closed, the reviewer's queue says so instead of "To do", the form
+	 * round as closed, the reviewer's queue says so instead of "To review", the form
 	 * explains itself, and a request that ignores all of that is still refused.
 	 */
 	it('shuts a closed round for the reviewer, on the page and on the POST', () => {
@@ -127,7 +127,7 @@ describe('Review round window', () => {
 
 			cy.visit(`/review/${slug}`);
 			cy.waitForHydration();
-			cy.contains('td', 'To do').should('exist');
+			cy.contains('td', 'To review').should('exist');
 			cy.contains('a', 'Too late to review').click();
 			cy.waitForHydration();
 			cy.get('[data-testid="round-window-notice"]').should('not.exist');
@@ -174,8 +174,8 @@ describe('Review round window', () => {
 
 						cy.visit(`/review/${slug}`);
 						cy.waitForHydration();
-						// "To do" would be an instruction nobody can follow.
-						cy.contains('td', 'To do').should('not.exist');
+						// "To review" would be an instruction nobody can follow.
+						cy.contains('td', 'To review').should('not.exist');
 						cy.contains('Closed').should('exist');
 
 						cy.contains('a', 'Too late to review').click();

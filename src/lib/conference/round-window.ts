@@ -109,13 +109,13 @@ export function roundWindowNotice(window: RoundWindowFacts, now: Date = new Date
 	if (window.state === 'not_yet_open') {
 		const opens = window.opensAt ? new Date(window.opensAt) : null;
 		return opens
-			? `This review round opens ${relative(opens, now)} (${stamp(opens)}). Nothing can be filed until then.`
+			? `This review round opens ${relative(opens, now)} (${stamp(opens)}). Nothing can be reviewed until then.`
 			: 'This review round has not opened yet.';
 	}
 	if (window.state === 'closed') {
 		const closes = window.closesAt ? new Date(window.closesAt) : null;
 		return closes
-			? `This review round closed on ${stamp(closes)}. Reviews can no longer be filed or changed.`
+			? `This review round closed on ${stamp(closes)}. Reviews can no longer be submitted or changed.`
 			: 'This review round is closed.';
 	}
 	return null;

@@ -66,21 +66,21 @@
 </script>
 
 <svelte:head>
-	<title>My review queue — {data.conference.name}</title>
+	<title>Reviewing — {data.conference.name}</title>
 </svelte:head>
 
 <div class="flex flex-wrap items-end justify-between gap-3">
 	<div>
-		<h1 class="text-lg font-semibold tracking-tight">My review queue</h1>
+		<h1 class="text-lg font-semibold tracking-tight">Reviewing</h1>
 		<p class="text-muted-foreground mt-0.5 text-sm tabular-nums" data-testid="queue-counts">
 			{done} of {outstanding.length} reviewed
 			{#if waiting > 0}
-				· <span class="text-foreground font-medium">{waiting} you can file now</span>
+				· <span class="text-foreground font-medium">{waiting} you can review now</span>
 			{:else if done < outstanding.length}
-				· nothing you can file today
+				· nothing you can review today
 			{/if}
 			{#if blind}
-				· other reviews stay hidden until you file your own
+				· other reviews stay hidden until you review your own
 			{/if}
 		</p>
 	</div>
@@ -110,7 +110,7 @@
 	<EmptyState
 		class="mt-6"
 		title="Nothing assigned to you yet"
-		description="When an organizer assigns you submissions in a review round, they appear here."
+		description="When an organizer assigns you talks in a review round, they appear here."
 	/>
 {:else}
 	{#snippet sortable(
@@ -170,7 +170,7 @@
 					{@render sortable(
 						'Mine',
 						'mine',
-						'what you can file now, then what you are waiting on',
+						'what you can review now, then what you are waiting on',
 						'ascending'
 					)}
 				</tr>
@@ -201,7 +201,7 @@
 											href="{base}/{row.submissionId}?round={round.id}"
 											data-testid="queue-round-{row.submissionId}-{round.id}"
 											class="hover:text-foreground underline underline-offset-2"
-											>{round.name}{round.submitted ? ' (filed)' : ''}</a
+											>{round.name}{round.submitted ? ' (reviewed)' : ''}</a
 										>{/each}
 								</span>
 							{/if}
@@ -218,9 +218,9 @@
 							{/if}
 						</td>
 						<td class="py-2 pr-4">
-							<!-- "To do" on a round that is shut is an instruction the reviewer cannot
+							<!-- "To review" on a round that is shut is an instruction the reviewer cannot
 							     follow (ABS-01), so the window replaces it — but only while the review
-							     is outstanding: one already filed stays "Reviewed" whether or not the
+							     is outstanding: one already reviewed stays "Reviewed" whether or not the
 							     round has since closed. -->
 							{#if !row.withdrawn && !row.ownReviewSubmitted && row.window.state !== 'open'}
 								<StatusBadge
@@ -239,7 +239,7 @@
 										? 'Withdrawn'
 										: row.ownReviewSubmitted
 											? 'Reviewed'
-											: 'To do'}
+											: 'To review'}
 								/>
 							{/if}
 						</td>

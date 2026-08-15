@@ -155,7 +155,7 @@
 		options={[
 			{ value: '', label: 'Any agenda status' },
 			{ value: 'scheduled', label: 'Scheduled' },
-			{ value: 'unscheduled', label: 'Not scheduled' }
+			{ value: 'unscheduled', label: 'Unscheduled' }
 		]}
 		onValueChange={applyAfterFlush}
 	/>

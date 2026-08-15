@@ -171,7 +171,7 @@
 	href="/review/{data.conference.slug}"
 	class="text-muted-foreground hover:text-foreground text-sm underline underline-offset-4"
 >
-	← Back to my queue
+	← Back to reviewing
 </a>
 
 <div class="mt-3 grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -211,9 +211,9 @@
 							     days" — and it is the wording the queue and the organizer's table
 							     use, so the reviewer meets one vocabulary and not three. -->
 							· {round.submitted
-								? 'filed'
+								? 'reviewed'
 								: round.window.state === 'open'
-									? 'to do'
+									? 'to review'
 									: round.window.label.toLowerCase()}
 						</span>
 					</a>
@@ -275,16 +275,16 @@
 				<p
 					class="border-status-warn/40 bg-status-warn-bg text-status-warn mt-2 rounded-md border p-3 text-sm"
 				>
-					Hidden until you file your own review. This conference reviews blind first, so nobody's
-					score anchors yours; everything opens up the moment you submit.
+					Hidden until you review your own. This conference reviews blind first, so nobody's score
+					anchors yours; everything opens up the moment you submit.
 				</p>
 			{:else if s.peers.length === 0}
 				<p class="text-muted-foreground mt-2 text-sm">
 					{s.peersPending === 0
 						? 'Nobody else has been assigned this one.'
 						: s.peersPending === 1
-							? 'One other reviewer has this one and has not filed yet.'
-							: `${s.peersPending} other reviewers have this one and have not filed yet.`}
+							? 'One other reviewer has this one and has not reviewed yet.'
+							: `${s.peersPending} other reviewers have this one and have not reviewed yet.`}
 				</p>
 			{:else}
 				<ul class="mt-2 space-y-3">
@@ -326,8 +326,8 @@
 				{#if s.peersPending > 0}
 					<p class="text-muted-foreground mt-2 text-sm">
 						{s.peersPending === 1
-							? 'One more reviewer has not filed yet.'
-							: `${s.peersPending} more reviewers have not filed yet.`}
+							? 'One more reviewer has not reviewed yet.'
+							: `${s.peersPending} more reviewers have not reviewed yet.`}
 					</p>
 				{/if}
 			{/if}
@@ -353,7 +353,7 @@
 			<h2 class="text-sm font-semibold">My review — {s.round.name}</h2>
 			<StatusBadge
 				status={withdrawn ? 'withdrawn' : s.own.status}
-				label={withdrawn ? 'Withdrawn' : s.own.status === 'submitted' ? 'Submitted' : 'Draft'}
+				label={withdrawn ? 'Withdrawn' : s.own.status === 'submitted' ? 'Reviewed' : 'To review'}
 			/>
 		</div>
 

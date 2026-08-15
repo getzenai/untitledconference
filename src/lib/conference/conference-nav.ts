@@ -39,7 +39,7 @@ export function conferenceNav(slug: string): ConferenceNavItem[] {
 	const base = `/manage/${slug}`;
 	return [
 		{ id: 'dashboard', href: `${base}/dashboard`, label: 'Dashboard' },
-		{ id: 'submissions', href: `${base}/submissions`, label: 'Submissions' },
+		{ id: 'submissions', href: `${base}/submissions`, label: 'Talks' },
 		{ id: 'decisions', href: `${base}/decisions`, label: 'Decision meeting' },
 		{ id: 'carryForward', href: `${base}/carry-forward`, label: 'Carry forward' },
 		{ id: 'cfp', href: `${base}/cfp`, label: 'Call for papers' },
