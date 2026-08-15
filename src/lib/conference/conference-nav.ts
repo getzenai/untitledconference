@@ -45,7 +45,7 @@ export function conferenceNav(slug: string): ConferenceNavItem[] {
 		{ id: 'cfp', href: `${base}/cfp`, label: 'Call for papers' },
 		{ id: 'agenda', href: `${base}/agenda`, label: 'Agenda' },
 		{ id: 'speakers', href: `${base}/speakers`, label: 'Speakers' },
-		{ id: 'content', href: `${base}/content`, label: 'Speaker content' },
+		{ id: 'content', href: `${base}/content`, label: 'Speaker materials' },
 		{ id: 'rounds', href: `${base}/rounds`, label: 'Rounds & scorecards' },
 		{ id: 'people', href: `${base}/people`, label: 'Reviewer pool' },
 		{ id: 'embed', href: `${base}/embed`, label: 'Embed & share' },

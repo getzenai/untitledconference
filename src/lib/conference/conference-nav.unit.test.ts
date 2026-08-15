@@ -35,6 +35,9 @@ describe('conferenceNav', () => {
 		// Last year's declined talks are a place too (#448) — not a filter on
 		// this year's pile, and not a lane you have to remember exists.
 		expect(items.find((item) => item.id === 'carryForward')?.label).toBe('Carry forward');
+		// The area holds files and the tasks that chase them, not "content" (#422).
+		expect(items.find((item) => item.id === 'content')?.label).toBe('Speaker materials');
+		expect(items.map((item) => item.label)).not.toContain('Speaker content');
 	});
 });
 

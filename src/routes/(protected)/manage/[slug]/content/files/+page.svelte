@@ -85,7 +85,7 @@
 				{/if}
 			</p>
 		</div>
-		<Button href="{base}/content" size="sm" variant="ghost">Back to speaker content</Button>
+		<Button href="{base}/content" size="sm" variant="ghost">Back to speaker materials</Button>
 	</div>
 </div>
 

@@ -113,7 +113,7 @@ type FixtureRequest = {
 	 */
 	textAnswers?: { label: string; value: string }[];
 	/**
-	 * Files already handed in on speaker content (#423).
+	 * Files already handed in on speaker materials (#423).
 	 *
 	 * A deliverable cannot be produced through the UI without walking
 	 * acceptance → task template → portal upload, and the organizer preview

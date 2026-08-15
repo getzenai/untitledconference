@@ -148,7 +148,7 @@ describe('organizer task file comments', () => {
 		expect(body.match(/action="\?\/decide"/g)).toHaveLength(1);
 	});
 
-	// #64: this page hangs off Speaker content and had the same defect — bounded,
+	// #64: this page hangs off Speaker materials and had the same defect — bounded,
 	// but with no padding, so it sat flush against the rail and the window edge.
 	it('pads its container away from the rail', () => {
 		const { body } = render(Page, {
@@ -197,5 +197,7 @@ describe('organizer task file comments', () => {
 		const container = body.match(/<div class="([^"]*max-w-3xl[^"]*)"/)?.[1];
 		expect(container).toContain('px-6');
 		expect(container).toContain('py-5');
+		expect(body).toContain('← Speaker materials');
+		expect(body).not.toContain('Speaker content');
 	});
 });
