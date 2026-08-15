@@ -24,6 +24,9 @@ describe('speaker import form', () => {
 		expect(body).toContain('enctype="multipart/form-data"');
 		expect(body).toContain('data-testid="import-file"');
 		expect(body).toContain('data-testid="import-csv"');
+		expect(body).toContain('sending the same file twice is safe');
+		expect(body).toContain('Check the email column');
+		expect(body).not.toContain('a name is not an identity');
 	});
 
 	it('answers an import in place, not through the page banner', () => {

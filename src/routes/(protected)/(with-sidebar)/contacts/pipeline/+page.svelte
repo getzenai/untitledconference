@@ -128,7 +128,7 @@
 		>
 			<h2 class="text-sm font-semibold">Enroll a contact</h2>
 			<p class="text-muted-foreground mt-0.5 text-xs">
-				Adds a directory contact as a card on the board without creating a duplicate profile.
+				They show up on this board. You can still find them in the directory.
 			</p>
 			<form
 				method="POST"
