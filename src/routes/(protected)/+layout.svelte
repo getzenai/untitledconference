@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
+	import AssistantLauncher from '$lib/components/app/assistant-launcher.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { initialAppRail, transitAppRail } from '$lib/conference/conference-nav';
 	import type { NavAccess } from '$lib/conference/nav-access';
@@ -40,6 +41,12 @@
 
 	const navAccess = $derived((page.data as { navAccess?: NavAccess }).navAccess);
 
+	// Same rule as the sidebar: onboarding and the post-verify card are not the
+	// app shell, so the star stays off there.
+	const showAssistant = $derived(
+		showAppChrome && (page.data as { chatEnabled?: boolean }).chatEnabled === true
+	);
+
 	// Goose easter egg: the login form sets this right before redirecting here
 	// (or wherever `returnTo` sends the user), so it fires exactly once per
 	// sign-in regardless of landing page.
@@ -57,4 +64,8 @@
 	</Sidebar.Provider>
 {:else}
 	{@render children?.()}
+{/if}
+
+{#if showAssistant}
+	<AssistantLauncher />
 {/if}

@@ -1,5 +1,6 @@
 import type { NavAccess } from '$lib/conference/nav-access';
 import { navAccess } from '$lib/server/conference/nav-access';
+import { isFeatureEnabled } from '$lib/server/feature-flags';
 import { createLogger } from '$lib/server/logger';
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
@@ -32,8 +33,13 @@ export const load: LayoutServerLoad = async ({ url, locals }) => {
 	//
 	// Optional on the *type* so page unit tests under /manage/<slug> do not
 	// all have to invent a navAccess fixture for a field they never read.
-	const shell: { navAccess?: NavAccess } = {
-		navAccess: await navAccess(user.id, user.email ?? null)
+	//
+	// `chatEnabled` rides along for the same reason and stays optional for the
+	// same one: the assistant star (#676) hangs on this layout, and without the
+	// flag `POST /chat` answers 404, so the button must not be there either.
+	const shell: { navAccess?: NavAccess; chatEnabled?: boolean } = {
+		navAccess: await navAccess(user.id, user.email ?? null),
+		chatEnabled: isFeatureEnabled('inAppChat')
 	};
 	return {
 		user,
