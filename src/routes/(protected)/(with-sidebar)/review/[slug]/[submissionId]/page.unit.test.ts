@@ -318,9 +318,34 @@ describe('custom CFP answers on the scorecard', () => {
 
 		expect(body).toContain('What they answered on the form');
 		expect(body).toContain('Have you given this talk before?');
-		expect(body).toContain('>Yes</dd>');
-		expect(body).not.toContain('>true</dd>');
+		expect(body).toContain('data-kind="boolean"');
+		expect(body).toContain('Yes');
+		expect(body).not.toContain('>true<');
 		expect(body).toContain('I need a lectern.');
+	});
+
+	it('opens a PDF attachment in place and leaves an unknown type as a download (#423)', () => {
+		const body = page('assigned', {
+			answers: [
+				{
+					label: 'Slides',
+					kind: 'file',
+					value: 'https://files.test/cfp/slides.pdf'
+				},
+				{
+					label: 'Notes',
+					kind: 'file',
+					value: 'https://files.test/cfp/notes.docx'
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="file-open"');
+		expect(body).toContain('slides.pdf');
+		expect(body).toContain('notes.docx');
+		expect(body).toContain('We cannot show this type here — download it instead.');
+		// The PDF is a button, not a raw URL dumped into the page.
+		expect(body).not.toContain('>https://files.test/cfp/slides.pdf<');
 	});
 });
 
