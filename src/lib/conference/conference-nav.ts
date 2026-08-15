@@ -53,6 +53,14 @@ export function conferenceNav(slug: string): ConferenceNavItem[] {
 	];
 }
 
+/**
+ * Which rail item is current. Exact path or a child of it — not a prefix
+ * match, so `/decisions` and `/submissions` cannot light up together (#555).
+ */
+export function isConferenceNavCurrent(pathname: string, href: string): boolean {
+	return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 /** True for `/manage/<slug>` and everything under it, but not the list or /manage/new. */
 export function isConferencePath(pathname: string): boolean {
 	const parts = pathname.split('/').filter(Boolean);

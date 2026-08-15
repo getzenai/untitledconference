@@ -35,6 +35,29 @@ const renderWith = (sponsorHolds: number, capacity: number | null = null) =>
 		} as never
 	}).body;
 
+describe('empty state before anyone ranks (#555)', () => {
+	it('names the room and points at Submissions, instead of a row list', () => {
+		const body = renderWith(0);
+
+		expect(body).toContain('data-testid="slot-board"');
+		expect(body).toContain('data-testid="decisions-empty"');
+		expect(body).toContain('No reviewer has ranked yet');
+		expect(body).toContain('The pile is on Submissions');
+		expect(body).toContain('href="/manage/test-conf/submissions"');
+		expect(body).toContain('Open Submissions');
+		expect(body).not.toContain('data-testid="lobbying-queue"');
+		expect(body).not.toContain('data-testid="committee-tabs"');
+	});
+
+	it('does not show the empty state once a member has a ranking', () => {
+		const body = renderQueue(null);
+
+		expect(body).not.toContain('data-testid="decisions-empty"');
+		expect(body).toContain('data-testid="committee-tabs"');
+		expect(body).toContain('data-testid="lobbying-queue"');
+	});
+});
+
 describe('sponsor holds on the decision screen', () => {
 	it('says nothing when no slot is held', () => {
 		expect(renderWith(0)).not.toContain('data-testid="slot-sponsor-holds"');

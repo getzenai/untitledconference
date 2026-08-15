@@ -3,6 +3,7 @@ import {
 	conferenceDateRange,
 	conferenceNav,
 	initialAppRail,
+	isConferenceNavCurrent,
 	isConferencePath,
 	isConferenceRail,
 	transitAppRail
@@ -33,6 +34,32 @@ describe('conferenceNav', () => {
 		// Last year's declined talks are a place too (#448) — not a filter on
 		// this year's pile, and not a lane you have to remember exists.
 		expect(items.find((item) => item.id === 'carryForward')?.label).toBe('Carry forward');
+	});
+});
+
+describe('isConferenceNavCurrent', () => {
+	const items = conferenceNav('devflow-2028');
+	const href = (id: (typeof items)[number]['id']) => items.find((item) => item.id === id)!.href;
+
+	it('marks Decision meeting on /decisions and leaves Submissions dark', () => {
+		const path = '/manage/devflow-2028/decisions';
+
+		expect(isConferenceNavCurrent(path, href('decisions'))).toBe(true);
+		expect(isConferenceNavCurrent(path, href('submissions'))).toBe(false);
+	});
+
+	it('marks Submissions on /submissions and leaves Decision meeting dark', () => {
+		const path = '/manage/devflow-2028/submissions';
+
+		expect(isConferenceNavCurrent(path, href('submissions'))).toBe(true);
+		expect(isConferenceNavCurrent(path, href('decisions'))).toBe(false);
+	});
+
+	it('keeps a submission detail on Submissions, not Decision meeting', () => {
+		const path = '/manage/devflow-2028/submissions/12';
+
+		expect(isConferenceNavCurrent(path, href('submissions'))).toBe(true);
+		expect(isConferenceNavCurrent(path, href('decisions'))).toBe(false);
 	});
 });
 

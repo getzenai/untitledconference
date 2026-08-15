@@ -179,10 +179,14 @@
 	</section>
 
 	{#if data.seats.length === 0}
-		<EmptyState
-			title="Nobody has handed in a review yet"
-			description="A lobbying queue is a member's own ranking, so it needs their scores. Assign reviewers from the reviewer pool, and this room fills up as reviews come in."
-		/>
+		<div data-testid="decisions-empty">
+			<EmptyState
+				title="No reviewer has ranked yet"
+				description="The pile is on Submissions. This room is the acceptance call — slots left, then each member's ranking as a tab — and it stays empty until someone hands in a review."
+				action={{ href: `${base}/submissions`, label: 'Open Submissions' }}
+				goose={false}
+			/>
+		</div>
 	{:else}
 		<nav class="flex flex-wrap gap-2" aria-label="Committee" data-testid="committee-tabs">
 			{#each data.seats as seat (seat.userId)}
