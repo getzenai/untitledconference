@@ -29,6 +29,7 @@
 	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
+	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import ReviewFileAnswer from '$lib/components/review-file-answer.svelte';
 	import { filenameFrom, type FilePreviewKind } from '$lib/conference/file-preview';
 
@@ -208,7 +209,10 @@
 								{:else if answer.kind === 'file'}
 									<ReviewFileAnswer value={answer.value} onOpen={openFile} />
 								{:else}
-									<span class="whitespace-pre-line">{answer.value}</span>
+									<!-- #477: a recording or a slide deck is the only evidence of how this
+									     person presents, and it was body text on the screen where they are
+									     scored. -->
+									<AnswerText value={answer.value} />
 								{/if}
 							</dd>
 						</div>
