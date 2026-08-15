@@ -686,6 +686,106 @@ describe('ordering by how many reviews are in (#122)', () => {
 });
 
 /**
+ * Who is on the talk, in the row itself (#414).
+ *
+ * The table has always said 1/3. Fabian asked the other half of it: which
+ * three. The counts and the names come off the same query, so the pair cannot
+ * disagree — a row saying 0/2 next to one chip would be worse than no chips.
+ */
+describe('assigned reviewers on the row (#414)', () => {
+	let secondRoundId: number;
+
+	beforeAll(async () => {
+		const [plan] = await db
+			.select()
+			.from(evaluationPlanTable)
+			.where(eq(evaluationPlanTable.conferenceId, conference.id));
+		const [round] = await db
+			.insert(reviewRoundTable)
+			.values({ evaluationPlanId: plan.id, name: 'Final', position: 1 })
+			.returning();
+		secondRoundId = round.id;
+	});
+
+	afterAll(async () => {
+		await db.delete(reviewRoundTable).where(eq(reviewRoundTable.id, secondRoundId));
+	});
+
+	it('names the people the count is counting', async () => {
+		await addSubmission(conference, 'Staffed talk', 1);
+		const submissionId = await idFor('Staffed talk');
+		await addReview(submissionId, REVIEWERS[0], { relevance: 4, depth: 8 });
+		await addReview(submissionId, REVIEWERS[1], {
+			relevance: null,
+			depth: null,
+			submitted: false
+		});
+
+		const [row] = (await listSubmissions(conference.id, {}, 1)).rows;
+
+		expect(row.reviewsSubmitted).toBe(1);
+		expect(row.reviewsAssigned).toBe(2);
+		expect(row.reviewers.map((r) => r.label)).toEqual([REVIEWERS[0], REVIEWERS[1]]);
+		expect(row.reviewers.map((r) => r.rounds)).toEqual([['Round 1'], ['Round 1']]);
+		// The one still to chase is the one who has not handed in.
+		expect(row.reviewers.map((r) => r.outstanding)).toEqual([false, true]);
+	});
+
+	it('gives a reviewer on two rounds one entry that names both', async () => {
+		await addSubmission(conference, 'Twice-reviewed talk', 2);
+		const submissionId = await idFor('Twice-reviewed talk');
+		await addReview(submissionId, REVIEWERS[0], { relevance: 4, depth: 8 });
+		await db.insert(reviewTable).values({
+			reviewRoundId: secondRoundId,
+			submissionId,
+			reviewerUserId: REVIEWERS[0],
+			status: 'assigned'
+		});
+
+		const [row] = (await listSubmissions(conference.id, {}, 1)).rows;
+
+		expect(row.reviewsAssigned).toBe(2);
+		expect(row.reviewers).toHaveLength(1);
+		// Round order, not insertion order: two organizers see the same row.
+		expect(row.reviewers[0].rounds).toEqual(['Round 1', 'Final']);
+		expect(row.reviewers[0].outstanding).toBe(true);
+	});
+
+	it('has nothing to say about a talk nobody has been asked about', async () => {
+		await addSubmission(conference, 'Untouched talk', 3);
+
+		const [row] = (await listSubmissions(conference.id, {}, 1)).rows;
+
+		expect(row.reviewsAssigned).toBe(0);
+		expect(row.reviewers).toEqual([]);
+	});
+
+	it('shows the email of a reviewer whose account has no name', async () => {
+		const nameless = `nameless-chip-${suffix}`;
+		await db.insert(user).values({
+			id: nameless,
+			name: '',
+			email: `${nameless}@example.com`,
+			emailVerified: true,
+			createdAt: new Date(),
+			updatedAt: new Date()
+		});
+		await addSubmission(conference, 'Nameless reviewer talk', 4);
+		await addReview(await idFor('Nameless reviewer talk'), nameless, {
+			relevance: 3,
+			depth: 6
+		});
+
+		const [row] = (await listSubmissions(conference.id, {}, 1)).rows;
+
+		expect(row.reviewers[0].label).toBe(`${nameless}@example.com`);
+		expect(row.reviewers[0].initials).toBe('N');
+
+		await db.delete(user).where(eq(user.id, nameless));
+	});
+});
+
+/**
  * Who reviewed this, on the organizer's own page (#416).
  *
  * A blind round hides the reviewer from their peers. It never hid them from the

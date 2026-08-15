@@ -1,4 +1,5 @@
 /** The table must expose two distinct actions: decide now, notify later. */
+import { assignedReviewers } from '$lib/conference/assigned-reviewers';
 import { BULK_SELECT_REASON } from '$lib/conference/bulk-toolbar';
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
@@ -64,6 +65,7 @@ const submission = (id: number, status: 'accepted' | 'submitted') => ({
 	score: null,
 	reviewsSubmitted: 0,
 	reviewsAssigned: 0,
+	reviewers: [],
 	// Accepted talks are the ones that can be on the grid, so the fixture puts one
 	// there and leaves the undecided one off it (#412).
 	agenda:
@@ -445,6 +447,124 @@ describe('the still-to-review filter and the reviews column', () => {
 	 */
 	it('shows reviews handed in over reviews assigned', () => {
 		expect(renderPage()).toContain('data-testid="reviews-cell"');
+	});
+});
+
+/** One row, rendered on its own, for the claims that are about that row. */
+function renderRow(row: PageData['submissions'][number]) {
+	currentUrl.value = new URL('https://example.test/manage/test-conf/submissions');
+	return render(Page, {
+		props: {
+			data: {
+				user: { id: 'organizer-1', name: 'Jordan' },
+				speakerProfile: false,
+				impersonating: null,
+				analytics: { apiKey: undefined, host: undefined },
+				conference,
+				submissions: [row],
+				pagination: { matching: 1, page: 1, pageSize: 50, pageCount: 1 },
+				facets: { tracks: [], formats: [] },
+				filters: {},
+				sort: 'newest',
+				counts: { total: 1, undecided: 0, unreviewed: 0 },
+				notificationStatuses: { [row.id]: null },
+				assignmentTargets
+			} as PageData,
+			form: null
+		}
+	}).body;
+}
+
+describe('who is on the talk (#414)', () => {
+	/**
+	 * #414. The count says how many are outstanding; Fabian asked the other half
+	 * of the question — which people. Initials rather than names, because a full
+	 * list per row does not survive two rounds.
+	 */
+	it('names who is on the talk, in the cell that counts them', () => {
+		const body = renderRow({
+			...submission(1, 'submitted'),
+			reviewsSubmitted: 1,
+			reviewsAssigned: 2,
+			reviewers: assignedReviewers([
+				{
+					userId: 'rev-1',
+					name: 'Riley Reviewer',
+					email: 'riley@example.com',
+					round: 'Screening',
+					submitted: true
+				},
+				{
+					userId: 'rev-2',
+					name: 'Sam Score',
+					email: 'sam@example.com',
+					round: 'Screening',
+					submitted: false
+				}
+			])
+		});
+
+		expect(body).toContain('data-testid="row-reviewers"');
+		expect(body).toContain('RR');
+		expect(body).toContain('SS');
+		// The state is said in words, not only in the chip's weight.
+		expect(body).toContain('Riley Reviewer · Screening · handed in');
+		expect(body).toContain('Sam Score · Screening · not handed in');
+	});
+
+	it('collapses a person who sits on two rounds into one chip', () => {
+		const body = renderRow({
+			...submission(1, 'submitted'),
+			reviewsSubmitted: 1,
+			reviewsAssigned: 2,
+			reviewers: assignedReviewers([
+				{
+					userId: 'rev-1',
+					name: 'Riley Reviewer',
+					email: 'riley@example.com',
+					round: 'Screening',
+					submitted: true
+				},
+				{
+					userId: 'rev-1',
+					name: 'Riley Reviewer',
+					email: 'riley@example.com',
+					round: 'Final',
+					submitted: false
+				}
+			])
+		});
+
+		expect(body.match(/>RR</g) ?? []).toHaveLength(1);
+		expect(body).toContain('Riley Reviewer · Screening, Final · not handed in');
+	});
+
+	it('holds the tail back behind a +N once the row is full', () => {
+		const body = renderRow({
+			...submission(1, 'submitted'),
+			reviewsSubmitted: 0,
+			reviewsAssigned: 6,
+			reviewers: assignedReviewers(
+				Array.from({ length: 6 }, (_, i) => ({
+					userId: `rev-${i}`,
+					name: `Reviewer ${i}`,
+					email: `r${i}@example.com`,
+					round: 'Screening',
+					submitted: false
+				}))
+			)
+		});
+
+		expect(body).toContain('data-testid="row-reviewers-overflow"');
+		expect(body).toContain('+2');
+		// Hidden from the eye, not from a screen reader.
+		expect(body).toContain('Reviewer 5 · Screening · not handed in');
+	});
+
+	it('says nothing at all about a talk nobody has been asked about', () => {
+		const body = renderRow({ ...submission(1, 'submitted'), reviewers: [] });
+
+		expect(body).not.toContain('data-testid="row-reviewers"');
 	});
 });
 
