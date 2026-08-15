@@ -551,6 +551,89 @@ export type PlaceAlsoResult =
 	| { ok: true; endMinutes: number; placementId: number }
 	| { ok: false; reason: string };
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+type SlotTimes =
+	| { ok: true; endMinutes: number; startsAt: Date; endsAt: Date }
+	| { ok: false; reason: string };
+
+/** Day, room, and clock for a write — the day is locked so a shrink cannot race it. */
+async function slotTimesFor(
+	tx: Tx,
+	conferenceId: number,
+	slot: { dayId: number; roomId: number; startMinutes: number },
+	formatMinutes: number | null
+): Promise<SlotTimes> {
+	const [day] = await tx
+		.select({ date: conferenceDayTable.date })
+		.from(conferenceDayTable)
+		.where(
+			and(eq(conferenceDayTable.id, slot.dayId), eq(conferenceDayTable.conferenceId, conferenceId))
+		)
+		.limit(1)
+		.for('key share');
+	if (!day) return { ok: false, reason: 'No such day' };
+
+	const [room] = await tx
+		.select({ id: roomTable.id })
+		.from(roomTable)
+		.where(and(eq(roomTable.id, slot.roomId), eq(roomTable.conferenceId, conferenceId)))
+		.limit(1);
+	if (!room) return { ok: false, reason: 'No such room' };
+
+	if (slot.startMinutes < DAY_STARTS_AT || slot.startMinutes >= DAY_ENDS_AT) {
+		return { ok: false, reason: 'That start time is outside the conference day' };
+	}
+
+	const minutes = formatMinutes ?? DEFAULT_MINUTES;
+	const endMinutes = slot.startMinutes + minutes;
+	return {
+		ok: true,
+		endMinutes,
+		startsAt: slotInstant(day.date, slot.startMinutes),
+		endsAt: slotInstant(day.date, endMinutes)
+	};
+}
+
+async function insertAlternativeRow(
+	tx: Tx,
+	conferenceId: number,
+	submissionId: number,
+	slot: { dayId: number; roomId: number; startMinutes: number },
+	times: Extract<SlotTimes, { ok: true }>
+): Promise<PlaceAlsoResult> {
+	const [existing] = await tx
+		.select({ id: placementTable.id })
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				eq(placementTable.submissionId, submissionId),
+				eq(placementTable.conferenceDayId, slot.dayId),
+				eq(placementTable.roomId, slot.roomId),
+				eq(placementTable.startsAt, times.startsAt)
+			)
+		)
+		.limit(1);
+	if (existing) return { ok: true, endMinutes: times.endMinutes, placementId: existing.id };
+
+	const [created] = await tx
+		.insert(placementTable)
+		.values({
+			conferenceId,
+			kind: 'session',
+			status: 'tentative',
+			submissionId,
+			conferenceDayId: slot.dayId,
+			roomId: slot.roomId,
+			startsAt: times.startsAt,
+			endsAt: times.endsAt
+		})
+		.returning({ id: placementTable.id });
+
+	return { ok: true, endMinutes: times.endMinutes, placementId: created.id };
+}
+
 /**
  * Parks the same talk on a second draft slot without moving the first (#559).
  *
@@ -581,65 +664,9 @@ export async function placeAlternative(
 	}
 
 	return db.transaction(async (tx) => {
-		const [day] = await tx
-			.select({ date: conferenceDayTable.date })
-			.from(conferenceDayTable)
-			.where(
-				and(
-					eq(conferenceDayTable.id, slot.dayId),
-					eq(conferenceDayTable.conferenceId, conferenceId)
-				)
-			)
-			.limit(1)
-			.for('key share');
-		if (!day) return { ok: false, reason: 'No such day' };
-
-		const [room] = await tx
-			.select({ id: roomTable.id })
-			.from(roomTable)
-			.where(and(eq(roomTable.id, slot.roomId), eq(roomTable.conferenceId, conferenceId)))
-			.limit(1);
-		if (!room) return { ok: false, reason: 'No such room' };
-
-		if (slot.startMinutes < DAY_STARTS_AT || slot.startMinutes >= DAY_ENDS_AT) {
-			return { ok: false, reason: 'That start time is outside the conference day' };
-		}
-
-		const minutes = source.formatMinutes ?? DEFAULT_MINUTES;
-		const endMinutes = slot.startMinutes + minutes;
-		const startsAt = slotInstant(day.date, slot.startMinutes);
-		const endsAt = slotInstant(day.date, endMinutes);
-
-		const [existing] = await tx
-			.select({ id: placementTable.id })
-			.from(placementTable)
-			.where(
-				and(
-					eq(placementTable.conferenceId, conferenceId),
-					eq(placementTable.submissionId, submissionId),
-					eq(placementTable.conferenceDayId, slot.dayId),
-					eq(placementTable.roomId, slot.roomId),
-					eq(placementTable.startsAt, startsAt)
-				)
-			)
-			.limit(1);
-		if (existing) return { ok: true, endMinutes, placementId: existing.id };
-
-		const [created] = await tx
-			.insert(placementTable)
-			.values({
-				conferenceId,
-				kind: 'session',
-				status: 'tentative',
-				submissionId,
-				conferenceDayId: slot.dayId,
-				roomId: slot.roomId,
-				startsAt,
-				endsAt
-			})
-			.returning({ id: placementTable.id });
-
-		return { ok: true, endMinutes, placementId: created.id };
+		const times = await slotTimesFor(tx, conferenceId, slot, source.formatMinutes);
+		if (!times.ok) return times;
+		return insertAlternativeRow(tx, conferenceId, submissionId, slot, times);
 	});
 }
 
@@ -1049,6 +1076,88 @@ export async function setPlacementStatus(
 	return true;
 }
 
+type Chosen = NonNullable<Awaited<ReturnType<typeof ownPlacement>>>;
+
+async function dropSiblingDrafts(tx: Tx, conferenceId: number, placement: Chosen) {
+	if (placement.submissionId === null) return;
+	await tx
+		.delete(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				eq(placementTable.submissionId, placement.submissionId),
+				ne(placementTable.id, placement.id)
+			)
+		);
+}
+
+function clearSlot(tx: Tx, placementId: number) {
+	return tx
+		.update(placementTable)
+		.set({
+			conferenceDayId: null,
+			roomId: null,
+			startsAt: null,
+			endsAt: null,
+			status: 'tentative'
+		})
+		.where(eq(placementTable.id, placementId));
+}
+
+async function vacateOverlappingDraft(tx: Tx, other: { id: number; submissionId: number | null }) {
+	if (other.submissionId === null) {
+		await clearSlot(tx, other.id);
+		return;
+	}
+
+	const extras = await tx
+		.select({ id: placementTable.id })
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.submissionId, other.submissionId),
+				ne(placementTable.id, other.id),
+				isNotNull(placementTable.startsAt)
+			)
+		);
+
+	if (extras.length > 0) {
+		// This row was a candidate slot; the talk still sits elsewhere.
+		await tx.delete(placementTable).where(eq(placementTable.id, other.id));
+		return;
+	}
+	await clearSlot(tx, other.id);
+}
+
+async function vacateOverlappingDrafts(tx: Tx, conferenceId: number, placement: Chosen) {
+	if (!placement.conferenceDayId || !placement.roomId || !placement.startsAt || !placement.endsAt) {
+		return;
+	}
+
+	const overlapping = await tx
+		.select({
+			id: placementTable.id,
+			submissionId: placementTable.submissionId
+		})
+		.from(placementTable)
+		.where(
+			and(
+				eq(placementTable.conferenceId, conferenceId),
+				ne(placementTable.id, placement.id),
+				eq(placementTable.kind, 'session'),
+				eq(placementTable.status, 'tentative'),
+				eq(placementTable.conferenceDayId, placement.conferenceDayId),
+				eq(placementTable.roomId, placement.roomId),
+				lt(placementTable.startsAt, placement.endsAt),
+				gt(placementTable.endsAt, placement.startsAt)
+			)
+		);
+
+	for (const other of overlapping) {
+		await vacateOverlappingDraft(tx, other);
+	}
+}
+
 /**
  * Confirm this option and drop its siblings (#559).
  *
@@ -1057,87 +1166,10 @@ export async function setPlacementStatus(
  * slot goes back to the tray: it still needs a place, just not this one.
  * Confirmed neighbours are left alone; those are real clashes, not options.
  */
-async function choosePlacement(
-	conferenceId: number,
-	placement: NonNullable<Awaited<ReturnType<typeof ownPlacement>>>
-) {
+async function choosePlacement(conferenceId: number, placement: Chosen) {
 	await db.transaction(async (tx) => {
-		if (placement.submissionId !== null) {
-			await tx
-				.delete(placementTable)
-				.where(
-					and(
-						eq(placementTable.conferenceId, conferenceId),
-						eq(placementTable.submissionId, placement.submissionId),
-						ne(placementTable.id, placement.id)
-					)
-				);
-		}
-
-		if (placement.conferenceDayId && placement.roomId && placement.startsAt && placement.endsAt) {
-			const overlapping = await tx
-				.select({
-					id: placementTable.id,
-					submissionId: placementTable.submissionId
-				})
-				.from(placementTable)
-				.where(
-					and(
-						eq(placementTable.conferenceId, conferenceId),
-						ne(placementTable.id, placement.id),
-						eq(placementTable.kind, 'session'),
-						eq(placementTable.status, 'tentative'),
-						eq(placementTable.conferenceDayId, placement.conferenceDayId),
-						eq(placementTable.roomId, placement.roomId),
-						lt(placementTable.startsAt, placement.endsAt),
-						gt(placementTable.endsAt, placement.startsAt)
-					)
-				);
-
-			for (const other of overlapping) {
-				if (other.submissionId === null) {
-					await tx
-						.update(placementTable)
-						.set({
-							conferenceDayId: null,
-							roomId: null,
-							startsAt: null,
-							endsAt: null,
-							status: 'tentative'
-						})
-						.where(eq(placementTable.id, other.id));
-					continue;
-				}
-
-				const extras = await tx
-					.select({ id: placementTable.id })
-					.from(placementTable)
-					.where(
-						and(
-							eq(placementTable.submissionId, other.submissionId),
-							ne(placementTable.id, other.id),
-							isNotNull(placementTable.startsAt)
-						)
-					);
-
-				if (extras.length > 0) {
-					// This row was a candidate slot; the talk still sits elsewhere.
-					await tx.delete(placementTable).where(eq(placementTable.id, other.id));
-				} else {
-					await tx
-						.update(placementTable)
-						.set({
-							conferenceDayId: null,
-							roomId: null,
-							startsAt: null,
-							endsAt: null,
-							status: 'tentative'
-						})
-						.where(eq(placementTable.id, other.id));
-				}
-			}
-		}
-
+		await dropSiblingDrafts(tx, conferenceId, placement);
+		await vacateOverlappingDrafts(tx, conferenceId, placement);
 		await tx
 			.update(placementTable)
 			.set({ status: 'confirmed' })
