@@ -440,13 +440,15 @@
 			<form method="POST" action="?/publish" use:enhance={submitting}>
 				<input type="hidden" name="published" value={everythingPublished ? 'false' : 'true'} />
 				<!--
-					Publish is the action this screen exists to take. Unpublish used to
-					be the same filled button, so once the programme was live the
-					loudest control took it down (#497).
+					One primary per strip (#477). Before the programme is live that is
+					Publish. Once it is live, taking it down is not the recommended
+					next step — Unpublish is a ghost, and View the public agenda is
+					the filled control. #497 already stopped Unpublish sharing the
+					filled style with Publish; this finishes the hierarchy.
 				-->
 				<Button
 					type="submit"
-					variant={everythingPublished ? 'outline' : 'default'}
+					variant={everythingPublished ? 'ghost' : 'default'}
 					disabled={busy || placedTalks.length === 0}
 					data-testid="agenda-publish"
 				>
@@ -595,7 +597,12 @@
 			<Button href="{base}/agenda/run-of-show" variant="ghost" data-testid="agenda-run-of-show">
 				Run of show
 			</Button>
-			<Button href="/c/{data.conference.slug}/agenda" variant="ghost" target="_blank">
+			<Button
+				href="/c/{data.conference.slug}/agenda"
+				variant={everythingPublished ? 'default' : 'ghost'}
+				target="_blank"
+				data-testid="agenda-view-public"
+			>
 				View the public agenda
 			</Button>
 		</div>

@@ -536,20 +536,20 @@ describe('agenda public state (#497)', () => {
 		expect(half).not.toContain('Unpublish the agenda');
 	});
 
-	it('fills Publish and outlines Unpublish', () => {
-		const publishButton = (html: string) => {
-			const mark = html.indexOf('data-testid="agenda-publish"');
+	it('fills Publish, ghosts Unpublish, and fills View once the programme is live (#477)', () => {
+		const slice = (html: string, testId: string) => {
+			const mark = html.indexOf(`data-testid="${testId}"`);
 			expect(mark).toBeGreaterThan(-1);
-			return html.slice(html.lastIndexOf('<button', mark), mark);
+			return html.slice(html.lastIndexOf('<', mark), html.indexOf('>', mark));
 		};
 
-		const draft = publishButton(renderWith(1, 1, { placed: [talk(1, 'tentative')] }));
-		expect(draft).toContain('bg-primary');
-		expect(draft).not.toContain('bg-background');
+		const draft = renderWith(1, 1, { placed: [talk(1, 'tentative')] });
+		expect(slice(draft, 'agenda-publish')).toContain('bg-primary');
+		expect(slice(draft, 'agenda-view-public')).not.toContain('bg-primary');
 
-		const live = publishButton(renderWith(1, 1, { placed: [talk(1, 'confirmed')] }));
-		expect(live).toContain('bg-background');
-		expect(live).not.toContain('bg-primary');
+		const live = renderWith(1, 1, { placed: [talk(1, 'confirmed')] });
+		expect(slice(live, 'agenda-publish')).not.toContain('bg-primary');
+		expect(slice(live, 'agenda-view-public')).toContain('bg-primary');
 	});
 
 	it('names what went live, the way auto-place already names what it placed', () => {
