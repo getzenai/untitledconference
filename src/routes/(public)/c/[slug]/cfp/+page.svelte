@@ -73,7 +73,11 @@
 			listening = true;
 			return;
 		}
-		const pending = consumePendingProposal(sessionStorage, slug);
+		// The server copy is written by the sign-up hook and survives the
+		// verification link opening in a new tab (#643). Consume the same-tab copy
+		// regardless, so the two handoff paths cannot become two future saves.
+		const browserPending = consumePendingProposal(sessionStorage, slug);
+		const pending = data.pendingProposal ?? browserPending;
 		if (pending) {
 			restored = pending.draft;
 			pendingIntent = pending.intent;

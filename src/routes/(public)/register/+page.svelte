@@ -13,6 +13,7 @@
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { registerSchema } from './schema';
 	import { safeReturnTo } from '$lib/safe-return-to';
+	import { readPendingProposal } from '$lib/conference/pending-proposal';
 
 	// The server action's answer. It only ever renders for a submit that happened
 	// before hydration — once superForm is live it cancels the native submit.
@@ -27,6 +28,14 @@
 	);
 	const verifyEmailHref = $derived(`/verify-email?returnTo=${encodeURIComponent(returnTo)}`);
 	const verificationCallback = $derived(`/email-verified?returnTo=${encodeURIComponent(returnTo)}`);
+
+	function pendingProposalForSignUp() {
+		const match = new URL(returnTo, page.url.origin).pathname.match(/^\/c\/([^/]+)\/cfp$/);
+		if (!match) return undefined;
+		const slug = decodeURIComponent(match[1]);
+		const pending = readPendingProposal(sessionStorage, slug);
+		return pending ? { slug, ...pending } : undefined;
+	}
 
 	// Initialize form client-side
 	const form = superForm(
@@ -44,12 +53,17 @@
 
 				try {
 					// Sign up the user using Better Auth client
-					const { data: signUpData, error: signUpError } = await authClient.signUp.email({
+					const signUp = {
 						email,
 						password,
 						name: '', // Better Auth requires a name field
-						callbackURL: verificationCallback
-					});
+						callbackURL: verificationCallback,
+						// Better Auth accepts additional request fields. Its user-create hook
+						// validates this again and keys it to the user it actually creates,
+						// before a verification email can send the reader to a new tab.
+						pendingProposal: pendingProposalForSignUp()
+					} as Parameters<typeof authClient.signUp.email>[0];
+					const { data: signUpData, error: signUpError } = await authClient.signUp.email(signUp);
 
 					if (signUpError) {
 						// Better error message for duplicate email

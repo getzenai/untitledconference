@@ -10,10 +10,17 @@
 import type { ProposalDraft } from '$lib/conference/proposal-draft';
 import { openCall, saveSubmission } from '$lib/server/conference/cfp-submission';
 import { readProposal } from '$lib/server/conference/proposal-input';
+import {
+	clearRegistrationProposal,
+	registrationProposalForUser
+} from '$lib/server/conference/registration-proposal';
 import { submissionForConference } from '$lib/server/conference/speaker-portal';
 import { myProfiles } from '$lib/server/conference/speaker-profile';
+import { createLogger } from '$lib/server/logger';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+
+const logger = createLogger('PublicCfp');
 
 export type CfpSpeakerProfile = {
 	organizationName: string;
@@ -37,11 +44,15 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const existing = locals.user
 		? await submissionForConference(locals.user.id, call.conference.id)
 		: null;
+	const pendingProposal =
+		locals.user && !existing
+			? await registrationProposalForUser(locals.user.id, call.conference.slug)
+			: null;
 
 	// The organization id is on the call for the write path; it has no business
 	// reaching the browser.
 	const { organizationId: _organizationId, ...conference } = call.conference;
-	return { call: { ...call, conference }, existing, speakerProfile };
+	return { call: { ...call, conference }, existing, speakerProfile, pendingProposal };
 };
 
 /**
@@ -92,6 +103,17 @@ async function save(
 		}
 		if (result.reason === 'closed') return fail(409, { closed: true });
 		error(404, 'This conference is not accepting proposals');
+	}
+
+	// The submission is already durable. A best-effort cleanup must not turn that
+	// successful write into an error page (or invite a duplicate on retry).
+	try {
+		await clearRegistrationProposal(userId, slug);
+	} catch (cleanupError) {
+		logger.error('Could not clear registration proposal handoff', cleanupError as Error, {
+			userId,
+			slug
+		});
 	}
 
 	// `justSubmitted` is a transient signal for the goose-feather confetti, not

@@ -322,6 +322,11 @@ jobs:
         env:
           SKIP_BUILD: 'true'
 
+      - name: Run email-verification E2E
+        run: npm run test:e2e:verification
+        env:
+          SKIP_BUILD: 'true'
+
       - name: Upload Cypress screenshots
         uses: actions/upload-artifact@v4
         if: failure()

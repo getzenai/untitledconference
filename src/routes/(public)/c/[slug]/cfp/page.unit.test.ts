@@ -79,6 +79,7 @@ const renderCfp = (
 			data: {
 				call: call(state, description, closesAt),
 				existing,
+				pendingProposal: null,
 				speakerProfile: extras.speakerProfile ?? null,
 				// The public layout's data reaches this page's type but not its body.
 				user: extras.user,
@@ -322,6 +323,7 @@ describe('speaker expenses on the public call (#512)', () => {
 				data: {
 					call: { ...base, support },
 					existing: null,
+					pendingProposal: null,
 					speakerProfile: null,
 					user: undefined,
 					conference: publicConference,
@@ -361,6 +363,7 @@ describe('speaker expenses on the public call (#512)', () => {
 				data: {
 					call: { ...base, support: { admission: 'free' } },
 					existing: null,
+					pendingProposal: null,
 					speakerProfile: null,
 					user: undefined,
 					conference: publicConference,
