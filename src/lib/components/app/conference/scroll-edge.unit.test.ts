@@ -7,6 +7,10 @@
  * two viewport widths. What belongs here is the server-rendered contract: the
  * strip comes out reachable, and neither mark comes out, because a hint baked
  * into the HTML would flash on every load and be wrong on every wide screen.
+ *
+ * The button names (#604) are absent here for exactly that reason, so they are
+ * asserted in the Cypress spec, on the one page that draws two strips at once —
+ * which is also the only place where telling them apart matters.
  */
 import { createRawSnippet } from 'svelte';
 import { render } from 'svelte/server';
