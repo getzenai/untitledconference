@@ -50,6 +50,16 @@
 	const maxCompanyCount = $derived(
 		overview.topCompanies.reduce((m: number, c: { count: number }) => Math.max(m, c.count), 1)
 	);
+	const minCompanyCount = $derived(
+		overview.topCompanies.reduce(
+			(m: number, c: { count: number }) => Math.min(m, c.count),
+			Number.POSITIVE_INFINITY
+		)
+	);
+	/** #477: bars normalised to the max look identical when every company has the same count. */
+	const companiesHaveALeader = $derived(
+		overview.topCompanies.length > 0 && maxCompanyCount > minCompanyCount
+	);
 	const duplicateIdSet = $derived(new Set(data.duplicateIds ?? []));
 </script>
 
@@ -236,55 +246,40 @@
 			</p>
 		{/if}
 
-		<!-- CRM-12: org-wide metrics + analytics widget above the directory. -->
+		<!-- CRM-12: counts sit in a single line so the directory table stays
+		     on screen. The company chart only renders when one firm actually
+		     leads — otherwise every bar is full-width black (#477). -->
 		<section class="space-y-3" aria-label="CRM overview" data-testid="crm-overview">
-			<div class="grid gap-3 sm:grid-cols-3" data-testid="crm-kpis">
-				<div class="border-border bg-card rounded-lg border p-4">
-					<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-						Total contacts
-					</p>
-					<p
-						class="mt-1 text-2xl font-semibold tracking-tight tabular-nums"
-						data-testid="crm-kpi-total-contacts"
+			<p
+				class="text-muted-foreground flex flex-wrap gap-x-4 gap-y-1 text-sm tabular-nums"
+				data-testid="crm-kpis"
+			>
+				<span
+					><span class="text-foreground font-medium" data-testid="crm-kpi-total-contacts"
+						>{overview.totalContacts}</span
 					>
-						{overview.totalContacts}
-					</p>
-				</div>
-				<div class="border-border bg-card rounded-lg border p-4">
-					<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-						Events with speakers
-					</p>
-					<p
-						class="mt-1 text-2xl font-semibold tracking-tight tabular-nums"
-						data-testid="crm-kpi-events"
+					{overview.totalContacts === 1 ? 'contact' : 'contacts'}</span
+				>
+				<span
+					><span class="text-foreground font-medium" data-testid="crm-kpi-events"
+						>{overview.eventsWithSpeakers}</span
 					>
-						{overview.eventsWithSpeakers}
-					</p>
-				</div>
-				<div class="border-border bg-card rounded-lg border p-4">
-					<p class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-						Returning speakers
-					</p>
-					<p
-						class="mt-1 text-2xl font-semibold tracking-tight tabular-nums"
-						data-testid="crm-kpi-returning"
+					{overview.eventsWithSpeakers === 1 ? 'event with speakers' : 'events with speakers'}</span
+				>
+				<span
+					><span class="text-foreground font-medium" data-testid="crm-kpi-returning"
+						>{overview.returningSpeakers}</span
 					>
-						{overview.returningSpeakers}
-					</p>
-					<p class="text-muted-foreground mt-1 text-xs">On two or more events</p>
-				</div>
-			</div>
+					{overview.returningSpeakers === 1 ? 'returning speaker' : 'returning speakers'}</span
+				>
+			</p>
 
-			<div class="border-border bg-card rounded-lg border p-4" data-testid="crm-top-companies">
-				<div class="flex flex-wrap items-baseline justify-between gap-2">
-					<h2 class="text-sm font-semibold tracking-tight">Top companies</h2>
-					<p class="text-muted-foreground text-xs">Click a company to filter the directory</p>
-				</div>
-				{#if overview.topCompanies.length === 0}
-					<p class="text-muted-foreground mt-3 text-sm" data-testid="crm-top-companies-empty">
-						No company data yet — add company on contacts to fill this chart.
-					</p>
-				{:else}
+			{#if companiesHaveALeader}
+				<div class="border-border bg-card rounded-lg border p-4" data-testid="crm-top-companies">
+					<div class="flex flex-wrap items-baseline justify-between gap-2">
+						<h2 class="text-sm font-semibold tracking-tight">Top companies</h2>
+						<p class="text-muted-foreground text-xs">Click a company to filter the directory</p>
+					</div>
 					<ul class="mt-3 space-y-2" data-testid="crm-top-companies-list">
 						{#each overview.topCompanies as bucket (bucket.company)}
 							<li>
@@ -311,8 +306,8 @@
 							</li>
 						{/each}
 					</ul>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		</section>
 
 		<!-- Multi-criteria filters (CRM-02): GET so the URL is the source of truth. -->
