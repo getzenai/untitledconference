@@ -88,6 +88,187 @@ jobs:
           done
           exit $missing
 
+      # A model that answers is not the same as a model this chat can use.
+      #
+      # The check above proves both AI_GATEWAY_* variables are *set*. It cannot
+      # prove they are the *right* ones: `AI_CHAT_MODEL` in wrangler.jsonc names
+      # the provider, and the provider decides which key is correct. Change the
+      # model string alone and the presence check still passes — the deploy goes
+      # green, the panel renders for every reviewer, and each message comes back
+      # an upstream auth error. That is worse than the "AI Gateway is not
+      # configured" state the flag guard was written to prevent, because nothing
+      # fails loudly.
+      #
+      # So this asks the gateway for one tool call, with the same three values
+      # the Worker will get. `2xx` alone is too weak a claim: the reviewer
+      # assistant is a tool-calling feature, and a model that talks but cannot
+      # call tools would sail through a status-code check and leave every tool
+      # silently dead.
+      #
+      # It runs *before* the dump and the migration on purpose. Drizzle
+      # migrations are forward-only, so failing here costs nothing, while
+      # failing after them leaves the database moved on from the code.
+      #
+      # Roughly $0.00008 per deploy on the current model.
+      - name: Prove the chat model and the gateway key fit each other
+        run: |
+          # Actions' default is `bash -e`, which leaves an unset variable as the
+          # empty string. Here that would turn a missing base URL into a request
+          # against a nonsense path and a confusing 404 instead of a named fault.
+          set -euo pipefail
+
+          cat > "$RUNNER_TEMP/read-wrangler-var.mjs" <<'NODE'
+          import { readFileSync } from 'node:fs';
+
+          // Strip JSONC comments without touching string contents. A regex cannot do this
+          // safely: `"https://untitledconference.com"` contains `//`, so a naive strip
+          // turns config values into a syntax error.
+          function stripComments(source) {
+          	let out = '';
+          	let inString = false;
+          	let inLine = false;
+          	let inBlock = false;
+          	for (let i = 0; i < source.length; i++) {
+          		const c = source[i];
+          		const next = source[i + 1];
+          		if (inLine) {
+          			if (c === '\n') { inLine = false; out += c; }
+          			continue;
+          		}
+          		if (inBlock) {
+          			if (c === '*' && next === '/') { inBlock = false; i++; }
+          			continue;
+          		}
+          		if (inString) {
+          			out += c;
+          			if (c === '\\') { out += next ?? ''; i++; continue; }
+          			if (c === '"') inString = false;
+          			continue;
+          		}
+          		if (c === '"') { inString = true; out += c; continue; }
+          		if (c === '/' && next === '/') { inLine = true; i++; continue; }
+          		if (c === '/' && next === '*') { inBlock = true; i++; continue; }
+          		out += c;
+          	}
+          	return out;
+          }
+
+          const config = JSON.parse(stripComments(readFileSync('wrangler.jsonc', 'utf8')));
+          process.stdout.write(String(config.vars?.[process.argv[2]] ?? ''));
+          NODE
+
+          chat_enabled="$(node "$RUNNER_TEMP/read-wrangler-var.mjs" FEATURE_INAPP_CHAT)"
+          model="$(node "$RUNNER_TEMP/read-wrangler-var.mjs" AI_CHAT_MODEL)"
+
+          # The gate exists to protect the chat. With the panel switched off there is no
+          # chat to protect, and a gateway outage must not hold up an unrelated deploy.
+          if [ "$chat_enabled" != "true" ]; then
+            echo "FEATURE_INAPP_CHAT is '${chat_enabled:-unset}' — no chat panel ships, nothing to prove."
+            exit 0
+          fi
+
+          if [ -z "$model" ]; then
+            echo "::error::FEATURE_INAPP_CHAT is true but AI_CHAT_MODEL is empty in wrangler.jsonc."
+            exit 1
+          fi
+
+          echo "Model under test: $model"
+
+          # Built with JSON.stringify rather than a heredoc so the model id cannot break
+          # out of the payload. `tool_choice: required` on purpose: with `auto` the answer
+          # depends on how persuasive the prompt is, and a deploy gate that sometimes
+          # passes is worse than no gate.
+          MODEL="$model" node -e '
+          process.stdout.write(JSON.stringify({
+            model: process.env.MODEL,
+            max_tokens: 64,
+            tool_choice: "required",
+            tools: [{
+              type: "function",
+              function: {
+                name: "deploy_smoke_test",
+                description: "Acknowledge the deploy smoke test.",
+                parameters: {
+                  type: "object",
+                  properties: { ok: { type: "boolean", description: "Always true." } },
+                  required: ["ok"]
+                }
+              }
+            }],
+            messages: [
+              { role: "system", content: "You verify tool calling. Call the tool you are given." },
+              { role: "user", content: "Call deploy_smoke_test with ok set to true." }
+            ]
+          }));' > "$RUNNER_TEMP/smoke-payload.json"
+
+          # Trailing slash would make this `//chat/completions`, which some gateways 404.
+          base="${AI_GATEWAY_BASE_URL%/}"
+
+          # Retries are only for faults that a retry can fix. A 401/403/404 is a wrong key,
+          # a wrong URL or a model the provider does not serve — retrying that just spends
+          # three times as long arriving at the same answer.
+          attempt=1
+          while :; do
+            # Emptied first: a failed connection never writes the file, and printing the
+            # previous attempt's body as if it were this one's is a wrong lead in exactly
+            # the moment somebody is reading these logs to find out what broke.
+            : > "$RUNNER_TEMP/smoke-response.json"
+            code="$(curl -sS -o "$RUNNER_TEMP/smoke-response.json" -w '%{http_code}' --max-time 45 \
+              -X POST "$base/chat/completions" \
+              -H "Authorization: Bearer $AI_GATEWAY_API_KEY" \
+              -H 'Content-Type: application/json' \
+              --data @"$RUNNER_TEMP/smoke-payload.json")" || code="000"
+
+            case "$code" in
+              2*) break ;;
+              000 | 408 | 429 | 5*)
+                if [ "$attempt" -ge 3 ]; then
+                  echo "::error::The AI Gateway did not answer after 3 attempts (last: HTTP $code). Deploy stopped before migrating."
+                  cat "$RUNNER_TEMP/smoke-response.json" 2>/dev/null || true
+                  exit 1
+                fi
+                echo "attempt $attempt: HTTP $code — transient, retrying"
+                attempt=$((attempt + 1))
+                sleep 5
+                ;;
+              *)
+                echo "::error::The AI Gateway rejected the request with HTTP $code. AI_GATEWAY_API_KEY does not fit AI_CHAT_MODEL ($model), or AI_GATEWAY_BASE_URL is wrong."
+                cat "$RUNNER_TEMP/smoke-response.json" 2>/dev/null || true
+                exit 1
+                ;;
+            esac
+          done
+
+          # The actual assertion. A 2xx only says something answered; the reviewer chat is
+          # useless unless the model calls tools, and not every model that talks can.
+          RESPONSE="$RUNNER_TEMP/smoke-response.json" MODEL="$model" node -e '
+          const { readFileSync } = require("node:fs");
+          let body;
+          try {
+            body = JSON.parse(readFileSync(process.env.RESPONSE, "utf8"));
+          } catch {
+            console.log("::error::The gateway returned 2xx with a body that is not JSON.");
+            console.log(readFileSync(process.env.RESPONSE, "utf8").slice(0, 500));
+            process.exit(1);
+          }
+          const choice = body.choices?.[0];
+          const calls = choice?.message?.tool_calls ?? [];
+          const finish = choice?.finish_reason;
+          console.log(`finish_reason: ${finish}`);
+          console.log(`tool_calls: ${calls.map((c) => c.function?.name).join(", ") || "(none)"}`);
+          if (calls.length === 0) {
+            console.log(`::error::${process.env.MODEL} answered but called no tool, so the reviewer chat cannot work. Its tools would never fire.`);
+            console.log(JSON.stringify(body).slice(0, 500));
+            process.exit(1);
+          }
+          // Asserting on the tool call rather than on the enum: providers disagree about
+          // what finish_reason says when a tool fires, and the call itself is the claim.
+          if (finish !== "tool_calls") {
+            console.log(`::warning::Tool call present but finish_reason is "${finish}", not "tool_calls".`);
+          }
+          console.log("The configured model reaches the gateway and calls tools.");
+          '
+
       # The way back. Drizzle migrations are forward-only, so the rollback path is
       # this dump plus `psql < dump.sql`, not a down-migration. Kept as an artifact
       # because the runner is discarded.
