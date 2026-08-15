@@ -2,10 +2,55 @@ import {
 	recuseReview,
 	requireReviewer,
 	reviewerSubmission,
-	saveReview
+	saveReview,
+	type SaveReviewResult
 } from '$lib/server/conference/reviewer';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+
+/**
+ * One refused save, one sentence and one status code.
+ *
+ * Kept apart from the action because these are answers to six different
+ * questions, and the differences are the point: calling an empty submit "not
+ * assigned to you" sends the reviewer hunting for a permission problem they do
+ * not have.
+ */
+function saveFailure(saved: Extract<SaveReviewResult, { ok: false }>) {
+	switch (saved.reason) {
+		case 'not_assigned':
+			return fail(404, { message: 'This submission is not assigned to you.' });
+		// Withdrawn is neither a permission problem nor a validation one: the talk
+		// left while this form was open, and the reviewer needs to know that rather
+		// than be told to write more. 409, because nothing about the POST was
+		// malformed — the world moved.
+		case 'withdrawn':
+			return fail(409, {
+				message: 'The speaker withdrew this talk, so it no longer needs a review.'
+			});
+		// The round is shut (ABS-01). Two messages, because "come back later" and
+		// "you are too late" ask opposite things of the reader.
+		case 'round_not_open':
+			return fail(409, {
+				message: 'This review round has not opened yet, so nothing can be filed in it.'
+			});
+		case 'round_closed':
+			return fail(409, {
+				message: 'This review round is closed. Reviews can no longer be filed or changed.'
+			});
+		// A number off its own scale, in a sentence that names the criterion and the
+		// scale (#477). Not "before submitting": this refusal happens to a draft too,
+		// and telling somebody who pressed Save progress that they failed to submit
+		// sends them looking for a button they did not press.
+		case 'rating_off_scale':
+			return fail(400, { message: saved.message });
+		case 'empty_submit':
+			return fail(400, {
+				message:
+					'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
+			});
+	}
+}
 
 const submissionId = (raw: string) => {
 	const value = Number(raw);
@@ -104,47 +149,7 @@ export const actions: Actions = {
 			Number.isInteger(round) && round > 0 ? round : undefined
 		);
 
-		if (!saved.ok) {
-			// Two different failures, two different answers. Calling an empty submit
-			// "not assigned to you" would send the reviewer looking for a permission
-			// problem they do not have.
-			if (saved.reason === 'not_assigned') {
-				return fail(404, { message: 'This submission is not assigned to you.' });
-			}
-			// Withdrawn is neither a permission problem nor a validation one: the talk
-			// left while this form was open, and the reviewer needs to know that rather
-			// than be told to write more.
-			if (saved.reason === 'withdrawn') {
-				return fail(409, {
-					message: 'The speaker withdrew this talk, so it no longer needs a review.'
-				});
-			}
-			// The round is shut (ABS-01). 409 for the same reason withdrawn is: nothing
-			// about this POST was malformed, the world moved while the form was open.
-			// Two messages, because "come back later" and "you are too late" ask
-			// opposite things of the reader.
-			if (saved.reason === 'round_not_open') {
-				return fail(409, {
-					message: 'This review round has not opened yet, so nothing can be filed in it.'
-				});
-			}
-			// A number off its own scale, and the sentence says which criterion and
-			// what the scale is (#477). Not "before submitting": this refusal happens
-			// to a draft too, and telling somebody who pressed Save progress that they
-			// failed to submit sends them looking for a button they did not press.
-			if (saved.reason === 'rating_off_scale') {
-				return fail(400, { message: saved.message });
-			}
-			if (saved.reason === 'round_closed') {
-				return fail(409, {
-					message: 'This review round is closed. Reviews can no longer be filed or changed.'
-				});
-			}
-			return fail(400, {
-				message:
-					'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
-			});
-		}
+		if (!saved.ok) return saveFailure(saved);
 
 		return {
 			ok: true,
