@@ -67,7 +67,8 @@ export const cfpFormTable = pgTable('cfp_form', {
 	title: text('title').notNull(),
 	/**
 	 * What a submitter needs to know before they start: what the programme is
-	 * looking for, whether reviews are anonymous, whether travel is covered.
+	 * looking for, whether reviews are anonymous. Travel and admission coverage
+	 * live on `speakerSupport` — this box is the rest.
 	 *
 	 * A column rather than fixed copy because none of that is true of conferences
 	 * in general — it is true of one conference, and only its organizer knows it.
@@ -95,6 +96,14 @@ export const cfpFormTable = pgTable('cfp_form', {
 	 * only exists in the markup.
 	 */
 	hiddenFixedFields: text('hidden_fixed_fields'),
+	/**
+	 * Structured answer to "do you cover my flight?" (#512), as JSON.
+	 *
+	 * Null means the call says nothing — not "not covered". A default of
+	 * "not covered" would invent a promise the organizer never made.
+	 * Parsed only by `$lib/conference/speaker-support`.
+	 */
+	speakerSupport: text('speaker_support'),
 	status: cfpFormStatus('status').notNull().default('draft'),
 	createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow()
 });

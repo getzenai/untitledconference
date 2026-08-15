@@ -35,7 +35,8 @@ const call = (
 	fields: [],
 	formats: [],
 	tracks: [],
-	fixed: ALL_FIXED_QUESTIONS_SHOWN
+	fixed: ALL_FIXED_QUESTIONS_SHOWN,
+	support: {}
 });
 
 const publicConference = {
@@ -207,5 +208,45 @@ describe('pointing a returning submitter at what they already sent', () => {
 		const body = renderCfp('open', null);
 
 		expect(body).not.toContain('You already');
+	});
+});
+
+describe('speaker expenses on the public call (#512)', () => {
+	const withSupport = (state: 'open' | 'closed', support: { admission?: 'free' }) => {
+		const base = call(state, state === 'closed' ? 'Travel is covered' : null);
+		return render(Page, {
+			props: {
+				data: {
+					call: { ...base, support },
+					existing: null,
+					user: undefined,
+					conference: publicConference,
+					daysUntilClose: null,
+					embed: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined }
+				},
+				form: null
+			}
+		}).body;
+	};
+
+	it('renders nothing when the call has not answered', () => {
+		const body = withSupport('open', {});
+		expect(body).not.toContain('data-testid="speaker-support"');
+		expect(body).not.toContain('Speaker expenses');
+	});
+
+	it('shows a labelled block for what was set, and keeps it after the call closes', () => {
+		const open = withSupport('open', { admission: 'free' });
+		expect(open).toContain('data-testid="speaker-support"');
+		expect(open).toContain('Speaker expenses');
+		expect(open).toContain('Free for speakers');
+
+		const closed = withSupport('closed', { admission: 'free' });
+		expect(closed).toContain('This call has closed');
+		expect(closed).not.toContain('Travel is covered');
+		expect(closed).toContain('Free for speakers');
+		expect(closed).toContain('data-testid="speaker-support"');
 	});
 });

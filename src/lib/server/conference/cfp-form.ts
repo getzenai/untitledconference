@@ -102,6 +102,12 @@ export type FormMeta = {
 	opensAt: Date | null;
 	closesAt: Date | null;
 	status: CfpForm['status'];
+	/**
+	 * Already serialized. Omitted means leave the stored column alone — publish
+	 * and close must not wipe a policy the organizer set on a different click.
+	 * `null` is an emptied form: the call goes back to saying nothing.
+	 */
+	speakerSupport?: string | null;
 };
 
 export async function updateCfpForm(conferenceId: number, meta: FormMeta): Promise<CfpForm | null> {
@@ -117,7 +123,8 @@ export async function updateCfpForm(conferenceId: number, meta: FormMeta): Promi
 			description: meta.description.trim() || null,
 			opensAt: meta.opensAt,
 			closesAt: meta.closesAt,
-			status: meta.status
+			status: meta.status,
+			...(meta.speakerSupport !== undefined ? { speakerSupport: meta.speakerSupport } : {})
 		})
 		.where(eq(cfpFormTable.id, form.id))
 		.returning();
