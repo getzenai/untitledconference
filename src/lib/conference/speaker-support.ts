@@ -64,6 +64,11 @@ export function isExpenseKind(value: unknown): value is ExpenseKind {
 	return typeof value === 'string' && EXPENSE.has(value);
 }
 
+/** Amounts, nights and the domestic/international split only apply once travel or stay is actually covered. */
+export function expenseIsCovered(kind: string | undefined | null): boolean {
+	return kind === 'up_to' || kind === 'case_by_case';
+}
+
 function line(value: unknown): string | undefined {
 	if (typeof value !== 'string') return undefined;
 	const trimmed = value.trim();
@@ -79,13 +84,13 @@ function term(value: unknown): ExpenseTerm | undefined {
 	if (!value || typeof value !== 'object') return undefined;
 	const raw = value as { kind?: unknown; amount?: unknown };
 	if (!isExpenseKind(raw.kind)) return undefined;
-	const amount = line(raw.amount);
+	const amount = raw.kind === 'up_to' ? line(raw.amount) : undefined;
 	return amount ? { kind: raw.kind, amount } : { kind: raw.kind };
 }
 
 function kindAndAmount(raw: Record<string, unknown>): { kind?: ExpenseKind; amount?: string } {
 	const kind = isExpenseKind(raw.kind) ? raw.kind : undefined;
-	const amount = line(raw.amount);
+	const amount = kind === 'up_to' ? line(raw.amount) : undefined;
 	return { ...(kind ? { kind } : {}), ...(amount ? { amount } : {}) };
 }
 
@@ -175,31 +180,54 @@ function posted(form: FormData, name: string): string {
 function postedTerm(form: FormData, kindName: string, amountName: string): ExpenseTerm | undefined {
 	const kind = posted(form, kindName);
 	if (!isExpenseKind(kind)) return undefined;
-	const amount = line(posted(form, amountName));
+	const amount = kind === 'up_to' ? line(posted(form, amountName)) : undefined;
 	return amount ? { kind, amount } : { kind };
+}
+
+function travelFromForm(form: FormData): TravelSupport | undefined {
+	const kind = posted(form, 'travelKind');
+	const covered = expenseIsCovered(kind);
+	return travelOf({
+		kind,
+		amount: posted(form, 'travelAmount'),
+		domestic: covered ? postedTerm(form, 'travelDomesticKind', 'travelDomesticAmount') : undefined,
+		international: covered
+			? postedTerm(form, 'travelInternationalKind', 'travelInternationalAmount')
+			: undefined
+	});
+}
+
+function accommodationFromForm(form: FormData): AccommodationSupport | undefined {
+	const kind = posted(form, 'accommodationKind');
+	const covered = expenseIsCovered(kind);
+	return accommodationOf({
+		kind,
+		amount: posted(form, 'accommodationAmount'),
+		nights: covered ? posted(form, 'accommodationNights') : '',
+		domesticNights: covered ? posted(form, 'accommodationDomesticNights') : '',
+		internationalNights: covered ? posted(form, 'accommodationInternationalNights') : ''
+	});
+}
+
+function anythingCovered(support: SpeakerSupport): boolean {
+	return (
+		support.admission === 'free' ||
+		support.admission === 'discounted' ||
+		expenseIsCovered(support.travel?.kind) ||
+		expenseIsCovered(support.accommodation?.kind)
+	);
 }
 
 /** The names the CFP settings form posts. One reader, used by the action. */
 export function speakerSupportFromForm(form: FormData): SpeakerSupport {
 	const admissionRaw = posted(form, 'admission');
-	const travel = travelOf({
-		kind: posted(form, 'travelKind'),
-		amount: posted(form, 'travelAmount'),
-		domestic: postedTerm(form, 'travelDomesticKind', 'travelDomesticAmount'),
-		international: postedTerm(form, 'travelInternationalKind', 'travelInternationalAmount')
-	});
-	const accommodation = accommodationOf({
-		kind: posted(form, 'accommodationKind'),
-		amount: posted(form, 'accommodationAmount'),
-		nights: posted(form, 'accommodationNights'),
-		domesticNights: posted(form, 'accommodationDomesticNights'),
-		internationalNights: posted(form, 'accommodationInternationalNights')
-	});
 	const support: SpeakerSupport = {};
 	if (isAdmissionKind(admissionRaw)) support.admission = admissionRaw;
+	const travel = travelFromForm(form);
 	if (travel) support.travel = travel;
+	const accommodation = accommodationFromForm(form);
 	if (accommodation) support.accommodation = accommodation;
-	const conditions = line(posted(form, 'supportConditions'));
+	const conditions = anythingCovered(support) ? line(posted(form, 'supportConditions')) : undefined;
 	if (conditions) support.conditions = conditions;
 	return support;
 }

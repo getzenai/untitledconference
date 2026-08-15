@@ -4,14 +4,28 @@
 	 *
 	 * Posted inside the same Save settings form as title and dates, so one
 	 * click writes the whole call. Empty option is "not stated" — not a
-	 * default of "not covered". The action reads these names through
+	 * default of "not covered". A dependent control is not rendered at all
+	 * until its parent makes it meaningful (#557) — hiding it would still
+	 * post a withdrawn amount. The action reads these names through
 	 * `speakerSupportFromForm`.
 	 */
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Input } from '$lib/components/ui/input';
-	import type { SpeakerSupport } from '$lib/conference/speaker-support';
+	import { expenseIsCovered, type SpeakerSupport } from '$lib/conference/speaker-support';
 
 	let { support }: { support: SpeakerSupport } = $props();
+
+	let admission = $state(support.admission ?? 'unset');
+	let travelKind = $state(support.travel?.kind ?? 'unset');
+	let travelDomesticKind = $state(support.travel?.domestic?.kind ?? 'unset');
+	let travelInternationalKind = $state(support.travel?.international?.kind ?? 'unset');
+	let accommodationKind = $state(support.accommodation?.kind ?? 'unset');
+
+	const travelCovered = $derived(expenseIsCovered(travelKind));
+	const accommodationCovered = $derived(expenseIsCovered(accommodationKind));
+	const anythingCovered = $derived(
+		admission === 'free' || admission === 'discounted' || travelCovered || accommodationCovered
+	);
 
 	const ADMISSION_OPTIONS = [
 		{ value: 'unset', label: 'Not stated' },
@@ -41,9 +55,10 @@
 			<AppSelect
 				id="cfp-admission"
 				name="admission"
-				value={support.admission ?? 'unset'}
+				value={admission}
 				options={ADMISSION_OPTIONS}
 				class="mt-1"
+				onValueChange={(value) => (admission = value)}
 			/>
 		</div>
 		<div class="text-muted-foreground text-xs">
@@ -51,69 +66,82 @@
 			<AppSelect
 				id="cfp-travel-kind"
 				name="travelKind"
-				value={support.travel?.kind ?? 'unset'}
+				value={travelKind}
 				options={EXPENSE_OPTIONS}
 				class="mt-1"
+				onValueChange={(value) => (travelKind = value)}
 			/>
 		</div>
-		<label class="text-muted-foreground text-xs">
-			Travel, up to
-			<Input
-				name="travelAmount"
-				value={support.travel?.amount ?? ''}
-				class="mt-1"
-				placeholder="€500, economy flight…"
-			/>
-		</label>
-		<label class="text-muted-foreground text-xs">
-			Conditions
-			<Input
-				name="supportConditions"
-				value={support.conditions ?? ''}
-				class="mt-1"
-				placeholder="Reimbursed after the event"
-			/>
-		</label>
+		{#if travelKind === 'up_to'}
+			<label class="text-muted-foreground text-xs">
+				Travel, up to
+				<Input
+					name="travelAmount"
+					value={support.travel?.amount ?? ''}
+					class="mt-1"
+					placeholder="€500, economy flight…"
+				/>
+			</label>
+		{/if}
+		{#if anythingCovered}
+			<label class="text-muted-foreground text-xs">
+				Conditions
+				<Input
+					name="supportConditions"
+					value={support.conditions ?? ''}
+					class="mt-1"
+					placeholder="Reimbursed after the event"
+				/>
+			</label>
+		{/if}
 	</div>
 
-	<div class="grid gap-2 sm:grid-cols-2">
-		<div class="text-muted-foreground text-xs">
-			<label for="cfp-travel-domestic-kind">Domestic travel</label>
-			<AppSelect
-				id="cfp-travel-domestic-kind"
-				name="travelDomesticKind"
-				value={support.travel?.domestic?.kind ?? 'unset'}
-				options={EXPENSE_OPTIONS}
-				class="mt-1"
-			/>
+	{#if travelCovered}
+		<div class="grid gap-2 sm:grid-cols-2">
+			<div class="text-muted-foreground text-xs">
+				<label for="cfp-travel-domestic-kind">Domestic travel</label>
+				<AppSelect
+					id="cfp-travel-domestic-kind"
+					name="travelDomesticKind"
+					value={travelDomesticKind}
+					options={EXPENSE_OPTIONS}
+					class="mt-1"
+					onValueChange={(value) => (travelDomesticKind = value)}
+				/>
+			</div>
+			{#if travelDomesticKind === 'up_to'}
+				<label class="text-muted-foreground text-xs">
+					Domestic, up to
+					<Input
+						name="travelDomesticAmount"
+						value={support.travel?.domestic?.amount ?? ''}
+						class="mt-1"
+					/>
+				</label>
+			{/if}
+			<div class="text-muted-foreground text-xs">
+				<label for="cfp-travel-international-kind">International travel</label>
+				<AppSelect
+					id="cfp-travel-international-kind"
+					name="travelInternationalKind"
+					value={travelInternationalKind}
+					options={EXPENSE_OPTIONS}
+					class="mt-1"
+					onValueChange={(value) => (travelInternationalKind = value)}
+				/>
+			</div>
+			{#if travelInternationalKind === 'up_to'}
+				<label class="text-muted-foreground text-xs">
+					International, up to
+					<Input
+						name="travelInternationalAmount"
+						value={support.travel?.international?.amount ?? ''}
+						class="mt-1"
+					/>
+				</label>
+			{/if}
 		</div>
-		<label class="text-muted-foreground text-xs">
-			Domestic, up to
-			<Input
-				name="travelDomesticAmount"
-				value={support.travel?.domestic?.amount ?? ''}
-				class="mt-1"
-			/>
-		</label>
-		<div class="text-muted-foreground text-xs">
-			<label for="cfp-travel-international-kind">International travel</label>
-			<AppSelect
-				id="cfp-travel-international-kind"
-				name="travelInternationalKind"
-				value={support.travel?.international?.kind ?? 'unset'}
-				options={EXPENSE_OPTIONS}
-				class="mt-1"
-			/>
-		</div>
-		<label class="text-muted-foreground text-xs">
-			International, up to
-			<Input
-				name="travelInternationalAmount"
-				value={support.travel?.international?.amount ?? ''}
-				class="mt-1"
-			/>
-		</label>
-	</div>
+	{/if}
 
 	<div class="grid gap-2 sm:grid-cols-2">
 		<div class="text-muted-foreground text-xs">
@@ -121,49 +149,58 @@
 			<AppSelect
 				id="cfp-accommodation-kind"
 				name="accommodationKind"
-				value={support.accommodation?.kind ?? 'unset'}
+				value={accommodationKind}
 				options={EXPENSE_OPTIONS}
 				class="mt-1"
+				onValueChange={(value) => (accommodationKind = value)}
 			/>
 		</div>
-		<label class="text-muted-foreground text-xs">
-			Accommodation, up to
-			<Input name="accommodationAmount" value={support.accommodation?.amount ?? ''} class="mt-1" />
-		</label>
-		<label class="text-muted-foreground text-xs">
-			Nights
-			<Input
-				name="accommodationNights"
-				type="number"
-				min="1"
-				step="1"
-				value={support.accommodation?.nights ?? ''}
-				class="mt-1"
-			/>
-		</label>
-		<div class="grid grid-cols-2 gap-2">
+		{#if accommodationKind === 'up_to'}
 			<label class="text-muted-foreground text-xs">
-				Domestic nights
+				Accommodation, up to
 				<Input
-					name="accommodationDomesticNights"
-					type="number"
-					min="1"
-					step="1"
-					value={support.accommodation?.domesticNights ?? ''}
+					name="accommodationAmount"
+					value={support.accommodation?.amount ?? ''}
 					class="mt-1"
 				/>
 			</label>
+		{/if}
+		{#if accommodationCovered}
 			<label class="text-muted-foreground text-xs">
-				International nights
+				Nights
 				<Input
-					name="accommodationInternationalNights"
+					name="accommodationNights"
 					type="number"
 					min="1"
 					step="1"
-					value={support.accommodation?.internationalNights ?? ''}
+					value={support.accommodation?.nights ?? ''}
 					class="mt-1"
 				/>
 			</label>
-		</div>
+			<div class="grid grid-cols-2 gap-2">
+				<label class="text-muted-foreground text-xs">
+					Domestic nights
+					<Input
+						name="accommodationDomesticNights"
+						type="number"
+						min="1"
+						step="1"
+						value={support.accommodation?.domesticNights ?? ''}
+						class="mt-1"
+					/>
+				</label>
+				<label class="text-muted-foreground text-xs">
+					International nights
+					<Input
+						name="accommodationInternationalNights"
+						type="number"
+						min="1"
+						step="1"
+						value={support.accommodation?.internationalNights ?? ''}
+						class="mt-1"
+					/>
+				</label>
+			</div>
+		{/if}
 	</div>
 </div>
