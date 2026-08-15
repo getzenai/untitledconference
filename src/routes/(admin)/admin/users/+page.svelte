@@ -33,15 +33,7 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { toast } from 'svelte-sonner';
-	import {
-		UserX,
-		UserCheck,
-		Mail,
-		Clock,
-		RefreshCw,
-		Loader2,
-		UserPlus
-	} from 'lucide-svelte';
+	import { UserX, UserCheck, Mail, Clock, RefreshCw, Loader2, UserPlus } from 'lucide-svelte';
 	import CopyButton from '$lib/components/ui/copy-button.svelte';
 	import {
 		Tooltip,
@@ -469,7 +461,8 @@
 	<div>
 		<h1 class="text-lg font-semibold tracking-tight">Users</h1>
 		<p class="text-muted-foreground mt-0.5 text-sm tabular-nums">
-			{stats.totalUsers} {stats.totalUsers === 1 ? 'account' : 'accounts'}{#if stats.adminUsers > 0}&nbsp;·
+			{stats.totalUsers}
+			{stats.totalUsers === 1 ? 'account' : 'accounts'}{#if stats.adminUsers > 0}&nbsp;·
 				{stats.adminUsers} admin{/if}{#if stats.bannedUsers > 0}&nbsp;·
 				{stats.bannedUsers} banned{/if}
 		</p>

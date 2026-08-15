@@ -66,7 +66,8 @@ describe('admin chrome (#477)', () => {
 		expect(html).not.toContain('User Management');
 		expect(html).not.toContain('System Invitations');
 		expect(html).toContain('>Invitations<');
-		expect(html).toContain('2 accounts');
+		// Prettier wraps the count and the noun; the words still sit next to each other.
+		expect(html.replace(/\s+/g, ' ')).toContain('2 accounts');
 		expect(html).toContain('1 admin');
 		expect(html).toContain('1 banned');
 	});
