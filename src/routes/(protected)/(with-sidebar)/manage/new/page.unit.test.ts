@@ -24,6 +24,10 @@ describe('new conference', () => {
 		const html = body(true);
 
 		expect(html).toContain('href="/manage"');
+		expect(html).toContain('New event');
+		expect(html).toContain('My events');
+		expect(html).not.toContain('New conference');
+		expect(html).not.toContain('My conferences');
 		expect(html).not.toContain('data-testid="account-menu-trigger"');
 	});
 
@@ -55,6 +59,6 @@ describe('new conference', () => {
 		expect(html).toContain('Name is required.');
 		// The button stays enabled so a no-JS submit still posts; HTML required
 		// and the server reason are the lock. The org form is the one that greys.
-		expect(html).toContain('Create conference');
+		expect(html).toContain('Create event');
 	});
 });

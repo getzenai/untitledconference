@@ -32,7 +32,7 @@ describe('Shared sidebar shell', () => {
 		cy.waitForHydration();
 		cy.get('input[name="name"]').clear().type(name);
 		cy.get('input[name="slug"]').clear().type(slug);
-		cy.contains('button[type="submit"]', 'Create conference').click();
+		cy.contains('button[type="submit"]', 'Create event').click();
 		cy.location('pathname', { timeout: 20000 }).should('include', `/manage/${slug}/`);
 
 		cy.get('[data-testid="app-sidebar"]').should('be.visible');

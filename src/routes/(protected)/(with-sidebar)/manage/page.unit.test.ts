@@ -51,13 +51,26 @@ function body(conferences: ReturnType<typeof conference>[], canCreate: boolean) 
 	}).body;
 }
 
-describe('my conferences', () => {
+describe('my events', () => {
+	it('calls the object an event, the same word home and the sidebar use (#438)', () => {
+		const listed = body([conference(1, 'devflow-2028')], true);
+		const empty = body([], true);
+
+		expect(listed).toContain('My events');
+		expect(listed).toContain('The events you organize.');
+		expect(listed).toContain('New event');
+		expect(listed).not.toContain('My conferences');
+		expect(listed).not.toContain('New conference');
+		expect(empty).toContain('Create an event');
+		expect(empty).not.toContain('Create a conference');
+	});
+
 	it('offers a way to start another one when the owner already has exactly one', () => {
 		// The regression this file exists for.
 		const html = body([conference(1, 'devflow-2028')], true);
 
 		expect(html).toContain('/manage/new');
-		expect(html).toContain('New conference');
+		expect(html).toContain('New event');
 		// The one they have is still listed, and the door is the dashboard (#411).
 		expect(html).toContain('/manage/devflow-2028/dashboard');
 	});
@@ -75,7 +88,7 @@ describe('my conferences', () => {
 		const html = body([], true);
 
 		expect(html).toContain('/manage/new');
-		expect(html).toContain('Create a conference');
+		expect(html).toContain('Create an event');
 	});
 
 	it('sends someone with no organization to that step first', () => {
