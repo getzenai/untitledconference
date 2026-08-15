@@ -1,14 +1,23 @@
 /**
- * A conditional accept is an accept with a note (#445).
+ * A conditional accept is an accept with a note (#445), and the note can
+ * be rewritten later without taking the accept back (#540).
  *
  * The interesting failures are the ones that would invent a second status:
  * a note whose owner cannot chase it, a resolve that quietly un-accepts the
- * talk, and a neighbour conference's submission answering as if it were ours.
+ * talk, a rewrite that costs a slot or a speaker confirmation, and a
+ * neighbour conference's submission answering as if it were ours.
  */
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { conferenceTable, type Conference } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceSpeakerTable,
+	conferenceTable,
+	speakerProfileTable,
+	type Conference
+} from '$lib/server/db/conference/conference-schema';
+import { taskTable } from '$lib/server/db/conference/content-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -16,14 +25,16 @@ import {
 	isConferenceOrganizer,
 	openAcceptConditions,
 	parseAcceptCondition,
-	resolveAcceptCondition
+	resolveAcceptCondition,
+	updateAcceptCondition
 } from './accept-condition';
 
 const suffix = `cond-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
 const OWNER = `owner-${suffix}`;
+const FOLLOW = `follow-${suffix}`;
 const OTHER = `other-${suffix}`;
-const PEOPLE = [OWNER, OTHER];
+const PEOPLE = [OWNER, FOLLOW, OTHER];
 
 let conference: Conference;
 let neighbour: Conference;
@@ -41,7 +52,7 @@ beforeAll(async () => {
 	for (const id of PEOPLE) {
 		await db.insert(user).values({
 			id,
-			name: id === OWNER ? 'Ann Follows' : 'Stranger',
+			name: id === OWNER ? 'Ann Follows' : id === FOLLOW ? 'Bob Chases' : 'Stranger',
 			email: `${id}@example.com`,
 			emailVerified: true,
 			createdAt: new Date(),
@@ -58,13 +69,15 @@ beforeAll(async () => {
 		.values({ organizationId, name: 'Neighbour Conf', slug: `${suffix}-n` })
 		.returning();
 
-	await db.insert(member).values({
-		id: `m-${OWNER}`,
-		organizationId,
-		userId: OWNER,
-		role: 'owner',
-		createdAt: new Date()
-	});
+	await db.insert(member).values(
+		[OWNER, FOLLOW].map((userId) => ({
+			id: `m-${userId}`,
+			organizationId,
+			userId,
+			role: 'owner' as const,
+			createdAt: new Date()
+		}))
+	);
 });
 
 beforeEach(async () => {
@@ -131,10 +144,14 @@ describe('parseAcceptCondition', () => {
 });
 
 describe('conference organizers', () => {
-	it('lists the org owner and refuses a stranger', async () => {
+	it('lists the org owners and refuses a stranger', async () => {
 		const owners = await conferenceOrganizers(conference);
-		expect(owners).toEqual([{ userId: OWNER, name: 'Ann Follows' }]);
+		expect(owners).toEqual([
+			{ userId: OWNER, name: 'Ann Follows' },
+			{ userId: FOLLOW, name: 'Bob Chases' }
+		]);
 		expect(await isConferenceOrganizer(conference, OWNER)).toBe(true);
+		expect(await isConferenceOrganizer(conference, FOLLOW)).toBe(true);
 		expect(await isConferenceOrganizer(conference, OTHER)).toBe(false);
 	});
 });
@@ -179,6 +196,148 @@ describe('resolveAcceptCondition', () => {
 			ok: false,
 			reason: 'not_found'
 		});
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, neighbourId));
+		expect(row.acceptCondition).toBe('foreign note');
+	});
+});
+
+describe('updateAcceptCondition', () => {
+	it('rewrites the sentence and the owner, and leaves status, slot, tasks and confirmation alone', async () => {
+		const [{ id: speakerProfileId }] = await db
+			.insert(speakerProfileTable)
+			.values({
+				organizationId,
+				name: 'Ada Speaker',
+				sortName: 'Speaker, Ada'
+			})
+			.returning({ id: speakerProfileTable.id });
+
+		const [placement] = await db
+			.insert(placementTable)
+			.values({
+				conferenceId: conference.id,
+				submissionId,
+				status: 'tentative'
+			})
+			.returning();
+		const [seat] = await db
+			.insert(conferenceSpeakerTable)
+			.values({
+				conferenceId: conference.id,
+				speakerProfileId,
+				status: 'confirmed'
+			})
+			.returning();
+		const [task] = await db
+			.insert(taskTable)
+			.values({
+				conferenceId: conference.id,
+				speakerProfileId,
+				submissionId,
+				title: 'Upload slides',
+				status: 'open'
+			})
+			.returning();
+
+		const result = await updateAcceptCondition(conference, submissionId, {
+			text: 'bring two people from the business side',
+			ownerId: FOLLOW
+		});
+		expect(result).toEqual({ ok: true });
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.status).toBe('accepted');
+		expect(row.acceptCondition).toBe('bring two people from the business side');
+		expect(row.acceptConditionOwnerId).toBe(FOLLOW);
+
+		const [samePlacement] = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.id, placement.id));
+		expect(samePlacement.status).toBe(placement.status);
+		expect(samePlacement.submissionId).toBe(submissionId);
+
+		const [sameSeat] = await db
+			.select()
+			.from(conferenceSpeakerTable)
+			.where(eq(conferenceSpeakerTable.id, seat.id));
+		expect(sameSeat.status).toBe('confirmed');
+
+		const [sameTask] = await db.select().from(taskTable).where(eq(taskTable.id, task.id));
+		expect(sameTask.status).toBe('open');
+		expect(sameTask.title).toBe('Upload slides');
+
+		const open = await openAcceptConditions(conference.id);
+		expect(open).toEqual([
+			{
+				submissionId,
+				title: 'Bring a co-presenter',
+				condition: 'bring two people from the business side',
+				ownerId: FOLLOW,
+				ownerName: 'Bob Chases'
+			}
+		]);
+	});
+
+	it('refuses a talk that is not accepted, a clean accept, and a stranger as owner', async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'submitted' })
+			.where(eq(submissionTable.id, submissionId));
+		expect(
+			await updateAcceptCondition(conference, submissionId, {
+				text: 'too late',
+				ownerId: OWNER
+			})
+		).toEqual({ ok: false, reason: 'not_accepted' });
+
+		await db
+			.update(submissionTable)
+			.set({ status: 'accepted', acceptCondition: null, acceptConditionOwnerId: null })
+			.where(eq(submissionTable.id, submissionId));
+		expect(
+			await updateAcceptCondition(conference, submissionId, {
+				text: 'forgotten note',
+				ownerId: OWNER
+			})
+		).toEqual({ ok: false, reason: 'no_condition' });
+
+		await db
+			.update(submissionTable)
+			.set({
+				acceptCondition: 'bring someone from the business side',
+				acceptConditionOwnerId: OWNER
+			})
+			.where(eq(submissionTable.id, submissionId));
+		expect(
+			await updateAcceptCondition(conference, submissionId, {
+				text: 'bring someone from the business side',
+				ownerId: OTHER
+			})
+		).toEqual({ ok: false, reason: 'invalid_owner' });
+
+		const [row] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row.acceptCondition).toBe('bring someone from the business side');
+		expect(row.acceptConditionOwnerId).toBe(OWNER);
+	});
+
+	it('does not rewrite a neighbour conference’s note', async () => {
+		expect(
+			await updateAcceptCondition(conference, neighbourId, {
+				text: 'stolen',
+				ownerId: OWNER
+			})
+		).toEqual({ ok: false, reason: 'not_found' });
 
 		const [row] = await db
 			.select()

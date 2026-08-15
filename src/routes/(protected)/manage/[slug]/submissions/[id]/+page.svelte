@@ -291,31 +291,73 @@
 		<p class="text-status-good mt-3 text-sm" role="status">{form.standMessage}</p>
 	{/if}
 	{#if conditionLine}
-		<form
-			method="POST"
-			action="?/resolveCondition"
-			class="mt-3 flex justify-end"
-			use:enhance={() => {
-				busy = true;
-				return async ({ update }) => {
-					try {
-						await update(formUpdateOptions('edit'));
-					} finally {
-						busy = false;
-					}
-				};
-			}}
-		>
-			<Button
-				type="submit"
-				size="sm"
-				variant="outline"
-				disabled={busy}
-				data-testid="resolve-condition"
+		<div class="mt-3 flex flex-wrap items-end justify-end gap-2" data-testid="edit-condition">
+			<form
+				method="POST"
+				action="?/updateCondition"
+				class="flex flex-wrap items-end gap-2"
+				use:enhance={() => {
+					busy = true;
+					return async ({ update }) => {
+						try {
+							await update(formUpdateOptions('edit'));
+						} finally {
+							busy = false;
+						}
+					};
+				}}
 			>
-				Resolve condition
-			</Button>
-		</form>
+				<input
+					name="condition"
+					type="text"
+					maxlength="280"
+					value={s.acceptCondition ?? ''}
+					class="border-input bg-background w-64 rounded-md border px-3 py-2 text-sm"
+					data-testid="edit-condition-text"
+				/>
+				<AppSelect
+					name="conditionOwnerId"
+					value={s.acceptConditionOwnerId ?? ''}
+					options={ownerOptions}
+					size="sm"
+					aria-label="Who follows up"
+					testId="edit-condition-owner"
+				/>
+				<Button
+					type="submit"
+					size="sm"
+					variant="outline"
+					disabled={busy}
+					data-testid="save-condition"
+				>
+					Save condition
+				</Button>
+			</form>
+			<form
+				method="POST"
+				action="?/resolveCondition"
+				use:enhance={() => {
+					busy = true;
+					return async ({ update }) => {
+						try {
+							await update(formUpdateOptions('edit'));
+						} finally {
+							busy = false;
+						}
+					};
+				}}
+			>
+				<Button
+					type="submit"
+					size="sm"
+					variant="outline"
+					disabled={busy}
+					data-testid="resolve-condition"
+				>
+					Resolve condition
+				</Button>
+			</form>
+		</div>
 	{/if}
 	{#if s.status === 'accepted'}
 		<div class="mt-3 flex flex-wrap items-end justify-end gap-2" data-testid="editorial-stand">
