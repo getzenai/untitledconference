@@ -21,6 +21,7 @@ const conference = {
 	statusBeforeArchive: null,
 	listedPublicly: false,
 	slotCapacity: null,
+	predecessorConferenceId: null,
 	reviewVisibility: 'open',
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')

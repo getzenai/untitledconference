@@ -183,6 +183,13 @@
 			"when": 1786780401583,
 			"tag": "0025_resubmit_guidance",
 			"breakpoints": true
+		},
+		{
+			"idx": 26,
+			"version": "7",
+			"when": 1786780401584,
+			"tag": "0026_conference_predecessor",
+			"breakpoints": true
 		}
 	]
 }

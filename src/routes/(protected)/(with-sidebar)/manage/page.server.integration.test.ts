@@ -8,10 +8,10 @@
  */
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
-import { conferenceTable } from '$lib/server/db/conference/conference-schema';
+import { conferenceTable, membershipTable } from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { load } from './+page.server';
+import { actions, load } from './+page.server';
 
 const suffix = `manage-load-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const ownerId = `owner-${suffix}`;
@@ -67,5 +67,96 @@ describe('the my-conferences load', () => {
 		expect(data.conferences).toHaveLength(1);
 		expect(data.conferences[0].slug).toBe(`only-one-${suffix}`);
 		expect(data.canCreate).toBe(true);
+	});
+});
+
+/**
+ * The write half of the predecessor boundary (#448).
+ *
+ * `withEditionLinks` already refuses to *name* a sibling the caller does not
+ * organize. That is the read path. A crafted POST still has to be refused, and
+ * it has to refuse as the inline `not_found` — not a 404 page — so a
+ * predecessor that vanished between render and submit leaves the organizer on
+ * the list with the same sentence a foreign org already gets.
+ */
+describe('?/predecessor', () => {
+	const writeSuffix = `pred-write-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+	const writeOrg = `org-${writeSuffix}`;
+	const scopedId = `scoped-${writeSuffix}`;
+	let mineId = 0;
+	let theirsId = 0;
+
+	beforeAll(async () => {
+		await db
+			.insert(organization)
+			.values({ id: writeOrg, name: 'Write Org', slug: writeOrg, createdAt: new Date() });
+		await db.insert(user).values({
+			id: scopedId,
+			email: `${scopedId}@example.test`,
+			emailVerified: true,
+			name: 'Scoped'
+		});
+		await db.insert(member).values({
+			id: `seat-${writeSuffix}`,
+			organizationId: writeOrg,
+			userId: scopedId,
+			role: 'member',
+			createdAt: new Date()
+		});
+
+		const [mine] = await db
+			.insert(conferenceTable)
+			.values({ organizationId: writeOrg, name: 'Mine', slug: `mine-${writeSuffix}` })
+			.returning();
+		const [theirs] = await db
+			.insert(conferenceTable)
+			.values({ organizationId: writeOrg, name: 'Theirs', slug: `theirs-${writeSuffix}` })
+			.returning();
+		mineId = mine.id;
+		theirsId = theirs.id;
+
+		await db.insert(membershipTable).values({
+			userId: scopedId,
+			role: 'organizer',
+			scopeType: 'conference',
+			scopeId: mineId
+		});
+	});
+
+	afterAll(async () => {
+		await db.delete(membershipTable).where(eq(membershipTable.userId, scopedId));
+		await db.delete(conferenceTable).where(eq(conferenceTable.organizationId, writeOrg));
+		await db.delete(member).where(eq(member.userId, scopedId));
+		await db.delete(organization).where(eq(organization.id, writeOrg));
+		await db.delete(user).where(eq(user.id, scopedId));
+	});
+
+	function predecessorEvent(conferenceId: number, predecessorId: number) {
+		const body = new FormData();
+		body.append('conferenceId', String(conferenceId));
+		body.append('predecessorId', String(predecessorId));
+
+		return {
+			request: new Request('http://localhost/manage?/predecessor', { method: 'POST', body }),
+			locals: { user: { id: scopedId } }
+		} as unknown as Parameters<typeof actions.predecessor>[0];
+	}
+
+	it('refuses a same-org edition the scoped organizer does not organize', async () => {
+		const result = await actions.predecessor(predecessorEvent(mineId, theirsId));
+
+		expect(result).toMatchObject({
+			status: 400,
+			data: {
+				conferenceId: mineId,
+				error: 'That conference is not an earlier edition you can name.'
+			}
+		});
+
+		const [row] = await db
+			.select({ predecessorConferenceId: conferenceTable.predecessorConferenceId })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, mineId));
+		expect(row.predecessorConferenceId).toBeNull();
 	});
 });

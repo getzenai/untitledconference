@@ -11,6 +11,7 @@ import { relations } from 'drizzle-orm';
 import {
 	boolean,
 	date,
+	foreignKey,
 	integer,
 	pgEnum,
 	pgTable,
@@ -131,6 +132,21 @@ export const conferenceTable = pgTable(
 		 * would stop a committee mid-call over a number we made up.
 		 */
 		slotCapacity: integer('slot_capacity'),
+		/**
+		 * The previous edition of this conference (#448).
+		 *
+		 * Recurring conferences are the norm, and without this column there is no
+		 * fact that 2026 follows 2025 — only two rows that happen to share an
+		 * organization. The near-miss invite lane sits on this later; this column
+		 * names the relationship and transfers nothing.
+		 *
+		 * Directed and cycle-free: a conference names at most one predecessor, and
+		 * walking the chain must not return to itself. Same organization only —
+		 * the setter refuses a row from another org rather than leaking that it
+		 * exists. Clearing is writing null. Deleting the previous edition (the
+		 * rare hard delete) drops the pointer, not the conference that named it.
+		 */
+		predecessorConferenceId: integer('predecessor_conference_id'),
 		/** ABS-07's setting, per conference — see `reviewVisibility`. */
 		reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -139,7 +155,16 @@ export const conferenceTable = pgTable(
 			.defaultNow()
 			.$onUpdate(() => new Date())
 	},
-	(t) => [uniqueIndex('conference_slug_unique').on(t.slug)]
+	(t) => [
+		uniqueIndex('conference_slug_unique').on(t.slug),
+		// Declared here rather than on the column: a `.references(() => conferenceTable.id)`
+		// on the same table is a circular type and turns the whole row into `any`.
+		foreignKey({
+			columns: [t.predecessorConferenceId],
+			foreignColumns: [t.id],
+			name: 'conference_predecessor_conference_id_conference_id_fk'
+		}).onDelete('set null')
+	]
 );
 
 export const trackTable = pgTable('track', {
@@ -368,12 +393,18 @@ export const membershipTrackTable = pgTable(
 	(t) => [uniqueIndex('membership_track_unique').on(t.membershipId, t.trackId)]
 );
 
-export const conferenceRelations = relations(conferenceTable, ({ many }) => ({
+export const conferenceRelations = relations(conferenceTable, ({ many, one }) => ({
 	tracks: many(trackTable),
 	sessionFormats: many(sessionFormatTable),
 	rooms: many(roomTable),
 	days: many(conferenceDayTable),
-	speakers: many(conferenceSpeakerTable)
+	speakers: many(conferenceSpeakerTable),
+	predecessor: one(conferenceTable, {
+		fields: [conferenceTable.predecessorConferenceId],
+		references: [conferenceTable.id],
+		relationName: 'edition_chain'
+	}),
+	successors: many(conferenceTable, { relationName: 'edition_chain' })
 }));
 
 export const speakerProfileRelations = relations(speakerProfileTable, ({ many }) => ({
