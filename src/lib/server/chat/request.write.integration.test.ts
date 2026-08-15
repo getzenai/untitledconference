@@ -144,4 +144,49 @@ describe('reviewer chat submit_review (#302)', () => {
 		expect(after?.own.status).toBe('submitted');
 		expect(after?.criteria[0]?.value).toBe(4);
 	});
+
+	// The panel reads this shape: a refusal finishes like a write, so a tool
+	// part that only looked at its state would paint "Saved review" over a
+	// review that was never filed (#302, same seam as the agenda board).
+	it('streams { error } and writes nothing when the reviewer is not assigned', async () => {
+		const strangerId = seeded.submissionIds['drew-migrations'];
+		const approved: UIMessage[] = [
+			userTurn(),
+			{
+				id: 'a1',
+				role: 'assistant',
+				parts: [
+					{
+						type: 'tool-submit_review',
+						toolCallId: 'call_submit',
+						state: 'approval-responded',
+						input: {
+							conferenceSlug: conference.slug,
+							submissionId: strangerId,
+							answers,
+							comment: ''
+						},
+						approval: { id: 'appr_2', approved: true }
+					}
+				]
+			}
+		];
+
+		const res = await streamReviewerChat({
+			ctx: ellis,
+			conference: { name: conference.name, slug: conference.slug },
+			messages: approved,
+			model: createMockSubmitReviewModel(
+				{ conferenceSlug: conference.slug, submissionId: strangerId, answers },
+				true
+			)
+		});
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		expect(body).toContain('"error"');
+		expect(body).toContain(`No assignment for submission ${strangerId}`);
+
+		const after = await reviewerSubmission(conference, ellis.userId, strangerId);
+		expect(after?.own.status).not.toBe('submitted');
+	});
 });

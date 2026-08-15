@@ -10,6 +10,8 @@
  * swallowed: a confirmation that hides what it cannot name is worse than one
  * that admits it.
  */
+import { chatWriteError } from './chat-write-error';
+
 export type AgendaWriteTool = 'place_talk' | 'move_talk' | 'swap_talks' | 'unplace_talk';
 
 export type AgendaWriteInput = {
@@ -139,8 +141,5 @@ export function isAgendaWriteTool(name: string): name is AgendaWriteTool {
  * panel asks the output what happened (#302).
  */
 export function agendaWriteError(output: unknown): string | null {
-	if (typeof output !== 'object' || output === null) return null;
-	const error = (output as { error?: unknown }).error;
-	if (typeof error !== 'string' || error.trim() === '') return null;
-	return error.trim();
+	return chatWriteError(output);
 }

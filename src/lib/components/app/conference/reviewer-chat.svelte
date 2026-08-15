@@ -20,7 +20,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { chatErrorMessage } from './reviewer-chat-error';
-	import { describeReviewWrite, previewReviewWrite } from './reviewer-chat-write';
+	import { describeReviewWrite, previewReviewWrite, reviewWriteError } from './reviewer-chat-write';
 
 	let {
 		slug,
@@ -32,13 +32,22 @@
 
 	let input = $state('');
 	let chat = $state<Chat | null>(null);
-	let invalidatedFor = $state<string | null>(null);
+	// Deliberately not `$state`: this only remembers which calls have already
+	// reloaded the page. A reactive tracker that the effect both reads and
+	// writes re-runs itself with every new id, and the effect already has its
+	// dependency in `chat.messages` — reactivity here is the bug, which is why
+	// this is a plain Set and not the SvelteSet the rule below asks for.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity
+	const reloadedFor = new Set<string>();
 
+	// The transport is built once; `focus` rides on each request instead, so
+	// walking from one assigned talk to the next keeps the conversation and
+	// still asks about the talk on screen (#302).
 	onMount(() => {
 		chat = new Chat({
 			transport: new DefaultChatTransport({
 				api: `/review/${slug}/chat`,
-				body: focus ? { focus } : {}
+				body: () => (focus ? { focus } : {})
 			}),
 			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses
 		});
@@ -53,8 +62,10 @@
 				if (!isToolUIPart(part)) continue;
 				if (getToolName(part) !== 'submit_review') continue;
 				if (part.state !== 'output-available') continue;
-				if (invalidatedFor === part.toolCallId) continue;
-				invalidatedFor = part.toolCallId;
+				// A refusal reaches this state too, and no review was filed.
+				if (reviewWriteError(part.output)) continue;
+				if (reloadedFor.has(part.toolCallId)) continue;
+				reloadedFor.add(part.toolCallId);
 				void invalidateAll();
 			}
 		}
@@ -121,6 +132,13 @@
 										</Button>
 									</div>
 								</div>
+							{:else if isToolUIPart(part) && getToolName(part) === 'submit_review' && part.state === 'output-available' && reviewWriteError(part.output)}
+								<p
+									class="bg-status-bad-bg text-status-bad w-fit rounded-md px-2 py-0.5 text-xs"
+									data-testid="chat-review-refused"
+								>
+									Review not filed: {reviewWriteError(part.output)}
+								</p>
 							{:else if isToolUIPart(part) && getToolName(part) === 'submit_review' && part.state === 'output-available'}
 								<p
 									class="bg-status-good-bg text-status-good w-fit rounded-md px-2 py-0.5 text-xs"
