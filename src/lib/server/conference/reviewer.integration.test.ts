@@ -1090,3 +1090,53 @@ describe('a withdrawn submission', () => {
 		expect(row.status).toBe('assigned');
 	});
 });
+
+/**
+ * #614: a draft is still the speaker's. Assignments may already exist for the
+ * moment they submit — they must not put the talk, or the speaker's name, in
+ * front of a reviewer before that.
+ */
+describe('an unsubmitted draft', () => {
+	beforeEach(async () => {
+		await db.update(submissionTable).set({ status: 'draft' }).where(eq(submissionTable.id, mine));
+	});
+
+	it('does not appear in the queue, even with an assignment', async () => {
+		const queue = await reviewQueue(await conferenceNow(), ME);
+
+		expect(queue.map((q) => q.submissionId)).not.toContain(mine);
+		expect(queue.map((q) => q.submissionId)).toContain(alsoMine);
+	});
+
+	it('does not open the scorecard', async () => {
+		await expect(reviewerSubmission(await conferenceNow(), ME, mine)).resolves.toBeNull();
+	});
+
+	it('refuses a review filed against it from a stale tab', async () => {
+		const result = await saveReview(await conferenceNow(), ME, mine, {
+			answers: { [criterionId]: '5' },
+			comment: 'Filed while it was still a draft.',
+			submit: true
+		});
+
+		expect(result).toEqual({ ok: false, reason: 'proposal_draft' });
+
+		const [row] = await db
+			.select({ status: reviewTable.status, comment: reviewTable.comment })
+			.from(reviewTable)
+			.where(and(eq(reviewTable.submissionId, mine), eq(reviewTable.reviewerUserId, ME)));
+		expect(row.status).not.toBe('submitted');
+		expect(row.comment).not.toBe('Filed while it was still a draft.');
+	});
+
+	it('becomes the queue the moment the speaker submits', async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, mine));
+
+		const queue = await reviewQueue(await conferenceNow(), ME);
+		expect(queue.map((q) => q.submissionId)).toContain(mine);
+		await expect(reviewerSubmission(await conferenceNow(), ME, mine)).resolves.not.toBeNull();
+	});
+});

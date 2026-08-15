@@ -74,10 +74,10 @@
 	);
 	const draftCloseLine = $derived(
 		!callOpen
-			? `Nobody has seen it yet. ${editClosedReason}`
+			? `It has not been submitted. ${editClosedReason}`
 			: closesLabel
-				? `Nobody has seen it yet. Pick it up where you left off, any time before ${closesLabel}.`
-				: 'Nobody has seen it yet. Pick it up where you left off, any time before the call closes.'
+				? `It has not been submitted. Pick it up where you left off, any time before ${closesLabel}.`
+				: 'It has not been submitted. Pick it up where you left off, any time before the call closes.'
 	);
 
 	const answerValue = (answer: { kind: string; value: string | null }) => {

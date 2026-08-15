@@ -29,6 +29,10 @@ function saveFailure(saved: Extract<SaveReviewResult, { ok: false }>) {
 			return fail(409, {
 				message: 'The speaker withdrew this talk, so it no longer needs a review.'
 			});
+		case 'proposal_draft':
+			return fail(409, {
+				message: 'This talk is still a draft. It cannot be reviewed until the speaker submits it.'
+			});
 		// The round is shut (ABS-01). Two messages, because "come back later" and
 		// "you are too late" ask opposite things of the reader.
 		case 'round_not_open':
