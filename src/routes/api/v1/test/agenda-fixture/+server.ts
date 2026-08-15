@@ -20,11 +20,18 @@
  */
 import { db } from '$lib/server/db';
 import { member } from '$lib/server/db/auth-schema';
-import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	cfpFormTable,
+	formFieldTable,
+	submissionAnswerTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceDayTable,
 	conferenceSpeakerTable,
 	conferenceTable,
+	membershipTable,
 	speakerProfileTable,
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
@@ -90,6 +97,14 @@ type FixtureRequest = {
 	 * working track filter from one that does nothing.
 	 */
 	tracks?: string[];
+	/**
+	 * File-kind CFP answers on the first session (#423).
+	 *
+	 * A file field cannot be produced through the public form without walking
+	 * CFP editor → publish → submit, and the preview spec only needs the
+	 * answers already sitting on a talk the reviewer can open.
+	 */
+	attachments?: { label: string; url: string }[];
 };
 
 const DEFAULT_DAYS = ['2028-05-10', '2028-05-11'];
@@ -219,6 +234,14 @@ async function addSubmittedReviews(
 		})
 		.returning();
 
+	// The review rows are not a seat. `/review/[slug]` 404s without one.
+	await db.insert(membershipTable).values({
+		userId: reviewerUserId,
+		role: 'reviewer',
+		scopeType: 'conference',
+		scopeId: conferenceId
+	});
+
 	const rows = await db
 		.select({ id: submissionTable.id, title: submissionTable.title })
 		.from(submissionTable)
@@ -250,6 +273,7 @@ type Fixture = {
 	reviewed: string[];
 	blindReview: boolean;
 	tracks: string[];
+	attachments: { label: string; url: string }[];
 };
 
 /** Everything defaulted, so the handler below reads as a sequence of writes. */
@@ -266,7 +290,8 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		speakerUserId: body.speakerUserId ?? null,
 		reviewed: body.reviewed ?? [],
 		blindReview: body.blindReview ?? false,
-		tracks: body.tracks ?? []
+		tracks: body.tracks ?? [],
+		attachments: body.attachments ?? []
 	};
 }
 
@@ -282,7 +307,7 @@ async function addSessions(
 	organizationId: string,
 	fixture: Fixture,
 	trackIds: number[]
-): Promise<void> {
+): Promise<number | null> {
 	// One profile for the whole fixture when a speaker is named, so their talks
 	// count as one person's — the withdrawal dialog counts talks per profile.
 	const speakerProfileId = fixture.speakerUserId
@@ -299,6 +324,8 @@ async function addSessions(
 			)[0].id
 		: null;
 
+	let firstSubmissionId: number | null = null;
+
 	for (const [index, title] of fixture.sessions.entries()) {
 		// Only the first session gets the first track, so a filter that ignores its
 		// parameter and returns everything is distinguishable from one that works.
@@ -314,10 +341,51 @@ async function addSessions(
 
 		// One participation answer covers the whole event, so one task on the first
 		// session is the shape the portal really has.
+		if (index === 0) firstSubmissionId = added.submissionId;
+
 		if (speakerProfileId && index === 0) {
 			await addParticipationTask(conferenceId, speakerProfileId, added.submissionId);
 		}
 	}
+
+	return firstSubmissionId;
+}
+
+/**
+ * File-kind answers on one talk, so the reviewer preview spec has something
+ * to open without walking the CFP editor (#423).
+ */
+async function addAttachments(
+	conferenceId: number,
+	submissionId: number,
+	attachments: { label: string; url: string }[]
+): Promise<void> {
+	if (attachments.length === 0) return;
+
+	const [form] = await db
+		.insert(cfpFormTable)
+		.values({ conferenceId, title: 'Fixture call', status: 'published' })
+		.returning({ id: cfpFormTable.id });
+
+	const fields = await db
+		.insert(formFieldTable)
+		.values(
+			attachments.map((attachment, position) => ({
+				cfpFormId: form.id,
+				label: attachment.label,
+				kind: 'file' as const,
+				position
+			}))
+		)
+		.returning({ id: formFieldTable.id });
+
+	await db.insert(submissionAnswerTable).values(
+		fields.map((field, i) => ({
+			submissionId,
+			formFieldId: field.id,
+			value: attachments[i].url
+		}))
+	);
 }
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -351,7 +419,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const trackIds = await addTracks(conference.id, fixture.tracks);
-	await addSessions(conference.id, organizationId, fixture, trackIds);
+	const firstSubmissionId = await addSessions(conference.id, organizationId, fixture, trackIds);
+	if (firstSubmissionId && fixture.attachments.length > 0) {
+		await addAttachments(conference.id, firstSubmissionId, fixture.attachments);
+	}
 
 	if (fixture.reviewed.length > 0) {
 		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed, fixture.blindReview);

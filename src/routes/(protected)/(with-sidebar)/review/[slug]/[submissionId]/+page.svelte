@@ -27,8 +27,17 @@
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
+	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
+	import ReviewFileAnswer from '$lib/components/review-file-answer.svelte';
+	import { filenameFrom, type FilePreviewKind } from '$lib/conference/file-preview';
 
 	let { data, form } = $props();
+
+	let preview = $state<{ title: string; src: string; kind: FilePreviewKind } | null>(null);
+
+	const openFile = (value: string, kind: FilePreviewKind) => {
+		preview = { title: filenameFrom(value), src: value, kind };
+	};
 
 	const s = $derived(data.submission);
 	const withdrawn = $derived(s.status === 'withdrawn');
@@ -114,6 +123,8 @@
 	const formOk = $derived(Boolean(form && 'ok' in form && form.ok));
 </script>
 
+<FilePreviewSheet bind:preview />
+
 <svelte:head>
 	<title>{s.title} — review</title>
 </svelte:head>
@@ -188,14 +199,16 @@
 					{#each s.answers as answer, i (i)}
 						<div>
 							<dt class="text-muted-foreground text-xs">{answer.label}</dt>
-							<dd class="mt-0.5 whitespace-pre-line">
-								{answer.value === null || answer.value === ''
-									? '—'
-									: answer.kind === 'boolean'
-										? answer.value === 'true'
-											? 'Yes'
-											: 'No'
-										: answer.value}
+							<dd class="mt-0.5" data-testid="form-answer" data-kind={answer.kind}>
+								{#if answer.value === null || answer.value === ''}
+									—
+								{:else if answer.kind === 'boolean'}
+									{answer.value === 'true' ? 'Yes' : 'No'}
+								{:else if answer.kind === 'file'}
+									<ReviewFileAnswer value={answer.value} onOpen={openFile} />
+								{:else}
+									<span class="whitespace-pre-line">{answer.value}</span>
+								{/if}
 							</dd>
 						</div>
 					{/each}
