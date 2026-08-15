@@ -79,6 +79,30 @@ describe('contacts directory page', () => {
 		expect(body).toContain('/contacts/5');
 	});
 
+	it('hides the company chart when every bar would be the same length (#477)', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					...baseData,
+					overview: {
+						...baseData.overview,
+						topCompanies: [
+							{ company: 'Acme', count: 2 },
+							{ company: 'Globex', count: 2 },
+							{ company: 'Initech', count: 2 }
+						]
+					}
+				} as never,
+				form: null
+			}
+		});
+
+		expect(body).toContain('data-testid="crm-kpis"');
+		expect(body).toContain('data-testid="contacts-table"');
+		expect(body).not.toContain('data-testid="crm-top-companies"');
+		expect(body).not.toContain('Top companies');
+	});
+
 	it('renders CRM overview KPIs and a populated top-companies widget (CRM-12)', () => {
 		const { body } = render(Page, {
 			props: { data: baseData as never, form: null }
