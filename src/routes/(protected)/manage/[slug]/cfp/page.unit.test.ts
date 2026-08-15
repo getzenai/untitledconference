@@ -371,3 +371,73 @@ describe('publishing the call for papers', () => {
 		expect(html).not.toContain('Live on the public site');
 	});
 });
+
+/**
+ * What the preview leaves out is what the organizer most wants to check (#556).
+ *
+ * The public call opens with the expenses answer and the organizers' own intro,
+ * and the preview beside the editor showed neither — so the two things nobody
+ * can proofread anywhere else were the two things it hid. These pin both, in
+ * the public page's order, inside the preview column rather than anywhere on
+ * the screen: the editor already prints the description in its textarea, so an
+ * assertion against the whole page would pass with the preview still empty.
+ */
+describe('the preview shows what the call opens with', () => {
+	const previewOf = (description: string | null, speakerSupport: string | null = null): string => {
+		const html = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					speakerProfile: false,
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					form: { ...cfpForm, description, speakerSupport },
+					fields: [],
+					tracks: [{ id: 1, name: 'Platform' }],
+					formats: [{ id: 1, name: 'Talk' }]
+				},
+				form: null
+			}
+		}).body;
+		return html.slice(html.indexOf('What the submitter sees'));
+	};
+
+	const support = JSON.stringify({
+		admission: 'free',
+		travel: { kind: 'up_to', amount: '€500' }
+	});
+
+	it('renders the expenses block and the intro prose when both are set', () => {
+		const preview = previewOf('## What we want\n\nTalks that show the **work**.', support);
+
+		expect(preview).toContain('data-testid="speaker-support"');
+		expect(preview).toContain('Speaker expenses');
+		expect(preview).toContain('€500');
+		expect(preview).toContain('data-testid="cfp-preview-intro"');
+		expect(preview).toContain('What we want');
+		expect(preview).toContain('Talks that show the');
+	});
+
+	// Order, not just presence: on the public page the money answer comes first,
+	// the intro second, the questions last. A preview that shuffles them is
+	// answering a question the organizer did not ask.
+	it('keeps the public page order — expenses, intro, questions', () => {
+		const preview = previewOf('Our intro line.', support);
+
+		const expenses = preview.indexOf('data-testid="speaker-support"');
+		const intro = preview.indexOf('data-testid="cfp-preview-intro"');
+		const questions = preview.indexOf(labels[0]);
+
+		expect(expenses).toBeGreaterThan(-1);
+		expect(expenses).toBeLessThan(intro);
+		expect(intro).toBeLessThan(questions);
+	});
+
+	it('shows neither block when the organizer has set neither', () => {
+		const preview = previewOf(null, null);
+
+		expect(preview).not.toContain('data-testid="speaker-support"');
+		expect(preview).not.toContain('data-testid="cfp-preview-intro"');
+	});
+});
