@@ -48,6 +48,16 @@ describe('app sidebar starter cleanup', () => {
 		expect(source).not.toMatch(/<aside[\s>]/);
 	});
 
+	it('nests Sourcing and Enrollment under Contacts (#420)', () => {
+		// The pipeline was only a button on the directory. Both views now sit
+		// under Contacts; the gate stays on the parent so a locked account
+		// still sees one create-org link, not three.
+		expect(source.match(/gate: 'contacts'/g)).toHaveLength(1);
+		expect(source).toMatch(/title: 'Directory'[\s\S]*url: '\/contacts'/);
+		expect(source).toContain("url: '/contacts/pipeline'");
+		expect(source).toContain("url: '/contacts/pipeline#pipeline-enroll'");
+	});
+
 	it('takes the reviewing item from reviewSlug, not a hard-coded /review (#373)', () => {
 		// The module-level list still says /review (the list of many). The
 		// derived items overwrite that when navAccess names exactly one

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+	isNavUrlCurrent,
 	navDestinations,
 	reviewQueueHref,
 	type NavAccess,
@@ -108,6 +109,37 @@ describe('the destinations a new account can unlock (#439)', () => {
 	it('drops the lock the moment the gate opens', () => {
 		const open = navDestinations(ITEMS, { ...FRESH, conferences: true });
 		expect(open.find((i) => i.title === 'Events')?.lock).toBeNull();
+	});
+});
+
+describe('which Contacts sub-item is current (#420)', () => {
+	const directory = '/contacts';
+	const sourcing = '/contacts/pipeline';
+	const enrollment = '/contacts/pipeline#pipeline-enroll';
+	const group = [directory, sourcing, enrollment];
+	const swapped = [enrollment, sourcing, directory];
+
+	it('lights Directory on the list and on a contact, not on the pipeline', () => {
+		expect(isNavUrlCurrent('/contacts', directory, group)).toBe(true);
+		expect(isNavUrlCurrent('/contacts/abc', directory, group)).toBe(true);
+		expect(isNavUrlCurrent('/contacts/pipeline', directory, group)).toBe(false);
+		expect(isNavUrlCurrent('/contacts/pipeline', directory, swapped)).toBe(false);
+	});
+
+	it('lights Sourcing on the pipeline, not when the hash is Enrollment', () => {
+		expect(isNavUrlCurrent('/contacts/pipeline', sourcing, group)).toBe(true);
+		expect(isNavUrlCurrent('/contacts/pipeline', sourcing, group, '#pipeline-enroll')).toBe(false);
+		expect(isNavUrlCurrent('/contacts', sourcing, group)).toBe(false);
+		expect(isNavUrlCurrent('/contacts/abc', sourcing, swapped)).toBe(false);
+	});
+
+	it('lights Enrollment only when the hash is present', () => {
+		expect(isNavUrlCurrent('/contacts/pipeline', enrollment, group, '#pipeline-enroll')).toBe(true);
+		expect(isNavUrlCurrent('/contacts/pipeline', enrollment, swapped, '#pipeline-enroll')).toBe(
+			true
+		);
+		expect(isNavUrlCurrent('/contacts/pipeline', enrollment, group)).toBe(false);
+		expect(isNavUrlCurrent('/contacts', enrollment, group, '#pipeline-enroll')).toBe(false);
 	});
 });
 
