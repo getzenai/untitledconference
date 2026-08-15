@@ -84,6 +84,12 @@ describe('organizer agenda layout', () => {
 		expect(body).toContain('/manage/test-conf/settings');
 	});
 
+	it('offers the run of show next to the public agenda (#449)', () => {
+		const body = renderWith(2);
+		expect(body).toContain('data-testid="agenda-run-of-show"');
+		expect(body).toContain('/manage/test-conf/agenda/run-of-show');
+	});
+
 	// The pair either side of the threshold, not two points far away from it: a test
 	// that only knows 2-versus-20 stays green if the threshold moves to 19.
 	it('offers a room filter at six rooms and not at five', () => {

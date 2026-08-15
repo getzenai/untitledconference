@@ -391,6 +391,9 @@
 					{everythingPublished ? 'Unpublish the agenda' : 'Publish the agenda'}
 				</Button>
 			</form>
+			<Button href="{base}/agenda/run-of-show" variant="ghost" data-testid="agenda-run-of-show">
+				Run of show
+			</Button>
 			<Button href="/c/{data.conference.slug}/agenda" variant="ghost" target="_blank">
 				View the public agenda
 			</Button>
