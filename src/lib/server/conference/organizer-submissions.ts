@@ -87,6 +87,8 @@ type SubmissionBase = {
 	acceptCondition: string | null;
 	/** Display name of who will chase the condition. */
 	acceptConditionOwner: string | null;
+	/** Named editorial stand on an accept (#446). Null if not tracking yet. */
+	editorialStand: Submission['editorialStand'];
 };
 
 export type SubmissionRow = SubmissionBase & {
@@ -316,6 +318,7 @@ const submissionColumns = {
 	sessionFormat: sessionFormatTable.name,
 	sponsorTier: sponsorTierTable.name,
 	acceptCondition: submissionTable.acceptCondition,
+	editorialStand: submissionTable.editorialStand,
 	ownerName: user.name,
 	ownerEmail: user.email
 };
@@ -522,6 +525,7 @@ async function submissionHeader(conferenceId: number, submissionId: number) {
 			sponsorTier: sponsorTierTable.name,
 			sponsorNote: sponsorTierTable.note,
 			acceptCondition: submissionTable.acceptCondition,
+			editorialStand: submissionTable.editorialStand,
 			ownerName: user.name,
 			ownerEmail: user.email
 		})

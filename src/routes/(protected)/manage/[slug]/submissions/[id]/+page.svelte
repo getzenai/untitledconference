@@ -19,6 +19,11 @@
 		notificationTone
 	} from '$lib/conference/decision-summary';
 	import { formatScore } from '$lib/conference/scoring';
+	import {
+		EDITORIAL_STANDS,
+		EDITORIAL_STAND_LABELS,
+		nextEditorialStand
+	} from '$lib/conference/editorial-stand';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -141,6 +146,11 @@
 				: s.acceptCondition
 			: null
 	);
+	const standOptions = EDITORIAL_STANDS.map((stand) => ({
+		value: stand,
+		label: EDITORIAL_STAND_LABELS[stand]
+	}));
+	const nextStand = $derived(s.status === 'accepted' ? nextEditorialStand(s.editorialStand) : null);
 </script>
 
 <svelte:head>
@@ -162,6 +172,11 @@
 				{#if conditionLine}
 					<span data-testid="submission-condition">
 						<StatusBadge status="open" tone="warn" label={conditionLine} />
+					</span>
+				{/if}
+				{#if s.editorialStand}
+					<span data-testid="submission-editorial-stand">
+						<StatusBadge status={s.editorialStand} />
 					</span>
 				{/if}
 			</div>
@@ -272,6 +287,9 @@
 	{#if form?.conditionMessage}
 		<p class="text-status-good mt-3 text-sm" role="status">{form.conditionMessage}</p>
 	{/if}
+	{#if form?.standMessage}
+		<p class="text-status-good mt-3 text-sm" role="status">{form.standMessage}</p>
+	{/if}
 	{#if conditionLine}
 		<form
 			method="POST"
@@ -298,6 +316,63 @@
 				Resolve condition
 			</Button>
 		</form>
+	{/if}
+	{#if s.status === 'accepted'}
+		<div class="mt-3 flex flex-wrap items-end justify-end gap-2" data-testid="editorial-stand">
+			<form
+				method="POST"
+				action="?/setEditorialStand"
+				class="flex flex-wrap items-end gap-2"
+				use:enhance={() => {
+					busy = true;
+					return async ({ update }) => {
+						try {
+							await update(formUpdateOptions('edit'));
+						} finally {
+							busy = false;
+						}
+					};
+				}}
+			>
+				<AppSelect
+					name="editorialStand"
+					value={s.editorialStand ?? 'materials_requested'}
+					options={standOptions}
+					size="sm"
+					aria-label="Editorial stand"
+					testId="editorial-stand-select"
+				/>
+				<Button
+					type="submit"
+					size="sm"
+					variant="outline"
+					disabled={busy}
+					data-testid="set-editorial-stand"
+				>
+					Save stand
+				</Button>
+			</form>
+			{#if nextStand}
+				<form
+					method="POST"
+					action="?/advanceEditorialStand"
+					use:enhance={() => {
+						busy = true;
+						return async ({ update }) => {
+							try {
+								await update(formUpdateOptions('edit'));
+							} finally {
+								busy = false;
+							}
+						};
+					}}
+				>
+					<Button type="submit" size="sm" disabled={busy} data-testid="advance-editorial-stand">
+						Advance to {EDITORIAL_STAND_LABELS[nextStand].toLowerCase()}
+					</Button>
+				</form>
+			{/if}
+		</div>
 	{/if}
 </div>
 

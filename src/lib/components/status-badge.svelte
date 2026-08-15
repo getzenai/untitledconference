@@ -40,6 +40,12 @@
 		// task_status
 		open: 'neutral',
 		done: 'good',
+		// editorial_stand (#446) — named on an accept, not a second status
+		materials_requested: 'progress',
+		received: 'progress',
+		reviewed: 'warn',
+		revision_requested: 'warn',
+		final: 'good',
 		// review_status
 		assigned: 'progress',
 		recused: 'neutral',
