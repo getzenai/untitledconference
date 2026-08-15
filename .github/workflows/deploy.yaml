@@ -54,7 +54,8 @@ jobs:
         run: npm ci
 
       # Fetches CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, NEON_CONNECTION_STRING,
-      # BETTER_AUTH_SECRET, RESEND_API_KEY and the R2 keys as environment variables
+      # BETTER_AUTH_SECRET, RESEND_API_KEY, the two AI_GATEWAY_* variables and the
+      # R2 keys as environment variables
       # for the rest of this job only.
       #
       # `domain` is not optional for us: it defaults to app.infisical.com and our
@@ -73,7 +74,13 @@ jobs:
       - name: Verify required variables are present
         run: |
           missing=0
-          for var in NEON_CONNECTION_STRING CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BETTER_AUTH_SECRET RESEND_API_KEY; do
+          # The two AI_GATEWAY_* variables are here because the reviewer chat is
+          # switched on in wrangler.jsonc: without them the panel renders and every
+          # message answers "AI Gateway is not configured"
+          # (src/lib/server/chat/model.ts). The base URL is not a secret, but it
+          # carries the account id, and keeping both in Infisical keeps them
+          # together.
+          for var in NEON_CONNECTION_STRING CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID BETTER_AUTH_SECRET RESEND_API_KEY AI_GATEWAY_API_KEY AI_GATEWAY_BASE_URL; do
             if [ -z "${!var}" ]; then
               echo "::error::$var is missing from Infisical (project untitled-conference, env prod)"
               missing=1
@@ -115,6 +122,8 @@ jobs:
           printf '%s' "$BETTER_AUTH_SECRET" | npx wrangler secret put BETTER_AUTH_SECRET
           printf '%s' "$NEON_CONNECTION_STRING" | npx wrangler secret put DATABASE_URL
           printf '%s' "$RESEND_API_KEY" | npx wrangler secret put RESEND_API_KEY
+          printf '%s' "$AI_GATEWAY_API_KEY" | npx wrangler secret put AI_GATEWAY_API_KEY
+          printf '%s' "$AI_GATEWAY_BASE_URL" | npx wrangler secret put AI_GATEWAY_BASE_URL
 
       - name: Deploy
         run: npx wrangler deploy

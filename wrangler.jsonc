@@ -124,7 +124,11 @@
 		"RESEND_FROM": "Untitled Conference <conference@getzenai.com>",
 		"LOG_LEVEL": "info",
 		"LOG_FORMAT": "human",
-		"FEATURE_INAPP_CHAT": "false",
+		// The reviewer chat panel and its tools. The Gateway URL and key that make
+		// it answer are Worker secrets from Infisical, not vars, and the deploy
+		// refuses to ship with this on and either of them missing — a chat box that
+		// answers "AI Gateway is not configured" is worse than no chat box.
+		"FEATURE_INAPP_CHAT": "true",
 		"AI_CHAT_MODEL": "openai/gpt-4o-mini"
 	}
 }
