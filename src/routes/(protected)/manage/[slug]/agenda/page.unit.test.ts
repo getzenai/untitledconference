@@ -708,16 +708,28 @@ describe('holding a slot', () => {
 		expect(body).toContain('Release');
 	});
 
-	/** A break spanning every room has no column; it still has to be visible. */
-	it('lists an all-rooms break with its own room label', () => {
+	it("places a room-specific reservation in that room's column only", () => {
+		const body = renderWith(2, 1, { placed: [hold({})] });
+
+		expect(body).toContain('data-span="room"');
+		expect(body).toContain('data-kind="reservation"');
+		expect(body).not.toContain('data-span="all"');
+		expect(body).not.toContain('data-testid="agenda-holds"');
+	});
+
+	/** A break spanning every room is a band across the calendar, not a chip above it. */
+	it('places an all-rooms lunch as a full-width band on the grid', () => {
 		const body = renderWith(2, 1, {
 			placed: [hold({ kind: 'block', title: 'Lunch', roomId: null, placementId: 4 })]
 		});
 
 		expect(body).toContain('Lunch');
 		expect(body).toContain('all rooms');
+		expect(body).toContain('data-testid="agenda-hold-bands"');
+		expect(body).toContain('data-span="all"');
 		expect(body).toContain('data-testid="agenda-hold-release-4"');
 		expect(body).not.toContain('sponsor hold');
+		expect(body).not.toContain('data-testid="agenda-holds"');
 	});
 
 	/** A talk is not a hold: releasing one would take an accepted session off the grid. */

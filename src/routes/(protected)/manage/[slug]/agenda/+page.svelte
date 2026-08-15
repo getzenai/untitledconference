@@ -37,7 +37,16 @@
 		TooltipProvider,
 		TooltipTrigger
 	} from '$lib/components/ui/tooltip';
-	import { blockRows, gridSlots, laneLayout, type GridFrame } from '$lib/conference/agenda-grid';
+	import {
+		blockRows,
+		dropOccupant,
+		gridSlots,
+		laneLayout,
+		isHoldKind,
+		spanningHolds,
+		untimedHolds,
+		type GridFrame
+	} from '$lib/conference/agenda-grid';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { agendaReadyLine, autoPlaceResult, PROGRAM_LEGEND } from '$lib/conference/program-states';
 	import { formatDayLong } from '$lib/conference/public-view';
@@ -93,16 +102,15 @@
 		roomId === null ? 'all rooms' : (board.rooms.find((r) => r.id === roomId)?.name ?? 'a room');
 
 	/**
-	 * Everything on this day that is not a talk: breaks and sponsor holds, in both
-	 * room-bound and all-rooms form (#450). All-rooms breaks have no column to sit
-	 * in, so without this strip lunch is invisible on the one screen where an
-	 * organizer is deciding what fits around it.
+	 * Everything on this day that is not a talk: breaks and sponsor holds (#450).
 	 *
-	 * One list rather than a control on each card in the grid. A hold has to be
-	 * releasable, and the grid cards are drag handles — a button inside one competes
-	 * with the drag it sits on, on the very screen where dragging is the point.
+	 * Timed holds sit on the grid at their time (#560). Room-less ones span every
+	 * column; room-bound ones stay in theirs. The chip list above the grid is
+	 * only for holds that have no time yet — the grid has nowhere to put them.
 	 */
-	const dayHolds = $derived(daySessions.filter((s) => s.kind !== 'session').sort(byStart));
+	const dayHolds = $derived(daySessions.filter((s) => isHoldKind(s.kind)).sort(byStart));
+	const spanningDayHolds = $derived(spanningHolds(dayHolds));
+	const untimedDayHolds = $derived(untimedHolds(dayHolds));
 
 	/** The length options for a hold, in minutes — the lengths people actually book. */
 	const HOLD_LENGTHS = [15, 30, 45, 60, 90, 120];
@@ -213,7 +221,7 @@
 			dayStartsAt: data.slots[0]?.minutes ?? 9 * 60,
 			dayEndsAt: (data.slots.at(-1)?.minutes ?? 17 * 60 + 45) + SLOT_MINUTES,
 			slotMinutes: SLOT_MINUTES,
-			sessions: daySessions.filter((s) => s.roomId !== null)
+			sessions: daySessions
 		}),
 		slotMinutes: SLOT_MINUTES
 	});
@@ -325,7 +333,7 @@
 				height: first.height
 			};
 		},
-		occupantAt: (slot) => startingAt(slot.roomId, slot.startMinutes),
+		occupantAt: (slot) => dropOccupant(daySessions, slot),
 		openSlot: (slot) => {
 			const room = board.rooms.find((r) => r.id === slot.roomId);
 			if (room) openSlot(room, slot.startMinutes);
@@ -721,27 +729,16 @@
 			{/if}
 
 			{#if day}
-				{#if dayHolds.length > 0}
+				{#if untimedDayHolds.length > 0}
 					<ul class="mb-4 flex flex-wrap gap-2" data-testid="agenda-holds">
-						{#each dayHolds as slot (slot.placementId)}
+						{#each untimedDayHolds as slot (slot.placementId)}
 							<li
 								class="border-border bg-muted/40 flex items-center rounded-md border px-3 py-1.5 text-xs"
 								data-testid="agenda-hold"
 								data-kind={slot.kind}
 							>
-								<span class="font-medium tabular-nums">
-									{timeLabel(slot.startMinutes)}–{timeLabel(slot.endMinutes)}
-								</span>
 								<span class="px-1.5">{slot.title}</span>
 								<span class="text-muted-foreground">{roomName(slot.roomId)}</span>
-								{#if slot.kind === 'reservation'}
-									<!--
-										The word the committee needs: this slot is spoken for. Releasing
-										it is the backfill — the sponsor did not sell it, so the talk pile
-										gets it back.
-									-->
-									<span class="text-muted-foreground pl-1.5">· sponsor hold</span>
-								{/if}
 								<form method="POST" action="?/release" use:enhance={submitting} class="pl-1.5">
 									<input type="hidden" name="placementId" value={slot.placementId} />
 									<Button
@@ -836,96 +833,98 @@
 								</div>
 							</div>
 
-							{#each visibleRooms as room (room.id)}
-								<div
-									class="border-border min-w-36 flex-1 overflow-hidden border-l"
-									data-testid="agenda-room-card"
-									data-room-id={room.id}
-								>
+							<div class="relative flex min-w-0 flex-1">
+								{#each visibleRooms as room (room.id)}
 									<div
-										class="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
-										data-testid="agenda-room-head"
+										class="border-border min-w-36 flex-1 overflow-hidden border-l"
+										data-testid="agenda-room-card"
+										data-room-id={room.id}
 									>
-										<Tooltip>
-											<!--
+										<div
+											class="flex h-14 min-w-0 flex-col justify-center gap-0.5 px-1.5 py-1"
+											data-testid="agenda-room-head"
+										>
+											<Tooltip>
+												<!--
 												Room name is mouse-tooltip only — full name is already in the
 												DOM. TooltipTrigger defaults tabindex=0, which would add a
 												tab stop per room (World's Fair ≈ 20). Keep it out of the
 												sequence; the session card below stays a real control.
 											-->
-											<TooltipTrigger tabindex={-1}>
-												{#snippet child({ props })}
-													<h3
-														{...props}
-														data-testid="agenda-room-name"
-														class="w-full min-w-0 truncate text-sm font-medium"
-													>
-														{room.name}
-													</h3>
-												{/snippet}
-											</TooltipTrigger>
-											<TooltipContent side="bottom" class="max-w-xs">
-												{room.name}
-											</TooltipContent>
-										</Tooltip>
-										<Button
-											type="button"
-											size="sm"
-											variant="ghost"
-											class="h-6 w-full justify-start px-0 text-xs"
-											aria-label="Open a slot in {room.name}"
-											data-testid="agenda-open-slot-{room.id}"
-											onclick={() => openSlot(room, data.slots[0].minutes)}
-										>
-											+ slot
-										</Button>
-									</div>
+												<TooltipTrigger tabindex={-1}>
+													{#snippet child({ props })}
+														<h3
+															{...props}
+															data-testid="agenda-room-name"
+															class="w-full min-w-0 truncate text-sm font-medium"
+														>
+															{room.name}
+														</h3>
+													{/snippet}
+												</TooltipTrigger>
+												<TooltipContent side="bottom" class="max-w-xs">
+													{room.name}
+												</TooltipContent>
+											</Tooltip>
+											<Button
+												type="button"
+												size="sm"
+												variant="ghost"
+												class="h-6 w-full justify-start px-0 text-xs"
+												aria-label="Open a slot in {room.name}"
+												data-testid="agenda-open-slot-{room.id}"
+												onclick={() => openSlot(room, data.slots[0].minutes)}
+											>
+												+ slot
+											</Button>
+										</div>
 
-									<div class="relative min-w-0" data-column-body style="height: {gridHeight}">
-										<!--
+										<div class="relative min-w-0" data-column-body style="height: {gridHeight}">
+											<!--
 											One button per slot, all of them out of the tab order. The
 											keyboard route into a slot is the room's "Open a slot"
 											button and the editor's day/time/room selects; putting 36
 											empty cells per room into the tab sequence would bury it.
 										-->
-										{#each frame.slots as minutes, i (minutes)}
-											<button
-												type="button"
-												tabindex="-1"
-												aria-label="{room.name} at {timeLabel(minutes)}"
-												data-testid="agenda-slot-cell"
-												data-room-id={room.id}
-												data-start-minutes={minutes}
-												onclick={() => slotClicked(room, minutes)}
-												class="absolute inset-x-0 {i % LABEL_EVERY === 0
-													? 'border-border border-t'
-													: ''} {drag.hover?.roomId === room.id &&
-												drag.hover?.startMinutes === minutes
-													? 'bg-primary/20'
-													: 'hover:bg-muted/60'}"
-												style="top: {i * ROW_REM}rem; height: {ROW_REM}rem"
-											></button>
-										{/each}
+											{#each frame.slots as minutes, i (minutes)}
+												<button
+													type="button"
+													tabindex="-1"
+													aria-label="{room.name} at {timeLabel(minutes)}"
+													data-testid="agenda-slot-cell"
+													data-room-id={room.id}
+													data-start-minutes={minutes}
+													onclick={() => slotClicked(room, minutes)}
+													class="absolute inset-x-0 {i % LABEL_EVERY === 0
+														? 'border-border border-t'
+														: ''} {drag.hover?.roomId === room.id &&
+													drag.hover?.startMinutes === minutes
+														? 'bg-primary/20'
+														: 'hover:bg-muted/60'}"
+													style="top: {i * ROW_REM}rem; height: {ROW_REM}rem"
+												></button>
+											{/each}
 
-										{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
-											{@const rows = blockRows(frame, session)}
-											{@const clashes = clashesFor(session.placementId)}
-											{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
-											{@const published = session.status === 'confirmed'}
-											{@const decidedDown =
-												session.submissionStatus === 'rejected' ||
-												session.submissionStatus === 'waitlisted'}
-											<!--
+											{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
+												{@const rows = blockRows(frame, session)}
+												{@const clashes = clashesFor(session.placementId)}
+												{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
+												{@const published = session.status === 'confirmed'}
+												{@const decidedDown =
+													session.submissionStatus === 'rejected' ||
+													session.submissionStatus === 'waitlisted'}
+												<!--
 												A room-bound hold is a card like any other, and that is right: a
 												sponsor slot in Hall 1 has to occupy the column it takes. What it
 												is not is a drag handle. `?/place` reads a length off the talk's
 												format and a hold has none, so dragging a two-hour sponsor slot
-												would hand it back as thirty minutes (#450). Holds come off the
-												grid through Release, in the strip above the grid.
+												would hand it back as thirty minutes (#450). Release lives on
+												the block itself (#560).
 											-->
-											{@const draggable = session.kind === 'session'}
-											{#if rows}
-												<!--
+												{@const isHold = isHoldKind(session.kind)}
+												{@const draggable = !isHold}
+												{#if rows}
+													<!--
 													Title first — the clock is already on the grid axis, so the
 													card's job is the talk name. Colour codes publish state so the
 													title keeps the full card width (#219); clash colour wins.
@@ -934,35 +933,39 @@
 													(#497). min-w-0 + overflow-hidden still clip width
 													(#154 / #166); nothing here changes DnD keys or drop targets.
 												-->
-												<div
-													data-testid="agenda-placed-session"
-													data-placement-id={session.placementId}
-													data-publish-state={published ? 'published' : 'draft'}
-													class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
-													0
-														? 'border-status-bad bg-status-bad/10'
-														: decidedDown
-															? 'border-status-warn bg-status-warn-bg'
-															: published
-																? 'border-status-good bg-status-good-bg'
-																: 'border-border bg-card'} {drag.dragging?.placementId ===
-													session.placementId
-														? 'opacity-40'
-														: ''}"
-													style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
-														ROW_REM}rem; left: calc({(lane / lanes) *
-														100}% + 0.125rem); width: calc({100 /
-														lanes}% - 0.25rem); max-width: calc({100 / lanes}% - 0.25rem)"
-												>
-													<!--
+													<div
+														data-testid={isHold ? 'agenda-hold' : 'agenda-placed-session'}
+														data-kind={session.kind}
+														data-span={isHold ? 'room' : undefined}
+														data-placement-id={session.placementId}
+														data-publish-state={published ? 'published' : 'draft'}
+														class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
+														0
+															? 'border-status-bad bg-status-bad/10'
+															: isHold
+																? 'border-border bg-muted/70'
+																: decidedDown
+																	? 'border-status-warn bg-status-warn-bg'
+																	: published
+																		? 'border-status-good bg-status-good-bg'
+																		: 'border-border bg-card'} {drag.dragging?.placementId ===
+														session.placementId
+															? 'opacity-40'
+															: ''}"
+														style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span *
+															ROW_REM}rem; left: calc({(lane / lanes) *
+															100}% + 0.125rem); width: calc({100 /
+															lanes}% - 0.25rem); max-width: calc({100 / lanes}% - 0.25rem)"
+													>
+														<!--
 														Tooltip lives on the card button itself (child-snippet merge)
 														so the title never nests a second interactive control inside
 														the drag/edit button — Cypress still finds the same testids.
 													-->
-													<Tooltip>
-														<TooltipTrigger>
-															{#snippet child({ props })}
-																<!--
+														<Tooltip>
+															<TooltipTrigger>
+																{#snippet child({ props })}
+																	<!--
 																	Svelte 5: attributes after `{...props}` win. Our own
 																	onclick/onpointerdown would drop bits-ui's handlers —
 																	#onpointerdown is the only guard that stops mousedown
@@ -973,103 +976,191 @@
 																	bits-ui types the child snippet's props as `{}`, so
 																	narrow the two handlers we actually forward — not `any`.
 																-->
-																{@const tip = props as {
-																	onclick?: (e: MouseEvent) => void;
-																	onpointerdown?: (e: PointerEvent) => void;
-																}}
-																<button
-																	{...props}
-																	type="button"
-																	data-testid="agenda-edit-slot-{session.placementId}"
-																	onclick={(e) => {
-																		tip.onclick?.(e);
-																		slotClicked(room, session.startMinutes ?? 0);
+																	{@const tip = props as {
+																		onclick?: (e: MouseEvent) => void;
+																		onpointerdown?: (e: PointerEvent) => void;
 																	}}
-																	onpointerdown={(e) => {
-																		tip.onpointerdown?.(e);
-																		if (!draggable) return;
-																		drag.begin(e, {
-																			placementId: session.placementId,
-																			title: session.title,
-																			roomId: room.id
-																		});
-																	}}
-																	class="flex h-full w-full min-w-0 touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none {draggable
-																		? 'cursor-grab'
-																		: 'cursor-pointer'}"
-																>
-																	<span class="sr-only">{published ? 'Published' : 'Draft'}</span>
-																	<span
-																		data-testid="agenda-session-title"
-																		class="block min-w-0 shrink-0 truncate text-sm leading-tight font-medium"
+																	<button
+																		{...props}
+																		type="button"
+																		data-testid="agenda-edit-slot-{session.placementId}"
+																		onclick={(e) => {
+																			tip.onclick?.(e);
+																			slotClicked(room, session.startMinutes ?? 0);
+																		}}
+																		onpointerdown={(e) => {
+																			tip.onpointerdown?.(e);
+																			if (!draggable) return;
+																			drag.begin(e, {
+																				placementId: session.placementId,
+																				title: session.title,
+																				roomId: room.id
+																			});
+																		}}
+																		class="flex h-full w-full min-w-0 touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none {draggable
+																			? 'cursor-grab'
+																			: 'cursor-pointer'}"
 																	>
-																		{session.title}
-																	</span>
-																	<!-- Clock is secondary: the grid axis already places the block.
+																		<span class="sr-only">{published ? 'Published' : 'Draft'}</span>
+																		<span
+																			data-testid="agenda-session-title"
+																			class="block min-w-0 shrink-0 truncate text-sm leading-tight font-medium"
+																		>
+																			{session.title}
+																		</span>
+																		<!-- Clock is secondary: the grid axis already places the block.
 																	     Kept small so short slots still read the title first, and so
 																	     existing E2E can pin a drop by the range text. A declined
 																	     line used to draw on top of the range (#497); the axis
 																	     already says when, so the label takes that row. -->
-																	{#if !decidedDown}
-																		<span
-																			class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
-																		>
-																			{timeLabel(session.startMinutes)}–{timeLabel(
-																				session.endMinutes
-																			)}
-																		</span>
-																	{/if}
-																	{#if session.submissionStatus === 'rejected'}
-																		<span
-																			class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
-																			data-testid="rejected-placement-badge"
-																			title="This talk was declined but its slot remains — remove or reassign it."
-																		>
-																			Declined
-																		</span>
-																	{:else if session.submissionStatus === 'waitlisted'}
-																		<span
-																			class="text-status-warn block min-w-0 shrink truncate text-xs font-medium"
-																			data-testid="rejected-placement-badge"
-																			title="This talk is waitlisted but its slot remains — remove or reassign it."
-																		>
-																			Waitlisted
-																		</span>
-																	{/if}
+																		{#if !decidedDown}
+																			<span
+																				class="text-muted-foreground block min-w-0 shrink truncate text-[0.65rem] leading-tight tabular-nums"
+																			>
+																				{timeLabel(session.startMinutes)}–{timeLabel(
+																					session.endMinutes
+																				)}
+																			</span>
+																		{/if}
+																		{#if session.submissionStatus === 'rejected'}
+																			<span
+																				class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
+																				data-testid="rejected-placement-badge"
+																				title="This talk was declined but its slot remains — remove or reassign it."
+																			>
+																				Declined
+																			</span>
+																		{:else if session.submissionStatus === 'waitlisted'}
+																			<span
+																				class="text-status-warn block min-w-0 shrink truncate text-xs font-medium"
+																				data-testid="rejected-placement-badge"
+																				title="This talk is waitlisted but its slot remains — remove or reassign it."
+																			>
+																				Waitlisted
+																			</span>
+																		{/if}
 
-																	{#each clashes as clash, ci (ci)}
-																		<span
-																			data-testid="agenda-conflict"
-																			class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
-																			title={clash}
-																		>
-																			{clash}
-																		</span>
-																	{/each}
+																		{#each clashes as clash, ci (ci)}
+																			<span
+																				data-testid="agenda-conflict"
+																				class="text-status-bad block min-w-0 shrink truncate text-xs font-medium"
+																				title={clash}
+																			>
+																				{clash}
+																			</span>
+																		{/each}
 
-																	<span
-																		class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
-																		title={session.trackName
-																			? `${speakerLine} · ${session.trackName}`
-																			: speakerLine}
-																	>
-																		{speakerLine}
-																		{#if session.trackName}<span class="px-1">·</span
-																			>{session.trackName}{/if}
-																	</span>
-																</button>
-															{/snippet}
-														</TooltipTrigger>
-														<TooltipContent side="top" class="max-w-xs">
-															{session.title}
-														</TooltipContent>
-													</Tooltip>
-												</div>
-											{/if}
-										{/each}
+																		<span
+																			class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
+																			title={session.trackName
+																				? `${speakerLine} · ${session.trackName}`
+																				: speakerLine}
+																		>
+																			{speakerLine}
+																			{#if session.trackName}<span class="px-1">·</span
+																				>{session.trackName}{/if}
+																		</span>
+																	</button>
+																{/snippet}
+															</TooltipTrigger>
+															<TooltipContent side="top" class="max-w-xs">
+																{session.title}
+															</TooltipContent>
+														</Tooltip>
+														{#if isHold}
+															<form
+																method="POST"
+																action="?/release"
+																use:enhance={submitting}
+																class="absolute top-0.5 right-0.5"
+															>
+																<input
+																	type="hidden"
+																	name="placementId"
+																	value={session.placementId}
+																/>
+																<Button
+																	type="submit"
+																	variant="ghost"
+																	size="sm"
+																	class="h-6 px-1.5 text-xs"
+																	disabled={busy}
+																	data-testid="agenda-hold-release-{session.placementId}"
+																>
+																	{session.kind === 'reservation' ? 'Release' : 'Remove'}
+																</Button>
+															</form>
+															{#if session.kind === 'reservation'}
+																<span class="text-muted-foreground sr-only">sponsor hold</span>
+															{/if}
+														{/if}
+													</div>
+												{/if}
+											{/each}
+										</div>
 									</div>
+								{/each}
+
+								<!--
+									#560: a room-less hold is a band across every column, at its
+									time — the same reading as the public agenda. Pointer-events
+									stay on the band so Release works; drop targeting is coordinate
+									math, not hit-testing, so the overlay does not steal a drop.
+								-->
+								<div
+									class="pointer-events-none absolute inset-x-0 bottom-0 z-[15]"
+									style="height: {gridHeight}"
+									data-testid="agenda-hold-bands"
+								>
+									{#each spanningDayHolds as slot (slot.placementId)}
+										{@const rows = blockRows(frame, slot)}
+										{#if rows}
+											<div
+												data-testid="agenda-hold"
+												data-kind={slot.kind}
+												data-span="all"
+												data-placement-id={slot.placementId}
+												class="border-border bg-muted/70 pointer-events-auto absolute inset-x-1 overflow-hidden rounded-md border"
+												style="top: {(rows.row - 1) * ROW_REM}rem; height: {rows.span * ROW_REM}rem"
+											>
+												<div class="flex h-full min-w-0 items-start gap-2 px-2 py-0.5">
+													<div class="min-w-0 flex-1">
+														<span
+															data-testid="agenda-session-title"
+															class="block truncate text-sm font-medium"
+														>
+															{slot.title}
+														</span>
+														<span
+															class="text-muted-foreground block truncate text-[0.65rem] tabular-nums"
+														>
+															{timeLabel(slot.startMinutes)}–{timeLabel(slot.endMinutes)}
+															<span class="px-1">·</span>
+															{roomName(slot.roomId)}
+															{#if slot.kind === 'reservation'}
+																<span class="pl-1">· sponsor hold</span>
+															{/if}
+														</span>
+													</div>
+													<form method="POST" action="?/release" use:enhance={submitting}>
+														<input type="hidden" name="placementId" value={slot.placementId} />
+														<Button
+															type="submit"
+															variant="ghost"
+															size="sm"
+															class="h-6 px-1.5 text-xs"
+															disabled={busy}
+															data-testid="agenda-hold-release-{slot.placementId}"
+														>
+															{slot.kind === 'reservation' ? 'Release' : 'Remove'}
+														</Button>
+													</form>
+												</div>
+											</div>
+										{/if}
+									{/each}
 								</div>
-							{/each}
+							</div>
 						</div>
 					</div>
 				</TooltipProvider>
