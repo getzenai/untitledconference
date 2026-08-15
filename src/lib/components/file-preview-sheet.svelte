@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * The file, in a sheet, next to the submission (#423).
+	 * The file, in a sheet, without leaving the page (#423).
 	 *
 	 * Images render natively. PDFs go through an iframe of the same URL the
 	 * download uses — we do not fetch bytes ourselves, so a broken or hostile
@@ -36,7 +36,7 @@
 			<Sheet.Header>
 				<Sheet.Title>{preview.title}</Sheet.Title>
 				<Sheet.Description class="flex flex-wrap items-center gap-x-3 gap-y-1">
-					<span>Beside the submission, so the review does not leave the page.</span>
+					<span>Opens here, so you do not leave the page.</span>
 					<a
 						class="underline underline-offset-4"
 						href={preview.src}

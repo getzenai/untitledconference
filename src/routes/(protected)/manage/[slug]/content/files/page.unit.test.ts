@@ -57,6 +57,24 @@ describe('files library page', () => {
 		expect(body).toContain('Shipping on Fridays');
 		expect(body).toContain('name="id"');
 		expect(body).toContain('action="/manage/devflow-conf-2027/content/files/download"');
+		expect(body).toContain('data-testid="file-open"');
+		expect(body).toContain('/manage/devflow-conf-2027/content/files/7');
+	});
+
+	it('leaves a type we cannot render as a download, with the sentence saying why', () => {
+		const { body } = render(Page, {
+			props: props([
+				file({
+					id: 9,
+					filename: 'notes.docx',
+					contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+				})
+			])
+		});
+
+		expect(body).toContain('notes.docx');
+		expect(body).not.toContain('data-testid="file-open"');
+		expect(body).toContain('We cannot show this type here — download it instead.');
 	});
 
 	// The second option lives in the popover the shadcn select opens, so it is not
