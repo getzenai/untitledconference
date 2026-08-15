@@ -553,17 +553,44 @@ describe('saving a review', () => {
 		expect(revised?.own.comment).toBe('Better');
 	});
 
-	it('drops a rating outside its own scale instead of clamping it', async () => {
+	it('refuses a rating outside its own scale, and says which one and why (#477)', async () => {
 		const now = await conferenceNow();
-
 		await saveReview(now, ME, mine, {
-			answers: { [criterionId]: '50' },
+			answers: { [criterionId]: '3' },
 			comment: '',
 			submit: false
 		});
 
-		// Clamping would turn a typo into an opinion the reviewer never held.
-		expect((await reviewerSubmission(now, ME, mine))?.criteria[0].value).toBeNull();
+		// It used to be dropped: not clamped — clamping turns a typo into an opinion
+		// the reviewer never held — but not refused either, so the reviewer was told
+		// their progress was saved while the column went blank behind them.
+		expect(
+			await saveReview(now, ME, mine, {
+				answers: { [criterionId]: '50' },
+				comment: '',
+				submit: false
+			})
+		).toEqual({
+			ok: false,
+			reason: 'rating_off_scale',
+			message: 'Relevance is scored out of 5, so 50 is off the scale.'
+		});
+
+		// And nothing was written on the way to the refusal — the earlier 3 stands.
+		expect((await reviewerSubmission(now, ME, mine))?.criteria[0].value).toBe(3);
+	});
+
+	it('refuses the same number on a submit, not only on a draft', async () => {
+		const now = await conferenceNow();
+
+		expect(
+			await saveReview(now, ME, mine, {
+				answers: { [criterionId]: '7' },
+				comment: 'Loved it',
+				submit: true
+			})
+		).toMatchObject({ ok: false, reason: 'rating_off_scale' });
+		expect((await reviewerSubmission(now, ME, mine))?.own.status).toBe('assigned');
 	});
 
 	it('emails nobody — deciding and telling people are separate acts', async () => {
@@ -813,20 +840,23 @@ describe('the two ways a reviewer could buy the peers cheaply', () => {
 		expect((await reviewerSubmission(blind, ME, mine))?.peersWithheld).toBe(true);
 	});
 
-	it('refuses an out-of-scale rating as the only answer — it is not stored either', async () => {
+	it('refuses an out-of-scale rating as the only answer, and does not open the peers', async () => {
 		const blind = await setMode('blind_until_reviewed');
 		await peerReviews(mine, '5');
 
-		// 50 on a five-point scale is dropped by `writeScore`. If it counted as an
-		// answer here, "submit 50" would be the empty submit wearing a number.
+		// 50 on a five-point scale is refused outright now (#477); it used to fall
+		// through to `empty_submit`, because `writeScore` dropped it and there was
+		// nothing left. Either way it must not count as having reviewed — that is
+		// what would cost the peers their privacy.
 		const result = await saveReview(blind, ME, mine, {
 			answers: { [criterionId]: '50' },
 			comment: '',
 			submit: true
 		});
 
-		expect(result).toEqual({ ok: false, reason: 'empty_submit' });
+		expect(result).toMatchObject({ ok: false, reason: 'rating_off_scale' });
 		expect((await reviewerSubmission(blind, ME, mine))?.peers).toEqual([]);
+		expect((await reviewerSubmission(blind, ME, mine))?.peersWithheld).toBe(true);
 	});
 
 	it('accepts a comment with no scores — that is a judgement, not an empty submit', async () => {

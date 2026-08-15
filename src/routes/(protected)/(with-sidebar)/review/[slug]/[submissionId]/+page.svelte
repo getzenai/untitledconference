@@ -14,6 +14,7 @@
 	import { enhance } from '$lib/forms/enhance';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { ratingAnswerError } from '$lib/conference/rating-answer';
 	import { formatScore } from '$lib/conference/scoring';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
@@ -88,10 +89,44 @@
 	 * review with it. Recuse still cancels first — the wrapper only holds the
 	 * page when a POST actually ran and threw.
 	 */
+	/**
+	 * The scores as they currently read in the boxes (#477).
+	 *
+	 * Kept here rather than left to the browser because the browser's answer to a
+	 * 7 on a 1–5 scale was a native bubble — its own font, its own wording, on a
+	 * page that has both of its own — and because that bubble was doing more than
+	 * it looked: a number past the scale is DROPPED on the way to the database,
+	 * not clamped, so anybody who got past the bubble saved a blank criterion and
+	 * was told their progress was saved. The form is `novalidate`; the rule is
+	 * ours, and `saveReview` asks it again on the POST.
+	 */
+	let typed = $state<Record<number, string>>({});
+
+	/** What the box reads now: what they typed, or what was stored before they did. */
+	const scoreOf = (criterion: { id: number; value: number | null }) =>
+		typed[criterion.id] ?? (criterion.value === null ? '' : String(criterion.value));
+
+	const scoreErrors = $derived(
+		new Map(
+			s.criteria
+				.filter((criterion) => criterion.kind === 'rating')
+				.map((criterion) => [criterion.id, ratingAnswerError(scoreOf(criterion), criterion)])
+				.filter((entry): entry is [number, string] => entry[1] !== null)
+		)
+	);
+
 	const submitting: SubmitFunction = ({ submitter, cancel }) => {
 		if (isRecuse(submitter) && !allowRecuse) {
 			cancel();
 			confirmRecuseOpen = true;
+			return;
+		}
+		// Handing work back is not scoring, so a bad number does not stand in its
+		// way; anything that writes the scorecard does wait for the number to make
+		// sense. The message is already under the field — there is nothing a round
+		// trip would add.
+		if (!isRecuse(submitter) && scoreErrors.size > 0) {
+			cancel();
 			return;
 		}
 		// The confirm click re-submits the same button; that one goes through.
@@ -305,6 +340,7 @@
 		bind:this={reviewForm}
 		method="POST"
 		action="?/save&round={s.round.id}"
+		novalidate
 		use:enhance={submitting}
 		class="border-border bg-card h-fit space-y-3 rounded-lg border p-4"
 	>
@@ -372,6 +408,7 @@
 				</span>
 
 				{#if criterion.kind === 'rating'}
+					{@const scoreError = scoreErrors.get(criterion.id)}
 					<input
 						type="number"
 						name="criterion-{criterion.id}"
@@ -379,9 +416,22 @@
 						max={criterion.scaleMax ?? undefined}
 						step="1"
 						value={criterion.value ?? ''}
+						oninput={(event) => (typed[criterion.id] = event.currentTarget.value)}
 						disabled={locked}
-						class="{inputClass} mt-1 w-full"
+						aria-invalid={scoreError ? 'true' : undefined}
+						aria-describedby={scoreError ? `criterion-${criterion.id}-error` : undefined}
+						class="{inputClass} mt-1 w-full {scoreError ? 'border-status-bad' : ''}"
+						data-testid="criterion-{criterion.id}"
 					/>
+					{#if scoreError}
+						<span
+							id="criterion-{criterion.id}-error"
+							class="text-status-bad mt-1 block text-xs"
+							data-testid="criterion-error"
+						>
+							{scoreError}
+						</span>
+					{/if}
 				{:else if criterion.kind === 'select'}
 					<AppSelect
 						name="criterion-{criterion.id}"

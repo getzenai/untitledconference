@@ -20,6 +20,7 @@
  * takes that choice away from the organizer.
  */
 import { peerDisplayLabels } from '$lib/conference/anonymous-reviewers';
+import { ratingAnswerError } from '$lib/conference/rating-answer';
 import {
 	canSeePeerReviews,
 	sortQueue,
@@ -807,12 +808,35 @@ function hasSomethingToSay(criteria: Criterion[], draft: ReviewDraft): boolean {
 	});
 }
 
+/**
+ * The first rating that is not a number on its own scale, phrased for the
+ * reviewer, or null when every answer fits (#477).
+ *
+ * One message rather than a list per field: this is the last line of defence
+ * behind a form that already marks the offending field, and a POST that gets
+ * here has at most one thing wrong with it in practice.
+ */
+function ratingProblem(criteria: Criterion[], draft: ReviewDraft): string | null {
+	for (const criterion of criteria) {
+		if (criterion.kind !== 'rating') continue;
+		const problem = ratingAnswerError(draft.answers[criterion.id] ?? '', criterion);
+		if (problem) return problem;
+	}
+	return null;
+}
+
 export type SaveReviewResult =
 	| { ok: true }
 	/** Not this reviewer's to write — the caller owes a 404, not a validation message. */
 	| { ok: false; reason: 'not_assigned' }
 	/** Submitting nothing at all; saving nothing is still fine. */
 	| { ok: false; reason: 'empty_submit' }
+	/**
+	 * A rating outside its own scale, on a draft as much as on a submit. It
+	 * carries its own sentence because only this layer knows which criterion is
+	 * called what (#477).
+	 */
+	| { ok: false; reason: 'rating_off_scale'; message: string }
 	/** The speaker took the talk back while this form was open. */
 	| { ok: false; reason: 'withdrawn' }
 	/**
@@ -876,11 +900,19 @@ export async function saveReview(
 	const criteria = await db
 		.select({
 			id: scorecardCriterionTable.id,
+			label: scorecardCriterionTable.label,
 			kind: scorecardCriterionTable.kind,
 			scaleMax: scorecardCriterionTable.scaleMax
 		})
 		.from(scorecardCriterionTable)
 		.where(eq(scorecardCriterionTable.reviewRoundId, own.roundId));
+
+	// Before anything is written, and for the draft as well as the submit: an
+	// off-scale number used to reach `writeScore`, which drops it rather than
+	// clamping it (a mistyped 50 is not a 5). Dropping it quietly told the
+	// reviewer their score was saved when the column had gone blank.
+	const offScale = ratingProblem(criteria, draft);
+	if (offScale) return { ok: false, reason: 'rating_off_scale', message: offScale };
 
 	if (draft.submit && !hasSomethingToSay(criteria, draft)) {
 		return { ok: false, reason: 'empty_submit' };
@@ -963,7 +995,7 @@ export async function recuseReview(
 		: { ok: false, reason: 'not_found' };
 }
 
-type Criterion = { id: number; kind: string; scaleMax: number | null };
+type Criterion = { id: number; label: string; kind: string; scaleMax: number | null };
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** One answer, written where the reviewer's previous one was. */

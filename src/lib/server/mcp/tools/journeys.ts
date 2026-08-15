@@ -651,6 +651,9 @@ function submitReviewTool(ctx: McpContext): AnyMcpToolDefinition {
 				roundId
 			);
 			if (!result.ok) {
+				// This one already knows which criterion and what its scale is; a
+				// generic sentence here would throw that away (#477).
+				if (result.reason === 'rating_off_scale') throw new McpToolError(result.message);
 				const messages: Record<(typeof result)['reason'], string> = {
 					not_assigned: `No assignment for submission ${submissionId} on "${conferenceSlug}".`,
 					empty_submit: 'A review needs at least a score or a comment.',

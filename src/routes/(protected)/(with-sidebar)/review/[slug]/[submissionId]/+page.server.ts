@@ -128,6 +128,13 @@ export const actions: Actions = {
 					message: 'This review round has not opened yet, so nothing can be filed in it.'
 				});
 			}
+			// A number off its own scale, and the sentence says which criterion and
+			// what the scale is (#477). Not "before submitting": this refusal happens
+			// to a draft too, and telling somebody who pressed Save progress that they
+			// failed to submit sends them looking for a button they did not press.
+			if (saved.reason === 'rating_off_scale') {
+				return fail(400, { message: saved.message });
+			}
 			if (saved.reason === 'round_closed') {
 				return fail(409, {
 					message: 'This review round is closed. Reviews can no longer be filed or changed.'
