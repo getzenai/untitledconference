@@ -17,7 +17,7 @@ vi.mock('$lib/server/logger', () => ({
 }));
 
 import { McpAuthError, type McpContext } from './context';
-import { McpToolError, registerMcpTool } from './tool-helpers';
+import { McpToolError, registerMcpTool, writingToolNames } from './tool-helpers';
 
 const ctx: McpContext = { userId: 'user-1', organizationId: 'org-1', clientId: 'client-1' };
 
@@ -38,6 +38,7 @@ function runTool(handler: () => Promise<Record<string, unknown>>): Promise<CallT
 	registerMcpTool(stubServer, ctx, {
 		name: 'test_tool',
 		description: 'Test tool',
+		writes: false,
 		inputSchema: {},
 		handler
 	});
@@ -64,6 +65,7 @@ describe('registerMcpTool', () => {
 		registerMcpTool({ registerTool } as unknown as McpServer, ctx, {
 			name: 'get_my_profile',
 			description: 'Get the profile of the authenticated user.',
+			writes: false,
 			inputSchema: {},
 			handler: async () => ({})
 		});
@@ -180,5 +182,28 @@ describe('registerMcpTool', () => {
 			organizationId: 'org-1',
 			success: true
 		});
+	});
+});
+
+describe('writingToolNames', () => {
+	it('returns only the tools that said they write', () => {
+		expect(
+			writingToolNames([
+				{
+					name: 'list_rooms',
+					description: 'read',
+					writes: false,
+					inputSchema: {},
+					handler: async () => ({})
+				},
+				{
+					name: 'create_room',
+					description: 'write',
+					writes: true,
+					inputSchema: {},
+					handler: async () => ({})
+				}
+			])
+		).toEqual(['create_room']);
 	});
 });

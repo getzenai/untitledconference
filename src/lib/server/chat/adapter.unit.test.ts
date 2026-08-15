@@ -43,6 +43,7 @@ describe('toLanguageModelTool', () => {
 		const def: AnyMcpToolDefinition = {
 			name: 'get_review_assignment',
 			description: 'test',
+			writes: false,
 			inputSchema: {},
 			handler: async () => {
 				throw new McpToolError('No conference "other" that you review for.');

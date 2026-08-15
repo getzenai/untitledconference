@@ -119,6 +119,7 @@ async function speakerInput(ctx: McpContext): Promise<SubmissionInput['speaker']
 function listOpenCfps(): AnyMcpToolDefinition {
 	return {
 		name: 'list_open_cfps',
+		writes: false,
 		description:
 			'List published conferences whose call for papers is currently open. ' +
 			'These are the slugs submit_proposal accepts. A draft conference or a ' +
@@ -134,6 +135,7 @@ function listOpenCfps(): AnyMcpToolDefinition {
 function submitProposal(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'submit_proposal',
+		writes: true,
 		description:
 			'Create a draft proposal on an open call. You become the speaker. A draft needs only a title. ' +
 			'It is NOT handed in yet — call finalize_proposal when it is ready, which is ' +
@@ -186,6 +188,7 @@ function submitProposal(ctx: McpContext): AnyMcpToolDefinition {
 function updateProposal(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'update_proposal',
+		writes: true,
 		description:
 			'Edit one of your proposals while the call is still open and no decision ' +
 			'has been made. Same function as the CFP form (`saveSubmission`). Omit a ' +
@@ -261,6 +264,7 @@ function updateProposal(ctx: McpContext): AnyMcpToolDefinition {
 function finalizeProposal(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'finalize_proposal',
+		writes: true,
 		description:
 			'Hand in one of your drafts — the same transition as the submit button on the ' +
 			'CFP form. Nothing you wrote changes; only the status does. What has to be ' +
@@ -333,6 +337,7 @@ function finalizeProposal(ctx: McpContext): AnyMcpToolDefinition {
 function withdrawProposal(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'withdraw_proposal',
+		writes: true,
 		description:
 			'Withdraw one of your proposals. Only drafts, submitted and in-review ' +
 			'proposals can be withdrawn — a decision has already been read and those ' +
@@ -357,6 +362,7 @@ function withdrawProposal(ctx: McpContext): AnyMcpToolDefinition {
 function listMyProposals(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_my_proposals',
+		writes: false,
 		description:
 			'List the proposals you are a speaker on, with status. Same data as the speaker portal.',
 		inputSchema: {},
@@ -381,6 +387,7 @@ function listMyProposals(ctx: McpContext): AnyMcpToolDefinition {
 function updateMySpeakerProfile(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'update_my_speaker_profile',
+		writes: true,
 		description:
 			'Update your speaker profile — name, bio, job title, company, photo URL and links. ' +
 			'Same functions as the speaker portal (`updateOwnProfile`, `setOwnHeadshot`). ' +
@@ -510,6 +517,7 @@ function updateMySpeakerProfile(ctx: McpContext): AnyMcpToolDefinition {
 function listMyReviewAssignments(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_my_review_assignments',
+		writes: false,
 		description:
 			'List the reviews assigned to you. Pass a conference slug to stay on one conference, ' +
 			'or omit it to see every conference you review for. Same queue as the reviewer screen ' +
@@ -545,6 +553,7 @@ function listMyReviewAssignments(ctx: McpContext): AnyMcpToolDefinition {
 function getReviewAssignment(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_review_assignment',
+		writes: false,
 		description:
 			'Get one assigned submission with the rubric and your current answers. ' +
 			'Same function as the reviewer scorecard (`reviewerSubmission`). Peer reviews ' +
@@ -607,6 +616,7 @@ function getReviewAssignment(ctx: McpContext): AnyMcpToolDefinition {
 function submitReviewTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'submit_review',
+		writes: true,
 		description:
 			'File your review for an assigned submission. Scores are keyed by criterion id ' +
 			'from get_review_assignment. Writing again overwrites, same as the reviewer form ' +

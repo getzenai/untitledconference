@@ -26,6 +26,11 @@ export class McpToolError extends Error {
 export interface McpToolDefinition<Shape extends ZodRawShapeCompat> {
 	name: string;
 	description: string;
+	/**
+	 * Whether the handler mutates. Required so the next tool someone adds
+	 * cannot write without saying so — chat builds `toolApproval` from this.
+	 */
+	writes: boolean;
 	inputSchema: Shape;
 	handler: (args: ShapeOutput<Shape>) => Promise<Record<string, unknown>>;
 }
@@ -91,6 +96,11 @@ export function classifyError(
  */
 /** Protocol-free tool list item. The MCP adapter loops this; REST will too. */
 export type AnyMcpToolDefinition = McpToolDefinition<ZodRawShapeCompat>;
+
+/** Names of tools that mutate. Chat builds `toolApproval` from this; MCP and REST ignore it. */
+export function writingToolNames(tools: readonly AnyMcpToolDefinition[]): string[] {
+	return tools.filter((tool) => tool.writes).map((tool) => tool.name);
+}
 
 export function registerMcpTools(
 	server: McpServer,

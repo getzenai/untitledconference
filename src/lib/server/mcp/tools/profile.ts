@@ -27,6 +27,7 @@ export function registerProfileTools(server: McpServer, ctx: McpContext): void {
 function getMyProfile(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_my_profile',
+		writes: false,
 		description:
 			'Get the profile of the authenticated user (the owner of the access token), ' +
 			'including the organization this connection is acting on.',
@@ -63,6 +64,7 @@ function getMyProfile(ctx: McpContext): AnyMcpToolDefinition {
 function listMyOrganizations(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_my_organizations',
+		writes: false,
 		description:
 			'List the organizations the authenticated user is a member of, oldest membership first, ' +
 			'with the role held in each.',

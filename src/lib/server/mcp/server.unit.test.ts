@@ -27,6 +27,32 @@ describe('the MCP tool registry', () => {
 		expect(names).toEqual([...new Set(names)]);
 	});
 
+	// Chat builds toolApproval from `writes`. A tool that is in neither
+	// the write set nor the read set used to be a silent write; the field
+	// is required on the type, and this holds that every definition answered.
+	it('makes every tool say whether it writes', () => {
+		const tools = allTools(ctx);
+		expect(tools.length).toBeGreaterThan(0);
+		for (const tool of tools) {
+			expect(typeof tool.writes, tool.name).toBe('boolean');
+		}
+	});
+
+	it('treats a mutation as a write and a list as not — including lists that live next to writers', () => {
+		const byName = Object.fromEntries(allTools(ctx).map((tool) => [tool.name, tool.writes]));
+		expect(byName.decide_submissions).toBe(true);
+		expect(byName.submit_review).toBe(true);
+		expect(byName.create_conference).toBe(true);
+		expect(byName.notify_speakers).toBe(true);
+		expect(byName.create_room).toBe(true);
+		expect(byName.list_reviewers).toBe(false);
+		expect(byName.list_review_rounds).toBe(false);
+		expect(byName.list_session_formats).toBe(false);
+		expect(byName.list_tracks).toBe(false);
+		expect(byName.get_agenda).toBe(false);
+		expect(byName.get_my_profile).toBe(false);
+	});
+
 	it('exports the organizer write tools #298 adds', () => {
 		const names = allTools(ctx).map((tool) => tool.name);
 		expect(names).toEqual(
