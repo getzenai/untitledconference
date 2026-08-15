@@ -744,7 +744,12 @@
 										{#each round.reviewers as reviewer (reviewer.userId)}
 											<li class="flex items-center justify-between gap-3 py-2 text-sm">
 												<div class="min-w-0">
-													<p class="truncate font-medium">{reviewer.name}</p>
+													<p class="flex min-w-0 items-center gap-2">
+														<span class="truncate font-medium">{reviewer.name}</span>
+														{#if reviewer.status}
+															<StatusBadge status={reviewer.status} />
+														{/if}
+													</p>
 													<p class="text-muted-foreground truncate text-xs">{reviewer.email}</p>
 												</div>
 												<form method="POST" action="?/assignment">
@@ -760,7 +765,7 @@
 																size="sm"
 																disabled={Boolean(reviewer.unassignBlockReason)}
 															>
-																Unassign · {reviewer.status}
+																Unassign
 															</Button>
 															{#if reviewer.unassignBlockReason}
 																<p
