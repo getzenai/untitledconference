@@ -49,11 +49,9 @@
 		to be there; <code class="text-foreground">email</code>,
 		<code class="text-foreground">job title</code>, <code class="text-foreground">company</code>,
 		<code class="text-foreground">bio</code>, <code class="text-foreground">notes</code> and
-		<code class="text-foreground">status</code> are used when present and anything else is ignored.
-		A speaker already on the roster is skipped by <strong>email</strong>, so sending the same file
-		twice is safe — but two rows naming the same person under different addresses become two
-		speakers, because a name is not an identity and merging Alex Chen with Alex Chen would
-		eventually merge two real people.
+		<code class="text-foreground">status</code> are used when present and anything else is ignored. A
+		matching email is skipped, so sending the same file twice is safe. Two rows with different emails
+		become two people — even if the names match. Check the email column before you import.
 	</p>
 
 	<form

@@ -1,9 +1,14 @@
 /**
  * Contacts directory surface (CRM-01 / CRM-02 / CRM-12): table, filters, overview.
  */
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
+
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
 vi.mock('$app/forms', () => ({
 	enhance: () => ({})
@@ -131,6 +136,13 @@ describe('contacts directory page', () => {
 		expect(body).toContain('data-testid="contacts-segments-list"');
 		expect(body).toContain('AI Experts');
 		expect(body).toContain('/contacts?tag=AI');
+	});
+
+	it('tells the organizer what adding a contact does, not that we skipped a copy (#421)', () => {
+		expect(source).toContain('They appear in this directory');
+		expect(source).toContain('Open their page to add them to an event');
+		expect(source).not.toMatch(/no copy/i);
+		expect(source).not.toContain('org-wide profile');
 	});
 
 	it('offers add and import as header buttons, not as cards below the table (#419)', () => {

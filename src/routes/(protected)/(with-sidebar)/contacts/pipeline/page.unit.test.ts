@@ -63,6 +63,8 @@ describe('pipeline page', () => {
 		expect(body).toContain('data-testid="pipeline-heading"');
 		expect(body).toContain('data-testid="pipeline-board"');
 		expect(body).toContain('data-testid="pipeline-enroll"');
+		expect(body).toContain('They show up on this board');
+		expect(body).not.toContain('duplicate profile');
 		expect(body).toContain('Researching');
 		expect(body).toContain('Identified');
 		expect(body).toContain('Contacted');

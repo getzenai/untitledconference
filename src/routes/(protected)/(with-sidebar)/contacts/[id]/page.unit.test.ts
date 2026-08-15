@@ -63,6 +63,10 @@ describe('contact detail page', () => {
 		expect(body).toContain('Shipping faster');
 		expect(body).toContain('data-testid="contact-push"');
 		expect(body).toContain('data-testid="contact-push-submit"');
+		// #421: say what happens for them, not that we declined to copy a row.
+		expect(body).toContain('Adds them to this event');
+		expect(body).toContain('Edits here show up on every event they are on');
+		expect(body).not.toContain('no copy');
 	});
 
 	it('surfaces same-name duplicates with a merge action (CRM-06)', () => {

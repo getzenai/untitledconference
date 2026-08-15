@@ -182,7 +182,7 @@
 	<section class="border-border bg-card max-w-3xl rounded-lg border p-4" data-testid="contact-push">
 		<h2 class="text-sm font-semibold">Add to an event</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			Puts this contact on the event’s speaker roster. Profile data stays here — no copy.
+			Adds them to this event’s speaker roster. Edits here show up on every event they are on.
 		</p>
 		{#if data.availableEvents.length === 0}
 			<p class="text-muted-foreground mt-3 text-sm" data-testid="contact-push-empty">

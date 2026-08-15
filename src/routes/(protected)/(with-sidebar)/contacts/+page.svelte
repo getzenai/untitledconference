@@ -90,7 +90,7 @@
 						<Dialog.Header>
 							<Dialog.Title>Add a contact</Dialog.Title>
 							<Dialog.Description>
-								Creates an org-wide profile. Push them onto an event from their detail page.
+								They appear in this directory. Open their page to add them to an event.
 							</Dialog.Description>
 						</Dialog.Header>
 						<form
