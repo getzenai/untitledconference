@@ -11,16 +11,28 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
+	import { enhance } from '$lib/forms/enhance';
+	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import FeatherConfetti from '$lib/components/feather-confetti.svelte';
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
+	import { proposalWithdrawWarning } from '$lib/conference/proposal-withdraw-warning';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 
-	let { data } = $props();
+	let { data, form } = $props();
 
 	const s = $derived(data.submission);
 	const zone = readerZone();
@@ -85,6 +97,22 @@
 		if (answer.kind !== 'boolean') return answer.value;
 		return answer.value === 'true' ? 'Yes' : 'No';
 	};
+
+	const warning = $derived(proposalWithdrawWarning(s.conferenceName));
+	let busy = $state(false);
+	let confirmWithdraw = $state(false);
+
+	const submitting = () => {
+		busy = true;
+		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+			try {
+				await update(formUpdateOptions('edit'));
+			} finally {
+				busy = false;
+				confirmWithdraw = false;
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -107,7 +135,7 @@
 				{/if}
 			</p>
 		</div>
-		<Badge variant={s.status === 'draft' ? 'outline' : 'secondary'}>
+		<Badge variant={s.status === 'draft' || s.status === 'withdrawn' ? 'outline' : 'secondary'}>
 			{statusLabel[s.status] ?? s.status}
 		</Badge>
 	</div>
@@ -127,14 +155,61 @@
 					{editClosedReason} The text stays as it is.
 				{/if}
 			</p>
-			{#if callOpen}
-				<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline" class="mt-3">
-					Edit this proposal
-				</Button>
-			{:else}
-				<Button size="sm" variant="outline" class="mt-3" disabled data-testid="edit-closed">
-					Editing closed
-				</Button>
+			<div class="mt-3 flex flex-wrap gap-2">
+				{#if callOpen}
+					<Button href="/portal/submissions/{s.id}/edit" size="sm" variant="outline">
+						Edit this proposal
+					</Button>
+				{:else}
+					<Button size="sm" variant="outline" disabled data-testid="edit-closed">
+						Editing closed
+					</Button>
+				{/if}
+				{#if data.canWithdraw}
+					<form id="withdraw-form" method="POST" action="?/withdraw" use:enhance={submitting}>
+						<Button
+							type="submit"
+							size="sm"
+							variant="outline"
+							disabled={busy}
+							data-testid="withdraw-proposal"
+							onclick={(event: MouseEvent) => {
+								event.preventDefault();
+								confirmWithdraw = true;
+							}}
+						>
+							Withdraw this proposal
+						</Button>
+					</form>
+					<AlertDialog bind:open={confirmWithdraw}>
+						<AlertDialogContent data-testid="withdraw-dialog">
+							<AlertDialogHeader>
+								<AlertDialogTitle>{warning.title}</AlertDialogTitle>
+								<AlertDialogDescription>
+									{warning.consequence}
+									<span class="mt-2 block">{warning.reversal}</span>
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel data-testid="withdraw-cancel"
+									>Keep this proposal</AlertDialogCancel
+								>
+								<Button
+									type="submit"
+									form="withdraw-form"
+									variant="destructive"
+									disabled={busy}
+									data-testid="withdraw-confirm"
+								>
+									Withdraw it
+								</Button>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				{/if}
+			</div>
+			{#if form?.withdrawError}
+				<p class="text-status-bad mt-3 text-sm">{form.withdrawError}</p>
 			{/if}
 		</div>
 	{:else if s.status === 'draft'}
@@ -191,6 +266,13 @@
 			<p class="font-medium">Waitlisted.</p>
 			<p class="text-muted-foreground mt-1">
 				This proposal is on the reserve list. You will hear if a place opens up.
+			</p>
+		</div>
+	{:else if s.status === 'withdrawn'}
+		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
+			<p class="font-medium">This proposal is withdrawn.</p>
+			<p class="text-muted-foreground mt-1">
+				The organizers will not review it. If you change your mind you will need to submit again.
 			</p>
 		</div>
 	{/if}

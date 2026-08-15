@@ -3,7 +3,7 @@
  */
 import { db } from '$lib/server/db';
 import { member, organization, user } from '$lib/server/db/auth-schema';
-import { submissionTable } from '$lib/server/db/conference/cfp-schema';
+import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	membershipTable,
@@ -241,6 +241,36 @@ describe('loadHomeDashboard', () => {
 			await db.delete(submissionTable).where(eq(submissionTable.id, waiting.id));
 			await db.delete(submissionTable).where(eq(submissionTable.id, covered.id));
 			await db.delete(reviewRoundTable).where(eq(reviewRoundTable.id, later[0].id));
+		}
+	});
+
+	it('keeps a withdrawn proposal on the speaker hub so the badge can name it (#663)', async () => {
+		const [row] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId,
+				title: 'Taken back',
+				status: 'withdrawn',
+				submittedAt: new Date()
+			})
+			.returning();
+		await db.insert(submissionSpeakerTable).values({
+			submissionId: row.id,
+			speakerProfileId: profileId,
+			isPrimary: true,
+			position: 0
+		});
+
+		try {
+			const hub = await loadHomeDashboard(speakerId);
+			expect(hub.openSubmissions).toMatchObject([
+				{ id: row.id, title: 'Taken back', status: 'withdrawn' }
+			]);
+		} finally {
+			await db
+				.delete(submissionSpeakerTable)
+				.where(eq(submissionSpeakerTable.submissionId, row.id));
+			await db.delete(submissionTable).where(eq(submissionTable.id, row.id));
 		}
 	});
 

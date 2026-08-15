@@ -20,7 +20,7 @@ import {
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { load } from './+page.server';
+import { actions, load } from './+page.server';
 
 const suffix = `portal-closes-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const organizationId = `org-${suffix}`;
@@ -32,7 +32,13 @@ const draftOnly = new Date('2028-09-09T09:09:00.000Z');
 let conferenceId = 0;
 let submissionId = 0;
 
-type Loaded = { closesAt: Date | null; callState: string; closedByOrganizer: boolean };
+type Loaded = {
+	closesAt: Date | null;
+	callState: string;
+	closedByOrganizer: boolean;
+	canWithdraw: boolean;
+	submission: { status: string };
+};
 
 const visit = async (): Promise<Loaded> =>
 	(await load({
@@ -144,5 +150,53 @@ describe('the close instant on a proposal', () => {
 		expect(data.closesAt?.toISOString()).toBe(announced.toISOString());
 		expect(data.callState).toBe('closed');
 		expect(data.closedByOrganizer).toBe(true);
+	});
+});
+
+describe('withdrawing from the receipt (#663)', () => {
+	const event = (userId: string) =>
+		({
+			params: { id: String(submissionId) },
+			locals: { user: { id: userId } }
+		}) as unknown as Parameters<typeof actions.withdraw>[0];
+
+	it('writes through withdrawSubmission when the call is open', async () => {
+		await db
+			.update(cfpFormTable)
+			.set({ status: 'published' })
+			.where(and(eq(cfpFormTable.conferenceId, conferenceId), eq(cfpFormTable.status, 'closed')));
+
+		const loaded = await visit();
+		expect(loaded.callState).toBe('open');
+		expect(loaded.canWithdraw).toBe(true);
+
+		const result = await actions.withdraw(event(speakerUserId));
+		expect(result).toEqual({ withdrawn: true });
+
+		const again = await visit();
+		expect(again.submission.status).toBe('withdrawn');
+		expect(again.canWithdraw).toBe(false);
+	});
+
+	it('refuses a closed call without writing', async () => {
+		await db
+			.update(submissionTable)
+			.set({ status: 'in_review' })
+			.where(eq(submissionTable.id, submissionId));
+		await db
+			.update(cfpFormTable)
+			.set({ status: 'closed' })
+			.where(
+				and(eq(cfpFormTable.conferenceId, conferenceId), eq(cfpFormTable.status, 'published'))
+			);
+
+		const result = await actions.withdraw(event(speakerUserId));
+		expect(result).toMatchObject({ status: 409, data: { withdrawError: 'This call has closed.' } });
+
+		const [row] = await db
+			.select({ status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row?.status).toBe('in_review');
 	});
 });

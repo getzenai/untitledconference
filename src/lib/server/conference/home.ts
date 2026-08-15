@@ -6,7 +6,7 @@
  * hub answers four concrete questions instead:
  *
  * - Which events do I organize?
- * - Which proposals of mine are still open?
+ * - Which proposals of mine are still open — and which I just took back (#663)?
  * - Which reviews am I still expected to file?
  * - Can I jump into speaker sourcing?
  *
@@ -38,7 +38,8 @@ import { and, count, desc, eq, inArray, ne } from 'drizzle-orm';
 /** Cap on each list so the hub stays a glance, not a second workspace. */
 export const HOME_LIST_LIMIT = 6;
 
-const OPEN_SUBMISSION_STATUSES = new Set(['draft', 'submitted', 'in_review']);
+/** Still listed after the speaker takes it back, so `/home` can say Withdrawn (#663). */
+const OPEN_SUBMISSION_STATUSES = new Set(['draft', 'submitted', 'in_review', 'withdrawn']);
 
 export type HomeOpenReview = {
 	submissionId: number;
