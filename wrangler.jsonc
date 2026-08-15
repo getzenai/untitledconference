@@ -139,6 +139,14 @@
 		// deploy only checks that a key is *present* (#598). Change the two
 		// together, or the chat ships green and answers every reviewer with an
 		// auth error.
-		"AI_CHAT_MODEL": "workers-ai/@cf/meta/llama-3.3-70b-instruct-fp8-fast"
+		//
+		// Measured, not read off a datasheet (#660): probe run 31910437582 asked
+		// six catalogue models the reviewer's question in this chat's own shape —
+		// streaming, tool_choice auto. Four answered with a tool call, two did not,
+		// and the one that shipped first (llama-3.3-70b) is the one that wrote the
+		// call out as chat text. glm-4.7-flash was the only candidate that said
+		// what it was about to do *and* sent the call, which is the behaviour a
+		// person watching a stream needs.
+		"AI_CHAT_MODEL": "workers-ai/@cf/zai-org/glm-4.7-flash"
 	}
 }
