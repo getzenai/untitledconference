@@ -344,13 +344,19 @@
 	<title>Settings — {data.conference.name}</title>
 </svelte:head>
 
+<!--
+	The bar keeps its rule across the whole width; the words inside it sit on the
+	same column as the nav and the sections below (#424).
+-->
 <div class="border-border bg-card border-b px-6 py-5">
-	<h1 class="text-lg font-semibold tracking-tight">Settings</h1>
-	<p class="text-muted-foreground mt-0.5 text-sm">
-		Whether this conference is public, plus its dates, rooms, tracks and session formats. Reviewer
-		visibility is under
-		<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>.
-	</p>
+	<div class="mx-auto max-w-[61rem]">
+		<h1 class="text-lg font-semibold tracking-tight">Settings</h1>
+		<p class="text-muted-foreground mt-0.5 text-sm">
+			Whether this conference is public, plus its dates, rooms, tracks and session formats. Reviewer
+			visibility is under
+			<a class="underline underline-offset-4" href="{base}/people">Reviewer pool</a>.
+		</p>
+	</div>
 </div>
 
 <!--
@@ -365,8 +371,17 @@
 
 	Desktop: sticky left column. Narrow screens: horizontal jump strip so the map
 	is still reachable without a sidebar.
+
+	Centred only from `lg` (#424). Below it the jump strip bleeds to the window
+	edge with `-mx-6`, and a container narrower than the window would leave that
+	strip stranded with a seam on either side. 61rem is what the two columns
+	actually occupy — 11rem of nav, 2rem of gap, 48rem of sections — so the block
+	centres on its own width rather than inside a wider box.
 -->
-<div class="px-6 py-5 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start lg:gap-8">
+<div
+	class="px-6 py-5 lg:mx-auto lg:grid lg:w-full lg:max-w-[61rem] lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start lg:gap-8"
+	data-testid="page-column"
+>
 	<nav
 		class="border-border bg-background/95 sticky top-0 z-10 -mx-6 mb-6 border-b px-6 py-2 backdrop-blur lg:top-5 lg:mx-0 lg:mb-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none"
 		aria-label="Settings sections"

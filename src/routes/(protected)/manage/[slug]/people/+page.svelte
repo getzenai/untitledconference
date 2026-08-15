@@ -30,28 +30,36 @@
 	<title>Reviewer pool — {data.conference.name}</title>
 </svelte:head>
 
+<!--
+	The bar keeps its rule across the whole width; the words inside it sit on the
+	same column as the page below (#424).
+-->
 <div class="border-border bg-card border-b px-6 py-5">
-	<h1 class="text-lg font-semibold tracking-tight">Reviewer pool</h1>
-	<p class="text-muted-foreground mt-0.5 text-sm">
-		Invite the committee, limit who reviews each track, and follow their assignments. Scorecards and
-		weights for each round live under
-		<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/rounds"
-			>Rounds &amp; scorecards</a
-		>.
-	</p>
+	<div class="mx-auto max-w-2xl">
+		<h1 class="text-lg font-semibold tracking-tight">Reviewer pool</h1>
+		<p class="text-muted-foreground mt-0.5 text-sm">
+			Invite the committee, limit who reviews each track, and follow their assignments. Scorecards
+			and weights for each round live under
+			<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/rounds"
+				>Rounds &amp; scorecards</a
+			>.
+		</p>
+	</div>
 </div>
 
-<div class="px-6 py-5">
+<!-- One column for the page, not a width on every section (#424). `w-full`
+     before the cap: see the note on the rounds page. -->
+<div class="mx-auto w-full max-w-2xl px-6 py-5" data-testid="page-column">
 	{#if form?.message}
 		<p
-			class="border-status-good text-status-good mb-3 max-w-2xl rounded-md border px-3 py-2 text-sm"
+			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
 			role="status"
 		>
 			{form.message}
 		</p>
 	{/if}
 	{#if form?.invitationLink}
-		<div class="border-border bg-muted mb-3 max-w-2xl rounded-md border p-3 text-sm">
+		<div class="border-border bg-muted mb-3 rounded-md border p-3 text-sm">
 			<p class="font-medium">Share this reviewer invitation link</p>
 			<div class="mt-2 flex gap-2">
 				<input
@@ -65,7 +73,7 @@
 	{/if}
 
 	<section
-		class="border-border bg-card max-w-2xl rounded-lg border p-4"
+		class="border-border bg-card rounded-lg border p-4"
 		data-testid="people-review-visibility"
 	>
 		<h2 class="text-sm font-semibold">What reviewers see of each other</h2>
@@ -100,10 +108,7 @@
 		</form>
 	</section>
 
-	<section
-		class="border-border bg-card mt-6 max-w-2xl rounded-lg border p-4"
-		data-testid="people-committee"
-	>
+	<section class="border-border bg-card mt-6 rounded-lg border p-4" data-testid="people-committee">
 		<h2 class="text-sm font-semibold">Who reviews</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
 			Existing users join immediately. New users get a shareable invite and join this committee when

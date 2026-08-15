@@ -109,22 +109,37 @@
 	<title>Rounds &amp; scorecards — {data.conference.name}</title>
 </svelte:head>
 
+<!--
+	The bar keeps its rule across the whole width; the words inside it sit on the
+	same column as the form they introduce, instead of drifting apart on a wide
+	screen (#424).
+-->
 <div class="border-border bg-card border-b px-6 py-5">
-	<h1 class="text-lg font-semibold tracking-tight">Rounds &amp; scorecards</h1>
-	<p class="text-muted-foreground mt-0.5 text-sm">
-		Each review round has its own open/close window and scorecard. Add criteria (rating, select, or
-		text), set their weights. A submission's average weights the criteria, then counts every
-		reviewer equally. Assign reviewers from the
-		<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/people"
-			>reviewer pool</a
-		>.
-	</p>
+	<div class="mx-auto max-w-2xl">
+		<h1 class="text-lg font-semibold tracking-tight">Rounds &amp; scorecards</h1>
+		<p class="text-muted-foreground mt-0.5 text-sm">
+			Each review round has its own open/close window and scorecard. Add criteria (rating, select,
+			or text), set their weights. A submission's average weights the criteria, then counts every
+			reviewer equally. Assign reviewers from the
+			<a class="underline underline-offset-4" href="/manage/{data.conference.slug}/people"
+				>reviewer pool</a
+			>.
+		</p>
+	</div>
 </div>
 
-<div class="px-6 py-5">
+<!--
+	One column for the page, not a width on every section (#424).
+
+	`w-full` is not decoration. This div is a flex item, and an auto margin in the
+	cross axis turns off the stretch that would otherwise give it the page width —
+	so `mx-auto` alone leaves the column sized by its own content, which on a phone
+	is wider than the window. Width first, then the cap, then the centring.
+-->
+<div class="mx-auto w-full max-w-2xl px-6 py-5" data-testid="page-column">
 	{#if form?.message}
 		<p
-			class="border-status-good text-status-good mb-3 max-w-2xl rounded-md border px-3 py-2 text-sm"
+			class="border-status-good text-status-good mb-3 rounded-md border px-3 py-2 text-sm"
 			role="status"
 			data-testid="rounds-feedback"
 		>
@@ -132,7 +147,7 @@
 		</p>
 	{/if}
 
-	<section class="border-border bg-card max-w-2xl rounded-lg border p-4" data-testid="rounds-add">
+	<section class="border-border bg-card rounded-lg border p-4" data-testid="rounds-add">
 		<h2 class="text-sm font-semibold">Add a round</h2>
 
 		<form method="POST" action="?/add" use:enhance={saveRound('add')} class="mt-3 space-y-3">
@@ -186,7 +201,7 @@
 		</form>
 	</section>
 
-	<section class="mt-6 max-w-2xl" data-testid="rounds-list">
+	<section class="mt-6" data-testid="rounds-list">
 		<h2 class="text-sm font-medium">Rounds</h2>
 
 		{#if data.rounds.length === 0}
