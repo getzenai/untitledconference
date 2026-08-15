@@ -7,7 +7,11 @@
 	 */
 	import { page } from '$app/state';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import { conferenceNav, type ConferenceRail } from '$lib/conference/conference-nav';
+	import {
+		conferenceNav,
+		isConferenceNavCurrent,
+		type ConferenceRail
+	} from '$lib/conference/conference-nav';
 	import CalendarDaysIcon from '@lucide/svelte/icons/calendar-days';
 	import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
 	import GavelIcon from '@lucide/svelte/icons/gavel';
@@ -46,7 +50,7 @@
 
 	const items = $derived(conferenceNav(conference.slug));
 
-	const isCurrent = (href: string) => page.url.pathname.startsWith(href);
+	const isCurrent = (href: string) => isConferenceNavCurrent(page.url.pathname, href);
 </script>
 
 <Sidebar.Group class={className}>
