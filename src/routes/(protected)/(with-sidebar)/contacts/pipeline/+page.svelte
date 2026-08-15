@@ -123,6 +123,7 @@
 
 		<!-- Enroll (CRM-07) -->
 		<section
+			id="pipeline-enroll"
 			class="border-border bg-card max-w-3xl rounded-lg border p-4"
 			data-testid="pipeline-enroll"
 		>

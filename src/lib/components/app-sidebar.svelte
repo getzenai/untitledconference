@@ -35,11 +35,20 @@
 				// CRM-01: org-wide speaker directory, outside any single event — and
 				// org-wide is also who gets the link, since a scoped conference
 				// organizer's directory is empty.
+				//
+				// Sourcing and Enrollment live on `/contacts/pipeline`; they sit
+				// here as children so the rail names both views (#420). The gate
+				// stays on the parent — the children do not get their own flag.
 				title: 'Contacts',
 				url: '/contacts',
 				icon: UsersRoundIcon,
 				gate: 'contacts' as NavGate,
-				unlock: CREATE_ORGANIZATION
+				unlock: CREATE_ORGANIZATION,
+				items: [
+					{ title: 'Directory', url: '/contacts' },
+					{ title: 'Sourcing pipeline', url: '/contacts/pipeline' },
+					{ title: 'Enrollment', url: '/contacts/pipeline#pipeline-enroll' }
+				]
 			},
 			{
 				// No gate: anyone may submit a proposal, so `/portal` is everyone's.

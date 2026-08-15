@@ -94,6 +94,52 @@ export type NavLock = {
 /** A destination the sidebar should render, and whether it is still locked. */
 export type NavDestination<T> = T & { lock: NavLock | null };
 
+/** Path, or path plus a hash (`/contacts/pipeline#pipeline-enroll`). */
+function parseNavUrl(url: string): { path: string; hash: string } {
+	const hashIndex = url.indexOf('#');
+	if (hashIndex === -1) return { path: url, hash: '' };
+	return { path: url.slice(0, hashIndex), hash: url.slice(hashIndex) };
+}
+
+/**
+ * Which item in a sibling group is current. A more specific sibling wins, so
+ * `/contacts` does not light up on `/contacts/pipeline` (#420). Hash-only
+ * siblings on the same path (Enrollment vs Sourcing) split the same way.
+ *
+ * `siblings` is the whole group, including `itemUrl`; order does not matter.
+ */
+export function isNavUrlCurrent(
+	pathname: string,
+	itemUrl: string,
+	siblings: string[],
+	hash = ''
+): boolean {
+	const item = parseNavUrl(itemUrl);
+	const currentHash = hash.startsWith('#') || hash === '' ? hash : `#${hash}`;
+
+	if (item.hash) {
+		return pathname === item.path && currentHash === item.hash;
+	}
+
+	const matchesPath = pathname === item.path || pathname.startsWith(`${item.path}/`);
+	if (!matchesPath) return false;
+
+	if (
+		siblings.some((candidate) => {
+			const other = parseNavUrl(candidate);
+			return other.path === item.path && other.hash !== '' && other.hash === currentHash;
+		})
+	) {
+		return false;
+	}
+
+	return !siblings.some((candidate) => {
+		const other = parseNavUrl(candidate);
+		if (other.hash || other.path.length <= item.path.length) return false;
+		return pathname === other.path || pathname.startsWith(`${other.path}/`);
+	});
+}
+
 /**
  * The sidebar's list: open destinations, plus the ones the person can unlock
  * themselves, in the order they were given.

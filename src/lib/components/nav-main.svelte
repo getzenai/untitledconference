@@ -2,7 +2,7 @@
 	import LockIcon from '@lucide/svelte/icons/lock';
 	import { page } from '$app/state';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import type { NavLock } from '$lib/conference/nav-access';
+	import { isNavUrlCurrent, type NavLock } from '$lib/conference/nav-access';
 	import { cn } from '$lib/utils.js';
 
 	let {
@@ -21,11 +21,24 @@
 			 * would answer 404.
 			 */
 			lock?: NavLock | null;
+			/** Nested destinations. Same gate as the parent; no flag of their own. */
+			items?: { title: string; url: string }[];
 		}[];
 	} = $props();
 
 	const isCurrent = (url: string) =>
 		page.url.pathname === url || page.url.pathname.startsWith(`${url}/`);
+
+	const groupUrls = (item: (typeof items)[number]) => [
+		item.url,
+		...(item.items ?? []).map((child) => child.url)
+	];
+
+	const childIsCurrent = (item: (typeof items)[number], childUrl: string) =>
+		isNavUrlCurrent(page.url.pathname, childUrl, groupUrls(item), page.url.hash);
+
+	const groupIsOpen = (item: (typeof items)[number]) =>
+		!item.lock && (item.items ?? []).some((child) => childIsCurrent(item, child.url));
 </script>
 
 <Sidebar.Group>
@@ -33,10 +46,13 @@
 	<Sidebar.Menu>
 		{#each items as mainItem (mainItem.title)}
 			{@const lock = mainItem.lock ?? null}
+			{@const children = lock ? [] : (mainItem.items ?? [])}
+			{@const open = groupIsOpen(mainItem)}
 			<Sidebar.MenuItem>
 				<Sidebar.MenuButton
 					tooltipContent={lock ? `${mainItem.title} — ${lock.reason}` : mainItem.title}
-					data-active={lock ? false : isCurrent(mainItem.url)}
+					data-active={lock ? false : children.length ? open : isCurrent(mainItem.url)}
+					data-state={open ? 'open' : undefined}
 				>
 					{#snippet child({ props })}
 						<a
@@ -61,6 +77,23 @@
 						</a>
 					{/snippet}
 				</Sidebar.MenuButton>
+				{#if children.length}
+					<Sidebar.MenuSub data-testid={`nav-${mainItem.title.toLowerCase()}-sub`}>
+						{#each children as subItem (subItem.url)}
+							<Sidebar.MenuSubItem>
+								<Sidebar.MenuSubButton
+									href={subItem.url}
+									isActive={childIsCurrent(mainItem, subItem.url)}
+									data-testid={`nav-${mainItem.title.toLowerCase()}-${subItem.title
+										.toLowerCase()
+										.replace(/\s+/g, '-')}`}
+								>
+									{subItem.title}
+								</Sidebar.MenuSubButton>
+							</Sidebar.MenuSubItem>
+						{/each}
+					</Sidebar.MenuSub>
+				{/if}
 			</Sidebar.MenuItem>
 		{/each}
 	</Sidebar.Menu>
