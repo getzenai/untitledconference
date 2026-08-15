@@ -98,6 +98,55 @@ describe('speaker roster page', () => {
 		expect(tableWrapper?.[0]).not.toMatch(/\boverflow-auto\b/);
 	});
 
+	it('gives each row one status control, and the filter one mechanism (#552)', () => {
+		const { body } = render(Page, {
+			props: {
+				data: {
+					user: { id: 'organizer-1', name: 'Jordan' },
+					impersonating: null,
+					analytics: { apiKey: undefined, host: undefined },
+					conference,
+					speakers: [speaker, { ...speaker, speakerProfileId: 6, status: 'confirmed' as const }],
+					filters: {},
+					counts: {
+						total: 2,
+						invited: 1,
+						confirmed: 1,
+						declined: 0,
+						cancelled: 0
+					},
+					statuses: ['invited', 'confirmed', 'declined', 'cancelled']
+				} as never,
+				form: null
+			}
+		});
+
+		// One control per row: the badge that repeated the select is gone, and with
+		// it the raw enum casing beside a Title Case word.
+		expect(body).not.toContain('data-slot="status-badge"');
+		const selects = body.match(/data-testid="speaker-status-select"/g) ?? [];
+		expect(selects).toHaveLength(2);
+		expect(body).toContain('>Confirmed<');
+		expect(body).not.toContain('>confirmed<');
+
+		// One filter mechanism: the chip row is gone and its counts moved into the
+		// options of the control that stayed.
+		expect(body).not.toContain('data-testid="speakers-status-chips"');
+		expect(body).toContain('All statuses (2)');
+		// The chips' one piece of real information — the counts — survives as prose
+		// in the subtitle, where it filters nothing. Empty statuses stay out.
+		const text = body.replace(/\s+/g, ' ');
+		expect(text).toContain('2 on the roster');
+		expect(text).toContain('1 invited');
+		expect(text).toContain('1 confirmed');
+		expect(text).not.toContain('0 declined');
+
+		// It applies itself, like the submissions filter row — no Apply button, and
+		// a real submit only for the no-JavaScript case.
+		expect(body).not.toContain('>Apply<');
+		expect(body).toContain('<noscript>');
+	});
+
 	it('shows empty state when the roster has no rows', () => {
 		const { body } = render(Page, {
 			props: {
