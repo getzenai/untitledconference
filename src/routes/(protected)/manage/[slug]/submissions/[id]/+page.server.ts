@@ -1,6 +1,11 @@
 import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
 import { normalizeRecordingUrl } from '$lib/conference/recording-url';
 import { SUBMITTED_REVIEW_UNASSIGN_REASON } from '$lib/conference/review-assignment';
+import {
+	conditionForDecision,
+	conferenceOrganizers,
+	resolveAcceptCondition
+} from '$lib/server/conference/accept-condition';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	decisionNotificationStatuses,
@@ -39,8 +44,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
 	if (!submission) throw error(404, 'Submission not found');
-	const [notificationStatuses, assignmentRounds, ownReview, contentEdit, tiers] = await Promise.all(
-		[
+	const [notificationStatuses, assignmentRounds, ownReview, contentEdit, tiers, organizers] =
+		await Promise.all([
 			decisionNotificationStatuses(conference.id, [submission]),
 			reviewAssignmentMatrix(conference.id, submission.id),
 			// An organizer who also holds a reviewer seat writes their review on the
@@ -48,9 +53,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			// them, and it asks the same two questions that surface would.
 			ownReviewAccess(conference.id, locals.user!.id, submission.id),
 			lastContentEdit(submission.id),
-			sponsorTiers(conference.id)
-		]
-	);
+			sponsorTiers(conference.id),
+			conferenceOrganizers(conference)
+		]);
 
 	return {
 		submission,
@@ -58,7 +63,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		assignmentRounds,
 		ownReview,
 		contentEdit,
-		sponsorTiers: tiers
+		sponsorTiers: tiers,
+		organizers
 	};
 };
 
@@ -72,10 +78,14 @@ export const actions: Actions = {
 			return fail(400, { message: 'Unknown decision.' });
 		}
 
+		const note = await conditionForDecision(conference, form, decision);
+		if (!note.ok) return fail(400, { message: note.message });
+
 		const result = await decideSubmissions(
 			conference,
 			[submissionId(params.id)],
-			decision as Decision
+			decision as Decision,
+			note.condition
 		);
 		// A disabled button is not a lock (#471). The bulk path still reports
 		// skipped drafts as a success summary; on this one talk that line used
@@ -217,5 +227,15 @@ export const actions: Actions = {
 		return {
 			sponsorMessage: tierId === null ? 'Sponsor marker cleared.' : 'Sponsor tier saved.'
 		};
+	},
+
+	/**
+	 * The follow-up landed. The talk stays accepted; only the note goes.
+	 */
+	resolveCondition: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const result = await resolveAcceptCondition(conference.id, submissionId(params.id));
+		if (!result.ok) throw error(404, 'Submission not found');
+		return { conditionMessage: result.changed ? 'Condition resolved.' : 'Nothing to resolve.' };
 	}
 };

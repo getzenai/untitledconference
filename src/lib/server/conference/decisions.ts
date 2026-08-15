@@ -19,6 +19,7 @@ import {
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { isConferenceOrganizer, type AcceptCondition } from './accept-condition';
 import { taskDueDate } from './task-templates';
 
 export type Decision = 'accepted' | 'rejected' | 'waitlisted';
@@ -65,10 +66,13 @@ const NOTHING_HAPPENED: DecisionResult = {
 export async function decideSubmissions(
 	conference: Conference,
 	submissionIds: number[],
-	decision: Decision
+	decision: Decision,
+	condition: AcceptCondition | null = null
 ): Promise<DecisionResult> {
 	const result: DecisionResult = { ...NOTHING_HAPPENED };
 	if (submissionIds.length === 0) return result;
+
+	const note = await acceptedNote(conference, decision, condition);
 
 	await db.transaction(async (tx) => {
 		const selected = await tx
@@ -105,14 +109,7 @@ export async function decideSubmissions(
 		const ids = targets.map((t) => t.id);
 		const now = new Date();
 
-		await tx
-			.update(submissionTable)
-			// Use the database wall clock so this decision boundary is strictly after
-			// any notification row committed by an earlier organizer action. A JS Date
-			// only has millisecond precision and can otherwise make two rapid actions
-			// appear simultaneous to Postgres.
-			.set({ status: decision, decidedAt: sql`clock_timestamp()` })
-			.where(inArray(submissionTable.id, ids));
+		await recordDecision(tx, ids, decision, note);
 		result.decided = ids.length;
 
 		const speakers = await speakersOn(tx, ids);
@@ -129,6 +126,50 @@ export async function decideSubmissions(
 	});
 
 	return result;
+}
+
+/**
+ * A condition on a decline is leftover form state. A condition whose owner
+ * cannot open the chase board would write a note nobody can resolve, so the
+ * accept itself does not go through.
+ */
+async function acceptedNote(
+	conference: Conference,
+	decision: Decision,
+	condition: AcceptCondition | null
+): Promise<AcceptCondition | null> {
+	const note = decision === 'accepted' ? condition : null;
+	if (note && !(await isConferenceOrganizer(conference, note.ownerId))) {
+		throw new Error('invalid_condition_owner');
+	}
+	return note;
+}
+
+/**
+ * Use the database wall clock so this decision boundary is strictly after any
+ * notification row committed by an earlier organizer action. A JS Date only
+ * has millisecond precision and can otherwise make two rapid actions appear
+ * simultaneous to Postgres.
+ *
+ * A clean accept writes null; a decline or waitlist drops a leftover note.
+ * The talk is accepted either way — the note is not a second status, and it
+ * must not survive a decision that is no longer an accept (#445).
+ */
+async function recordDecision(
+	tx: Tx,
+	ids: number[],
+	decision: Decision,
+	note: AcceptCondition | null
+) {
+	await tx
+		.update(submissionTable)
+		.set({
+			status: decision,
+			decidedAt: sql`clock_timestamp()`,
+			acceptCondition: note?.text ?? null,
+			acceptConditionOwnerId: note?.ownerId ?? null
+		})
+		.where(inArray(submissionTable.id, ids));
 }
 
 /** Every speaker on the given submissions, with the address the decision mail goes to. */

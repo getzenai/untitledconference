@@ -83,6 +83,10 @@ type SubmissionBase = {
 	sessionFormat: string | null;
 	/** INTERNAL (R6) — organizer views only. */
 	sponsorTier: string | null;
+	/** A note on an accept, not a status (#445). Null is a clean accept. */
+	acceptCondition: string | null;
+	/** Display name of who will chase the condition. */
+	acceptConditionOwner: string | null;
 };
 
 export type SubmissionRow = SubmissionBase & {
@@ -310,8 +314,22 @@ const submissionColumns = {
 	submittedAt: submissionTable.submittedAt,
 	track: trackTable.name,
 	sessionFormat: sessionFormatTable.name,
-	sponsorTier: sponsorTierTable.name
+	sponsorTier: sponsorTierTable.name,
+	acceptCondition: submissionTable.acceptCondition,
+	ownerName: user.name,
+	ownerEmail: user.email
 };
+
+function namedOwner(row: {
+	acceptCondition: string | null;
+	ownerName: string | null;
+	ownerEmail: string | null;
+}): Pick<SubmissionBase, 'acceptCondition' | 'acceptConditionOwner'> {
+	return {
+		acceptCondition: row.acceptCondition,
+		acceptConditionOwner: row.ownerName?.trim() || row.ownerEmail || null
+	};
+}
 
 /**
  * Hangs the speakers and the aggregate score onto a set of rows, in two queries.
@@ -375,6 +393,7 @@ export async function listSubmissions(
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
+		.leftJoin(user, eq(user.id, submissionTable.acceptConditionOwnerId))
 		.where(where)
 		// The id is not decoration: `submittedAt` is null for every draft, so without a
 		// tiebreaker two pages of the same table could show the same row twice and skip
@@ -385,7 +404,10 @@ export async function listSubmissions(
 		.offset((page - 1) * PAGE_SIZE);
 
 	return {
-		rows: await withSpeakersAndScores(conferenceId, rows),
+		rows: await withSpeakersAndScores(
+			conferenceId,
+			rows.map((row) => ({ ...row, ...namedOwner(row) }))
+		),
 		matching,
 		page,
 		pageSize: PAGE_SIZE,
@@ -429,6 +451,7 @@ export async function exportSubmissions(
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
+		.leftJoin(user, eq(user.id, submissionTable.acceptConditionOwnerId))
 		.where(submissionWhere(conferenceId, filters))
 		.orderBy(...orderFor(sort, conferenceId))
 		// One more than the fuse, so "we hit the limit" can be told apart from "the
@@ -436,8 +459,12 @@ export async function exportSubmissions(
 		.limit(EXPORT_LIMIT + 1);
 
 	const truncated = rows.length > EXPORT_LIMIT;
+	const sliced = (truncated ? rows.slice(0, EXPORT_LIMIT) : rows).map((row) => ({
+		...row,
+		...namedOwner(row)
+	}));
 	return {
-		rows: await withSpeakersAndScores(conferenceId, truncated ? rows.slice(0, EXPORT_LIMIT) : rows),
+		rows: await withSpeakersAndScores(conferenceId, sliced),
 		truncated
 	};
 }
@@ -493,12 +520,16 @@ async function submissionHeader(conferenceId: number, submissionId: number) {
 			sessionFormat: sessionFormatTable.name,
 			sessionMinutes: sessionFormatTable.minutes,
 			sponsorTier: sponsorTierTable.name,
-			sponsorNote: sponsorTierTable.note
+			sponsorNote: sponsorTierTable.note,
+			acceptCondition: submissionTable.acceptCondition,
+			ownerName: user.name,
+			ownerEmail: user.email
 		})
 		.from(submissionTable)
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sessionFormatTable, eq(sessionFormatTable.id, submissionTable.sessionFormatId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
+		.leftJoin(user, eq(user.id, submissionTable.acceptConditionOwnerId))
 		// Scoped by conference as well as by id: an organizer of conference A must not
 		// reach a submission of conference B by editing the URL.
 		.where(
@@ -643,9 +674,11 @@ export async function submissionDetail(conferenceId: number, submissionId: numbe
 	]);
 
 	const reviews = groupReviews(reviewRows);
+	const { ownerName, ownerEmail, ...header } = row;
 
 	return {
-		...row,
+		...header,
+		...namedOwner({ acceptCondition: row.acceptCondition, ownerName, ownerEmail }),
 		speakers: speakers.get(submissionId) ?? [],
 		answers,
 		reviews,

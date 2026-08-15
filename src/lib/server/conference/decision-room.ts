@@ -63,6 +63,12 @@ export type LobbyRow = {
 	 * score and not an automatic decision. Reviewer views never select this.
 	 */
 	sponsorTier: string | null;
+	/**
+	 * Organizer-only (#445). A conditional accept is still an accept — the
+	 * remainder does not change. The note is what the committee said.
+	 */
+	acceptCondition: string | null;
+	acceptConditionOwner: string | null;
 };
 
 export type CommitteeSeat = { userId: string; name: string; queueLength: number };
@@ -231,7 +237,10 @@ function myReviews(conferenceId: number, reviewerUserId: string) {
 			status: submissionTable.status,
 			trackId: submissionTable.trackId,
 			track: trackTable.name,
-			sponsorTier: sponsorTierTable.name
+			sponsorTier: sponsorTierTable.name,
+			acceptCondition: submissionTable.acceptCondition,
+			ownerName: user.name,
+			ownerEmail: user.email
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
@@ -239,6 +248,7 @@ function myReviews(conferenceId: number, reviewerUserId: string) {
 		.innerJoin(submissionTable, eq(submissionTable.id, reviewTable.submissionId))
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
 		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
+		.leftJoin(user, eq(user.id, submissionTable.acceptConditionOwnerId))
 		.where(
 			and(
 				eq(evaluationPlanTable.conferenceId, conferenceId),
@@ -321,7 +331,9 @@ export async function lobbyingQueue(
 			overallScore: submissionScore(all),
 			reviewsSubmitted: all.filter((review) => review.submitted).length,
 			myComment: row.comment,
-			sponsorTier: row.sponsorTier
+			sponsorTier: row.sponsorTier,
+			acceptCondition: row.acceptCondition,
+			acceptConditionOwner: row.ownerName?.trim() || row.ownerEmail || null
 		};
 	});
 

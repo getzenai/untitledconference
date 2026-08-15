@@ -128,6 +128,18 @@
 		{ value: 'none', label: 'No sponsor' },
 		...tiers.map((tier) => ({ value: String(tier.id), label: tier.name }))
 	]);
+	const organizers = $derived(data.organizers ?? []);
+	const ownerOptions = $derived([
+		{ value: '', label: 'Who follows up' },
+		...organizers.map((owner) => ({ value: owner.userId, label: owner.name }))
+	]);
+	const conditionLine = $derived(
+		s.acceptCondition
+			? s.acceptConditionOwner
+				? `${s.acceptCondition} · ${s.acceptConditionOwner}`
+				: s.acceptCondition
+			: null
+	);
 </script>
 
 <svelte:head>
@@ -146,6 +158,11 @@
 			<div class="flex flex-wrap items-center gap-3">
 				<h1 class="text-lg font-semibold tracking-tight">{s.title}</h1>
 				<StatusBadge status={s.status} />
+				{#if conditionLine}
+					<span data-testid="submission-condition">
+						<StatusBadge status="open" tone="warn" label={conditionLine} />
+					</span>
+				{/if}
 			</div>
 			<p class="text-muted-foreground mt-0.5 text-sm">{subtitle}</p>
 		</div>
@@ -154,7 +171,7 @@
 			<form
 				method="POST"
 				action="?/decide"
-				class="flex gap-2"
+				class="flex flex-col items-end gap-2"
 				use:enhance={() => {
 					busy = true;
 					// `finally`, not a trailing line: a dropped connection would otherwise
@@ -168,35 +185,57 @@
 					};
 				}}
 			>
-				<Button
-					type="submit"
-					name="decision"
-					value="rejected"
-					variant="outline"
-					disabled={busy || Boolean(cannotDecide)}
-					aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-				>
-					Decline
-				</Button>
-				<Button
-					type="submit"
-					name="decision"
-					value="waitlisted"
-					variant="outline"
-					disabled={busy || Boolean(cannotDecide)}
-					aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-				>
-					Waitlist
-				</Button>
-				<Button
-					type="submit"
-					name="decision"
-					value="accepted"
-					disabled={busy || Boolean(cannotDecide)}
-					aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-				>
-					Accept
-				</Button>
+				{#if !decided}
+					<div class="flex w-64 flex-col gap-2" data-testid="accept-condition">
+						<input
+							name="condition"
+							type="text"
+							maxlength="280"
+							placeholder="If they bring a co-presenter…"
+							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+							data-testid="accept-condition-text"
+						/>
+						<AppSelect
+							name="conditionOwnerId"
+							value=""
+							options={ownerOptions}
+							size="sm"
+							aria-label="Who follows up"
+							testId="accept-condition-owner"
+						/>
+					</div>
+				{/if}
+				<div class="flex gap-2">
+					<Button
+						type="submit"
+						name="decision"
+						value="rejected"
+						variant="outline"
+						disabled={busy || Boolean(cannotDecide)}
+						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+					>
+						Decline
+					</Button>
+					<Button
+						type="submit"
+						name="decision"
+						value="waitlisted"
+						variant="outline"
+						disabled={busy || Boolean(cannotDecide)}
+						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+					>
+						Waitlist
+					</Button>
+					<Button
+						type="submit"
+						name="decision"
+						value="accepted"
+						disabled={busy || Boolean(cannotDecide)}
+						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+					>
+						Accept
+					</Button>
+				</div>
 			</form>
 			{#if cannotDecide}
 				<p
@@ -228,6 +267,36 @@
 		</p>
 	{:else if form?.message}
 		<p class="text-status-bad mt-3 text-sm" role="alert">{form.message}</p>
+	{/if}
+	{#if form?.conditionMessage}
+		<p class="text-status-good mt-3 text-sm" role="status">{form.conditionMessage}</p>
+	{/if}
+	{#if conditionLine}
+		<form
+			method="POST"
+			action="?/resolveCondition"
+			class="mt-3 flex justify-end"
+			use:enhance={() => {
+				busy = true;
+				return async ({ update }) => {
+					try {
+						await update(formUpdateOptions('edit'));
+					} finally {
+						busy = false;
+					}
+				};
+			}}
+		>
+			<Button
+				type="submit"
+				size="sm"
+				variant="outline"
+				disabled={busy}
+				data-testid="resolve-condition"
+			>
+				Resolve condition
+			</Button>
+		</form>
 	{/if}
 </div>
 
@@ -671,6 +740,10 @@
 				<li>· put the talk in the agenda tray as an unscheduled session</li>
 				<li>· confirm the speakers for this conference</li>
 				<li>· create their tasks from the conference's task template</li>
+				<li>
+					· a condition is a note on that accept, not a second status — the talk still takes its
+					slot
+				</li>
 			</ul>
 			<p class="text-muted-foreground border-border mt-3 border-t pt-3 text-xs">
 				Declining or waitlisting an accepted talk takes the session back out of the tray and

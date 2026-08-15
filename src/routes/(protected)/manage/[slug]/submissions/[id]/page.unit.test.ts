@@ -35,6 +35,9 @@ type Extras = {
 	sponsorTier?: string | null;
 	sponsorNote?: string | null;
 	sponsorTiers?: { id: number; name: string; note: string | null; position: number }[];
+	acceptCondition?: string | null;
+	acceptConditionOwner?: string | null;
+	organizers?: { userId: string; name: string }[];
 	speakers?: {
 		id: number;
 		name: string;
@@ -78,6 +81,8 @@ function renderPage(
 					sessionMinutes: null,
 					sponsorTier: extras.sponsorTier ?? null,
 					sponsorNote: extras.sponsorNote ?? null,
+					acceptCondition: extras.acceptCondition ?? null,
+					acceptConditionOwner: extras.acceptConditionOwner ?? null,
 					speakers: extras.speakers ?? [],
 					answers: [],
 					reviews: [],
@@ -106,7 +111,8 @@ function renderPage(
 							],
 				ownReview,
 				contentEdit: extras.contentEdit ?? null,
-				sponsorTiers: extras.sponsorTiers ?? []
+				sponsorTiers: extras.sponsorTiers ?? [],
+				organizers: extras.organizers ?? [{ userId: 'organizer-1', name: 'Jordan' }]
 			} as PageData,
 			form: (extras.form ?? (notificationResult ? { notificationResult } : null)) as ActionData
 		}
@@ -440,5 +446,30 @@ describe('the organizer talk editor', () => {
 		expect(body).toContain('data-testid="rejected-placement-badge"');
 		expect(body).toContain('Declined but still on the programme');
 		expect(body).toContain('/manage/test-conf/agenda');
+	});
+
+	it('takes a condition and an owner on an undecided talk (#445)', () => {
+		const body = renderPage('submitted', null, null, null, 'one', null, {
+			organizers: [{ userId: 'ann', name: 'Ann Follows' }]
+		});
+
+		expect(body).toContain('data-testid="accept-condition"');
+		expect(body).toContain('name="condition"');
+		expect(body).toContain('name="conditionOwnerId"');
+		expect(body).toContain('data-testid="accept-condition-owner"');
+		expect(body).not.toContain('data-testid="submission-condition"');
+		expect(body).not.toContain('data-testid="resolve-condition"');
+	});
+
+	it('names an open condition without opening anything, and offers resolve', () => {
+		const body = renderPage('accepted', null, null, null, 'one', null, {
+			acceptCondition: 'bring a co-presenter',
+			acceptConditionOwner: 'Ann Follows'
+		});
+
+		expect(body).toContain('data-testid="submission-condition"');
+		expect(body).toContain('bring a co-presenter · Ann Follows');
+		expect(body).toContain('data-testid="resolve-condition"');
+		expect(body).not.toContain('data-testid="accept-condition"');
 	});
 });

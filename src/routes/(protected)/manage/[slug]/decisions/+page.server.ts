@@ -11,6 +11,10 @@
  * through the meeting instead of out of it.
  */
 import { parseCapacity } from '$lib/conference/decision-room';
+import {
+	conditionForDecision,
+	conferenceOrganizers
+} from '$lib/server/conference/accept-condition';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
 	committeeSeats,
@@ -27,9 +31,10 @@ const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted'];
 export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 
-	const [board, seats] = await Promise.all([
+	const [board, seats, organizers] = await Promise.all([
 		slotBoard(conference.id),
-		committeeSeats(conference.id)
+		committeeSeats(conference.id),
+		conferenceOrganizers(conference)
 	]);
 
 	// An unknown `?member=` falls back to the first seat rather than failing: this
@@ -38,7 +43,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const selected = seats.find((seat) => seat.userId === requested) ?? seats[0] ?? null;
 	const queue = selected ? await lobbyingQueue(conference.id, selected.userId) : [];
 
-	return { board, seats, selectedUserId: selected?.userId ?? null, queue };
+	return { board, seats, selectedUserId: selected?.userId ?? null, queue, organizers };
 };
 
 export const actions: Actions = {
@@ -62,7 +67,10 @@ export const actions: Actions = {
 			return fail(400, { message: 'Unknown submission.' });
 		}
 
-		const result = await decideSubmissions(conference, [id], decision as Decision);
+		const note = await conditionForDecision(conference, form, decision);
+		if (!note.ok) return fail(400, { message: note.message });
+
+		const result = await decideSubmissions(conference, [id], decision as Decision, note.condition);
 		return { decision, result };
 	},
 
