@@ -79,7 +79,7 @@
 			.map((status) => ({
 				status,
 				count: Number(data.counts[status] ?? 0),
-				label: status.replace(/_/g, ' ')
+				label: humanise(status)
 			}))
 			.filter((entry) => entry.count > 0)
 	);

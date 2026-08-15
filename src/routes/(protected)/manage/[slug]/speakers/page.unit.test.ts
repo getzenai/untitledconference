@@ -137,8 +137,8 @@ describe('speaker roster page', () => {
 		// in the subtitle, where it filters nothing. Empty statuses stay out.
 		const text = body.replace(/\s+/g, ' ');
 		expect(text).toContain('2 on the roster');
-		expect(text).toContain('1 invited');
-		expect(text).toContain('1 confirmed');
+		expect(text).toContain('1 Invited');
+		expect(text).toContain('1 Confirmed');
 		expect(text).not.toContain('0 declined');
 
 		// It applies itself, like the submissions filter row — no Apply button, and
