@@ -13,6 +13,7 @@ import { organization, user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
+	sponsorTierTable,
 	trackTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
@@ -261,6 +262,26 @@ describe('a member’s lobbying queue', () => {
 
 		expect(queue.map((row) => row.title)).toEqual(['Scored', 'Comment only']);
 		expect(queue[1].myScore).toBeNull();
+	});
+
+	it('carries the sponsor marker the room has to see', async () => {
+		const paid = await addSubmission(conference, 'Paid keynote', 'submitted');
+		const ordinary = await addSubmission(conference, 'Ordinary talk', 'submitted');
+		const [tier] = await db
+			.insert(sponsorTierTable)
+			.values({ conferenceId: conference.id, name: 'Gold', position: 0 })
+			.returning({ id: sponsorTierTable.id });
+		await db
+			.update(submissionTable)
+			.set({ sponsorTierId: tier.id })
+			.where(eq(submissionTable.id, paid));
+		await addReview(paid, ADA, 5);
+		await addReview(ordinary, ADA, 4);
+
+		const queue = await lobbyingQueue(conference.id, ADA);
+
+		expect(queue.find((row) => row.title === 'Paid keynote')?.sponsorTier).toBe('Gold');
+		expect(queue.find((row) => row.title === 'Ordinary talk')?.sponsorTier).toBeNull();
 	});
 
 	it('stays inside its own conference', async () => {

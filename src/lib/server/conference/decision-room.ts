@@ -17,7 +17,11 @@ import { reviewScore, submissionScore, type ReviewScores } from '$lib/conference
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
-import { conferenceTable, trackTable } from '$lib/server/db/conference/conference-schema';
+import {
+	conferenceTable,
+	sponsorTierTable,
+	trackTable
+} from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import {
 	evaluationPlanTable,
@@ -54,6 +58,11 @@ export type LobbyRow = {
 	reviewsSubmitted: number;
 	/** This reviewer's own words, the thing they will read out on the call. */
 	myComment: string | null;
+	/**
+	 * Organizer-only (#450). A sponsor talk is a fact the room must see, not a
+	 * score and not an automatic decision. Reviewer views never select this.
+	 */
+	sponsorTier: string | null;
 };
 
 export type CommitteeSeat = { userId: string; name: string; queueLength: number };
@@ -221,13 +230,15 @@ function myReviews(conferenceId: number, reviewerUserId: string) {
 			title: submissionTable.title,
 			status: submissionTable.status,
 			trackId: submissionTable.trackId,
-			track: trackTable.name
+			track: trackTable.name,
+			sponsorTier: sponsorTierTable.name
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
 		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
 		.innerJoin(submissionTable, eq(submissionTable.id, reviewTable.submissionId))
 		.leftJoin(trackTable, eq(trackTable.id, submissionTable.trackId))
+		.leftJoin(sponsorTierTable, eq(sponsorTierTable.id, submissionTable.sponsorTierId))
 		.where(
 			and(
 				eq(evaluationPlanTable.conferenceId, conferenceId),
@@ -309,7 +320,8 @@ export async function lobbyingQueue(
 			myScore: ownScore === null ? null : ownScore * 5,
 			overallScore: submissionScore(all),
 			reviewsSubmitted: all.filter((review) => review.submitted).length,
-			myComment: row.comment
+			myComment: row.comment,
+			sponsorTier: row.sponsorTier
 		};
 	});
 
