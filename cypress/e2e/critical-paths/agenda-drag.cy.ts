@@ -69,7 +69,14 @@ describe('Agenda drag and drop', () => {
 	 * to give the lowest id. Two moves rather than one: the first crosses the
 	 * threshold that separates a drag from a click, the second lands.
 	 */
-	const dragOnto = (source: string, room: string, startMinutes: number, named?: string) => {
+	const dragOnto = (
+		source: string,
+		room: string,
+		startMinutes: number,
+		named?: string,
+		options: { altKey?: boolean } = {}
+	) => {
+		const altKey = options.altKey ?? false;
 		cy.contains('[data-testid="agenda-room-card"]', room)
 			.invoke('attr', 'data-room-id')
 			.then((roomId) => {
@@ -87,6 +94,7 @@ describe('Agenda drag and drop', () => {
 					button: 0,
 					pointerId: 1,
 					pointerType: 'mouse',
+					altKey,
 					clientX: 0,
 					clientY: 0
 				});
@@ -102,6 +110,7 @@ describe('Agenda drag and drop', () => {
 							eventConstructor: 'PointerEvent',
 							pointerId: 1,
 							pointerType: 'mouse',
+							altKey,
 							clientX: at.x,
 							clientY: at.y
 						});
@@ -111,6 +120,7 @@ describe('Agenda drag and drop', () => {
 						eventConstructor: 'PointerEvent',
 						pointerId: 1,
 						pointerType: 'mouse',
+						altKey,
 						clientX: to.x,
 						clientY: to.y
 					});
@@ -138,7 +148,11 @@ describe('Agenda drag and drop', () => {
 		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 	};
 
-	it('keeps a draft talk in both rooms when dragged to a second slot', () => {
+	/**
+	 * Fabian's report (#596): one drag, and he could not tell whether it would
+	 * move the talk or leave a twin behind. It moves.
+	 */
+	it('moves a draft talk when it is dragged to a second slot', () => {
 		addRooms(['Hall 1', 'Hall 2']);
 		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
 
@@ -151,7 +165,51 @@ describe('Agenda drag and drop', () => {
 		roomCard('Hall 2')
 			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
 			.should('contain', '11:00');
-		// The first slot stays. A move that erases it is the failure this pins (#559).
+		// Nothing left behind, and no alternative pair to resolve later.
+		roomCard('Hall 1').find('[data-testid="agenda-placed-session"]').should('not.exist');
+		cy.get('[data-testid="agenda-alternative"]').should('not.exist');
+	});
+
+	/**
+	 * The same choice without a keyboard (#596). There is no Alt on a finger, so
+	 * the editor has to carry it — and the intent rides on the submitting
+	 * button's own name/value, which is the part worth proving end to end.
+	 */
+	it('keeps both slots from the editor, with no modifier at all', () => {
+		addRooms(['Hall 1', 'Hall 2']);
+		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
+
+		cy.contains('[data-testid="agenda-room-card"]', 'Hall 2')
+			.find('[data-testid^="agenda-open-slot-"]')
+			.click();
+		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
+		cy.chooseFromAppSelect('agenda-slot-session', 'Fixture Talk A');
+		cy.chooseFromAppSelect('agenda-slot-room', 'Hall 2');
+		cy.chooseFromAppSelect('agenda-slot-start', '11:00');
+		cy.get('[data-testid="agenda-slot-place-also"]').click();
+		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
+
+		roomCard('Hall 2')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '11:00');
+		roomCard('Hall 1')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '09:00');
+		cy.get('[data-testid="agenda-alternative"]').should('exist');
+	});
+
+	/** The deliberate copy, and the badge that says so before the drop (#596, #559). */
+	it('keeps both slots when Alt is held during the drag', () => {
+		addRooms(['Hall 1', 'Hall 2']);
+		placeFromTray('Fixture Talk A', 'Hall 1', '09:00');
+
+		dragOnto('[data-testid^="agenda-edit-slot-"]', 'Hall 2', 11 * 60, undefined, {
+			altKey: true
+		});
+
+		roomCard('Hall 2')
+			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
+			.should('contain', '11:00');
 		roomCard('Hall 1')
 			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
 			.should('contain', '09:00');
@@ -188,9 +246,9 @@ describe('Agenda drag and drop', () => {
 		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
 		roomCard('Hall 2').find('[data-testid="agenda-placed-session"]').should('have.length', 2);
 		roomCard('Hall 2').should('contain', 'Fixture Talk A').and('contain', 'Fixture Talk B');
-		roomCard('Hall 1')
-			.contains('[data-testid="agenda-placed-session"]', 'Fixture Talk A')
-			.should('exist');
+		// A moved into B's slot: the slot holds two talks, and Hall 1 is empty.
+		// Before #596 A stayed in Hall 1 as well, which nobody asked for.
+		roomCard('Hall 1').find('[data-testid="agenda-placed-session"]').should('not.exist');
 		cy.get('[data-testid="agenda-alternative"]').should('exist');
 	});
 

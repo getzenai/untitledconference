@@ -6,10 +6,10 @@
  * already has. Dropping a write from the list is the rollback: the next derive
  * is the server board again.
  *
- * A draft dragged onto a second slot currently becomes a *new* placement on
- * the server (#559). We cannot invent that id, so a drop is always a move
- * here. #596 will pass move-vs-alternative as an intent; alternative stays
- * server-owned until then.
+ * A drop carries its intent since #596: a plain drag is a move and paints
+ * here, `Alt`+drag asks for an alternative and does not. That copy is a *new*
+ * placement row whose id only the server can hand out, so it stays
+ * server-owned — the queue carries it only to mark the card as saving.
  */
 
 export type OptimisticSession = {
@@ -30,6 +30,20 @@ export type BoardWrite =
 			roomId: number;
 			startMinutes: number;
 	  }
+	| {
+			/**
+			 * `Alt`+drag and the slot editor's "keep both" (#596). It is in the queue
+			 * so the card reads as saving and the reply is settled like any other
+			 * write — but it paints nothing: the copy is a *new* placement row and
+			 * only the server can hand out its id. The card the organizer dragged
+			 * stays where it is, which is what an alternative leaves behind anyway.
+			 */
+			kind: 'alternative';
+			placementId: number;
+			dayId: number;
+			roomId: number;
+			startMinutes: number;
+	  }
 	| { kind: 'unplace'; placementId: number }
 	| { kind: 'swap'; placementId: number; withPlacementId: number };
 
@@ -38,8 +52,10 @@ export function involvedPlacementIds(write: BoardWrite): number[] {
 }
 
 /**
- * The slot editor's `?/place` of a talk already on the grid is "keep both"
- * (#559): a second row the server allocates. We do not paint that locally.
+ * The slot editor's `?/place`, read the same way the server reads it (#596):
+ * the intent decides, not the talk's status. "Keep its current slot too" on a
+ * talk already on the grid is a row only the server can allocate, so that one
+ * is queued without painting; everything else is a move and paints.
  */
 export function slotEditorWrite(
 	actionName: string,
@@ -50,7 +66,8 @@ export function slotEditorWrite(
 		roomId?: number;
 		startMinutes?: number;
 	},
-	source: 'tray' | 'grid' | 'missing'
+	source: 'tray' | 'grid' | 'missing',
+	intent: 'move' | 'alternative' = 'move'
 ): BoardWrite | null {
 	if (actionName === 'unplace') return { kind: 'unplace', placementId: fields.placementId };
 	if (actionName === 'swap' && fields.withPlacementId !== undefined) {
@@ -62,13 +79,15 @@ export function slotEditorWrite(
 	}
 	if (
 		actionName === 'place' &&
-		source === 'tray' &&
+		source !== 'missing' &&
 		fields.dayId !== undefined &&
 		fields.roomId !== undefined &&
 		fields.startMinutes !== undefined
 	) {
 		return {
-			kind: 'place',
+			// From the tray there is no slot to keep, so "keep both" is a move
+			// there whatever the button said — the server agrees.
+			kind: intent === 'alternative' && source === 'grid' ? 'alternative' : 'place',
 			placementId: fields.placementId,
 			dayId: fields.dayId,
 			roomId: fields.roomId,
@@ -90,6 +109,7 @@ function applyOne<S extends OptimisticSession, B extends { placed: S[]; tray: S[
 	write: BoardWrite
 ): B {
 	if (write.kind === 'place') return applyPlace(board, write);
+	if (write.kind === 'alternative') return board;
 	if (write.kind === 'unplace') return applyUnplace(board, write.placementId);
 	return applySwap(board, write.placementId, write.withPlacementId);
 }

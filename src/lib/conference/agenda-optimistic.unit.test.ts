@@ -69,6 +69,37 @@ describe('applyBoardWrites', () => {
 		});
 	});
 
+	/**
+	 * #596. The copy is a new placement row and only the server can hand out its
+	 * id, so painting one here would mean inventing it. Leaving the card where it
+	 * is happens to be exactly what an alternative does — the talk keeps the slot
+	 * it had — so the wait costs the organizer nothing they can see.
+	 */
+	it('paints nothing for an alternative, and leaves the dragged card alone', () => {
+		const talk = session({ placementId: 3, roomId: 1, startMinutes: 9 * 60 });
+		const before = board([talk]);
+		const next = applyBoardWrites(before, [
+			{ kind: 'alternative', placementId: 3, dayId: 1, roomId: 2, startMinutes: 11 * 60 }
+		]);
+
+		expect(next.placed).toEqual(before.placed);
+		expect(next.tray).toEqual([]);
+	});
+
+	// It is still a write in the queue, so the card reads as saving until the
+	// reply lands.
+	it('marks the source card as saving while the alternative is in flight', () => {
+		expect(
+			involvedPlacementIds({
+				kind: 'alternative',
+				placementId: 3,
+				dayId: 1,
+				roomId: 2,
+				startMinutes: 11 * 60
+			})
+		).toEqual([3]);
+	});
+
 	it('is a no-op when the placement is gone — a dropped connection must not invent a card', () => {
 		const next = applyBoardWrites(board(), [
 			{ kind: 'place', placementId: 99, dayId: 1, roomId: 1, startMinutes: 600 }
@@ -164,7 +195,7 @@ describe('applyBoardWrites', () => {
 });
 
 describe('slotEditorWrite', () => {
-	it('paints a tray place, an unplace and a swap, and refuses a copy it cannot id', () => {
+	it('paints a tray place, an unplace and a swap, and reads the intent for the rest', () => {
 		expect(
 			slotEditorWrite('place', { placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 }, 'tray')
 		).toEqual({ kind: 'place', placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 });
@@ -177,9 +208,39 @@ describe('slotEditorWrite', () => {
 			placementId: 1,
 			withPlacementId: 2
 		});
-		// Already on the grid: the server will insert a new row. No local id.
+		// Already on the grid, no copy asked for: an ordinary move, and it paints.
 		expect(
 			slotEditorWrite('place', { placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 }, 'grid')
+		).toEqual({ kind: 'place', placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 });
+
+		// "Keep its current slot too": the server inserts a new row and only it
+		// knows the id, so this one is queued and painted nowhere (#596).
+		expect(
+			slotEditorWrite(
+				'place',
+				{ placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 },
+				'grid',
+				'alternative'
+			)
+		).toEqual({ kind: 'alternative', placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 });
+
+		// From the tray the same button is a move: there is no slot to keep.
+		expect(
+			slotEditorWrite(
+				'place',
+				{ placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 },
+				'tray',
+				'alternative'
+			)
+		).toEqual({ kind: 'place', placementId: 1, dayId: 1, roomId: 2, startMinutes: 600 });
+
+		// A talk the board has never heard of stays unpainted.
+		expect(
+			slotEditorWrite(
+				'place',
+				{ placementId: 9, dayId: 1, roomId: 2, startMinutes: 600 },
+				'missing'
+			)
 		).toBeNull();
 	});
 });

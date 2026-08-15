@@ -670,24 +670,32 @@ export async function placeAlternative(
 	});
 }
 
+/** What the organizer meant by this drop: put it there, or also try it there (#596). */
+export type PlaceIntent = 'move' | 'alternative';
+
 /**
- * The `?/place` write: a tray item moves, a draft already on the grid grows
- * another candidate slot. Confirmed sessions still move — they are published.
+ * The `?/place` write. The caller says which of the two it is.
+ *
+ * It used to decide by itself: a draft already on the grid, dragged elsewhere,
+ * grew a second row (#559). The rule is defensible and the gesture is not — one
+ * drag, and the organizer could not tell in advance whether it would move the
+ * talk or leave a twin behind (#596). So the intent comes from the input now:
+ * a plain drag is a move, `Alt`+drag and the slot editor's "keep both" ask for
+ * the alternative.
+ *
+ * "Keep both" on a talk that has no slot yet is just placing it: the row it
+ * already has becomes the second option and there is nothing left behind, so
+ * that case is a plain `placeSession` rather than a refusal.
  */
 export async function placeOnBoard(
 	conferenceId: number,
 	placementId: number,
-	slot: { dayId: number; roomId: number; startMinutes: number }
+	slot: { dayId: number; roomId: number; startMinutes: number },
+	intent: PlaceIntent = 'move'
 ): Promise<PlaceResult> {
 	const placement = await ownPlacement(conferenceId, placementId);
 	if (!placement) return { ok: false, reason: 'No such session' };
-	if (
-		placement.status === 'tentative' &&
-		alreadyOnGrid(placement) &&
-		(placement.conferenceDayId !== slot.dayId ||
-			placement.roomId !== slot.roomId ||
-			(placement.startsAt && slotMinutes(placement.startsAt) !== slot.startMinutes))
-	) {
+	if (intent === 'alternative' && alreadyOnGrid(placement)) {
 		return placeAlternative(conferenceId, placementId, slot);
 	}
 	return placeSession(conferenceId, placementId, slot);

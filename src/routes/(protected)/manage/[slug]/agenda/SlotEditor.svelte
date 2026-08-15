@@ -276,8 +276,8 @@
 					</form>
 				</div>
 				<p class="text-muted-foreground mt-2 text-xs">
-					To move it, take it out here and open the slot you want. Dragging a draft onto another
-					slot keeps both as alternatives.
+					To move it, take it out here and open the slot you want, or drag it — dragging always
+					moves. To try a draft in two places, hold Alt while you drag, or use the button below.
 				</p>
 
 				{#if occupant.status === 'tentative' && placeable}
@@ -290,6 +290,10 @@
 						<input type="hidden" name="dayId" value={selectedDayId ?? ''} />
 						<input type="hidden" name="startMinutes" value={target.startMinutes} />
 						<input type="hidden" name="roomId" value={target.roomId} />
+						<!-- The keyboard-and-touch way to the same thing Alt+drag does, and
+						     the only way on a finger (#596). A talk from the tray is placed
+						     rather than copied — it has no slot to keep. -->
+						<input type="hidden" name="intent" value="alternative" />
 						<div class="block text-sm">
 							<span class="text-muted-foreground text-xs">Also try this talk here</span>
 							<AppSelect
@@ -378,9 +382,34 @@
 					</div>
 				</div>
 
-				<Button type="submit" disabled={busy} data-testid="agenda-slot-place">
-					Put it in this slot
-				</Button>
+				<div class="flex flex-wrap gap-2">
+					<Button type="submit" disabled={busy} data-testid="agenda-slot-place">
+						Put it in this slot
+					</Button>
+					<!--
+						The alternative without a keyboard (#596). Dragging is a move now,
+						and Alt is the copy — but there is no Alt on a finger, so the same
+						choice has to exist as a button. The submitter's own name/value is
+						what carries the intent: the plain button posts nothing and the
+						server reads a missing field as a move.
+
+						Only offered when there is a placed draft to pick. A talk from the
+						tray has no slot to keep, so this would be the same act as the
+						button beside it.
+					-->
+					{#if alsoOnGrid.length > 0}
+						<Button
+							type="submit"
+							name="intent"
+							value="alternative"
+							variant="outline"
+							disabled={busy}
+							data-testid="agenda-slot-place-also"
+						>
+							Keep its current slot too
+						</Button>
+					{/if}
+				</div>
 			</form>
 		{/if}
 	</div>

@@ -825,7 +825,11 @@ describe('draft alternatives (#559)', () => {
 		expect(result).toEqual({ ok: true, changed: 0 });
 	});
 
-	it('placeOnBoard copies a draft already on the grid and moves a tray item', async () => {
+	/**
+	 * #596: the intent comes from the caller now. The same draft, the same two
+	 * slots, and the only difference is the word the form posted.
+	 */
+	it('placeOnBoard moves by default and copies only when asked', async () => {
 		const { placementId } = await (async () => {
 			const [format] = await db
 				.select({ id: sessionFormatTable.id })
@@ -853,21 +857,42 @@ describe('draft alternatives (#559)', () => {
 			return { placementId: placement.id };
 		})();
 
-		await placeOnBoard(altConferenceId, placementId, {
-			dayId: altDayId,
-			roomId: altRooms[0],
-			startMinutes: 14 * 60
-		});
+		// Out of the tray: a move, whatever the intent says — there is no slot to
+		// keep, so "keep both" and "move" are the same act.
+		await placeOnBoard(
+			altConferenceId,
+			placementId,
+			{ dayId: altDayId, roomId: altRooms[0], startMinutes: 14 * 60 },
+			'alternative'
+		);
 		let board = await agendaBoard(altConferenceId);
 		expect(board.placed.filter((p) => p.title === 'Gamma')).toHaveLength(1);
 		expect(board.tray.map((t) => t.title)).not.toContain('Gamma');
 
+		// A plain drag to another slot: it moves, and nothing is left behind. This
+		// is the case Fabian reported — it used to duplicate.
 		await placeOnBoard(altConferenceId, placementId, {
 			dayId: altDayId,
 			roomId: altRooms[1],
 			startMinutes: 15 * 60
 		});
 		board = await agendaBoard(altConferenceId);
-		expect(board.placed.filter((p) => p.title === 'Gamma')).toHaveLength(2);
+		const moved = board.placed.filter((p) => p.title === 'Gamma');
+		expect(moved).toHaveLength(1);
+		expect(moved[0].roomId).toBe(altRooms[1]);
+		expect(moved[0].placementId).toBe(placementId);
+
+		// Alt held: now there are two, and the first one stayed where it was.
+		await placeOnBoard(
+			altConferenceId,
+			placementId,
+			{ dayId: altDayId, roomId: altRooms[0], startMinutes: 16 * 60 },
+			'alternative'
+		);
+		board = await agendaBoard(altConferenceId);
+		const both = board.placed.filter((p) => p.title === 'Gamma');
+		expect(both).toHaveLength(2);
+		expect(both.map((p) => p.roomId).sort()).toEqual([...altRooms].sort());
+		expect(both.some((p) => p.placementId === placementId)).toBe(true);
 	});
 });
