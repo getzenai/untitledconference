@@ -20,10 +20,9 @@
 	 *    no write path that only exists for the mouse.
 	 *
 	 * Two things deliberately cannot be dragged. Breaks span every room, so
-	 * dropping one into a column would file lunch under Hall 1. And a drop onto a
-	 * taken slot is not a swap: `placeSession` is permissive about conflicts, so it
-	 * would double-book rather than trade. Both stay with the editor, which asks
-	 * which of the two you meant.
+	 * dropping one into a column would file lunch under Hall 1. A drop onto a
+	 * published slot is still a question (swap or empty it). A drop onto a draft
+	 * slot keeps both talks as alternatives (#559).
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { tick } from 'svelte';
@@ -83,7 +82,17 @@
 	 * machinery than the problem has.
 	 */
 	const clashesFor = (placementId: number) =>
-		board.conflicts.filter((c) => c.placementIds.includes(placementId)).map((c) => c.detail);
+		board.conflicts
+			.filter((c) => c.kind !== 'alternative' && c.placementIds.includes(placementId))
+			.map((c) => c.detail);
+
+	const alternativesFor = (placementId: number) =>
+		board.conflicts
+			.filter((c) => c.kind === 'alternative' && c.placementIds.includes(placementId))
+			.map((c) => c.detail);
+
+	const realClashes = $derived(board.conflicts.filter((c) => c.kind !== 'alternative'));
+	const alternativePairs = $derived(board.conflicts.filter((c) => c.kind === 'alternative'));
 
 	const daySessions = $derived(board.placed.filter((p) => p.dayId === day?.id));
 
@@ -286,6 +295,27 @@
 			: []
 	);
 
+	const alsoOnGrid = $derived(
+		daySessions
+			.filter(
+				(s) =>
+					s.kind === 'session' &&
+					s.status === 'tentative' &&
+					s.placementId !== occupant?.placementId
+			)
+			.map((s) => ({
+				placementId: s.placementId,
+				title: s.title,
+				minutes: s.minutes,
+				startMinutes: s.startMinutes,
+				endMinutes: s.endMinutes,
+				speakers: s.speakers,
+				status: s.status,
+				kind: s.kind,
+				roomName: roomName(s.roomId)
+			}))
+	);
+
 	const openSlot = (room: { id: number; name: string }, startMinutes: number) => {
 		editing = { roomId: room.id, roomName: room.name, startMinutes };
 	};
@@ -381,10 +411,16 @@
 				{#if publicState}
 					<span data-testid="agenda-public-state">{publicState}</span>
 				{/if}
-				{#if board.conflicts.length > 0}
+				{#if realClashes.length > 0}
 					<span class="text-status-bad font-medium">
-						{board.conflicts.length}
-						{board.conflicts.length === 1 ? 'clash' : 'clashes'} to resolve.
+						{realClashes.length}
+						{realClashes.length === 1 ? 'clash' : 'clashes'} to resolve.
+					</span>
+				{/if}
+				{#if alternativePairs.length > 0}
+					<span class="text-status-warn font-medium" data-testid="agenda-alternatives-count">
+						{alternativePairs.length}
+						{alternativePairs.length === 1 ? 'alternative' : 'alternatives'} to pick.
 					</span>
 				{/if}
 			</p>
@@ -908,6 +944,7 @@
 											{#each laneLayout(sessionsIn(room.id)) as { session, lane, lanes } (session.placementId)}
 												{@const rows = blockRows(frame, session)}
 												{@const clashes = clashesFor(session.placementId)}
+												{@const alternatives = alternativesFor(session.placementId)}
 												{@const speakerLine = session.speakers.join(', ') || 'No speaker'}
 												{@const published = session.status === 'confirmed'}
 												{@const decidedDown =
@@ -942,13 +979,15 @@
 														class="absolute z-10 min-h-8 min-w-0 overflow-hidden rounded-md border {clashes.length >
 														0
 															? 'border-status-bad bg-status-bad/10'
-															: isHold
-																? 'border-border bg-muted/70'
-																: decidedDown
-																	? 'border-status-warn bg-status-warn-bg'
-																	: published
-																		? 'border-status-good bg-status-good-bg'
-																		: 'border-border bg-card'} {drag.dragging?.placementId ===
+															: alternatives.length > 0
+																? 'border-status-warn bg-status-warn-bg'
+																: isHold
+																	? 'border-border bg-muted/70'
+																	: decidedDown
+																		? 'border-status-warn bg-status-warn-bg'
+																		: published
+																			? 'border-status-good bg-status-good-bg'
+																			: 'border-border bg-card'} {drag.dragging?.placementId ===
 														session.placementId
 															? 'opacity-40'
 															: ''}"
@@ -1050,6 +1089,16 @@
 																			</span>
 																		{/each}
 
+																		{#each alternatives as alternative, ai (ai)}
+																			<span
+																				data-testid="agenda-alternative"
+																				class="text-status-warn block min-w-0 shrink truncate text-xs font-medium"
+																				title={alternative}
+																			>
+																				{alternative}
+																			</span>
+																		{/each}
+
 																		<span
 																			class="text-muted-foreground mt-0.5 block min-h-0 min-w-0 shrink truncate text-xs"
 																			title={session.trackName
@@ -1093,6 +1142,30 @@
 															{#if session.kind === 'reservation'}
 																<span class="text-muted-foreground sr-only">sponsor hold</span>
 															{/if}
+														{:else if alternatives.length > 0 && !published}
+															<form
+																method="POST"
+																action="?/toggleOne"
+																use:enhance={submitting}
+																class="absolute top-0.5 right-0.5"
+															>
+																<input
+																	type="hidden"
+																	name="placementId"
+																	value={session.placementId}
+																/>
+																<input type="hidden" name="status" value="confirmed" />
+																<Button
+																	type="submit"
+																	variant="ghost"
+																	size="sm"
+																	class="h-6 px-1.5 text-xs"
+																	disabled={busy}
+																	data-testid="agenda-choose-{session.placementId}"
+																>
+																	Choose
+																</Button>
+															</form>
 														{/if}
 													</div>
 												{/if}
@@ -1198,6 +1271,7 @@
 		{occupant}
 		{swapWith}
 		tray={board.tray}
+		{alsoOnGrid}
 		days={board.days}
 		rooms={board.rooms}
 		slots={data.slots}

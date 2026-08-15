@@ -38,7 +38,7 @@ type Options = {
 	 */
 	columnsBox: () => GridBox | null;
 	/** What already *starts* in a slot, if anything. */
-	occupantAt: (slot: SlotRef) => { placementId: number } | null;
+	occupantAt: (slot: SlotRef) => { placementId: number; status?: string } | null;
 	/** A drop onto a free slot: the one write this gesture makes. */
 	place: (placementId: number, slot: SlotRef) => void;
 	/** A drop onto a taken slot, which is a question rather than a write. */
@@ -116,10 +116,9 @@ export class DragController {
 		// would still reload the board and read as if something had moved.
 		if (occupant?.placementId === item.placementId) return;
 
-		// A taken slot is left to the editor. Placing on top of it would neither
-		// swap nor be refused — it would double-book and report the clash after
-		// the fact, which is not what dropping a card onto a card means.
-		if (occupant) {
+		// A published occupant is still a question (swap or empty it). A draft
+		// occupant is an alternative: both talks stay, marked as options (#559).
+		if (occupant && occupant.status !== 'tentative') {
 			this.#options.openSlot(target);
 			return;
 		}

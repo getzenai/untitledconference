@@ -245,7 +245,9 @@ describe('the permissive clash rule stays permissive (AIA-05)', () => {
 
 		expect(overlapped).toMatchObject({ ok: true });
 		const clashes = await conflicts(conferenceId);
-		expect(clashes.some((c) => c.kind === 'room')).toBe(true);
+		// Two drafts in one slot are alternatives, not a published double-booking (#559).
+		expect(clashes.some((c) => c.kind === 'alternative')).toBe(true);
+		expect(clashes.some((c) => c.kind === 'room')).toBe(false);
 	});
 
 	it('does not refuse a swap that happens to create a clash', async () => {
@@ -271,7 +273,8 @@ describe('the permissive clash rule stays permissive (AIA-05)', () => {
 
 		// 45 minutes from 09:00 runs to 09:45, over the neighbour at 09:30.
 		const clashes = await conflicts(conferenceId);
-		expect(clashes.some((c) => c.kind === 'room')).toBe(true);
+		expect(clashes.some((c) => c.kind === 'alternative')).toBe(true);
+		expect(clashes.some((c) => c.kind === 'room')).toBe(false);
 	});
 });
 

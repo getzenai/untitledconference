@@ -66,6 +66,12 @@
 		 */
 		swapWith: SwapCandidate[];
 		tray: Session[];
+		/**
+		 * Draft talks already on the grid, offered as a second candidate slot
+		 * (#559). Empty while the occupant is a published session — that one
+		 * is moved, not copied.
+		 */
+		alsoOnGrid: (Session & { roomName: string })[];
 		days: { id: number; date: string }[];
 		rooms: { id: number; name: string }[];
 		slots: { minutes: number; label: string }[];
@@ -83,6 +89,7 @@
 		occupant,
 		swapWith,
 		tray,
+		alsoOnGrid,
 		days,
 		rooms,
 		slots,
@@ -119,12 +126,18 @@
 		}))
 	);
 
-	const sessionOptions = $derived(
-		tray.map((item) => ({
+	const sessionOptions = $derived([
+		...tray.map((item) => ({
 			value: String(item.placementId),
 			label: `${item.title} (${item.minutes} min)`
+		})),
+		...alsoOnGrid.map((item) => ({
+			value: String(item.placementId),
+			label: `${item.title} (also — already in ${item.roomName} at ${timeLabel(item.startMinutes)})`
 		}))
-	);
+	]);
+
+	const placeable = $derived(sessionOptions.length > 0);
 
 	const dayOptions = $derived(days.map((d) => ({ value: String(d.id), label: d.date.slice(5) })));
 
@@ -263,11 +276,44 @@
 					</form>
 				</div>
 				<p class="text-muted-foreground mt-2 text-xs">
-					To move it, drag it to an empty slot on the grid — or take it out here and open the one
-					you want.
+					To move it, take it out here and open the slot you want. Dragging a draft onto another
+					slot keeps both as alternatives.
 				</p>
+
+				{#if occupant.status === 'tentative' && placeable}
+					<form
+						method="POST"
+						action="?/place"
+						use:enhance={submit}
+						class="border-border mt-4 space-y-3 border-t pt-4"
+					>
+						<input type="hidden" name="dayId" value={selectedDayId ?? ''} />
+						<input type="hidden" name="startMinutes" value={target.startMinutes} />
+						<input type="hidden" name="roomId" value={target.roomId} />
+						<div class="block text-sm">
+							<span class="text-muted-foreground text-xs">Also try this talk here</span>
+							<AppSelect
+								name="placementId"
+								required
+								testId="agenda-slot-also"
+								aria-label="Also try this talk here"
+								class="mt-1"
+								value={String((tray[0] ?? alsoOnGrid[0]).placementId)}
+								options={sessionOptions}
+							/>
+						</div>
+						<Button
+							type="submit"
+							variant="outline"
+							disabled={busy}
+							data-testid="agenda-slot-also-place"
+						>
+							Keep both as alternatives
+						</Button>
+					</form>
+				{/if}
 			{/if}
-		{:else if tray.length === 0}
+		{:else if !placeable}
 			<p class="text-muted-foreground mt-4 text-sm">
 				Nothing is waiting for a slot. Take a session out of another slot first.
 			</p>
@@ -283,7 +329,7 @@
 						testId="agenda-slot-session"
 						aria-label="Session"
 						class="mt-1"
-						value={String(tray[0].placementId)}
+						value={String((tray[0] ?? alsoOnGrid[0]).placementId)}
 						options={sessionOptions}
 					/>
 				</div>
