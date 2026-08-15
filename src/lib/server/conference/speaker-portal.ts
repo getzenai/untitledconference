@@ -239,7 +239,8 @@ async function ownedSubmissionRow(userId: string, submissionId: number) {
 			conferenceName: conferenceTable.name,
 			conferenceStatus: conferenceTable.status,
 			formatName: sessionFormatTable.name,
-			trackName: trackTable.name
+			trackName: trackTable.name,
+			isPrimary: submissionSpeakerTable.isPrimary
 		})
 		.from(submissionTable)
 		.innerJoin(conferenceTable, eq(conferenceTable.id, submissionTable.conferenceId))

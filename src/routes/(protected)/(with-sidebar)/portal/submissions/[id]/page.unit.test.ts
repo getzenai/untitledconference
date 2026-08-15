@@ -33,7 +33,11 @@ const submission = (over: Partial<Record<string, unknown>> = {}) => ({
 const draw = (
 	over: Partial<Record<string, unknown>> = {},
 	closesAt: Date | null = null,
-	call: { callState?: 'open' | 'not_yet_open' | 'closed'; closedByOrganizer?: boolean } = {}
+	call: {
+		callState?: 'open' | 'not_yet_open' | 'closed';
+		closedByOrganizer?: boolean;
+		canWithdraw?: boolean;
+	} = {}
 ) =>
 	render(Page, {
 		props: {
@@ -41,8 +45,10 @@ const draw = (
 				submission: submission(over),
 				closesAt,
 				callState: call.callState ?? 'open',
-				closedByOrganizer: call.closedByOrganizer ?? false
-			}
+				closedByOrganizer: call.closedByOrganizer ?? false,
+				canWithdraw: call.canWithdraw ?? false
+			},
+			form: null
 		} as never
 	}).body;
 
@@ -154,6 +160,26 @@ describe('speaker submission detail', () => {
 		expect(body).toContain('Waitlisted.');
 		expect(body).toContain('reserve list');
 	});
+
+	it('offers withdraw on an open submitted talk, and not on an accepted one (#663)', () => {
+		const open = draw({ status: 'submitted' }, null, { canWithdraw: true });
+		expect(open).toContain('data-testid="withdraw-proposal"');
+		expect(open).toContain('action="?/withdraw"');
+		expect(open).toContain('Withdraw this proposal');
+
+		const accepted = draw({ status: 'accepted' }, null, { canWithdraw: false });
+		expect(accepted).not.toContain('data-testid="withdraw-proposal"');
+		expect(accepted).not.toContain('action="?/withdraw"');
+	});
+
+	it('names a withdrawn proposal instead of leaving only the badge', () => {
+		const body = draw({ status: 'withdrawn' });
+
+		expect(body).toContain('This proposal is withdrawn.');
+		expect(body).toContain('will not review it');
+		expect(body).not.toContain('Your proposal is in.');
+		expect(body).not.toContain('data-testid="withdraw-proposal"');
+	});
 });
 
 describe('speaker expenses in the portal (#512)', () => {
@@ -172,8 +198,10 @@ describe('speaker expenses in the portal (#512)', () => {
 					closesAt: null,
 					callState: 'closed',
 					closedByOrganizer: true,
+					canWithdraw: false,
 					support
-				}
+				},
+				form: null
 			} as never
 		}).body;
 
