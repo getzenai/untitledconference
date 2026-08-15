@@ -66,7 +66,7 @@ describe('Review submit keeps answers', () => {
 			cy.contains('button', 'Submit review').click();
 
 			cy.contains('Review submitted').should('exist');
-			cy.contains('Submitted').should('exist');
+			cy.contains('Reviewed').should('exist');
 			cy.get('input[type="number"][name^="criterion-"]').should('have.value', '4');
 			cy.get('textarea[name="comment"]').should('have.value', comment);
 			cy.contains('button', 'Update review').should('exist');
