@@ -32,12 +32,19 @@ export const PEOPLE = [
 /** What each demo login is for, printed at the end so the URL alone is enough. */
 export const LOGIN_NOTES = {
 	'user-jordan': 'Organizer — submissions, decisions, schedule, speakers',
-	'user-priya': 'Speaker — two accepted talks, tasks, uploaded files, one unfinished draft',
+	'user-priya': 'Speaker and reviewer — two accepted talks, plus three DevFlow reviews waiting',
 	'user-marcus': 'Speaker — accepted talk, tasks, two versions of a slide deck',
 	'user-sam': 'Reviewer — round 1 only, so the round scoping is visible',
 	'user-ines': 'Reviewer — both rounds, with work outstanding in each',
 	'user-tomas': 'Reviewer — round 2 (anonymized) only'
 };
+
+/**
+ * In-review talks Priya is assigned on (#654). She is a speaker on `ragmemory`,
+ * so these three are other people's talks — `assign_reviews` would refuse her
+ * own. The live repair script finds them by title.
+ */
+export const PRIYA_REVIEW_KEYS = ['designsys', 'queues', 'testing'];
 
 export const SPEAKERS = [
 	{

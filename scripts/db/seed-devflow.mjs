@@ -3,7 +3,8 @@
  *
  * The fixture itself lives in `seed-data.mjs`; this file is the part that writes it.
  * The tenant it produces behaves like a real conference mid-review: thirty proposals
- * across every status, two review rounds with scores from three reviewers, answers to
+ * across every status, two review rounds with scores from three reviewers, a small
+ * screening queue for Priya so the reviewer journey has DevFlow work (#654), answers to
  * the configurable questions, and speaker tasks in every state. A screen showing four
  * rows cannot demonstrate filtering, progress or a decision — those criteria fail on
  * emptiness alone, so seed data is part of the submission, not decoration.
@@ -37,6 +38,7 @@ import {
 	LOGIN_NOTES,
 	NOTES,
 	PEOPLE,
+	PRIYA_REVIEW_KEYS,
 	ROOMS,
 	SPEAKERS,
 	SPEAKER_TASKS,
@@ -394,8 +396,10 @@ function scoreFor(status, n) {
 /**
  * Round 1 screens everything that was actually submitted.
  *
- * Sam and Inés are the only two holding a round-1 membership, and a review by somebody
- * without one would contradict the scoping the same screens are meant to show.
+ * Sam and Inés still screen everything; Priya holds a three-talk queue on the
+ * same open round so signing in as her is a reviewer journey, not a detour
+ * through a harness conference (#654). A review by somebody without a
+ * membership would contradict the scoping the same screens are meant to show.
  * Everything decided has been reviewed; what is still in review has one reviewer done
  * and one outstanding, which is what makes the progress dashboard (ABS-08) and the
  * reminder set (ABS-09) non-trivial.
@@ -432,6 +436,25 @@ function planCommittee(roundId, submission, submissionId, counter) {
 	}));
 }
 
+/** Three outstanding screening reviews, none of them her own talks. */
+function planPriyaReviews(roundId, submissionIds) {
+	return PRIYA_REVIEW_KEYS.map((key, i) => {
+		const submission = SUBMISSIONS.find((s) => s.key === key);
+		if (!submission) throw new Error(`PRIYA_REVIEW_KEYS names unknown submission '${key}'`);
+		if (submission.speakers.includes('priya')) {
+			throw new Error(`Priya cannot review her own talk '${key}'`);
+		}
+		return {
+			round: roundId,
+			submissionId: submissionIds[key],
+			reviewer: 'user-priya',
+			submitted: false,
+			status: submission.status,
+			n: 1000 + i
+		};
+	});
+}
+
 function planReviews(rounds, submissionIds) {
 	const planned = [];
 	for (const s of SUBMISSIONS) {
@@ -440,6 +463,7 @@ function planReviews(rounds, submissionIds) {
 		planned.push(...planScreening(rounds[0], s, id, planned.length));
 		planned.push(...planCommittee(rounds[1], s, id, planned.length));
 	}
+	planned.push(...planPriyaReviews(rounds[0], submissionIds));
 	return planned;
 }
 
@@ -601,7 +625,8 @@ async function seedRoles(conferenceId, rounds) {
 		{ user_id: 'user-sam', role: 'reviewer', scope_type: 'round', scope_id: rounds[0] },
 		{ user_id: 'user-ines', role: 'reviewer', scope_type: 'round', scope_id: rounds[0] },
 		{ user_id: 'user-ines', role: 'reviewer', scope_type: 'round', scope_id: rounds[1] },
-		{ user_id: 'user-tomas', role: 'reviewer', scope_type: 'round', scope_id: rounds[1] }
+		{ user_id: 'user-tomas', role: 'reviewer', scope_type: 'round', scope_id: rounds[1] },
+		{ user_id: 'user-priya', role: 'reviewer', scope_type: 'round', scope_id: rounds[0] }
 	])}`;
 }
 
