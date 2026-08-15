@@ -54,7 +54,15 @@ describe('Reviewer chat', () => {
 	it('shows the panel and names the tool it used when the flag is on', function () {
 		if (!chatEnabled) this.skip();
 
-		openReviewerQueue();
+		openReviewerQueue().then((slug) => {
+			// The pending line lives exactly as long as the request does, and the
+			// mock model answers a warm server in under the time Cypress needs to
+			// look. Hold the response open so "is it visible" is a question about
+			// the panel and not about the clock.
+			cy.intercept('POST', `/review/${slug}/chat`, (req) => {
+				req.on('response', (res) => res.setDelay(700));
+			});
+		});
 		cy.get('[data-testid="reviewer-chat"]').should('exist');
 		cy.get('[data-testid="reviewer-chat-input"]').type('Which reviews do I still have open?');
 		cy.get('[aria-label="Send"]').click();
