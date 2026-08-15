@@ -78,8 +78,8 @@
 	>
 		<h2 class="text-sm font-semibold">What reviewers see of each other</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
-			The restriction is enforced when the page is built, not when it is drawn — a hidden score is
-			never sent to the browser.
+			This is whether a reviewer can read other people’s scores before they file their own. A saved
+			draft is not filed.
 		</p>
 
 		<form

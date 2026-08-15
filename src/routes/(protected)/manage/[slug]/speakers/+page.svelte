@@ -190,8 +190,8 @@
 					<Dialog.Header>
 						<Dialog.Title>Email speakers</Dialog.Title>
 						<Dialog.Description>
-							One message to the addresses in the current filter. Delivery is recorded in the
-							conference mail log.
+							One message to the addresses in the current filter. You can look this send up later in
+							the conference mail log.
 						</Dialog.Description>
 					</Dialog.Header>
 					<ComposeForm

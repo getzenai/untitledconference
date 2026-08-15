@@ -64,6 +64,10 @@ describe('team & reviewers page', () => {
 
 		expect(body).toContain('data-testid="people-review-visibility"');
 		expect(body).toContain('What reviewers see of each other');
+		expect(body).toContain('before they file their own');
+		expect(body).toContain('draft is not filed');
+		expect(body).not.toContain('page is built');
+		expect(body).not.toContain('never sent to the browser');
 		expect(body).toContain('action="?/reviewVisibility"');
 		expect(body).not.toContain('action="?/addRoom"');
 		expect(body).not.toContain('Session formats');

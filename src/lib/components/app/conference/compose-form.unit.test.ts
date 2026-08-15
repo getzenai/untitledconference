@@ -48,8 +48,10 @@ describe('speaker compose form', () => {
 			}
 		});
 
-		expect(body).toContain('2 recipients with an email address');
+		expect(body).toContain('2 recipients with an email address.');
+		expect(body).not.toContain('address .');
 		expect(body).not.toContain('in the current filter');
+		expect(body).not.toContain('mail log');
 		expect(body).toContain('Send to 2 speakers');
 	});
 
