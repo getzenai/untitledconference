@@ -39,6 +39,8 @@ const inviteeId = `invitee-${suffix}`;
 const inviteeEmail = `${inviteeId}@example.test`;
 const roundReviewerId = `round-${suffix}`;
 const roundReviewerEmail = `${roundReviewerId}@example.test`;
+const loadReviewerId = `load-${suffix}`;
+const loadReviewerEmail = `${loadReviewerId}@example.test`;
 
 let conference: Conference;
 let otherConference: Conference;
@@ -56,7 +58,8 @@ beforeAll(async () => {
 		{ id: reviewerId, email: reviewerEmail, emailVerified: true, name: 'Rex Reviewer' },
 		{ id: otherId, email: otherEmail, emailVerified: true, name: 'Ines Reviewer' },
 		{ id: inviteeId, email: inviteeEmail, emailVerified: true, name: 'New Reviewer' },
-		{ id: roundReviewerId, email: roundReviewerEmail, emailVerified: true, name: 'Round Reviewer' }
+		{ id: roundReviewerId, email: roundReviewerEmail, emailVerified: true, name: 'Round Reviewer' },
+		{ id: loadReviewerId, email: loadReviewerEmail, emailVerified: true, name: 'Load Reviewer' }
 	]);
 
 	[conference] = await db
@@ -87,6 +90,7 @@ afterAll(async () => {
 	await db.delete(user).where(eq(user.id, otherId));
 	await db.delete(user).where(eq(user.id, inviteeId));
 	await db.delete(user).where(eq(user.id, roundReviewerId));
+	await db.delete(user).where(eq(user.id, loadReviewerId));
 });
 
 describe('addReviewer', () => {
@@ -262,6 +266,78 @@ describe('committee and assignment membership contract', () => {
 			rounds: ['Round-scoped screening', 'Round-scoped final'],
 			assigned: 1,
 			outstanding: 1
+		});
+	});
+});
+
+describe('outstanding seats (#631)', () => {
+	it('counts a real seat and ignores a draft seat on the same reviewer', async () => {
+		const added = await addReviewer(conference.id, loadReviewerEmail);
+		expect(added).toEqual({ ok: true, name: 'Load Reviewer' });
+
+		const round = await addReviewRound(conference.id, {
+			name: 'Load screening',
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
+		});
+		expect(round.ok).toBe(true);
+		if (!round.ok) return;
+
+		const [live] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Handed-in talk', status: 'submitted' })
+			.returning({ id: submissionTable.id });
+		const [draft] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Unfinished draft', status: 'draft' })
+			.returning({ id: submissionTable.id });
+
+		expect(await setReviewAssignment(conference.id, live.id, round.id, loadReviewerId, true)).toBe(
+			'assigned'
+		);
+		expect(await setReviewAssignment(conference.id, draft.id, round.id, loadReviewerId, true)).toBe(
+			'assigned'
+		);
+
+		const member = (await committee(conference.id)).find((row) => row.userId === loadReviewerId);
+		expect(member).toMatchObject({ assigned: 1, submitted: 0, outstanding: 1 });
+	});
+
+	it('keeps a withdrawn seat in assigned, but not in outstanding', async () => {
+		const memberBefore = (await committee(conference.id)).find(
+			(row) => row.userId === loadReviewerId
+		);
+		expect(memberBefore).toBeDefined();
+		if (!memberBefore) return;
+
+		const round = await addReviewRound(conference.id, {
+			name: 'Load withdrawn',
+			anonymized: false,
+			opensAt: null,
+			closesAt: null
+		});
+		expect(round.ok).toBe(true);
+		if (!round.ok) return;
+
+		const [withdrawn] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: 'Speaker took it back',
+				status: 'withdrawn'
+			})
+			.returning({ id: submissionTable.id });
+
+		expect(
+			await setReviewAssignment(conference.id, withdrawn.id, round.id, loadReviewerId, true)
+		).toBe('assigned');
+
+		const member = (await committee(conference.id)).find((row) => row.userId === loadReviewerId);
+		expect(member).toMatchObject({
+			assigned: memberBefore.assigned + 1,
+			submitted: 0,
+			outstanding: memberBefore.outstanding
 		});
 	});
 });

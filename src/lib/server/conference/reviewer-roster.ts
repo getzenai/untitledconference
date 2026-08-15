@@ -18,6 +18,7 @@
  */
 import { db } from '$lib/server/db';
 import { invitation, user } from '$lib/server/db/auth-schema';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceTable,
 	membershipTable,
@@ -29,7 +30,7 @@ import {
 	reviewRoundTable,
 	reviewTable
 } from '$lib/server/db/conference/review-schema';
-import { and, asc, count, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, ne, sql } from 'drizzle-orm';
 import { conferenceReviewerMemberships } from './reviewer-memberships';
 
 export type CommitteeMember = {
@@ -90,16 +91,26 @@ async function committeeAssignmentRows(conferenceId: number, userIds: string[]) 
 		.select({
 			userId: reviewTable.reviewerUserId,
 			assigned: count(),
-			submitted: count(reviewTable.submittedAt)
+			submitted: count(reviewTable.submittedAt),
+			// A withdrawn talk stays on the reviewer's queue so the assignment does
+			// not vanish, but the form is closed and POST is refused. Counting that
+			// seat as outstanding would send the organizer after a reviewer for a
+			// talk that left (#631).
+			outstanding: sql<number>`count(*) filter (where ${reviewTable.submittedAt} is null and ${submissionTable.status} <> 'withdrawn')`
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
 		.innerJoin(evaluationPlanTable, eq(evaluationPlanTable.id, reviewRoundTable.evaluationPlanId))
+		.innerJoin(submissionTable, eq(submissionTable.id, reviewTable.submissionId))
 		.where(
 			and(
 				eq(evaluationPlanTable.conferenceId, conferenceId),
 				inArray(reviewTable.reviewerUserId, userIds),
-				ne(reviewTable.status, 'recused')
+				ne(reviewTable.status, 'recused'),
+				// A draft is still the speaker's. The seat may already exist so the
+				// queue lights up the moment they submit (#623 / #614), but it is
+				// not work anyone can do today.
+				ne(submissionTable.status, 'draft')
 			)
 		)
 		.groupBy(reviewTable.reviewerUserId);
@@ -158,6 +169,7 @@ function committeeMember(
 	const progress = assignmentsByUser.get(row.userId);
 	const assigned = Number(progress?.assigned ?? 0);
 	const submitted = Number(progress?.submitted ?? 0);
+	const outstanding = Number(progress?.outstanding ?? 0);
 	return {
 		membershipId: row.membershipId,
 		userId: row.userId,
@@ -169,7 +181,7 @@ function committeeMember(
 		...access,
 		assigned,
 		submitted,
-		outstanding: assigned - submitted
+		outstanding
 	};
 }
 
