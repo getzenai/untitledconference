@@ -165,7 +165,13 @@
 								use. The honk lives where the goose is the page's own subject.
 							-->
 							<Goose silent class="h-6 w-5 shrink-0" />
-							<span class="truncate font-semibold tracking-tight">untitledconference</span>
+							<!-- Icon-collapsed width still fits one letter of a truncated
+							     wordmark, so the product reads as "u" (#620). -->
+							<span
+								class="truncate font-semibold tracking-tight group-data-[collapsible=icon]:hidden"
+							>
+								untitledconference
+							</span>
 						</a>
 					{/snippet}
 				</Sidebar.MenuButton>

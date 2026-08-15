@@ -22,6 +22,11 @@ describe('app sidebar starter cleanup', () => {
 		expect(source).toContain('untitledconference');
 	});
 
+	it('hides the wordmark when the rail is icon-collapsed (#620)', () => {
+		// truncate still paints the first letter in a 3rem rail.
+		expect(source).toContain('group-data-[collapsible=icon]:hidden');
+	});
+
 	it('wears the same goose as the landing page (#562)', () => {
 		// Signing in must not change the bird. Both surfaces render one component,
 		// so there is a single drawing and nothing to keep in sync by hand.
