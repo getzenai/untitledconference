@@ -1,5 +1,5 @@
 /**
- * Org-wide speaker directory (Speaker CRM).
+ * Org-wide contacts.
  *
  * Identity on `speaker_profile` (CRM-01). Event participation is a
  * `conference_speaker` row (CRM-10 handoff is an insert, not a copy). Notes and

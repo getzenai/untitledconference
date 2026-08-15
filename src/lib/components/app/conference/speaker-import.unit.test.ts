@@ -27,6 +27,16 @@ describe('speaker import form', () => {
 		expect(body).toContain('sending the same file twice is safe');
 		expect(body).toContain('Check the email column');
 		expect(body).not.toContain('a name is not an identity');
+		expect(body).toContain('Import speakers');
+	});
+
+	it('lets Contacts rename the button without changing the roster default (#455)', () => {
+		const { body } = render(ImportForm, {
+			props: { ...props, form: null, submitLabel: 'Import contacts' }
+		});
+
+		expect(body).toContain('Import contacts');
+		expect(body).not.toContain('Import speakers');
 	});
 
 	it('answers an import in place, not through the page banner', () => {

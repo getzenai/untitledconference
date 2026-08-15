@@ -17,12 +17,15 @@
 	let {
 		busy = false,
 		embedded = false,
+		submitLabel = 'Import speakers',
 		enhanceForm,
 		form
 	}: {
 		busy?: boolean;
 		/** Render without the card wrapper and heading when nested inside a dialog (issue #220). */
 		embedded?: boolean;
+		/** Contacts says "Import contacts"; the conference roster keeps speakers (#455). */
+		submitLabel?: string;
 		/** The page's shared submit handler, so this form disables with the others. */
 		enhanceForm: Parameters<typeof enhance>[1];
 		form: { scope?: string; message?: string; error?: string } | null;
@@ -108,7 +111,7 @@
 		{/if}
 
 		<Button type="submit" size="sm" disabled={busy} data-testid="import-submit">
-			Import speakers
+			{submitLabel}
 		</Button>
 	</form>
 </div>

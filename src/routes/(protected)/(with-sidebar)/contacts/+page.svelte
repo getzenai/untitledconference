@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * Speaker CRM directory — org-wide contacts across events (CRM-01 / CRM-02 / CRM-05)
+	 * Contacts directory — org-wide contacts across events (CRM-01 / CRM-02 / CRM-05)
 	 * plus overview KPIs and top-companies analytics (CRM-12).
 	 */
 	import { enhance } from '$lib/forms/enhance';
@@ -64,7 +64,7 @@
 </script>
 
 <svelte:head>
-	<title>Contacts — Speaker CRM</title>
+	<title>Contacts</title>
 </svelte:head>
 
 <div class="space-y-6">
@@ -72,7 +72,7 @@
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight" data-testid="contacts-heading">Contacts</h1>
 			<p class="text-muted-foreground mt-0.5 text-sm">
-				Organization-wide speaker directory across every event you administer.
+				Organization-wide contacts across every event you administer.
 				{#if data.canManage}
 					<span class="text-foreground tabular-nums"> · {data.contacts.length} shown</span>
 				{/if}
@@ -178,7 +178,7 @@
 					</Dialog.Trigger>
 					<Dialog.Content class="sm:max-w-lg">
 						<Dialog.Header>
-							<Dialog.Title>Import a list</Dialog.Title>
+							<Dialog.Title>Import contacts</Dialog.Title>
 							<Dialog.Description>
 								Load contacts from a CSV file or pasted rows; a contact already in the directory
 								with the same email is skipped.
@@ -186,6 +186,7 @@
 						</Dialog.Header>
 						<SpeakerImport
 							embedded
+							submitLabel="Import contacts"
 							{busy}
 							enhanceForm={submitting('add')}
 							form={form?.scope === 'import' ? form : null}
@@ -201,7 +202,7 @@
 			class="border-border bg-card text-muted-foreground max-w-2xl rounded-lg border px-4 py-3 text-sm"
 			data-testid="contacts-empty-org"
 		>
-			You need to own or administer an organization to use the speaker directory. Create one under
+			You need to own or administer an organization to use Contacts. Create one under
 			<a href="/settings/organization" class="text-foreground underline">Settings → Organization</a
 			>.
 		</p>
