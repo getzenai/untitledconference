@@ -131,6 +131,50 @@ describe('Sideways scrolling on the public site', () => {
 		cy.get('[data-testid="scroll-hint"]').should('be.visible');
 	});
 
+	it('reaches the last room and comes back with nothing but clicks (#589)', () => {
+		cy.viewport(PHONE.width, PHONE.height);
+		cy.visit(`/c/${slug}/agenda`);
+		cy.waitForHydration();
+
+		const GRID_BOX = '[data-testid="agenda-room-grid"]';
+		const onward = `${GRID_BOX} [data-testid="scroll-on"]`;
+		const back = `${GRID_BOX} [data-testid="scroll-back"]`;
+
+		// Nothing has moved yet, so there is nothing behind us to go back to. A
+		// button offering the trip anyway is the same lie as a permanent fade.
+		cy.get(back).should('not.exist');
+
+		// A mouse, and only a mouse. Each click moves most of a box; four rooms in
+		// 342 px take two or three, so keep clicking while the button is still there.
+		const toTheEnd = (left = 6) => {
+			if (left === 0) return;
+			cy.get('body').then(($body) => {
+				if ($body.find(onward).length === 0) return;
+				cy.get(onward).click();
+				cy.wait(400); // the scroll is smooth; let it land before re-measuring
+				toTheEnd(left - 1);
+			});
+		};
+		toTheEnd();
+
+		cy.contains(ROOMS.at(-1)!).should('be.visible');
+		cy.get(onward).should('not.exist');
+
+		const toTheStart = (left = 6) => {
+			if (left === 0) return;
+			cy.get('body').then(($body) => {
+				if ($body.find(back).length === 0) return;
+				cy.get(back).click();
+				cy.wait(400);
+				toTheStart(left - 1);
+			});
+		};
+		toTheStart();
+
+		cy.contains(ROOMS[0]).should('be.visible');
+		cy.get(back).should('not.exist');
+	});
+
 	it('leaves the desktop agenda alone', () => {
 		cy.viewport(DESKTOP.width, DESKTOP.height);
 		cy.visit(`/c/${slug}/agenda`);
@@ -142,6 +186,8 @@ describe('Sideways scrolling on the public site', () => {
 		cy.contains('Workshop Lab').should('exist');
 		cy.get('[data-testid="scroll-edge"]').should('not.exist'); // neither strip
 		cy.get('[data-testid="scroll-hint"]').should('not.exist');
+		cy.get('[data-testid="scroll-on"]').should('not.exist');
+		cy.get('[data-testid="scroll-back"]').should('not.exist');
 	});
 
 	it('marks the tab strip and still lets the tab under the edge be tapped', () => {
@@ -160,6 +206,14 @@ describe('Sideways scrolling on the public site', () => {
 		// for a screenreader to announce.
 		cy.get(TABS).should('have.attr', 'aria-hidden', 'true');
 		cy.get(TABS).should('have.css', 'pointer-events', 'none');
+
+		// The button, on the other hand, lies over a half-cut tab on purpose, and a
+		// click on it has to move the strip rather than open whatever is underneath
+		// (#589). Staying on the page is the assertion.
+		cy.get('[data-testid="conference-tabs"] [data-testid="scroll-on"]').click();
+		cy.wait(400);
+		cy.location('pathname').should('eq', `/c/${slug}`);
+		cy.get('[data-testid="conference-tabs"] [data-testid="scroll-back"]').should('exist');
 
 		// The tab furthest right is the one the edge lies over. Reaching it is the
 		// whole point of leaving the strip scrollable.

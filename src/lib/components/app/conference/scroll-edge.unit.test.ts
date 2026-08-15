@@ -32,4 +32,14 @@ describe('the public scroll edge', () => {
 		expect(body).not.toContain('data-testid="scroll-hint"');
 		expect(body).not.toContain('Scroll sideways for the other rooms');
 	});
+
+	it('ships no buttons either, for the same reason (#589)', () => {
+		// A button in the server HTML would offer to scroll a strip that, on a wide
+		// screen, has nowhere to go — and would sit there until hydration measured
+		// the box and took it away again.
+		const { body } = render(ScrollEdge, { props: { children } });
+
+		expect(body).not.toContain('data-testid="scroll-on"');
+		expect(body).not.toContain('data-testid="scroll-back"');
+	});
 });
