@@ -12,7 +12,8 @@ import {
 	cfpDeadlineCalendar,
 	cfpDeadlineEvent,
 	cfpDeadlineFilename,
-	cfpDeadlinePath
+	cfpDeadlinePath,
+	namedCall
 } from './cfp-deadline';
 
 const NOW = new Date('2026-08-14T20:00:00.000Z');
@@ -61,5 +62,33 @@ describe('the CFP deadline as a calendar event', () => {
 			'DevFlow-Conf-2027-Call-for-papers.ics'
 		);
 		expect(cfpDeadlinePath('devflow-conf-2027')).toBe('/c/devflow-conf-2027/cfp.ics');
+	});
+});
+
+describe('namedCall — the conference name once', () => {
+	it('puts the name in front of a title that does not already carry it', () => {
+		expect(namedCall('DevFlow Conf 2027', 'Call for papers')).toBe(
+			'DevFlow Conf 2027 — Call for papers'
+		);
+	});
+
+	it('leaves a default title that already carries the name alone', () => {
+		expect(namedCall('DevFlow Conf 2027', 'DevFlow Conf 2027 — Call for papers')).toBe(
+			'DevFlow Conf 2027 — Call for papers'
+		);
+	});
+
+	it('uses the same label for SUMMARY, calendar name and filename', () => {
+		const defaulted = {
+			...DEADLINE,
+			formTitle: 'DevFlow Conf 2027 — Call for papers'
+		};
+		const lines = cfpDeadlineCalendar(defaulted, NOW).split('\r\n');
+
+		expect(lines).toContain('SUMMARY:DevFlow Conf 2027 — Call for papers closes');
+		expect(lines).toContain('X-WR-CALNAME:DevFlow Conf 2027 — Call for papers');
+		expect(cfpDeadlineFilename(defaulted.conferenceName, defaulted.formTitle)).toBe(
+			'DevFlow-Conf-2027-Call-for-papers.ics'
+		);
 	});
 });

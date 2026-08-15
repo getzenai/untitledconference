@@ -25,13 +25,30 @@ export type CfpDeadline = {
 	url: string;
 };
 
+/**
+ * Conference name in front of the call title, once (#528).
+ *
+ * The default form title is already `<Name> — Call for papers`. Prepending
+ * unconditionally stutters in a speaker's calendar, between events they wrote
+ * themselves. Prefix only when the title does not already carry the name.
+ * SUMMARY, X-WR-CALNAME and the filename all read this.
+ */
+export function namedCall(conferenceName: string, formTitle: string): string {
+	const name = conferenceName.trim();
+	const title = formTitle.trim();
+	if (name && title.toLowerCase().includes(name.toLowerCase())) return title;
+	if (!name) return title;
+	if (!title) return name;
+	return `${name} — ${title}`;
+}
+
 export function cfpDeadlineEvent(deadline: CfpDeadline): CalendarEvent {
 	const start = new Date(deadline.closesAt.getTime() - CFP_DEADLINE_MINUTES * 60 * 1000);
 	return {
 		uid: `cfp-${deadline.formId}@untitledconference`,
 		start,
 		end: deadline.closesAt,
-		summary: `${deadline.conferenceName} — ${deadline.formTitle} closes`,
+		summary: `${namedCall(deadline.conferenceName, deadline.formTitle)} closes`,
 		description: 'The call for papers closes at this moment.',
 		url: deadline.url
 	};
@@ -39,7 +56,7 @@ export function cfpDeadlineEvent(deadline: CfpDeadline): CalendarEvent {
 
 export function cfpDeadlineCalendar(deadline: CfpDeadline, now: Date): string {
 	return icalFile(
-		`${deadline.conferenceName} — ${deadline.formTitle}`,
+		namedCall(deadline.conferenceName, deadline.formTitle),
 		[cfpDeadlineEvent(deadline)],
 		now
 	);
@@ -47,7 +64,7 @@ export function cfpDeadlineCalendar(deadline: CfpDeadline, now: Date): string {
 
 /** `DevFlow-Conf-2027-Call-for-papers.ics` — safe for `Content-Disposition`. */
 export function cfpDeadlineFilename(conferenceName: string, formTitle: string): string {
-	return attachmentFilename('ics', conferenceName, formTitle);
+	return attachmentFilename('ics', namedCall(conferenceName, formTitle));
 }
 
 export function cfpDeadlinePath(slug: string): string {
