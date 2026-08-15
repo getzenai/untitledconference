@@ -33,6 +33,7 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
+	import AutoDistributeCounts from '$lib/components/app/conference/auto-distribute-counts.svelte';
 	import SubmissionFilters from '$lib/components/app/conference/submission-filters.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import {
@@ -907,32 +908,7 @@
 						assignReviewerIds.clear();
 					}}
 				/>
-				<label class="text-muted-foreground flex items-center gap-1 text-sm">
-					<input
-						type="number"
-						name="reviewsPerSubmission"
-						min="1"
-						step="1"
-						class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
-						bind:value={reviewsPerSubmission}
-						data-testid="bulk-assign-per-talk"
-						aria-label="Reviewers per talk"
-					/>
-					each
-				</label>
-				<label class="text-muted-foreground flex items-center gap-1 text-sm">
-					cap
-					<input
-						type="number"
-						name="capPerReviewer"
-						min="1"
-						step="1"
-						class="border-input bg-background h-8 w-14 rounded-md border px-2 text-sm tabular-nums"
-						bind:value={capPerReviewer}
-						data-testid="bulk-assign-cap"
-						aria-label="Cap per reviewer"
-					/>
-				</label>
+				<AutoDistributeCounts bind:reviewsPerSubmission bind:capPerReviewer />
 			</div>
 			<!--
 				Remount when the round changes so a checked box from the
