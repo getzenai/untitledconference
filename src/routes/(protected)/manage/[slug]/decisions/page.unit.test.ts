@@ -195,3 +195,18 @@ describe('conditional accept on the decision list', () => {
 		expect(body).not.toContain('data-testid="accept-condition"');
 	});
 });
+
+describe('decision fields say who reads them (#630)', () => {
+	it('tells the room which notes stay inside and which reach the speaker', () => {
+		const body = renderQueue(null);
+
+		expect(body).toContain('Condition on this accept');
+		expect(body).toContain('The committee sees this. The speaker does not.');
+		expect(body).toContain('The organizer who will chase it. Speakers never see this name.');
+		expect(body).toContain('What they should change');
+		expect(body).toContain('Note with the rejection (optional)');
+		expect(body).toContain(
+			'The speaker will see this in their portal, and in the email when you notify them.'
+		);
+	});
+});

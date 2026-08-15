@@ -42,6 +42,10 @@
 		{ value: '', label: 'Who follows up' },
 		...organizers.map((owner) => ({ value: owner.userId, label: owner.name }))
 	]);
+
+	/** Guidance and a decline note both reach the speaker. The accept condition does not. */
+	const speakerSees =
+		'The speaker will see this in their portal, and in the email when you notify them.';
 </script>
 
 <svelte:head>
@@ -171,7 +175,7 @@
 				{/each}
 				<p class="text-muted-foreground text-xs">
 					Leave a field empty and we say nothing about it. Empty is not zero — a committee should
-					never be stopped by a limit we invented.
+					never be stopped by a limit we invented. Only this room sees these numbers.
 				</p>
 				<Button type="submit" size="sm" disabled={busy}>Save slots</Button>
 			</form>
@@ -290,15 +294,21 @@
 								>
 									<input type="hidden" name="id" value={row.submissionId} />
 									{#if row.status !== 'accepted'}
-										<div class="flex w-52 flex-col gap-1" data-testid="accept-condition">
-											<input
-												name="condition"
-												type="text"
-												maxlength="280"
-												placeholder="If they bring a co-presenter…"
-												class="border-input bg-background w-full rounded-md border px-2 py-1 text-xs"
-												data-testid="accept-condition-text"
-											/>
+										<div class="flex w-64 flex-col gap-1" data-testid="accept-condition">
+											<label class="block">
+												<span class="text-xs font-medium">Condition on this accept</span>
+												<input
+													name="condition"
+													type="text"
+													maxlength="280"
+													placeholder="If they bring a co-presenter…"
+													class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1 text-xs"
+													data-testid="accept-condition-text"
+												/>
+											</label>
+											<p class="text-muted-foreground text-[0.65rem] leading-snug">
+												The committee sees this. The speaker does not.
+											</p>
 											<AppSelect
 												name="conditionOwnerId"
 												value=""
@@ -307,27 +317,42 @@
 												aria-label="Who follows up"
 												testId="accept-condition-owner"
 											/>
+											<p class="text-muted-foreground text-[0.65rem] leading-snug">
+												The organizer who will chase it. Speakers never see this name.
+											</p>
 										</div>
 									{/if}
 									{#if row.status !== 'resubmit_with_guidance'}
-										<input
-											name="guidance"
-											type="text"
-											maxlength="280"
-											placeholder="Resubmit with your client…"
-											class="border-input bg-background w-52 rounded-md border px-2 py-1 text-xs"
-											data-testid="resubmit-guidance-text"
-										/>
+										<label class="block w-64">
+											<span class="text-xs font-medium">What they should change</span>
+											<input
+												name="guidance"
+												type="text"
+												maxlength="280"
+												placeholder="Resubmit with your client…"
+												class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1 text-xs"
+												data-testid="resubmit-guidance-text"
+											/>
+											<span class="text-muted-foreground mt-0.5 block text-[0.65rem] leading-snug">
+												{speakerSees}
+											</span>
+										</label>
 									{/if}
 									{#if row.status !== 'rejected'}
-										<input
-											name="declineNote"
-											type="text"
-											maxlength="280"
-											placeholder="Optional — one sentence from the champion"
-											class="border-input bg-background w-52 rounded-md border px-2 py-1 text-xs"
-											data-testid="decline-note-text"
-										/>
+										<label class="block w-64">
+											<span class="text-xs font-medium">Note with the rejection (optional)</span>
+											<input
+												name="declineNote"
+												type="text"
+												maxlength="280"
+												placeholder="One sentence from the champion"
+												class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1 text-xs"
+												data-testid="decline-note-text"
+											/>
+											<span class="text-muted-foreground mt-0.5 block text-[0.65rem] leading-snug">
+												{speakerSees}
+											</span>
+										</label>
 									{/if}
 									<div class="flex flex-wrap justify-end gap-1">
 										{#if row.status !== 'accepted'}
