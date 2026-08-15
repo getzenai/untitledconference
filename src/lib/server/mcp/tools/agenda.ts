@@ -223,6 +223,7 @@ function placeInputSchema() {
 function listRooms(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_rooms',
+		writes: false,
 		description:
 			'List the rooms of a conference you organize, in column order. ' +
 			'Rooms are a name and a position — this product does not store a seat count. ' +
@@ -248,6 +249,7 @@ function listRooms(ctx: McpContext): AnyMcpToolDefinition {
 function createRoom(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'create_room',
+		writes: true,
 		description:
 			'Add one room to a conference you organize. Same function as Settings → Rooms ' +
 			'(`addRoom`). A duplicate name is refused. Rooms have no capacity field.',
@@ -286,6 +288,7 @@ function createRoom(ctx: McpContext): AnyMcpToolDefinition {
 function getAgendaTray(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_agenda_tray',
+		writes: false,
 		description:
 			'List accepted talks that are not yet on the grid, plus the days and rooms ' +
 			'you can place them on. Same tray `agendaBoard` shows on /agenda. ' +
@@ -356,6 +359,7 @@ async function placeOrMove(
 function placeTalk(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'place_talk',
+		writes: true,
 		description:
 			'Put a talk from the tray onto a room and start time. Same write as the ' +
 			'agenda builder (`placeSession`). A room or speaker collision is refused ' +
@@ -369,6 +373,7 @@ function placeTalk(ctx: McpContext): AnyMcpToolDefinition {
 function moveTalk(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'move_talk',
+		writes: true,
 		description:
 			'Move a placed talk to a different room and/or start. Same write as ' +
 			'place_talk (`placeSession`). A collision is refused with the other talk named.',
@@ -381,6 +386,7 @@ function moveTalk(ctx: McpContext): AnyMcpToolDefinition {
 function swapTalks(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'swap_talks',
+		writes: true,
 		description:
 			'Swap the slots of two placed talks. Same function as the agenda builder ' +
 			'(`swapPlacements`) — both move or neither does. A collision after the swap ' +
@@ -418,6 +424,7 @@ function swapTalks(ctx: McpContext): AnyMcpToolDefinition {
 function unplaceTalk(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'unplace_talk',
+		writes: true,
 		description:
 			'Take a talk off the grid and back into the tray. Same function as the ' +
 			'agenda builder (`unplaceSession`). Status drops to tentative with it.',
@@ -446,6 +453,7 @@ function unplaceTalk(ctx: McpContext): AnyMcpToolDefinition {
 function createBreak(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'create_break',
+		writes: true,
 		description:
 			'Put a break or a reserved block on the grid — lunch, coffee, registration, ' +
 			'a room held for a sponsor. Omit roomId and it covers every room, which is ' +
@@ -526,6 +534,7 @@ function createBreak(ctx: McpContext): AnyMcpToolDefinition {
 function removeBreak(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'remove_break',
+		writes: true,
 		description:
 			'Delete a break or reserved block from the grid, by the placementId get_agenda ' +
 			'reports for it. A talk is refused — use unplace_talk, which returns it to the ' +

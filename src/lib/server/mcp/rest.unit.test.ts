@@ -159,6 +159,7 @@ describe('invokeTool', () => {
 			{
 				name: 'boom',
 				description: 'boom',
+				writes: false,
 				inputSchema: {},
 				handler: async () => {
 					throw thrown;

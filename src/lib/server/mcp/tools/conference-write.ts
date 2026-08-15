@@ -57,6 +57,7 @@ function parseInstant(value: string | undefined, label: string): Date | undefine
 function createConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'create_conference',
+		writes: true,
 		description:
 			'Create a new conference as a draft under the organization you own. ' +
 			'It is not public until you call publish_conference. The slug becomes the ' +
@@ -110,6 +111,7 @@ function createConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 function updateConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'update_conference',
+		writes: true,
 		description:
 			'Change the name, venue or date range of a conference you organize. ' +
 			'Changing the dates also rebuilds the agenda days the same way Settings does. ' +
@@ -176,6 +178,7 @@ function updateConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 function openCfpTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'open_cfp',
+		writes: true,
 		description:
 			'Open the call for papers on a conference you organize. Creates the form if ' +
 			'it does not exist yet, then publishes it — the same two actions as the CFP ' +
@@ -215,6 +218,7 @@ function openCfpTool(ctx: McpContext): AnyMcpToolDefinition {
 function closeCfpTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'close_cfp',
+		writes: true,
 		description:
 			'Close the call for papers on a conference you organize. Existing submissions ' +
 			'stay; no new ones come in. Same action as the CFP screen Close button.',
@@ -238,6 +242,7 @@ function closeCfpTool(ctx: McpContext): AnyMcpToolDefinition {
 function publishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'publish_conference',
+		writes: true,
 		description:
 			'Publish a conference you organize. /c/<slug> and the public call become live. ' +
 			'Same switch as Settings → Publish. Idempotent if it is already published.',
@@ -264,6 +269,7 @@ function publishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 function unpublishConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'unpublish_conference',
+		writes: true,
 		description:
 			'Return a conference you organize to draft. /c/<slug> and the public call ' +
 			'answer 404 again. Same switch as Settings → Return to draft. Idempotent.',
@@ -309,6 +315,7 @@ const confirmSlugField = z
 function archiveConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'archive_conference',
+		writes: true,
 		description:
 			'Archive a conference in an organization you own or administer. This is how a ' +
 			'conference is removed: /c/<slug>, the public call for papers, the front-door ' +
@@ -361,6 +368,7 @@ function archiveConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 function restoreConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'restore_conference',
+		writes: true,
 		description:
 			'Bring an archived conference back, exactly where it was: published if it was ' +
 			'published, a draft if it was a draft. Everything under it was kept, so nothing ' +
@@ -390,6 +398,7 @@ function restoreConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 function deleteConferenceTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'delete_conference',
+		writes: true,
 		description:
 			'Erase an archived conference and everything under it — rooms, tracks, days, the ' +
 			'call for papers and its submissions, reviews and agenda. There is no undo. Two ' +
@@ -468,6 +477,7 @@ function deleteRefusal(
 function inviteReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'invite_reviewer',
+		writes: true,
 		description:
 			'Add a reviewer to a conference you organize, by email. The address must ' +
 			'already have an account — same rule as Team & reviewers when the person ' +
@@ -495,6 +505,7 @@ function inviteReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
 function assignReviewsTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'assign_reviews',
+		writes: true,
 		description:
 			'Assign one reviewer to one or more submissions of a conference you organize. ' +
 			'Same function as the submissions-table bulk assign: existing assignments stay, ' +
@@ -599,6 +610,7 @@ async function recusalCounts(
 function listReviewersTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_reviewers',
+		writes: false,
 		description:
 			'List the review committee of a conference you organize — the same people ' +
 			'Team & reviewers shows. Returns email, name, role, assignment counts and ' +
@@ -641,6 +653,7 @@ function listReviewersTool(ctx: McpContext): AnyMcpToolDefinition {
 function removeReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'remove_reviewer',
+		writes: true,
 		description:
 			'Take a reviewer off the committee of a conference you organize, by email. ' +
 			'Same action as Team & reviewers → Remove. Existing reviews stay; they just ' +
@@ -684,6 +697,7 @@ function removeReviewerTool(ctx: McpContext): AnyMcpToolDefinition {
 function listReviewRoundsTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_review_rounds',
+		writes: false,
 		description:
 			'List the review rounds of a conference you organize, in order. ' +
 			'A fresh conference has none — call create_review_round before assign_reviews. ' +
@@ -713,6 +727,7 @@ function listReviewRoundsTool(ctx: McpContext): AnyMcpToolDefinition {
 function createReviewRoundTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'create_review_round',
+		writes: true,
 		description:
 			'Add a review round to a conference you organize. Same function as the ' +
 			'Review rounds screen (`addReviewRound`). Creates the conference evaluation ' +
@@ -790,6 +805,7 @@ function parseCreatedFormat(
 function listSessionFormatsTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_session_formats',
+		writes: false,
 		description:
 			'List the session formats of a conference you organize (Talk, Keynote, …). ' +
 			'`minutes` is the default length place_talk uses. A fresh conference has none — ' +
@@ -815,6 +831,7 @@ function listSessionFormatsTool(ctx: McpContext): AnyMcpToolDefinition {
 function createSessionFormatTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'create_session_format',
+		writes: true,
 		description:
 			'Add one session format to a conference you organize. Same function as ' +
 			'Settings → Formats (`addFormat`). `minutes` becomes the default length of ' +
@@ -871,6 +888,7 @@ function createSessionFormatTool(ctx: McpContext): AnyMcpToolDefinition {
 function listTracksTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_tracks',
+		writes: false,
 		description:
 			'List the tracks of a conference you organize, in order. A fresh conference ' +
 			'has none — call create_track so submit_proposal can take a trackId.',
@@ -894,6 +912,7 @@ function listTracksTool(ctx: McpContext): AnyMcpToolDefinition {
 function createTrackTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'create_track',
+		writes: true,
 		description:
 			'Add one track to a conference you organize. Same function as Settings → ' +
 			'Tracks (`addTrack`). A duplicate name is refused.',
@@ -938,6 +957,7 @@ function createTrackTool(ctx: McpContext): AnyMcpToolDefinition {
 function notifySpeakersTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'notify_speakers',
+		writes: true,
 		description:
 			'Tell speakers the current decision on one or more proposals of a conference you organize. ' +
 			'Same path as the Notify button on the submissions table — not a second send. ' +

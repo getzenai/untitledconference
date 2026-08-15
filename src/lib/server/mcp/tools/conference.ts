@@ -82,6 +82,7 @@ async function organizedConferenceList(ctx: McpContext) {
 function listMyConferences(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_my_conferences',
+		writes: false,
 		description:
 			'List the conferences the authenticated user organizes, newest first. ' +
 			'Start here: the slugs returned are what every other conference tool takes. ' +
@@ -95,6 +96,7 @@ function listMyConferences(ctx: McpContext): AnyMcpToolDefinition {
 function listConferences(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_conferences',
+		writes: false,
 		description:
 			'List the conferences the authenticated user organizes, newest first. ' +
 			'Same list as list_my_conferences. A caller who organizes nothing gets an empty list, ' +
@@ -107,6 +109,7 @@ function listConferences(ctx: McpContext): AnyMcpToolDefinition {
 function getConference(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_conference',
+		writes: false,
 		description:
 			'Get one conference you organize — name, venue, dates, status. ' +
 			'Unknown slugs and slugs you do not organize are the same answer.',
@@ -123,6 +126,7 @@ function getConference(ctx: McpContext): AnyMcpToolDefinition {
 function listSubmissions(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_submissions',
+		writes: false,
 		description:
 			'List the proposals submitted to a conference you organize, newest first, ' +
 			'optionally filtered by status. Returns titles and status only — call ' +
@@ -182,6 +186,7 @@ function listSubmissions(ctx: McpContext): AnyMcpToolDefinition {
 function getSubmission(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_submission',
+		writes: false,
 		description:
 			'Get one proposal of a conference you organize in full — abstract, key takeaway, ' +
 			'status — together with the reviews written for it. Reviewer identities are not returned.',
@@ -308,6 +313,7 @@ async function scheduledProgramme(conferenceSlug: string, ctx: McpContext) {
 function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'get_agenda',
+		writes: false,
 		description:
 			'Get the scheduled programme of a conference you organize — every placed session, ' +
 			'break and reservation in start order, with its day and room. Includes tentative ' +
@@ -324,6 +330,7 @@ function getAgenda(ctx: McpContext): AnyMcpToolDefinition {
 function listSessions(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'list_sessions',
+		writes: false,
 		description:
 			'List the scheduled programme of a conference you organize — day, room, start ' +
 			'and session, in start order. Same placements as get_agenda, including tentative ' +
@@ -338,6 +345,7 @@ function listSessions(ctx: McpContext): AnyMcpToolDefinition {
 function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'decide_submissions',
+		writes: true,
 		description:
 			'Accept, reject, waitlist, or ask a speaker to resubmit with guidance. ' +
 			'Accepting also places the talk in the agenda tray, confirms its speakers and creates ' +
