@@ -24,12 +24,27 @@ export type Dragged = {
 	title: string;
 	/** The room it currently sits in, or null while it is still in the tray. */
 	roomId: number | null;
+	/**
+	 * `tentative` can grow a second slot. Anything else is published, and the
+	 * server will refuse to copy it (#611).
+	 */
+	status?: string;
 };
 
 export type SlotRef = { roomId: number; startMinutes: number };
 
 /** What a drop means. `Alt`/`Option` is the copy modifier everywhere else (#596). */
 export type PlaceIntent = 'move' | 'alternative';
+
+/**
+ * The rule the badge and the drop both obey. `Alt` copies only a draft that is
+ * already on the grid. A published talk, or a tray card, is a move — the
+ * server refuses the copy (#611) and there is nothing to leave behind (#596).
+ */
+export function dragIntent(alt: boolean, item: Pick<Dragged, 'roomId' | 'status'>): PlaceIntent {
+	const canCopy = item.roomId != null && item.status === 'tentative';
+	return alt && canCopy ? 'alternative' : 'move';
+}
 
 type Options = {
 	/** The frame as it is now — rooms and rows both change under the room filter. */
@@ -64,9 +79,9 @@ export class DragController {
 	 * organizer lets go. A modifier nobody can see is as invisible as the rule it
 	 * replaced (#596).
 	 *
-	 * Only a talk that is already on the grid can grow an alternative: from the
-	 * tray there is nothing to leave behind, so `Alt` there is a move like any
-	 * other and promising a copy would be a lie.
+	 * Only a draft already on the grid can grow an alternative. From the tray
+	 * there is nothing to leave behind; a published talk the server will refuse
+	 * to copy (#611). Promising either would be a lie.
 	 */
 	intent = $state<PlaceIntent>('move');
 
@@ -99,11 +114,10 @@ export class DragController {
 	/**
 	 * The key can be pressed or released mid-drag, and a held key on a still
 	 * pointer fires no pointer event at all — so the page hands us the keyboard
-	 * too. `Alt` on a tray card stays a move; see `intent`.
+	 * too. `Alt` on a tray card or a published talk stays a move; see `intent`.
 	 */
 	#readModifier = (alt: boolean) => {
-		const onGrid = this.dragging?.roomId != null;
-		this.intent = alt && onGrid ? 'alternative' : 'move';
+		this.intent = this.dragging ? dragIntent(alt, this.dragging) : 'move';
 	};
 
 	modifier = (alt: boolean) => {

@@ -9,7 +9,7 @@
  */
 import { gridSlots } from '$lib/conference/agenda-grid';
 import { describe, expect, it, vi } from 'vitest';
-import { DragController, type SlotRef } from './drag-controller.svelte';
+import { DragController, dragIntent, type SlotRef } from './drag-controller.svelte';
 
 const ROOMS = [11, 22];
 const SLOTS = gridSlots({ dayStartsAt: 9 * 60, dayEndsAt: 18 * 60, slotMinutes: 15, sessions: [] });
@@ -142,7 +142,8 @@ describe('DragController', () => {
 	 * would do. Now the plain gesture is always a move and the copy is asked for.
 	 */
 	describe('move unless Alt is held', () => {
-		const PLACED = { placementId: 5, title: 'Talk', roomId: 11 };
+		const PLACED = { placementId: 5, title: 'Talk', roomId: 11, status: 'tentative' };
+		const PUBLISHED = { ...PLACED, status: 'confirmed' };
 
 		it('moves a draft that is already on the grid', () => {
 			const { controller, place } = harness([
@@ -195,6 +196,23 @@ describe('DragController', () => {
 			expect(controller.intent).toBe('move');
 		});
 
+		/**
+		 * #611. The server refuses to copy a published talk. Alt on one used to
+		 * light the badge and then fail; it is a move, the same as a tray card.
+		 */
+		it('stays a move for a published talk even with Alt held', () => {
+			const { controller, place } = harness();
+
+			controller.begin(pointerAt(0, 0, { altKey: true }), PUBLISHED);
+			controller.move(pointerAt(150, 105, { altKey: true }));
+			expect(controller.intent).toBe('move');
+			controller.modifier(true);
+			expect(controller.intent).toBe('move');
+			controller.end(pointerAt(150, 105, { altKey: true }));
+
+			expect(place).toHaveBeenCalledWith(5, { roomId: 22, startMinutes: 11 * 60 + 30 }, 'move');
+		});
+
 		// Nothing to leave behind, so the copy would be a lie — and the badge that
 		// promises it must not appear either.
 		it('stays a move for a tray card even with Alt held', () => {
@@ -216,6 +234,20 @@ describe('DragController', () => {
 			controller.cancel();
 
 			expect(controller.intent).toBe('move');
+		});
+	});
+
+	/**
+	 * The badge and the drop share this. The hole was `alt && onGrid` with no
+	 * look at publication — pin every combination that used to lie.
+	 */
+	describe('dragIntent', () => {
+		it('copies only a draft that is already on the grid, and only with Alt', () => {
+			expect(dragIntent(true, { roomId: 11, status: 'tentative' })).toBe('alternative');
+			expect(dragIntent(false, { roomId: 11, status: 'tentative' })).toBe('move');
+			expect(dragIntent(true, { roomId: 11, status: 'confirmed' })).toBe('move');
+			expect(dragIntent(true, { roomId: null, status: 'tentative' })).toBe('move');
+			expect(dragIntent(true, { roomId: 11 })).toBe('move');
 		});
 	});
 

@@ -1255,7 +1255,8 @@
 																			drag.begin(e, {
 																				placementId: session.placementId,
 																				title: session.title,
-																				roomId: room.id
+																				roomId: room.id,
+																				status: session.status
 																			});
 																		}}
 																		class="flex h-full w-full min-w-0 touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none {draggable
