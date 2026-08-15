@@ -3,7 +3,7 @@ import { organizationForNewConference } from '$lib/server/conference/create-conf
 import { setConferencePredecessor, withEditionLinks } from '$lib/server/conference/predecessor';
 import { db } from '$lib/server/db';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, isHttpError } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -55,6 +55,21 @@ async function organizedEdition(userId: string, id: number) {
 	return requireOrganizer(userId, row.slug);
 }
 
+/**
+ * Same gate as `organizedEdition`, but a missing or unauthorized predecessor
+ * is the inline `not_found` the form already uses for a foreign org — not a
+ * 404 page. The conference being edited still 404s: that one they should
+ * not have been posting about at all.
+ */
+async function organizedPredecessor(userId: string, id: number) {
+	try {
+		return await organizedEdition(userId, id);
+	} catch (cause) {
+		if (isHttpError(cause) && cause.status === 404) return null;
+		throw cause;
+	}
+}
+
 export const actions: Actions = {
 	/**
 	 * Name or clear the previous edition (#448). Empty `predecessorId` is the
@@ -72,7 +87,10 @@ export const actions: Actions = {
 
 		const { conference } = await organizedEdition(locals.user!.id, conferenceId);
 		if (predecessorId !== null) {
-			await organizedEdition(locals.user!.id, predecessorId);
+			const predecessor = await organizedPredecessor(locals.user!.id, predecessorId);
+			if (!predecessor) {
+				return fail(400, { conferenceId, error: predecessorError('not_found') });
+			}
 		}
 
 		const result = await setConferencePredecessor(conference.id, predecessorId);
