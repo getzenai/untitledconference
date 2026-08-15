@@ -32,10 +32,10 @@
 	<title>Front page listings — Admin</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6 p-6">
+<div class="space-y-6">
 	<div>
-		<h1 class="text-2xl font-semibold">Front page listings</h1>
-		<p class="text-muted-foreground text-sm">
+		<h1 class="text-lg font-semibold tracking-tight">Front page listings</h1>
+		<p class="text-muted-foreground mt-0.5 text-sm">
 			The conferences the directory on <code>/</code> is allowed to name. Taking one off here does
 			not unpublish it — <code>/c/&lt;slug&gt;</code> and its call for papers stay exactly as they were.
 		</p>
