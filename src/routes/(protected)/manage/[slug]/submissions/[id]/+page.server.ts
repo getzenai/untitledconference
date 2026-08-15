@@ -5,7 +5,9 @@ import { SUBMITTED_REVIEW_UNASSIGN_REASON } from '$lib/conference/review-assignm
 import {
 	conditionForDecision,
 	conferenceOrganizers,
-	resolveAcceptCondition
+	parseAcceptCondition,
+	resolveAcceptCondition,
+	updateAcceptCondition
 } from '$lib/server/conference/accept-condition';
 import { requireOrganizer } from '$lib/server/conference/access';
 import {
@@ -281,5 +283,35 @@ export const actions: Actions = {
 			return fail(400, { standMessage: 'Only an accepted talk can carry a stand.' });
 		}
 		return { standMessage: 'Stand advanced.' };
+	},
+
+	/**
+	 * The sentence was wrong, or the owner was. The talk stays accepted;
+	 * only the note is rewritten (#540).
+	 */
+	updateCondition: async ({ locals, params, request }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const parsed = parseAcceptCondition(await request.formData());
+		if (!parsed.ok) return fail(400, { conditionMessage: parsed.message });
+		if (!parsed.condition) {
+			return fail(400, { conditionMessage: 'Say what the accept depends on.' });
+		}
+
+		const result = await updateAcceptCondition(
+			conference,
+			submissionId(params.id),
+			parsed.condition
+		);
+		if (!result.ok) {
+			if (result.reason === 'not_found') throw error(404, 'Submission not found');
+			if (result.reason === 'invalid_owner') {
+				return fail(400, { conditionMessage: 'That person cannot follow this up.' });
+			}
+			if (result.reason === 'not_accepted') {
+				return fail(400, { conditionMessage: 'Only an accepted talk can carry a condition.' });
+			}
+			return fail(400, { conditionMessage: 'There is no condition to rewrite.' });
+		}
+		return { conditionMessage: 'Condition saved.' };
 	}
 };

@@ -43,6 +43,10 @@ export type ResolveConditionResult =
 	| { ok: true; changed: boolean }
 	| { ok: false; reason: 'not_found' };
 
+export type UpdateConditionResult =
+	| { ok: true }
+	| { ok: false; reason: 'not_found' | 'not_accepted' | 'no_condition' | 'invalid_owner' };
+
 /** `user.name` is nullable; the address is who they are when it is not set. */
 function displayName(name: string | null, email: string): string {
 	return name?.trim() || email;
@@ -204,4 +208,46 @@ export async function resolveAcceptCondition(
 		);
 
 	return { ok: true, changed: true };
+}
+
+/**
+ * Rewrite the note on an already-accepted talk (#540). The talk stays
+ * accepted — the slot, the speaker tasks and the confirmation do not
+ * move. Clearing the note is `resolveAcceptCondition`; this is the
+ * other direction.
+ */
+export async function updateAcceptCondition(
+	conference: Conference,
+	submissionId: number,
+	condition: AcceptCondition
+): Promise<UpdateConditionResult> {
+	if (!(await isConferenceOrganizer(conference, condition.ownerId))) {
+		return { ok: false, reason: 'invalid_owner' };
+	}
+
+	const [existing] = await db
+		.select({
+			id: submissionTable.id,
+			status: submissionTable.status,
+			acceptCondition: submissionTable.acceptCondition
+		})
+		.from(submissionTable)
+		.where(
+			and(eq(submissionTable.id, submissionId), eq(submissionTable.conferenceId, conference.id))
+		);
+	if (!existing) return { ok: false, reason: 'not_found' };
+	if (existing.status !== 'accepted') return { ok: false, reason: 'not_accepted' };
+	if (existing.acceptCondition === null) return { ok: false, reason: 'no_condition' };
+
+	await db
+		.update(submissionTable)
+		.set({
+			acceptCondition: condition.text,
+			acceptConditionOwnerId: condition.ownerId
+		})
+		.where(
+			and(eq(submissionTable.id, submissionId), eq(submissionTable.conferenceId, conference.id))
+		);
+
+	return { ok: true };
 }

@@ -38,6 +38,7 @@ type Extras = {
 	sponsorTiers?: { id: number; name: string; note: string | null; position: number }[];
 	acceptCondition?: string | null;
 	acceptConditionOwner?: string | null;
+	acceptConditionOwnerId?: string | null;
 	editorialStand?:
 		| 'materials_requested'
 		| 'received'
@@ -93,6 +94,7 @@ function renderPage(
 					sponsorNote: extras.sponsorNote ?? null,
 					acceptCondition: extras.acceptCondition ?? null,
 					acceptConditionOwner: extras.acceptConditionOwner ?? null,
+					acceptConditionOwnerId: extras.acceptConditionOwnerId ?? null,
 					editorialStand: extras.editorialStand ?? null,
 					speakers: extras.speakers ?? [],
 					answers: [],
@@ -476,7 +478,8 @@ describe('the organizer talk editor', () => {
 	it('names an open condition without opening anything, and offers resolve', () => {
 		const body = renderPage('accepted', null, null, null, 'one', null, {
 			acceptCondition: 'bring a co-presenter',
-			acceptConditionOwner: 'Ann Follows'
+			acceptConditionOwner: 'Ann Follows',
+			acceptConditionOwnerId: 'ann'
 		});
 
 		expect(body).toContain('data-testid="submission-condition"');
@@ -510,6 +513,26 @@ describe('the organizer talk editor', () => {
 		const body = renderPage('submitted');
 		expect(body).not.toContain('data-testid="editorial-stand"');
 		expect(body).not.toContain('data-testid="advance-editorial-stand"');
+	});
+
+	it('lets the organizer rewrite the sentence and the owner (#540)', () => {
+		const body = renderPage('accepted', null, null, null, 'one', null, {
+			acceptCondition: 'bring a co-presenter',
+			acceptConditionOwner: 'Ann Follows',
+			acceptConditionOwnerId: 'ann',
+			organizers: [
+				{ userId: 'ann', name: 'Ann Follows' },
+				{ userId: 'bob', name: 'Bob Chases' }
+			]
+		});
+
+		expect(body).toContain('data-testid="edit-condition"');
+		expect(body).toContain('data-testid="edit-condition-text"');
+		expect(body).toContain('data-testid="edit-condition-owner"');
+		expect(body).toContain('data-testid="save-condition"');
+		expect(body).toContain('bring a co-presenter');
+		expect(body).toContain('name="conditionOwnerId"');
+		expect(body).toContain('value="ann"');
 	});
 });
 
