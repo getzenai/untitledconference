@@ -18,7 +18,7 @@ vi.mock('$app/state', () => ({
 	}
 }));
 
-async function body(path: string) {
+async function body(path: string, call: unknown = null) {
 	pathname.value = path;
 	const empty = (() => '') as unknown as import('svelte').Snippet;
 	const { default: Layout } = await import('./+layout.svelte');
@@ -26,7 +26,7 @@ async function body(path: string) {
 		props: {
 			data: {
 				conference: FIXTURE_CONFERENCE,
-				call: null,
+				call,
 				daysUntilClose: null,
 				embed: false
 			} as never,
@@ -34,6 +34,9 @@ async function body(path: string) {
 		}
 	}).body;
 }
+
+/** The tab this issue is about only exists when there is a call to open (#617). */
+const withCall = (path: string) => body(path, { state: 'open' });
 
 const base = `/c/${FIXTURE_CONFERENCE.slug}`;
 
@@ -72,5 +75,34 @@ describe('public tab bar', () => {
 
 		expect(html).toContain('overflow-x-auto');
 		expect(html).toContain('whitespace-nowrap');
+	});
+
+	it('shortens the call tab on a phone without losing its name (#617)', async () => {
+		const html = await withCall(`${base}/cfp`);
+
+		// Both halves ship, and each is hidden from exactly one audience: the eye
+		// sees "CFP" and never hears it, a screenreader reads "Call for papers" and
+		// never sees the abbreviation. A tab that shipped only the short form would
+		// pass a width check and rename the page for everyone who cannot see it.
+		expect(html).toMatch(/aria-hidden="true"[^>]*class="[^"]*sm:hidden[^"]*">CFP</);
+		expect(html).toMatch(/class="[^"]*sr-only sm:not-sr-only[^"]*">Call for papers</);
+	});
+
+	it('leaves the four one-word tabs alone', async () => {
+		const html = await withCall(base);
+
+		// The short form is a fix for one label, not a style. Sessions, Agenda,
+		// Itinerary and Speakers already fit at 390 px; abbreviating them would cost
+		// clarity for nothing.
+		expect(html.match(/aria-hidden="true"[^>]*sm:hidden/g)).toHaveLength(1);
+	});
+
+	it('closes the gaps on a phone and keeps them on a desktop', async () => {
+		const html = await withCall(base);
+
+		// 24 px of gap around five tabs is what pushed the last one off a 390 px
+		// screen even after the label got shorter — measured at 390.06 px of content
+		// in 390 px of screen. 16 px below `sm` buys the 32 px of headroom.
+		expect(html).toMatch(/class="[^"]*\bgap-4\b[^"]*\bsm:gap-6\b/);
 	});
 });

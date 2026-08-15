@@ -28,12 +28,19 @@
 	// visible tab that 404s for most conferences would be worse than no tab at
 	// all, and a closed call still gets one, because "we are not taking proposals
 	// right now" is an answer a speaker came here for.
+	//
+	// `short` is the label a phone shows, and only this one tab has it: at 390 px
+	// the other four are single words that already fit (#617). "CFP" is the word
+	// the speaker world uses for exactly this page, and it is the only one of the
+	// candidates that stays true when the call is closed — "Submit" would offer
+	// something the page then refuses.
 	const surfaces = $derived([
 		...EMBEDDABLE_SURFACES.filter(({ path }) => path !== '/gallery').map(({ path, label }) => ({
 			path,
-			label
+			label,
+			short: undefined as string | undefined
 		})),
-		...(data.call ? [{ path: '/cfp', label: 'Call for papers' }] : [])
+		...(data.call ? [{ path: '/cfp', label: 'Call for papers', short: 'CFP' }] : [])
 	]);
 
 	// Prefix match, not equality: the speaker detail page lives under /speakers
@@ -94,15 +101,29 @@
 				<ModeToggle class="-mr-2" />
 			</div>
 
-			<!-- The tab that falls off a 390 px screen is "Call for papers" — the way in
-			     for the person the whole site is trying to attract. The banner above is
-			     a second way there and it has a dismiss button, so once it is gone this
-			     strip is the only one. -->
+			<!-- The tab that fell off a 390 px screen was "Call for papers" — the way in
+			     for the person the whole site is trying to attract, and it arrived
+			     clipped to "Cal" (#617). The banner above is a second way there and it
+			     has a dismiss button, so once it is gone this strip is the only one.
+			     Being reachable by a swipe was never the fix: a word nobody can read at
+			     rest is a word nobody looks for.
+
+			     So the longest label gets a short form on the narrowest screens, and the
+			     gaps close from 24 px to 16 px. Together the five tabs fit inside a
+			     390 px phone, which is what makes every visible label a whole word.
+			     Only the eye reads the short form — `aria-hidden` on it and the full
+			     name in a screenreader-only span means the tab is still called "Call
+			     for papers" to anyone who cannot see the difference. From `sm` up the
+			     two swap over and the abbreviation is gone.
+
+			     The strip stays scrollable, because fitting at 390 px is not fitting
+			     everywhere: a 320 px phone and large browser text both still push the
+			     last tab off, and then the fade and the buttons are what reach it. -->
 			<!-- "sections" is the word the nav below already uses for itself, so the
 			     button and the landmark agree (#604). -->
 			<ScrollEdge class="mx-auto max-w-6xl" data-testid="conference-tabs" name="sections">
 				<nav aria-label="Conference sections" class="px-6">
-					<ul class="-mb-px flex gap-6 text-sm whitespace-nowrap">
+					<ul class="-mb-px flex gap-4 text-sm whitespace-nowrap sm:gap-6">
 						{#each surfaces as surface (surface.path)}
 							{@const current = isCurrent(surface.path)}
 							<li>
@@ -113,7 +134,12 @@
 										? 'border-primary text-foreground font-medium'
 										: 'text-muted-foreground border-transparent'}"
 								>
-									{surface.label}
+									{#if surface.short}
+										<span aria-hidden="true" class="sm:hidden">{surface.short}</span>
+										<span class="sr-only sm:not-sr-only">{surface.label}</span>
+									{:else}
+										{surface.label}
+									{/if}
 								</a>
 							</li>
 						{/each}
