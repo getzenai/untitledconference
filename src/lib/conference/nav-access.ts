@@ -14,6 +14,14 @@
  *
  * Speaking has no flag on purpose: anyone may submit a proposal, so `/portal` is a
  * destination for every signed-in user and a flag for it would only ever be true.
+ *
+ * Hiding is not the same as saying nothing (#439). A brand-new account saw one
+ * entry, and after creating an organization it saw three, with nothing before or
+ * after to explain the jump — the sidebar is where a new organizer learns the shape
+ * of the product, and two thirds of it were invisible. So a destination whose gate
+ * the person can open themselves is *shown locked*, with the reason and a link to
+ * the form that opens it. Reviewing stays hidden: no form makes you a reviewer,
+ * somebody has to invite you, and a permanently locked entry is only noise.
  */
 
 /** The right to open a destination, not the presence of anything behind it. */
@@ -51,6 +59,15 @@ export type NavAccess = {
 	 * shell for anyone an organizer never named as a speaker.
 	 */
 	speakerProfile: boolean;
+	/**
+	 * Any organization seat at all, whatever the role. Not a right — it is what
+	 * separates "you can open this yourself" from "someone has to let you in"
+	 * (#439): with no seat, the organizer destinations are one form away, and the
+	 * sidebar says so. With a seat but no organizer role, the missing thing is a
+	 * colleague's decision, so the entry stays hidden rather than pointing at a
+	 * form that would create a second organization.
+	 */
+	organization: boolean;
 };
 
 /** A destination that is only shown when its flag is set; no flag means always shown. */
@@ -66,12 +83,37 @@ export function reviewQueueHref(slug: string | null): string {
 	return slug ? `/review/${slug}` : '/review';
 }
 
+/** Why a shown destination cannot be opened yet, and where the person opens it. */
+export type NavLock = {
+	/** Written for someone who has never seen the product: what to do, not what failed. */
+	reason: string;
+	/** The form that opens the gate. */
+	href: string;
+};
+
+/** A destination the sidebar should render, and whether it is still locked. */
+export type NavDestination<T> = T & { lock: NavLock | null };
+
 /**
- * Keeps the items whose gate is open, in the order they were given.
+ * The sidebar's list: open destinations, plus the ones the person can unlock
+ * themselves, in the order they were given.
+ *
+ * Three cases, and the third is the whole point of the file:
+ * - no gate, or an open gate → shown, `lock: null`;
+ * - a closed gate the person can open (`unlock`, and no organization yet) →
+ *   shown with the reason;
+ * - any other closed gate → dropped, as before.
  *
  * Generic over the item so the sidebar can keep its icons and labels in the
  * component and still have the rule live here, under test.
  */
-export function visibleNavItems<T extends { gate?: NavGate }>(items: T[], access: NavAccess): T[] {
-	return items.filter((item) => item.gate === undefined || access[item.gate]);
+export function navDestinations<T extends { gate?: NavGate; unlock?: NavLock }>(
+	items: T[],
+	access: NavAccess
+): NavDestination<T>[] {
+	return items.flatMap((item): NavDestination<T>[] => {
+		if (item.gate === undefined || access[item.gate]) return [{ ...item, lock: null }];
+		if (item.unlock && !access.organization) return [{ ...item, lock: item.unlock }];
+		return [];
+	});
 }

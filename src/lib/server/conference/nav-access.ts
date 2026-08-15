@@ -39,9 +39,9 @@ import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
 
 /**
- * Both reads are existence checks — `limit(1)` on an index, not a count. The shell
- * layout runs this on every signed-in navigation, so it may not walk a user's
- * memberships.
+ * No read here counts anything — they are existence checks, or a `selectDistinct`
+ * over a role column whose range is three values. The shell layout runs this on
+ * every signed-in navigation, so it may not walk a user's memberships.
  */
 export async function navAccess(userId: string, email: string | null): Promise<NavAccess> {
 	// One `Promise.all`, not a chain of awaits: the driver pipelines concurrent
@@ -50,12 +50,11 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 	// public pages' latency. The two slug lookups ride that same trip; they
 	// name `/review/<slug>` on the sidebar so the common reviewer does not
 	// pay `/review`'s 303 (#373).
-	const [[orgSeat], seats, profile, viaConference, viaRound] = await Promise.all([
-		db
-			.select({ id: member.id })
-			.from(member)
-			.where(and(eq(member.userId, userId), inArray(member.role, ORG_WIDE_ORGANIZER_ROLES)))
-			.limit(1),
+	const [orgSeats, seats, profile, viaConference, viaRound] = await Promise.all([
+		// Every seat's role, not just the organizer ones: whether there is *any*
+		// seat is what decides between a locked entry and no entry (#439), and
+		// asking for it here keeps this at one roundtrip.
+		db.selectDistinct({ role: member.role }).from(member).where(eq(member.userId, userId)),
 		db
 			.selectDistinct({ role: membershipTable.role })
 			.from(membershipTable)
@@ -92,7 +91,7 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 			)
 	]);
 
-	const orgWide = Boolean(orgSeat);
+	const orgWide = orgSeats.some((s) => ORG_WIDE_ORGANIZER_ROLES.includes(s.role));
 	const slugs = [...new Set([...viaConference, ...viaRound].map((row) => row.slug))];
 
 	return {
@@ -100,7 +99,8 @@ export async function navAccess(userId: string, email: string | null): Promise<N
 		contacts: orgWide,
 		reviewing: seats.some((s) => s.role === 'reviewer'),
 		reviewSlug: slugs.length === 1 ? slugs[0] : null,
-		speakerProfile: profile
+		speakerProfile: profile,
+		organization: orgSeats.length > 0
 	};
 }
 

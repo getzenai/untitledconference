@@ -162,7 +162,8 @@ describe('navAccess', () => {
 			contacts: false,
 			reviewing: false,
 			reviewSlug: null,
-			speakerProfile: false
+			speakerProfile: false,
+			organization: true
 		});
 	});
 
@@ -172,7 +173,8 @@ describe('navAccess', () => {
 			contacts: true,
 			reviewing: false,
 			reviewSlug: null,
-			speakerProfile: false
+			speakerProfile: false,
+			organization: true
 		});
 	});
 
@@ -192,7 +194,8 @@ describe('navAccess', () => {
 			contacts: false,
 			reviewing: false,
 			reviewSlug: null,
-			speakerProfile: false
+			speakerProfile: false,
+			organization: true
 		});
 	});
 
@@ -218,7 +221,8 @@ describe('navAccess', () => {
 			contacts: false,
 			reviewing: true,
 			reviewSlug: conference.slug,
-			speakerProfile: false
+			speakerProfile: false,
+			organization: true
 		});
 	});
 
@@ -253,7 +257,10 @@ describe('navAccess', () => {
 			contacts: false,
 			reviewing: true,
 			reviewSlug: null,
-			speakerProfile: false
+			speakerProfile: false,
+			// No seat in any organization — this one would be offered the locked
+			// organizer entries and the form that opens them (#439).
+			organization: false
 		});
 
 		await db.delete(membershipTable).where(inArray(membershipTable.userId, [TWO]));
