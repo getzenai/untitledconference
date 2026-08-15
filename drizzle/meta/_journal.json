@@ -176,6 +176,13 @@
 			"when": 1786780401582,
 			"tag": "0024_editorial_stand",
 			"breakpoints": true
+		},
+		{
+			"idx": 25,
+			"version": "7",
+			"when": 1786780401583,
+			"tag": "0025_resubmit_guidance",
+			"breakpoints": true
 		}
 	]
 }

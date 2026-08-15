@@ -10,6 +10,7 @@ import {
 	updateAcceptCondition
 } from '$lib/server/conference/accept-condition';
 import { requireOrganizer } from '$lib/server/conference/access';
+import { sentenceForDecision } from '$lib/server/conference/decision-note';
 import {
 	decisionNotificationStatuses,
 	notifySubmissionDecisions
@@ -30,7 +31,7 @@ import { editSubmissionContent, lastContentEdit } from '$lib/server/conference/s
 import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
-const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted'];
+const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted', 'resubmit_with_guidance'];
 
 function submissionId(raw: string): number {
 	const id = Number(raw);
@@ -97,11 +98,15 @@ export const actions: Actions = {
 		const note = await conditionForDecision(conference, form, decision);
 		if (!note.ok) return fail(400, { message: note.message });
 
+		const sentence = sentenceForDecision(form, decision);
+		if (!sentence.ok) return fail(400, { message: sentence.message });
+
 		const result = await decideSubmissions(
 			conference,
 			[submissionId(params.id)],
 			decision as Decision,
-			note.condition
+			note.condition,
+			sentence.sentence
 		);
 		// A disabled button is not a lock (#471). The bulk path still reports
 		// skipped drafts as a success summary; on this one talk that line used

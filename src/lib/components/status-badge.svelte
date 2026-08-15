@@ -24,6 +24,7 @@
 		accepted: 'good',
 		rejected: 'bad',
 		waitlisted: 'warn',
+		resubmit_with_guidance: 'warn',
 		withdrawn: 'bad',
 		// content_approval / deliverable_approval
 		pending: 'warn',

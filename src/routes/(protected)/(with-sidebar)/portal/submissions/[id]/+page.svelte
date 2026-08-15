@@ -46,6 +46,7 @@
 		accepted: 'Accepted',
 		rejected: 'Not accepted',
 		waitlisted: 'Waitlisted',
+		resubmit_with_guidance: 'Please resubmit',
 		withdrawn: 'Withdrawn'
 	};
 
@@ -179,6 +180,16 @@
 			<p class="text-muted-foreground mt-1">
 				The organizers decided not to include this proposal in the programme.
 			</p>
+			{#if s.declineNote}
+				<p class="mt-2" data-testid="portal-decline-note">{s.declineNote}</p>
+			{/if}
+		</div>
+	{:else if s.status === 'resubmit_with_guidance'}
+		<div class="border-status-warn/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">
+			<p class="font-medium">Please resubmit.</p>
+			{#if s.resubmitGuidance}
+				<p class="mt-1" data-testid="portal-guidance">{s.resubmitGuidance}</p>
+			{/if}
 		</div>
 	{:else if s.status === 'waitlisted'}
 		<div class="border-status-warn/40 bg-muted/40 mt-6 rounded-lg border p-4 text-sm" role="status">

@@ -230,6 +230,8 @@ async function ownedSubmissionRow(userId: string, submissionId: number) {
 			keyTakeaway: submissionTable.keyTakeaway,
 			audienceLevel: submissionTable.audienceLevel,
 			status: submissionTable.status,
+			resubmitGuidance: submissionTable.resubmitGuidance,
+			declineNote: submissionTable.declineNote,
 			submittedAt: submissionTable.submittedAt,
 			decidedAt: submissionTable.decidedAt,
 			conferenceId: submissionTable.conferenceId,

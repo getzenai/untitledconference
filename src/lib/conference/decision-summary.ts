@@ -13,7 +13,8 @@ import type { DispatchResult } from '$lib/server/conference/email-dispatcher';
 const PAST_TENSE: Record<string, string> = {
 	accepted: 'accepted',
 	rejected: 'declined',
-	waitlisted: 'waitlisted'
+	waitlisted: 'waitlisted',
+	resubmit_with_guidance: 'asked to resubmit'
 };
 
 /**

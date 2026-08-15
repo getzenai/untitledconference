@@ -339,12 +339,13 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'decide_submissions',
 		description:
-			'Accept, reject or waitlist one or more proposals of a conference you organize. ' +
+			'Accept, reject, waitlist, or ask a speaker to resubmit with guidance. ' +
 			'Accepting also places the talk in the agenda tray, confirms its speakers and creates ' +
 			'their tasks; taking an acceptance back undoes those. Speakers are NOT emailed — ' +
 			'notifying them is a separate organizer action. Deciding the same way twice changes ' +
 			'nothing. Proposals still in draft are skipped and counted under skippedDrafts: they ' +
-			'were never handed in, and only the speaker can do that.',
+			'were never handed in, and only the speaker can do that. resubmit_with_guidance needs ' +
+			'guidance — it is not a decline wearing a note.',
 		inputSchema: {
 			conferenceSlug: z.string().min(1).describe('Conference slug, from list_my_conferences.'),
 			submissionIds: z
@@ -353,10 +354,18 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 				.max(100)
 				.describe('Submission ids to decide, from list_submissions (1-100).'),
 			decision: z
-				.enum(['accepted', 'rejected', 'waitlisted'])
-				.describe('The decision to apply to every listed proposal.')
+				.enum(['accepted', 'rejected', 'waitlisted', 'resubmit_with_guidance'])
+				.describe('The decision to apply to every listed proposal.'),
+			guidance: z
+				.string()
+				.optional()
+				.describe('Required when asking them to resubmit: what they should do differently.'),
+			declineNote: z
+				.string()
+				.optional()
+				.describe('Optional one sentence from the champion on a decline. Empty sends nothing.')
 		},
-		handler: async ({ conferenceSlug, submissionIds, decision }) => {
+		handler: async ({ conferenceSlug, submissionIds, decision, guidance, declineNote }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
 
 			// `decideSubmissions` is the same function the organizer screen calls, and
@@ -369,7 +378,21 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 			//
 			// It scopes its own update to `conference.id`, so an id belonging to
 			// another conference is silently not decided rather than decided wrongly.
-			const result = await decideSubmissions(conference, submissionIds, decision);
+			const sentence =
+				decision === 'resubmit_with_guidance'
+					? (guidance ?? null)
+					: decision === 'rejected'
+						? (declineNote ?? null)
+						: null;
+			let result;
+			try {
+				result = await decideSubmissions(conference, submissionIds, decision, null, sentence);
+			} catch (error) {
+				if (error instanceof Error && error.message === 'missing_guidance') {
+					throw new McpToolError('Say what they should do differently.');
+				}
+				throw error;
+			}
 
 			return {
 				conference: { slug: conference.slug, name: conference.name },

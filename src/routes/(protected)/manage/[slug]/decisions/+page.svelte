@@ -252,6 +252,16 @@
 										/>
 									</span>
 								{/if}
+								{#if row.resubmitGuidance}
+									<span class="mt-1 block" data-testid="queue-guidance">
+										<StatusBadge status="open" tone="warn" label={row.resubmitGuidance} />
+									</span>
+								{/if}
+								{#if row.declineNote}
+									<span class="mt-1 block" data-testid="queue-decline-note">
+										<StatusBadge status="open" tone="warn" label={row.declineNote} />
+									</span>
+								{/if}
 								{#if row.myComment}
 									<p class="text-muted-foreground mt-1 max-w-prose text-xs italic">
 										“{row.myComment}”
@@ -295,7 +305,27 @@
 											/>
 										</div>
 									{/if}
-									<div class="flex justify-end gap-1">
+									{#if row.status !== 'resubmit_with_guidance'}
+										<input
+											name="guidance"
+											type="text"
+											maxlength="280"
+											placeholder="Resubmit with your client…"
+											class="border-input bg-background w-52 rounded-md border px-2 py-1 text-xs"
+											data-testid="resubmit-guidance-text"
+										/>
+									{/if}
+									{#if row.status !== 'rejected'}
+										<input
+											name="declineNote"
+											type="text"
+											maxlength="280"
+											placeholder="Optional — one sentence from the champion"
+											class="border-input bg-background w-52 rounded-md border px-2 py-1 text-xs"
+											data-testid="decline-note-text"
+										/>
+									{/if}
+									<div class="flex flex-wrap justify-end gap-1">
 										{#if row.status !== 'accepted'}
 											<Button
 												type="submit"
@@ -324,6 +354,17 @@
 												name="decision"
 												value="rejected"
 												disabled={busy}>Reject</Button
+											>
+										{/if}
+										{#if row.status !== 'resubmit_with_guidance'}
+											<Button
+												type="submit"
+												size="sm"
+												variant="outline"
+												name="decision"
+												value="resubmit_with_guidance"
+												disabled={busy}
+												data-testid="decide-resubmit">Ask to resubmit</Button
 											>
 										{/if}
 									</div>
