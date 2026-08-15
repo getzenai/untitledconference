@@ -12,7 +12,7 @@
  * accepted" was the single view the organizer in that interview built for themselves
  * over their incumbent tool, and the only one the committee actually used on the call.
  */
-import type { SlotLine } from '$lib/conference/decision-room';
+import { latestPerKey, type SlotLine } from '$lib/conference/decision-room';
 import { reviewScore, submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
@@ -174,7 +174,9 @@ export async function committeeSeats(conferenceId: number): Promise<CommitteeSea
 			userId: reviewTable.reviewerUserId,
 			name: user.name,
 			email: user.email,
-			queueLength: sql<number>`count(*)`
+			// Distinct, not `count(*)`: a second round means a second review row for
+			// the same talk, and the tab counts talks to argue, not rows (#592).
+			queueLength: sql<number>`count(distinct ${reviewTable.submissionId})`
 		})
 		.from(reviewTable)
 		.innerJoin(reviewRoundTable, eq(reviewRoundTable.id, reviewTable.reviewRoundId))
@@ -203,6 +205,8 @@ type ScoreRow = {
 	reviewId: number;
 	submissionId: number;
 	reviewerUserId: string;
+	roundId: number;
+	roundPosition: number;
 	submitted: boolean;
 	value: string | null;
 	weight: string | null;
@@ -213,14 +217,23 @@ type ScoreRow = {
 function foldReviews(rows: ScoreRow[]) {
 	const byReview = new Map<
 		number,
-		ReviewScores & { submissionId: number; reviewerUserId: string }
+		ReviewScores & {
+			reviewId: number;
+			submissionId: number;
+			reviewerUserId: string;
+			roundId: number;
+			roundPosition: number;
+		}
 	>();
 	for (const row of rows) {
 		let review = byReview.get(row.reviewId);
 		if (!review) {
 			review = {
+				reviewId: row.reviewId,
 				submissionId: row.submissionId,
 				reviewerUserId: row.reviewerUserId,
+				roundId: row.roundId,
+				roundPosition: row.roundPosition,
 				submitted: row.submitted,
 				scores: []
 			};
@@ -242,6 +255,8 @@ function myReviews(conferenceId: number, reviewerUserId: string) {
 		.select({
 			reviewId: reviewTable.id,
 			submissionId: reviewTable.submissionId,
+			roundId: reviewRoundTable.id,
+			roundPosition: reviewRoundTable.position,
 			comment: reviewTable.comment,
 			title: submissionTable.title,
 			status: submissionTable.status,
@@ -283,6 +298,8 @@ function allReviewsOn(conferenceId: number, submissionIds: number[]) {
 			reviewId: reviewTable.id,
 			submissionId: reviewTable.submissionId,
 			reviewerUserId: reviewTable.reviewerUserId,
+			roundId: reviewRoundTable.id,
+			roundPosition: reviewRoundTable.position,
 			submitted: sql<boolean>`${reviewTable.status} = 'submitted'`,
 			value: reviewScoreTable.valueNumber,
 			weight: scorecardCriterionTable.weight,
@@ -315,22 +332,38 @@ export async function lobbyingQueue(
 	conferenceId: number,
 	reviewerUserId: string
 ): Promise<LobbyRow[]> {
-	const mine = await myReviews(conferenceId, reviewerUserId);
+	// One line per talk, from the member's latest round on it. Two rounds are normal
+	// and would otherwise put the same talk in the queue twice (#592).
+	const mine = latestPerKey(
+		await myReviews(conferenceId, reviewerUserId),
+		(row) => row.submissionId
+	);
 	if (mine.length === 0) return [];
 
 	const submissionIds = [...new Set(mine.map((row) => row.submissionId))];
-	const reviews = foldReviews(await allReviewsOn(conferenceId, submissionIds));
+	const folded = foldReviews(await allReviewsOn(conferenceId, submissionIds));
 
-	const bySubmission = new Map<number, typeof reviews>();
-	for (const review of reviews) {
+	// Same rule for everyone else: a person who reviewed a talk in both rounds is one
+	// voice in the pooled average, not two. Only handed-in reviews are deduplicated —
+	// a fresh assignment in a later round must not silence what that person already said.
+	const pooled = latestPerKey(
+		folded.filter((review) => review.submitted),
+		(review) => `${review.submissionId}:${review.reviewerUserId}`
+	);
+
+	const bySubmission = new Map<number, typeof pooled>();
+	for (const review of pooled) {
 		const list = bySubmission.get(review.submissionId) ?? [];
 		list.push(review);
 		bySubmission.set(review.submissionId, list);
 	}
+	const byReviewId = new Map(folded.map((review) => [review.reviewId, review]));
 
 	const rows: LobbyRow[] = mine.map((row) => {
 		const all = bySubmission.get(row.submissionId) ?? [];
-		const own = all.find((review) => review.reviewerUserId === reviewerUserId);
+		// By review id, not by reviewer: the score on the line belongs to the same
+		// round as the comment next to it.
+		const own = byReviewId.get(row.reviewId);
 		const ownScore = own ? reviewScore(own) : null;
 		return {
 			submissionId: row.submissionId,
@@ -341,7 +374,7 @@ export async function lobbyingQueue(
 			// `reviewScore` is 0..1; the 1..5 scale is what every other surface prints.
 			myScore: ownScore === null ? null : ownScore * 5,
 			overallScore: submissionScore(all),
-			reviewsSubmitted: all.filter((review) => review.submitted).length,
+			reviewsSubmitted: all.length,
 			myComment: row.comment,
 			sponsorTier: row.sponsorTier,
 			acceptCondition: row.acceptCondition,

@@ -38,6 +38,7 @@ let conference: Conference;
 let neighbour: Conference;
 let platformTrackId: number;
 let peopleTrackId: number;
+let planId: number;
 let roundId: number;
 let criterionId: number;
 
@@ -54,11 +55,18 @@ async function addSubmission(
 	return row.id;
 }
 
-async function addReview(submissionId: number, reviewerUserId: string, value: number | null) {
+async function addReview(
+	submissionId: number,
+	reviewerUserId: string,
+	value: number | null,
+	inRound: number = roundId,
+	comment: string | null = null
+) {
 	const [review] = await db
 		.insert(reviewTable)
 		.values({
-			reviewRoundId: roundId,
+			reviewRoundId: inRound,
+			comment,
 			submissionId,
 			reviewerUserId,
 			status: 'submitted',
@@ -116,6 +124,7 @@ beforeAll(async () => {
 		.insert(evaluationPlanTable)
 		.values({ conferenceId: conference.id, name: 'Plan' })
 		.returning();
+	planId = plan.id;
 	[{ id: roundId }] = await db
 		.insert(reviewRoundTable)
 		.values({ evaluationPlanId: plan.id, name: 'Screening' })
@@ -324,5 +333,110 @@ describe('who is in the room', () => {
 		// An empty tab per absent name is how a screen built for a 40-minute call
 		// becomes something you scroll past.
 		expect((await committeeSeats(conference.id)).map((seat) => seat.name)).toEqual(['Ada']);
+	});
+});
+
+/**
+ * #592. A second review round is the schema working as intended: one review row per
+ * (round, submission, reviewer). The queue is keyed by submission id, though, and a
+ * keyed `{#each}` over a duplicate key aborts the render — which is what the organizer
+ * saw as "the decision page shows whatever page I came from".
+ *
+ * Only a real database produces the duplicate, so it is tested here rather than against
+ * a fixture that could not have had it in the first place.
+ */
+describe('a talk carried into a second round', () => {
+	let secondRoundId: number;
+	let secondCriterionId: number;
+
+	beforeAll(async () => {
+		[{ id: secondRoundId }] = await db
+			.insert(reviewRoundTable)
+			.values({ evaluationPlanId: planId, name: 'Deep dive', position: 1 })
+			.returning({ id: reviewRoundTable.id });
+		[{ id: secondCriterionId }] = await db
+			.insert(scorecardCriterionTable)
+			.values({ reviewRoundId: secondRoundId, label: 'Overall', kind: 'rating', scaleMax: 5 })
+			.returning({ id: scorecardCriterionTable.id });
+	});
+
+	async function reviewInSecondRound(
+		submissionId: number,
+		reviewerUserId: string,
+		value: number,
+		comment: string
+	) {
+		const [review] = await db
+			.insert(reviewTable)
+			.values({
+				reviewRoundId: secondRoundId,
+				submissionId,
+				reviewerUserId,
+				comment,
+				status: 'submitted',
+				submittedAt: new Date()
+			})
+			.returning();
+		await db.insert(reviewScoreTable).values({
+			reviewId: review.id,
+			scorecardCriterionId: secondCriterionId,
+			valueNumber: String(value)
+		});
+	}
+
+	it('appears once, with the round the member will actually read out', async () => {
+		const twice = await addSubmission(conference, 'Reviewed twice', 'submitted');
+		await addReview(twice, ADA, 1, roundId, 'screening');
+		await reviewInSecondRound(twice, ADA, 5, 'deep dive');
+
+		const queue = await lobbyingQueue(conference.id, ADA);
+
+		expect(queue.map((row) => row.submissionId)).toEqual([twice]);
+		expect(queue[0].myComment).toBe('deep dive');
+		expect(queue[0].myScore).toBe(5);
+	});
+
+	it('counts a twice-reviewing member as one voice in the pooled average', async () => {
+		const twice = await addSubmission(conference, 'Reviewed twice', 'submitted');
+		await addReview(twice, ADA, 1, roundId, 'screening');
+		await reviewInSecondRound(twice, ADA, 5, 'deep dive');
+		await addReview(twice, BRUNO, 3);
+
+		const [row] = await lobbyingQueue(conference.id, ADA);
+
+		// Ada's 1 is gone with her first round: (5 + 3) / 2, not (1 + 5 + 3) / 3.
+		expect(row.reviewsSubmitted).toBe(2);
+		expect(row.overallScore).toBeCloseTo(4, 5);
+	});
+
+	it('counts talks, not review rows, on the member tab', async () => {
+		const twice = await addSubmission(conference, 'Reviewed twice', 'submitted');
+		const once = await addSubmission(conference, 'Reviewed once', 'submitted');
+		await addReview(twice, ADA, 1, roundId, 'screening');
+		await reviewInSecondRound(twice, ADA, 5, 'deep dive');
+		await addReview(once, ADA, 4);
+
+		const [ada] = await committeeSeats(conference.id);
+
+		expect(ada.queueLength).toBe(2);
+	});
+
+	it('keeps what a member already said when a later round only assigned them again', async () => {
+		const twice = await addSubmission(conference, 'Reassigned', 'submitted');
+		await addReview(twice, ADA, 4, roundId, 'screening');
+		await addReview(twice, BRUNO, 2);
+		// Round two is open and Bruno has it on his desk — he has not handed it in yet.
+		await db.insert(reviewTable).values({
+			reviewRoundId: secondRoundId,
+			submissionId: twice,
+			reviewerUserId: BRUNO,
+			status: 'assigned'
+		});
+
+		const [row] = await lobbyingQueue(conference.id, ADA);
+
+		// Two voices, not one: an open assignment does not retract a handed-in review.
+		expect(row.reviewsSubmitted).toBe(2);
+		expect(row.overallScore).toBeCloseTo(3, 5);
 	});
 });
