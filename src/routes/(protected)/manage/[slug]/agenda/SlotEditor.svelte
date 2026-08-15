@@ -271,13 +271,18 @@
 							value={occupant.status === 'confirmed' ? 'tentative' : 'confirmed'}
 						/>
 						<Button type="submit" variant="ghost" disabled={busy} data-testid="agenda-slot-status">
-							{occupant.status === 'confirmed' ? 'Hold it back' : 'Publish it'}
+							{occupant.status === 'confirmed' ? 'Make draft' : 'Publish it'}
 						</Button>
 					</form>
 				</div>
 				<p class="text-muted-foreground mt-2 text-xs">
-					To move it, take it out here and open the slot you want, or drag it — dragging always
-					moves. To try a draft in two places, hold Alt while you drag, or use the button below.
+					{#if occupant.status === 'confirmed'}
+						Make draft takes it off the public agenda. To move it, take it out here and open the
+						slot you want, or drag it — dragging always moves.
+					{:else}
+						To move it, take it out here and open the slot you want, or drag it — dragging always
+						moves. To preview a draft in two places, hold Alt while you drag, or pick one below.
+					{/if}
 				</p>
 
 				{#if occupant.status === 'tentative' && placeable}
@@ -295,16 +300,19 @@
 						     rather than copied — it has no slot to keep. -->
 						<input type="hidden" name="intent" value="alternative" />
 						<div class="block text-sm">
-							<span class="text-muted-foreground text-xs">Also try this talk here</span>
+							<span class="text-muted-foreground text-xs">Preview this placement</span>
 							<AppSelect
 								name="placementId"
 								required
 								testId="agenda-slot-also"
-								aria-label="Also try this talk here"
+								aria-label="Preview this placement"
 								class="mt-1"
 								value={String((tray[0] ?? alsoOnGrid[0]).placementId)}
 								options={sessionOptions}
 							/>
+							<p class="text-muted-foreground mt-1 text-xs">
+								Puts a draft copy in this slot. The original stays where it is.
+							</p>
 						</div>
 						<Button
 							type="submit"
