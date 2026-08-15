@@ -23,6 +23,7 @@ import {
 	type UIMessage
 } from 'ai';
 import { ChatModelNotConfiguredError, createChatModel } from './model';
+import { ChatToolCallLeakError, guardToolCallLeak } from './tool-call-leak';
 import { AGENDA_WRITE_TOOL_NAMES, agendaChatTools, reviewerChatTools } from './tools';
 
 export type ReviewerChatEvent = {
@@ -30,6 +31,19 @@ export type ReviewerChatEvent = {
 	params: { slug: string };
 	request: Request;
 };
+
+/**
+ * What the client is told when a part of the stream is an error.
+ *
+ * The default masks every message, and rightly so — a stack trace is not chat.
+ * The one thing worth saying out loud is the leak (#660): the reviewer asked a
+ * question, saw nothing happen, and needs to know that nothing happened rather
+ * than that something did.
+ */
+function streamErrorMessage(error: unknown): string {
+	if (error instanceof ChatToolCallLeakError) return error.message;
+	return 'Something went wrong. Please try again.';
+}
 
 /** Plain text — the AI SDK surfaces `response.text()` as `chat.error`. */
 function chatError(status: number, message: string): Response {
@@ -131,11 +145,12 @@ export async function streamReviewerChat(opts: {
 		messages: await convertToModelMessages(opts.messages, { tools }),
 		tools,
 		toolApproval: { submit_review: 'user-approval' },
-		stopWhen: isStepCount(5)
+		stopWhen: isStepCount(5),
+		experimental_transform: guardToolCallLeak()
 	});
 
 	return createUIMessageStreamResponse({
-		stream: toUIMessageStream({ stream: result.stream })
+		stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
 	});
 }
 
@@ -202,11 +217,12 @@ export async function streamAgendaChat(opts: {
 		toolApproval: AGENDA_APPROVAL,
 		// Reading the board, then the tray, then writing is three steps before a
 		// sentence comes back; a replan that touches two talks is more.
-		stopWhen: isStepCount(8)
+		stopWhen: isStepCount(8),
+		experimental_transform: guardToolCallLeak()
 	});
 
 	return createUIMessageStreamResponse({
-		stream: toUIMessageStream({ stream: result.stream })
+		stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
 	});
 }
 
