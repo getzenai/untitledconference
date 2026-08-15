@@ -20,6 +20,7 @@ const conference = {
 	cfpIntro: null,
 	statusBeforeArchive: null,
 	listedPublicly: false,
+	slotCapacity: null,
 	reviewVisibility: 'open' as const,
 	createdAt: new Date('2027-01-01T00:00:00Z'),
 	updatedAt: new Date('2027-01-01T00:00:00Z')

@@ -118,6 +118,19 @@ export const conferenceTable = pgTable(
 		 * and the agenda all keep filtering on `status` alone.
 		 */
 		listedPublicly: boolean('listed_publicly').notNull().default(false),
+		/**
+		 * How many programme slots the conference has to give away (#444).
+		 *
+		 * The argument that decides an acceptance call is arithmetic — "total slots 51,
+		 * accepted so far 33" — and nothing in the product knew the 51. It is a number a
+		 * human types, not one we can derive: the agenda grid only exists once talks are
+		 * placed, which is *after* the meeting that needs the count.
+		 *
+		 * Nullable, and null is not zero. A conference that has not said how many slots
+		 * it has gets a count of what is accepted and no remainder — inventing "0 left"
+		 * would stop a committee mid-call over a number we made up.
+		 */
+		slotCapacity: integer('slot_capacity'),
 		/** ABS-07's setting, per conference — see `reviewVisibility`. */
 		reviewVisibility: reviewVisibility('review_visibility').notNull().default('open'),
 		createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -136,6 +149,11 @@ export const trackTable = pgTable('track', {
 		.references(() => conferenceTable.id, { onDelete: 'cascade' }),
 	name: text('name').notNull(),
 	description: text('description'),
+	/**
+	 * The track's share of the programme (#444). Same rule as the conference total:
+	 * nullable, and null means "not said", not "none left".
+	 */
+	slotCapacity: integer('slot_capacity'),
 	position: integer('position').notNull().default(0)
 });
 
