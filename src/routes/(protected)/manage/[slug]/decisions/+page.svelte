@@ -104,6 +104,22 @@
 			</ul>
 		{/if}
 
+		{#if data.board.sponsorHolds > 0}
+			<!--
+				Stated, not subtracted (#450). A hold is a slot the committee cannot give
+				to a talk until someone releases it on the agenda — and an unsold one is
+				exactly the inventory the room asks about late in the call.
+			-->
+			<p class="text-muted-foreground mt-3 text-xs" data-testid="slot-sponsor-holds">
+				{data.board.sponsorHolds} sponsor
+				{data.board.sponsorHolds === 1 ? 'slot is' : 'slots are'} held on the grid with no talk in
+				{data.board.sponsorHolds === 1 ? 'it' : 'them'}. Release
+				{data.board.sponsorHolds === 1 ? 'it' : 'them'} on the
+				<a class="underline underline-offset-4" href="{base}/agenda">agenda</a> to give the slot back
+				to the programme.
+			</p>
+		{/if}
+
 		{#if data.board.untracked > 0}
 			<p class="text-muted-foreground mt-3 text-xs" data-testid="slot-untracked">
 				{data.board.untracked} accepted talk{data.board.untracked === 1 ? '' : 's'} sit outside every

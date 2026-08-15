@@ -89,12 +89,26 @@
 	const sessionsIn = (roomId: number) =>
 		daySessions.filter((s) => s.roomId === roomId).sort(byStart);
 
+	const roomName = (roomId: number | null) =>
+		roomId === null ? 'all rooms' : (board.rooms.find((r) => r.id === roomId)?.name ?? 'a room');
+
 	/**
-	 * Breaks that span every room. They have no room column to sit in, so they get
-	 * their own strip above the grid — otherwise lunch is invisible on the one screen
-	 * where an organizer is deciding what fits around it.
+	 * Everything on this day that is not a talk: breaks and sponsor holds, in both
+	 * room-bound and all-rooms form (#450). All-rooms breaks have no column to sit
+	 * in, so without this strip lunch is invisible on the one screen where an
+	 * organizer is deciding what fits around it.
+	 *
+	 * One list rather than a control on each card in the grid. A hold has to be
+	 * releasable, and the grid cards are drag handles — a button inside one competes
+	 * with the drag it sits on, on the very screen where dragging is the point.
 	 */
-	const dayBreaks = $derived(daySessions.filter((s) => s.roomId === null).sort(byStart));
+	const dayHolds = $derived(daySessions.filter((s) => s.kind !== 'session').sort(byStart));
+
+	/** The length options for a hold, in minutes — the lengths people actually book. */
+	const HOLD_LENGTHS = [15, 30, 45, 60, 90, 120];
+
+	let holdOpen = $state(false);
+	let holdKind = $state<'block' | 'reservation'>('block');
 
 	/**
 	 * Twenty rooms is twenty columns, and the one you are looking at is somewhere
@@ -391,6 +405,145 @@
 					{everythingPublished ? 'Unpublish the agenda' : 'Publish the agenda'}
 				</Button>
 			</form>
+			<!--
+				A break or a sponsor hold (#450). Held slots are inventory the committee
+				cannot decide against, so they belong on the grid before the acceptance
+				call, not in a spreadsheet next to it.
+			-->
+			<Popover.Root bind:open={holdOpen}>
+				<Popover.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="outline"
+							disabled={busy || board.days.length === 0}
+							data-testid="agenda-hold-open"
+						>
+							Hold a slot
+						</Button>
+					{/snippet}
+				</Popover.Trigger>
+				<Popover.Content class="w-80 p-4" align="end">
+					<form
+						method="POST"
+						action="?/hold"
+						use:enhance={() => {
+							busy = true;
+							return async ({
+								update,
+								result
+							}: {
+								update: (opts?: { reset?: boolean }) => Promise<void>;
+								result: { type: string };
+							}) => {
+								try {
+									await update(formUpdateOptions('add'));
+									if (result.type === 'success') holdOpen = false;
+								} finally {
+									busy = false;
+								}
+							};
+						}}
+						class="space-y-3"
+					>
+						<fieldset class="space-y-1.5">
+							<legend class="text-sm font-medium">What is it?</legend>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="radio"
+									name="kind"
+									value="block"
+									bind:group={holdKind}
+									data-testid="agenda-hold-kind-block"
+								/>
+								A break — lunch, a keynote, the coffee
+							</label>
+							<label class="flex items-center gap-2 text-sm">
+								<input
+									type="radio"
+									name="kind"
+									value="reservation"
+									bind:group={holdKind}
+									data-testid="agenda-hold-kind-reservation"
+								/>
+								A sponsor hold — sold, no talk in it yet
+							</label>
+						</fieldset>
+
+						<label class="block text-sm">
+							<span class="font-medium">Title</span>
+							<input
+								name="title"
+								required
+								placeholder={holdKind === 'reservation' ? 'Gold sponsor slot' : 'Lunch'}
+								class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+								data-testid="agenda-hold-title"
+							/>
+						</label>
+
+						<div class="grid grid-cols-2 gap-2">
+							<label class="block text-sm">
+								<span class="font-medium">Day</span>
+								<select
+									name="dayId"
+									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+									data-testid="agenda-hold-day"
+								>
+									{#each board.days as d (d.id)}
+										<option value={d.id} selected={d.id === day?.id}>{formatDayLong(d.date)}</option
+										>
+									{/each}
+								</select>
+							</label>
+							<label class="block text-sm">
+								<span class="font-medium">Room</span>
+								<select
+									name="roomId"
+									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+									data-testid="agenda-hold-room"
+								>
+									<option value="">All rooms</option>
+									{#each board.rooms as room (room.id)}
+										<option value={room.id}>{room.name}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="block text-sm">
+								<span class="font-medium">Starts</span>
+								<select
+									name="startMinutes"
+									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+									data-testid="agenda-hold-start"
+								>
+									{#each data.slots as slot (slot.minutes)}
+										<option value={slot.minutes}>{slot.label}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="block text-sm">
+								<span class="font-medium">Length</span>
+								<select
+									name="minutes"
+									class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
+									data-testid="agenda-hold-minutes"
+								>
+									{#each HOLD_LENGTHS as length (length)}
+										<option value={length} selected={length === 60}>{length} min</option>
+									{/each}
+								</select>
+							</label>
+						</div>
+
+						{#if form?.error}
+							<p class="text-status-bad text-sm" data-testid="agenda-hold-error">{form.error}</p>
+						{/if}
+
+						<Button type="submit" class="w-full" disabled={busy} data-testid="agenda-hold-submit">
+							Put it on the grid
+						</Button>
+					</form>
+				</Popover.Content>
+			</Popover.Root>
 			<Button href="{base}/agenda/run-of-show" variant="ghost" data-testid="agenda-run-of-show">
 				Run of show
 			</Button>
@@ -564,15 +717,40 @@
 			{/if}
 
 			{#if day}
-				{#if dayBreaks.length > 0}
-					<ul class="mb-4 flex flex-wrap gap-2">
-						{#each dayBreaks as slot (slot.placementId)}
-							<li class="border-border bg-muted/40 rounded-md border px-3 py-1.5 text-xs">
+				{#if dayHolds.length > 0}
+					<ul class="mb-4 flex flex-wrap gap-2" data-testid="agenda-holds">
+						{#each dayHolds as slot (slot.placementId)}
+							<li
+								class="border-border bg-muted/40 flex items-center rounded-md border px-3 py-1.5 text-xs"
+								data-testid="agenda-hold"
+								data-kind={slot.kind}
+							>
 								<span class="font-medium tabular-nums">
 									{timeLabel(slot.startMinutes)}–{timeLabel(slot.endMinutes)}
 								</span>
 								<span class="px-1.5">{slot.title}</span>
-								<span class="text-muted-foreground">all rooms</span>
+								<span class="text-muted-foreground">{roomName(slot.roomId)}</span>
+								{#if slot.kind === 'reservation'}
+									<!--
+										The word the committee needs: this slot is spoken for. Releasing
+										it is the backfill — the sponsor did not sell it, so the talk pile
+										gets it back.
+									-->
+									<span class="text-muted-foreground pl-1.5">· sponsor hold</span>
+								{/if}
+								<form method="POST" action="?/release" use:enhance={submitting} class="pl-1.5">
+									<input type="hidden" name="placementId" value={slot.placementId} />
+									<Button
+										type="submit"
+										variant="ghost"
+										size="sm"
+										class="h-6 px-1.5 text-xs"
+										disabled={busy}
+										data-testid="agenda-hold-release-{slot.placementId}"
+									>
+										{slot.kind === 'reservation' ? 'Release' : 'Remove'}
+									</Button>
+								</form>
 							</li>
 						{/each}
 					</ul>

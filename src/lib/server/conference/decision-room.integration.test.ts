@@ -16,6 +16,7 @@ import {
 	trackTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
+import { placementTable } from '$lib/server/db/conference/program-schema';
 import {
 	evaluationPlanTable,
 	reviewRoundTable,
@@ -126,6 +127,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
 	for (const target of [conference, neighbour]) {
+		await db.delete(placementTable).where(eq(placementTable.conferenceId, target.id));
 		await db.delete(submissionTable).where(eq(submissionTable.conferenceId, target.id));
 	}
 	await setSlotCapacity(conference.id, null, [
@@ -171,6 +173,30 @@ describe('the slot board', () => {
 		board = await slotBoard(conference.id);
 		expect(board.total.capacity).toBeNull();
 		expect(board.tracks.find((t) => t.name === 'Platform')?.capacity).toBeNull();
+	});
+
+	/**
+	 * Held slots are counted in SQL and nowhere else (#450), which is the only place
+	 * the three ways to get this wrong live: counting a talk as a hold, counting a
+	 * hold that already has a talk in it, and counting the conference next door.
+	 */
+	it('counts only the empty sponsor holds of this conference', async () => {
+		const filled = await addSubmission(conference, 'A sponsor talk', 'accepted', null);
+
+		await db.insert(placementTable).values([
+			{ conferenceId: conference.id, kind: 'reservation', title: 'Gold slot' },
+			{ conferenceId: conference.id, kind: 'reservation', title: 'Silver slot' },
+			// Sold and filled — it is a talk now, not inventory to backfill.
+			{ conferenceId: conference.id, kind: 'reservation', submissionId: filled },
+			{ conferenceId: conference.id, kind: 'block', title: 'Lunch' },
+			{ conferenceId: conference.id, kind: 'session', submissionId: filled },
+			{ conferenceId: neighbour.id, kind: 'reservation', title: 'Theirs' }
+		]);
+
+		const board = await slotBoard(conference.id);
+
+		expect(board.sponsorHolds).toBe(2);
+		expect((await slotBoard(neighbour.id)).sponsorHolds).toBe(1);
 	});
 
 	it('will not write a track belonging to another conference', async () => {

@@ -659,3 +659,72 @@ describe('agenda draft legend (#466)', () => {
 		expect(body).toContain('invisible to the public until you publish');
 	});
 });
+
+/**
+ * Breaks and sponsor holds (#450).
+ *
+ * `createBlock` existed from the start but no route called it: an organizer could
+ * not put lunch on the day, and the sponsor slots they had already sold were
+ * nowhere on the grid the committee decides against.
+ */
+describe('holding a slot', () => {
+	const hold = (over: Partial<BoardSession>): BoardSession => ({
+		placementId: 9,
+		submissionId: null,
+		title: 'Gold sponsor slot',
+		kind: 'reservation',
+		status: 'confirmed',
+		submissionStatus: null,
+		trackName: null,
+		formatName: null,
+		minutes: 60,
+		dayId: 1,
+		roomId: 1,
+		startMinutes: 600,
+		endMinutes: 660,
+		speakers: [],
+		...over
+	});
+
+	/**
+	 * The trigger only. The fields live inside a popover, which renders nothing
+	 * until it opens — the same reason the room filter is asserted this way. What
+	 * is inside the form is a browser spec's job.
+	 */
+	it('offers the organizer a way to hold a slot', () => {
+		const body = renderWith(2);
+
+		expect(body).toContain('data-testid="agenda-hold-open"');
+		expect(body).toContain('Hold a slot');
+	});
+
+	it('names a sponsor hold as one and offers to release it', () => {
+		const body = renderWith(2, 1, { placed: [hold({})] });
+
+		expect(body).toContain('Gold sponsor slot');
+		expect(body).toContain('sponsor hold');
+		expect(body).toContain('data-testid="agenda-hold-release-9"');
+		expect(body).toContain('Release');
+	});
+
+	/** A break spanning every room has no column; it still has to be visible. */
+	it('lists an all-rooms break with its own room label', () => {
+		const body = renderWith(2, 1, {
+			placed: [hold({ kind: 'block', title: 'Lunch', roomId: null, placementId: 4 })]
+		});
+
+		expect(body).toContain('Lunch');
+		expect(body).toContain('all rooms');
+		expect(body).toContain('data-testid="agenda-hold-release-4"');
+		expect(body).not.toContain('sponsor hold');
+	});
+
+	/** A talk is not a hold: releasing one would take an accepted session off the grid. */
+	it('leaves sessions out of the hold list', () => {
+		const body = renderWith(2, 1, {
+			placed: [hold({ kind: 'session', title: 'A real talk', submissionId: 3, placementId: 7 })]
+		});
+
+		expect(body).not.toContain('data-testid="agenda-hold-release-7"');
+	});
+});
