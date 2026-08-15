@@ -58,15 +58,30 @@ const renderCfp = (
 	state: 'open' | 'closed' | 'not_yet_open',
 	description: string | null,
 	existing: { id: number; title: string; status: 'draft' | 'submitted' } | null = null,
-	closesAt: Date | null = null
+	closesAt: Date | null = null,
+	extras: {
+		user?: { id: string };
+		speakerProfile?: {
+			organizationName: string;
+			speaker: {
+				name: string;
+				sortName: string;
+				email: string;
+				jobTitle: string;
+				company: string;
+				bio: string;
+			};
+		} | null;
+	} = {}
 ) =>
 	render(Page, {
 		props: {
 			data: {
 				call: call(state, description, closesAt),
 				existing,
+				speakerProfile: extras.speakerProfile ?? null,
 				// The public layout's data reaches this page's type but not its body.
-				user: undefined,
+				user: extras.user,
 				conference: publicConference,
 				daysUntilClose: null,
 				embed: false,
@@ -211,6 +226,67 @@ describe('pointing a returning submitter at what they already sent', () => {
 	});
 });
 
+describe('signing in from the public call (#558)', () => {
+	it('offers sign-in as a door, not as a grey caveat', () => {
+		const body = renderCfp('open', null);
+
+		expect(body).toContain('data-testid="cfp-sign-in"');
+		expect(body).toContain('Sign in to submit — or to reuse a speaker profile.');
+		expect(body).toContain('href="/login?returnTo=/c/devflow-conf-2027/cfp"');
+		expect(body).not.toContain('you will need to');
+		// The form's own submit still says the same thing it did before — two
+		// doors, same destination, so a filled form is not a dead end.
+		expect(body).toContain('Sign in to submit');
+	});
+
+	it('drops the door once they are signed in', () => {
+		const body = renderCfp('open', null, null, null, { user: { id: 'user-1' } });
+
+		expect(body).not.toContain('data-testid="cfp-sign-in"');
+		expect(body).not.toContain('reuse a speaker profile');
+	});
+});
+
+describe('prefilling a speaker who already has a profile (#558)', () => {
+	const priya = {
+		organizationName: 'Northwind',
+		speaker: {
+			name: 'Priya Raman',
+			sortName: 'Raman, Priya',
+			email: 'priya@example.test',
+			jobTitle: 'Staff Engineer',
+			company: 'Northwind Labs',
+			bio: 'Works on build systems.'
+		}
+	};
+
+	it('fills the About-you fields and names the profile they came from', () => {
+		const body = renderCfp('open', null, null, null, {
+			user: { id: 'user-1' },
+			speakerProfile: priya
+		});
+
+		expect(body).toContain('data-testid="cfp-profile-source"');
+		expect(body).toContain('your speaker profile at Northwind');
+		expect(body).toContain('value="Priya Raman"');
+		expect(body).toContain('value="Raman, Priya"');
+		expect(body).toContain('value="priya@example.test"');
+		expect(body).toContain('value="Staff Engineer"');
+		expect(body).toContain('value="Northwind Labs"');
+		expect(body).toContain('Works on build systems.');
+	});
+
+	it('says nothing about a profile when there is none', () => {
+		const signedOut = renderCfp('open', null);
+		const signedIn = renderCfp('open', null, null, null, { user: { id: 'user-1' } });
+
+		expect(signedOut).not.toContain('cfp-profile-source');
+		expect(signedOut).not.toContain('your speaker profile at');
+		expect(signedIn).not.toContain('cfp-profile-source');
+		expect(signedIn).not.toContain('your speaker profile at');
+	});
+});
+
 describe('speaker expenses on the public call (#512)', () => {
 	const withSupport = (state: 'open' | 'closed', support: { admission?: 'free' }) => {
 		const base = call(state, state === 'closed' ? 'Travel is covered' : null);
@@ -219,6 +295,7 @@ describe('speaker expenses on the public call (#512)', () => {
 				data: {
 					call: { ...base, support },
 					existing: null,
+					speakerProfile: null,
 					user: undefined,
 					conference: publicConference,
 					daysUntilClose: null,
