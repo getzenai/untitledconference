@@ -68,4 +68,56 @@ describe('An organizer holds a slot for a sponsor', () => {
 		cy.waitForHydration();
 		cy.get('[data-testid="slot-sponsor-holds"]').should('not.exist');
 	});
+
+	/**
+	 * A hold that names a room sits in the room grid, and there it looks exactly
+	 * like a talk — same card, same click. The three session moves would each read
+	 * its length off a format it does not have, so a two-hour sponsor slot would
+	 * come back thirty minutes long, and "take it out of this slot" would park it
+	 * where only talks are listed: gone from the screen, still counted by the
+	 * decision room. The editor offers one move for it, and that move is release.
+	 */
+	it('offers a room-bound hold a release, not a swap or a removal', () => {
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="settings-rooms"] textarea[name="names"]').clear().type('Hall 1{enter}');
+		cy.get('[data-testid="settings-room-row"][data-name="Hall 1"]').should('exist');
+
+		cy.visit(`/manage/${slug}/agenda`);
+		cy.waitForHydration();
+
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-kind-reservation"]').check();
+		cy.get('[data-testid="agenda-hold-title"]').type('Gold sponsor slot');
+		cy.get('[data-testid="agenda-hold-room"]').select('Hall 1');
+		cy.get('[data-testid="agenda-hold-minutes"]').select('120');
+		cy.get('[data-testid="agenda-hold-submit"]').click();
+
+		cy.get('[data-testid="agenda-holds"]').should('contain', 'Gold sponsor slot');
+
+		cy.reload();
+		cy.waitForHydration();
+
+		// It is a card on the room grid — that part is right, a sold slot has to
+		// occupy the column it takes.
+		cy.contains('[data-testid="agenda-session-title"]', 'Gold sponsor slot')
+			.parents('button')
+			.click();
+
+		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
+		cy.get('[data-testid="agenda-slot-swap"]').should('not.exist');
+		cy.get('[data-testid="agenda-slot-remove"]').should('not.exist');
+		cy.get('[data-testid="agenda-slot-status"]').should('not.exist');
+
+		cy.get('[data-testid="agenda-slot-release"]').click();
+
+		cy.get('[data-testid="agenda-holds"]').should('not.exist');
+		cy.contains('[data-testid="agenda-session-title"]', 'Gold sponsor slot').should('not.exist');
+
+		// Released means released — the slot is back with the programme, and the
+		// decision room stops naming it.
+		cy.visit(`/manage/${slug}/decisions`);
+		cy.waitForHydration();
+		cy.get('[data-testid="slot-sponsor-holds"]').should('not.exist');
+	});
 });

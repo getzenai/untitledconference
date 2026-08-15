@@ -254,16 +254,20 @@
 	/**
 	 * Who the occupant may trade places with: the rest of this day's grid.
 	 *
-	 * Breaks are left out even though the swap itself would accept them. A break has
-	 * no room — it spans all of them — so trading a talk into one would take the talk
-	 * off the room grid entirely and file it under lunch. Other days are left out too:
-	 * the organizer is looking at one day, and a list of everything would be a list
-	 * nobody reads.
+	 * Breaks and sponsor holds are left out. An all-rooms break has no room to give,
+	 * so trading a talk into one would take the talk off the room grid entirely and
+	 * file it under lunch; a room-bound hold has a room and is the worse case, because
+	 * the trade looks legal and rewrites the hold's length on the way through (#450).
+	 * Other days are left out too: the organizer is looking at one day, and a list of
+	 * everything would be a list nobody reads.
 	 */
 	const swapWith = $derived(
 		occupant
 			? daySessions
-					.filter((s) => s.roomId !== null && s.placementId !== occupant.placementId)
+					.filter(
+						(s) =>
+							s.kind === 'session' && s.roomId !== null && s.placementId !== occupant.placementId
+					)
 					.sort(byStart)
 					.map((s) => ({
 						placementId: s.placementId,
@@ -911,6 +915,15 @@
 											{@const decidedDown =
 												session.submissionStatus === 'rejected' ||
 												session.submissionStatus === 'waitlisted'}
+											<!--
+												A room-bound hold is a card like any other, and that is right: a
+												sponsor slot in Hall 1 has to occupy the column it takes. What it
+												is not is a drag handle. `?/place` reads a length off the talk's
+												format and a hold has none, so dragging a two-hour sponsor slot
+												would hand it back as thirty minutes (#450). Holds come off the
+												grid through Release, in the strip above the grid.
+											-->
+											{@const draggable = session.kind === 'session'}
 											{#if rows}
 												<!--
 													Title first — the clock is already on the grid axis, so the
@@ -974,13 +987,16 @@
 																	}}
 																	onpointerdown={(e) => {
 																		tip.onpointerdown?.(e);
+																		if (!draggable) return;
 																		drag.begin(e, {
 																			placementId: session.placementId,
 																			title: session.title,
 																			roomId: room.id
 																		});
 																	}}
-																	class="flex h-full w-full min-w-0 cursor-grab touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none"
+																	class="flex h-full w-full min-w-0 touch-none flex-col overflow-hidden px-1.5 py-0.5 text-left select-none {draggable
+																		? 'cursor-grab'
+																		: 'cursor-pointer'}"
 																>
 																	<span class="sr-only">{published ? 'Published' : 'Draft'}</span>
 																	<span

@@ -38,6 +38,7 @@ import {
 	slotInstant,
 	slotMinutes,
 	slotOptions,
+	swapPlacements,
 	unplaceSession
 } from './agenda';
 
@@ -261,6 +262,68 @@ describe('the tray and the grid', () => {
 			startMinutes: 3 * 60
 		});
 		expect(result.ok).toBe(false);
+	});
+
+	/**
+	 * A sponsor hold is a slot the programme has already spent, and it is not a
+	 * session (#450). It has no submission, so it has no format, so the three
+	 * session moves would each read its length as `DEFAULT_MINUTES` — a two-hour
+	 * hold moved one row down comes back as thirty minutes, and the committee's
+	 * remaining count is wrong at the exact moment somebody reads it out. A hold
+	 * leaves the grid through `removeBlock`, which is the mirror of this: it
+	 * refuses sessions.
+	 */
+	describe('a hold is not a session', () => {
+		let holdId = 0;
+
+		beforeAll(async () => {
+			const [hold] = await db
+				.insert(placementTable)
+				.values({
+					conferenceId,
+					kind: 'reservation',
+					status: 'confirmed',
+					title: 'Gold sponsor slot',
+					conferenceDayId: dayIds[0],
+					startsAt: slotInstant('2027-05-12', 14 * 60),
+					endsAt: slotInstant('2027-05-12', 16 * 60),
+					roomId: roomIds[0]
+				})
+				.returning();
+			holdId = hold.id;
+		});
+
+		it('will not move it, and leaves its two hours alone', async () => {
+			const result = await placeSession(conferenceId, holdId, {
+				dayId: dayIds[0],
+				roomId: roomIds[1],
+				startMinutes: 15 * 60
+			});
+			expect(result.ok).toBe(false);
+
+			const board = await agendaBoard(conferenceId);
+			const hold = board.placed.find((p) => p.placementId === holdId);
+			expect(hold?.startMinutes).toBe(14 * 60);
+			expect(hold?.endMinutes).toBe(16 * 60);
+			expect(hold?.roomId).toBe(roomIds[0]);
+		});
+
+		it('will not take it off the grid — release is the way out', async () => {
+			expect(await unplaceSession(conferenceId, holdId)).toBe(false);
+
+			const board = await agendaBoard(conferenceId);
+			expect(board.placed.map((p) => p.placementId)).toContain(holdId);
+			expect(board.tray.map((t) => t.placementId)).not.toContain(holdId);
+		});
+
+		it('will not swap it with a talk, in either direction', async () => {
+			const talk = placementOf['Talk one'];
+			expect((await swapPlacements(conferenceId, holdId, talk)).ok).toBe(false);
+			expect((await swapPlacements(conferenceId, talk, holdId)).ok).toBe(false);
+
+			const board = await agendaBoard(conferenceId);
+			expect(board.placed.find((p) => p.placementId === holdId)?.startMinutes).toBe(14 * 60);
+		});
 	});
 });
 

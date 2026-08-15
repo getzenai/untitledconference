@@ -163,9 +163,11 @@ export const actions: Actions = {
 	 * `createBlock` has existed since the agenda did, but only the in-app agent
 	 * could reach it — an organizer building a programme by hand had no way to put
 	 * lunch on the day, let alone the sponsor slots they sold before the call for
-	 * papers opened. The committee's arithmetic is wrong until those slots are on
-	 * the grid: a programme of 55 slots where 11 belong to sponsors has 44 to
-	 * decide against, and nothing anywhere said so.
+	 * papers opened. The committee is deciding blind until those slots are on the
+	 * grid: of 55 slots, 11 belong to sponsors, and nothing anywhere said so. The
+	 * decision screen names those 11 and does not subtract them — what the
+	 * organizer typed as capacity may or may not already allow for them, and
+	 * guessing which is worse than saying it out loud.
 	 */
 	hold: async ({ locals, params, request }) => {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);

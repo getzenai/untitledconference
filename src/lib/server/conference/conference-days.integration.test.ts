@@ -280,9 +280,12 @@ describe('syncConferenceDays under a concurrent placement', () => {
 			.insert(roomTable)
 			.values({ conferenceId, name: 'Hall 1' })
 			.returning({ id: roomTable.id });
+		// A talk, not a break: `placeSession` only moves sessions, and a break on
+		// the grid is put there and released rather than dragged (#450). What this
+		// test is about is the day underneath, which is the same either way.
 		const [tray] = await db
 			.insert(placementTable)
-			.values({ conferenceId, kind: 'block', title: 'Lunch' })
+			.values({ conferenceId, kind: 'session', title: 'A talk with no slot yet' })
 			.returning({ id: placementTable.id });
 
 		let placing!: ReturnType<typeof placeSession>;
