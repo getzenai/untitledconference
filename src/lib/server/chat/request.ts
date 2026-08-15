@@ -217,7 +217,9 @@ export async function handleAgendaChatRequest(
 			ctx: mcpContextFromLocals(event.locals),
 			conference,
 			messages: body.messages,
-			model: model ?? createChatModel(),
+			model:
+				model ??
+				createChatModel({ toolName: 'get_agenda', input: { conferenceSlug: conference.slug } }),
 			focus: readAgendaFocus(body)
 		});
 	} catch (err) {

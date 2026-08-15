@@ -133,13 +133,25 @@ export function createMockSubmitReviewModel(
 	});
 }
 
-export function createChatModel(): LanguageModel {
+/**
+ * @param mockCall Which read tool the `mock` model should call. A surface only
+ * gets the tools it was handed, so the reviewer default would be an unknown
+ * tool on the agenda board — the caller names one of its own.
+ */
+export function createChatModel(mockCall?: {
+	toolName: string;
+	input: Record<string, unknown>;
+}): LanguageModel {
 	const { AI_CHAT_MODEL, AI_GATEWAY_API_KEY, AI_GATEWAY_BASE_URL } = serverEnv();
 	// Process export first: wrangler.jsonc pins a production model id, and
 	// `AI_CHAT_MODEL=mock` from `scripts/run-e2e.sh` has to win for the
 	// flag-on Cypress path.
 	const modelId = process.env.AI_CHAT_MODEL || AI_CHAT_MODEL;
-	if (modelId === 'mock') return createMockChatModel();
+	if (modelId === 'mock') {
+		return mockCall
+			? createMockChatModel(mockCall.toolName, mockCall.input)
+			: createMockChatModel();
+	}
 	if (!AI_GATEWAY_API_KEY || !AI_GATEWAY_BASE_URL) {
 		throw new ChatModelNotConfiguredError();
 	}

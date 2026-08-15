@@ -59,6 +59,8 @@
 	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { DragController, type PlaceIntent } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
+	import AgendaChat from '$lib/components/app/conference/agenda-chat.svelte';
+	import type { BoardNames } from '$lib/components/app/conference/agenda-chat-write';
 
 	let { data, form } = $props();
 
@@ -90,6 +92,18 @@
 	};
 
 	const day = $derived(board.days[activeDay] ?? board.days[0]);
+
+	/**
+	 * The chat talks in ids; the organizer reads names. The board on screen is
+	 * the only place both exist, so the panel confirms a write with what this
+	 * page would call the same talk (#302).
+	 */
+	const chatNames: BoardNames = {
+		talk: (placementId) =>
+			[...board.placed, ...board.tray].find((s) => s.placementId === placementId)?.title,
+		room: (roomId) => board.rooms.find((r) => r.id === roomId)?.name,
+		day: (dayId) => board.days.find((d) => d.id === dayId)?.date
+	};
 
 	/**
 	 * The clashes a given session is part of, so a block can show its own.
@@ -1507,6 +1521,10 @@
 			>
 		{/if}
 	</div>
+{/if}
+
+{#if data.chatEnabled}
+	<AgendaChat slug={data.conference.slug} day={day?.date?.slice(0, 10)} names={chatNames} />
 {/if}
 
 {#if editing}
