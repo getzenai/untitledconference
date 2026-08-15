@@ -13,14 +13,24 @@
  *  1. the DevFlow conference by slug,
  *  2. the throwaway address shape the harness minted, and
  *  3. the orphan check the issue asks for — the address must no longer belong
- *     to a speaker profile in that conference's organization, nor to a user
- *     account.
+ *     to a speaker profile in that conference's organization.
  *
  * The address pattern is doing real work and is not redundant with the orphan
  * check. "Every logged recipient without a profile" would also match the
  * invitation that goes out *before* a profile exists, and mail to somebody who
  * was later merged into another profile (#653). Those are the demo's real
  * deliveries. A row that fails any of the three is reported and left alone.
+ *
+ * The first version also demanded that no *user account* carry the address, and
+ * against prod that condition kept every row: #619 deleted the juror speaker
+ * profiles but not the login accounts behind them, so all four rows read
+ * `profiles=0 accounts=1` and the script deleted nothing (run 31908465025).
+ * The check was defensive rather than load-bearing — the DoD asks about the
+ * profile, and an address of the shape `grok.juror.<epoch>@getzenai.com` is a
+ * harness fixture whether or not a login still exists for it. So the account
+ * count is still read and still printed, because it is the fact that explains
+ * the row; it no longer vetoes the delete. Those accounts outliving their
+ * profiles is a separate leak and stays out of this script.
  *
  * Idempotent: a second run finds nothing and says so.
  *
@@ -47,11 +57,12 @@ const log = (message) => console.log(`[remove-juror-mail-log] ${message}`);
 
 /**
  * Every log row in this conference addressed like a juror fixture, with the
- * two facts that decide whether it is an orphan.
+ * profile count that decides whether it is an orphan and the account count
+ * that explains it.
  *
- * The profile and account counts are subqueries rather than joins so that a
- * row which still has a profile shows up in the log instead of being silently
- * dropped from the result set.
+ * Both counts are subqueries rather than joins so that a row which still has a
+ * profile shows up in the log instead of being silently dropped from the
+ * result set.
  */
 function findCandidates(sql) {
 	return sql`
@@ -73,7 +84,7 @@ function findCandidates(sql) {
 function classify(candidates) {
 	const doomed = [];
 	for (const row of candidates) {
-		const orphan = Number(row.profiles) === 0 && Number(row.accounts) === 0;
+		const orphan = Number(row.profiles) === 0;
 		const detail =
 			`#${row.id} ${row.to_email} [${row.template}/${row.status}] ` +
 			`"${row.subject}" profiles=${row.profiles} accounts=${row.accounts}`;
