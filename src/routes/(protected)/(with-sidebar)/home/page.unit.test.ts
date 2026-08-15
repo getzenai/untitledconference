@@ -333,7 +333,7 @@ describe('a page that belongs to the reviewer', () => {
 	it('offers the organization as a sentence, not as the loudest thing on screen', () => {
 		const html = body(null, reviewerHub);
 
-		expect(html).toContain('data-testid="home-no-events-reviewer"');
+		expect(html).toContain('data-testid="home-no-events-aside"');
 		// The link survives; the call to action does not.
 		expect(html).toContain('href="/settings/organization/new"');
 		expect(html).not.toContain('Create an organization</a>');
@@ -363,7 +363,95 @@ describe('a page that belongs to the reviewer', () => {
 		expect(html.indexOf('Your events')).toBeLessThan(
 			html.indexOf('Reviews waiting') === -1 ? Infinity : html.indexOf('Reviews waiting')
 		);
-		expect(html).not.toContain('data-testid="home-no-events-reviewer"');
+		expect(html).not.toContain('data-testid="home-no-events-aside"');
+	});
+});
+
+/**
+ * #662: a speaker with a task and proposals met the same dashed card as the
+ * reviewer in #465 — *No events yet / Create an organization* — while the
+ * work that is actually theirs started below it. `#465` only swapped on
+ * `openReviews`.
+ */
+describe('a page that belongs to the speaker', () => {
+	const speakerHub = {
+		...emptyHub,
+		canCreateEvent: false,
+		openTasks: [
+			{
+				id: 41,
+				submissionId: 13,
+				title: 'Sign speaker release form',
+				instructions: null,
+				status: 'open',
+				dueOn: null,
+				conference: { slug: 'devflow', name: 'DevFlow Conf 2027' },
+				submissionTitle: 'Walk check: when the queue is the product'
+			} as never
+		],
+		openSubmissions: [
+			{
+				id: 13,
+				title: 'Walk check: when the queue is the product',
+				status: 'submitted',
+				submittedAt: new Date('2026-08-15'),
+				decidedAt: null,
+				isPrimary: true,
+				conference: { slug: 'devflow', name: 'DevFlow Conf 2027' }
+			} as never,
+			{
+				id: 14,
+				title: 'A hallway is not a hallway',
+				status: 'draft',
+				submittedAt: null,
+				decidedAt: null,
+				isPrimary: true,
+				conference: { slug: 'devflow', name: 'DevFlow Conf 2027' }
+			} as never
+		]
+	};
+
+	it('puts tasks and proposals above the events prompt when there are no events', () => {
+		const html = body(null, speakerHub);
+
+		expect(html.indexOf('Your tasks')).toBeLessThan(html.indexOf('Your events'));
+		expect(html.indexOf('Your proposals')).toBeLessThan(html.indexOf('Your events'));
+	});
+
+	it('offers the organization as a sentence, not as the loudest thing on screen', () => {
+		const html = body(null, speakerHub);
+
+		expect(html).toContain('data-testid="home-no-events-aside"');
+		expect(html).toContain('href="/settings/organization/new"');
+		expect(html).not.toContain('Create an organization</a>');
+	});
+
+	it('still puts reviews above speaker work when both are waiting', () => {
+		const html = body(null, {
+			...speakerHub,
+			openReviews: [
+				{
+					submissionId: 99,
+					title: 'Someone else is shipping',
+					conference: { slug: 'devflow', name: 'DevFlow Conf 2027' },
+					window: roundWindow(null, null),
+					reviewsFiled: 0
+				} as never
+			],
+			openReviewCounts: { total: 1, filable: 1 }
+		});
+
+		expect(html.indexOf('Reviews waiting')).toBeLessThan(html.indexOf('Your tasks'));
+		expect(html.indexOf('Your tasks')).toBeLessThan(html.indexOf('Your events'));
+	});
+
+	it('leaves Create an organization for someone with neither work nor events', () => {
+		const html = body(null, { ...emptyHub, canCreateEvent: false });
+
+		expect(html).toContain('Create an organization</a>');
+		expect(html).not.toContain('data-testid="home-no-events-aside"');
+		expect(html).not.toContain('Your tasks');
+		expect(html).not.toContain('Your proposals');
 	});
 });
 

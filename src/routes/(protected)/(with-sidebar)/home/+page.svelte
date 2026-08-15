@@ -44,21 +44,29 @@
 			: task.conference.name;
 
 	/**
-	 * Whose page is this (#465)?
+	 * Whose page is this (#465, #662)?
 	 *
-	 * A reviewer with 22 outstanding reviews opened `/home` and met a large dashed
-	 * card carrying the only styled call to action on the screen — *Create an
-	 * organization* — while "Reviews waiting" started below the fold. They will
-	 * never create an organization; it is not their job. So the section with work
-	 * in it goes first, and the events prompt only shouts at someone who could act
-	 * on it.
+	 * A reviewer with 22 outstanding reviews — and a speaker with a task and
+	 * five proposals — opened `/home` and met a large dashed card carrying the
+	 * only styled call to action on the screen — *Create an organization* —
+	 * while their work started below the fold. They will never create an
+	 * organization; it is not their job. So the section with work in it goes
+	 * first, and the events prompt only shouts at someone who could act on it.
 	 *
-	 * Order, not visibility: an organizer-and-reviewer still sees both, and a
-	 * reviewer who is curious about starting an event still finds the link.
+	 * Order, not visibility: an organizer who also reviews or speaks still
+	 * sees both, and anyone curious about starting an event still finds the
+	 * link. Reviewer work stays above speaker work when both are present
+	 * (#465 is the older, louder hole).
 	 */
 	const reviewsFirst = $derived(
 		Boolean(hub && hub.events.length === 0 && hub.openReviews.length > 0)
 	);
+	const speakerFirst = $derived(
+		Boolean(
+			hub && hub.events.length === 0 && (hub.openTasks.length > 0 || hub.openSubmissions.length > 0)
+		)
+	);
+	const workFirst = $derived(reviewsFirst || speakerFirst);
 
 	const hasAnyWork = $derived(
 		Boolean(
@@ -156,12 +164,12 @@
 							action={{ href: '/manage/new', label: 'Create an event' }}
 						/>
 					{:else if !data.onboarding}
-						<!-- Someone whose work is reviewing gets the sentence, not the button
-						     (#465): "Create an organization" was the only styled action on
-						     their page and it is not a thing they will ever do. The link is
-						     still there for the one who is curious. -->
-						{#if reviewsFirst}
-							<p class="text-muted-foreground mt-3 text-sm" data-testid="home-no-events-reviewer">
+						<!-- Someone whose work is reviewing or speaking gets the sentence,
+						     not the button (#465, #662): "Create an organization" was the
+						     only styled action on their page and it is not a thing they
+						     will ever do. The link is still there for the one who is curious. -->
+						{#if workFirst}
+							<p class="text-muted-foreground mt-3 text-sm" data-testid="home-no-events-aside">
 								You are not organizing an event. An organizer can add you to one — or you can
 								<a
 									href="/settings/organization/new"
@@ -274,88 +282,102 @@
 			{/if}
 		{/snippet}
 
-		<!-- The one with work in it first (#465). -->
-		{#if reviewsFirst}
-			{@render reviewsSection()}
-			{@render eventsSection()}
-		{:else}
-			{@render eventsSection()}
-			{@render reviewsSection()}
-		{/if}
-
 		<!-- Two lists, two headings — the same split the portal already makes.
 		     A single "Your proposals" over tasks-then-drafts was the lie (#615):
 		     the section's aria-label already said both, the visible heading did not,
 		     and nothing told a card's kind without opening it. -->
-		{#if hub.openTasks.length > 0}
-			<section aria-label="Your tasks">
-				<div class="flex flex-wrap items-baseline justify-between gap-2">
-					<h2 class="text-sm font-semibold tracking-tight">Your tasks</h2>
-					<a
-						href="/portal"
-						class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
-					>
-						Speaker portal
-					</a>
-				</div>
-
-				<ul class="mt-3 space-y-2">
-					{#each hub.openTasks as task (task.id)}
-						<li>
-							<a
-								href="/portal/tasks/{task.id}"
-								class="border-border hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
-							>
-								<div class="font-medium">{task.title}</div>
-								<!--
-									One expression, not an {#if} block: Svelte trims the whitespace that
-									starts a block, and the line read "DevFlow Conf 2027· due 2 May". The
-									deadline is an instant, so it carries its year and its zone (#498) —
-									"2 May" alone was neither a year nor a clock anyone could act on.
-								-->
-								<div class="text-muted-foreground text-xs">
-									{taskWhere(task)}{task.dueOn
-										? ` · due ${formatInstant(task.dueOn, zone.current)}`
-										: ''}
-								</div>
-							</a>
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{/if}
-
-		{#if hub.openSubmissions.length > 0}
-			<section aria-label="Your proposals">
-				<div class="flex flex-wrap items-baseline justify-between gap-2">
-					<h2 class="text-sm font-semibold tracking-tight">Your proposals</h2>
-					{#if hub.openTasks.length === 0}
+		{#snippet speakerSection()}
+			{#if hub.openTasks.length > 0}
+				<section aria-label="Your tasks">
+					<div class="flex flex-wrap items-baseline justify-between gap-2">
+						<h2 class="text-sm font-semibold tracking-tight">Your tasks</h2>
 						<a
 							href="/portal"
 							class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
 						>
 							Speaker portal
 						</a>
-					{/if}
-				</div>
+					</div>
 
-				<ul class="mt-3 space-y-2">
-					{#each hub.openSubmissions as submission (submission.id)}
-						<li>
+					<ul class="mt-3 space-y-2">
+						{#each hub.openTasks as task (task.id)}
+							<li>
+								<a
+									href="/portal/tasks/{task.id}"
+									class="border-border hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+								>
+									<div class="font-medium">{task.title}</div>
+									<!--
+										One expression, not an {#if} block: Svelte trims the whitespace that
+										starts a block, and the line read "DevFlow Conf 2027· due 2 May". The
+										deadline is an instant, so it carries its year and its zone (#498) —
+										"2 May" alone was neither a year nor a clock anyone could act on.
+									-->
+									<div class="text-muted-foreground text-xs">
+										{taskWhere(task)}{task.dueOn
+											? ` · due ${formatInstant(task.dueOn, zone.current)}`
+											: ''}
+									</div>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+
+			{#if hub.openSubmissions.length > 0}
+				<section aria-label="Your proposals">
+					<div class="flex flex-wrap items-baseline justify-between gap-2">
+						<h2 class="text-sm font-semibold tracking-tight">Your proposals</h2>
+						{#if hub.openTasks.length === 0}
 							<a
-								href="/portal/submissions/{submission.id}"
-								class="border-border hover:bg-muted/50 focus-visible:ring-ring flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+								href="/portal"
+								class="text-muted-foreground hover:text-foreground text-xs font-medium underline-offset-4 hover:underline"
 							>
-								<div>
-									<div class="font-medium">{submission.title}</div>
-									<div class="text-muted-foreground text-xs">{submission.conference.name}</div>
-								</div>
-								<StatusBadge status={submission.status} />
+								Speaker portal
 							</a>
-						</li>
-					{/each}
-				</ul>
-			</section>
+						{/if}
+					</div>
+
+					<ul class="mt-3 space-y-2">
+						{#each hub.openSubmissions as submission (submission.id)}
+							<li>
+								<a
+									href="/portal/submissions/{submission.id}"
+									class="border-border hover:bg-muted/50 focus-visible:ring-ring flex items-center justify-between gap-4 rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
+								>
+									<div>
+										<div class="font-medium">{submission.title}</div>
+										<div class="text-muted-foreground text-xs">{submission.conference.name}</div>
+									</div>
+									<StatusBadge status={submission.status} />
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+		{/snippet}
+
+		<!-- The one with work in it first (#465, #662). -->
+		{#if workFirst}
+			{#if reviewsFirst}
+				{@render reviewsSection()}
+			{/if}
+			{#if speakerFirst}
+				{@render speakerSection()}
+			{/if}
+			{@render eventsSection()}
+			{#if !reviewsFirst}
+				{@render reviewsSection()}
+			{/if}
+			{#if !speakerFirst}
+				{@render speakerSection()}
+			{/if}
+		{:else}
+			{@render eventsSection()}
+			{@render reviewsSection()}
+			{@render speakerSection()}
 		{/if}
 
 		{#if hub.canSourcing && hub.events.length > 0}
