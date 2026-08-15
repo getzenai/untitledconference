@@ -24,8 +24,8 @@ describe('sidebar landmark', () => {
 
 	it('gives the app rail and the conference rail different names', () => {
 		expect(appSidebar).toContain('aria-label="Application"');
-		expect(conferenceSidebar).toContain('aria-label="Conference"');
-		expect(appSidebar).not.toContain('aria-label="Conference"');
+		expect(conferenceSidebar).toContain('aria-label="Event"');
+		expect(appSidebar).not.toContain('aria-label="Event"');
 		expect(conferenceSidebar).not.toContain('aria-label="Application"');
 	});
 });
