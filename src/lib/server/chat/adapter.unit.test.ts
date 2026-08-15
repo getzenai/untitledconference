@@ -3,18 +3,18 @@ import { allTools } from '$lib/server/mcp/server';
 import { McpToolError, type AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
 import { describe, expect, it } from 'vitest';
 import { mcpInputSchema, runMcpTool, toLanguageModelTool } from './adapter';
-import { REVIEWER_READ_TOOL_NAMES, reviewerReadTools } from './tools';
+import { REVIEWER_CHAT_TOOL_NAMES, reviewerChatTools, reviewerReadTools } from './tools';
 
 const ctx: McpContext = { userId: 'user-1', organizationId: 'org-1' };
 
 describe('toLanguageModelTool', () => {
 	it('takes names and zod schemas from the MCP registry', () => {
 		const registry = allTools(ctx);
-		const adapted = reviewerReadTools(ctx);
+		const adapted = reviewerChatTools(ctx);
 
-		expect(Object.keys(adapted).sort()).toEqual([...REVIEWER_READ_TOOL_NAMES].sort());
+		expect(Object.keys(adapted).sort()).toEqual([...REVIEWER_CHAT_TOOL_NAMES].sort());
 
-		for (const name of REVIEWER_READ_TOOL_NAMES) {
+		for (const name of REVIEWER_CHAT_TOOL_NAMES) {
 			const def = registry.find((tool) => tool.name === name);
 			expect(def, name).toBeDefined();
 			const schema = mcpInputSchema(def!);
@@ -29,13 +29,14 @@ describe('toLanguageModelTool', () => {
 		expect(parsed.success).toBe(false);
 	});
 
-	it('does not wire a writing tool even though the registry has them', () => {
-		const names = new Set(Object.keys(reviewerReadTools(ctx)));
+	it('wires submit_review from the registry and leaves organizer writes unwired', () => {
+		const names = new Set(Object.keys(reviewerChatTools(ctx)));
 		const registry = allTools(ctx).map((tool) => tool.name);
 		expect(registry).toContain('submit_review');
 		expect(registry).toContain('decide_submissions');
-		expect(names.has('submit_review')).toBe(false);
+		expect(names.has('submit_review')).toBe(true);
 		expect(names.has('decide_submissions')).toBe(false);
+		expect(Object.keys(reviewerReadTools(ctx))).not.toContain('submit_review');
 	});
 
 	it('returns a recognized refusal as { error } instead of throwing', async () => {

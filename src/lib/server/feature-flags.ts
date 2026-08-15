@@ -16,7 +16,7 @@ import { error } from '@sveltejs/kit';
 const FLAG_ENV_VARS = {
 	/** Example flag shipped with the starter — replace with your own. */
 	exampleFeature: 'FEATURE_EXAMPLE_FEATURE',
-	/** In-app reviewer chat (#302). Off in production until the write slice ships. */
+	/** In-app reviewer chat (#302). Off until the flag is turned on. */
 	inAppChat: 'FEATURE_INAPP_CHAT'
 } as const;
 

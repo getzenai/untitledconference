@@ -31,6 +31,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
+	import ReviewerChat from '$lib/components/app/conference/reviewer-chat.svelte';
 	import ReviewFileAnswer from '$lib/components/review-file-answer.svelte';
 	import { filenameFrom, type FilePreviewKind } from '$lib/conference/file-preview';
 
@@ -535,6 +536,10 @@
 		</p>
 	</form>
 </div>
+
+{#if data.chatEnabled}
+	<ReviewerChat slug={data.conference.slug} focus={{ submissionId: s.id, title: s.title }} />
+{/if}
 
 <AlertDialog bind:open={confirmRecuseOpen}>
 	<AlertDialogContent data-testid="recuse-dialog">
