@@ -20,6 +20,7 @@ import {
 	type AssignmentResult
 } from '$lib/server/conference/review-management';
 import { ownReviewAccess } from '$lib/server/conference/reviewer';
+import { speakerHistoryForSubmission } from '$lib/server/conference/speaker-history';
 import { setSubmissionSponsorTier, sponsorTiers } from '$lib/server/conference/sponsor-tiers';
 import { editSubmissionContent, lastContentEdit } from '$lib/server/conference/submission-content';
 import { error, fail } from '@sveltejs/kit';
@@ -44,18 +45,28 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	const submission = await submissionDetail(conference.id, submissionId(params.id));
 	if (!submission) throw error(404, 'Submission not found');
-	const [notificationStatuses, assignmentRounds, ownReview, contentEdit, tiers, organizers] =
-		await Promise.all([
-			decisionNotificationStatuses(conference.id, [submission]),
-			reviewAssignmentMatrix(conference.id, submission.id),
-			// An organizer who also holds a reviewer seat writes their review on the
-			// reviewer surface, not here — this only says whether that door is open for
-			// them, and it asks the same two questions that surface would.
-			ownReviewAccess(conference.id, locals.user!.id, submission.id),
-			lastContentEdit(submission.id),
-			sponsorTiers(conference.id),
-			conferenceOrganizers(conference)
-		]);
+	const [
+		notificationStatuses,
+		assignmentRounds,
+		ownReview,
+		contentEdit,
+		tiers,
+		organizers,
+		speakerHistory
+	] = await Promise.all([
+		decisionNotificationStatuses(conference.id, [submission]),
+		reviewAssignmentMatrix(conference.id, submission.id),
+		// An organizer who also holds a reviewer seat writes their review on the
+		// reviewer surface, not here — this only says whether that door is open for
+		// them, and it asks the same two questions that surface would.
+		ownReviewAccess(conference.id, locals.user!.id, submission.id),
+		lastContentEdit(submission.id),
+		sponsorTiers(conference.id),
+		conferenceOrganizers(conference),
+		// #451: no anonymised gate here — this is the organizer's own screen, and
+		// they already have the speakers' names two panels up.
+		speakerHistoryForSubmission(conference, submission.id)
+	]);
 
 	return {
 		submission,
@@ -64,7 +75,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		ownReview,
 		contentEdit,
 		sponsorTiers: tiers,
-		organizers
+		organizers,
+		speakerHistory
 	};
 };
 

@@ -1,6 +1,7 @@
 /** A single decision is saved before, and independently from, its notification. */
 import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
 import { unassignBlockReason } from '$lib/conference/review-assignment';
+import type { SpeakerHistory } from '$lib/conference/speaker-history';
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -38,6 +39,8 @@ type Extras = {
 	acceptCondition?: string | null;
 	acceptConditionOwner?: string | null;
 	organizers?: { userId: string; name: string }[];
+	/** #451: what these speakers held at our earlier editions. */
+	speakerHistory?: SpeakerHistory[];
 	speakers?: {
 		id: number;
 		name: string;
@@ -112,7 +115,8 @@ function renderPage(
 				ownReview,
 				contentEdit: extras.contentEdit ?? null,
 				sponsorTiers: extras.sponsorTiers ?? [],
-				organizers: extras.organizers ?? [{ userId: 'organizer-1', name: 'Jordan' }]
+				organizers: extras.organizers ?? [{ userId: 'organizer-1', name: 'Jordan' }],
+				speakerHistory: extras.speakerHistory ?? []
 			} as PageData,
 			form: (extras.form ?? (notificationResult ? { notificationResult } : null)) as ActionData
 		}
@@ -471,5 +475,48 @@ describe('the organizer talk editor', () => {
 		expect(body).toContain('bring a co-presenter · Ann Follows');
 		expect(body).toContain('data-testid="resolve-condition"');
 		expect(body).not.toContain('data-testid="accept-condition"');
+	});
+});
+
+/**
+ * #451 on the organizer's detail page — the panel the decision meeting reads
+ * from. The wording itself is covered by the summary's own unit test; what this
+ * asserts is that the panel appears next to the talk, and that a talk with no
+ * history leaves no empty frame behind.
+ */
+describe('speaker history panel', () => {
+	it('shows the count, the latest year and the past talks', () => {
+		const body = renderPage('submitted', null, null, null, 'one', null, {
+			speakerHistory: [
+				{
+					speakerProfileId: 3,
+					name: 'Ada Lovelace',
+					appearances: [
+						{ conferenceId: 2, conferenceName: 'Untitled 2025', year: 2025, talkTitle: 'Note G' },
+						{ conferenceId: 1, conferenceName: 'Untitled 2024', year: 2024, talkTitle: 'Engines' }
+					]
+				}
+			]
+		});
+
+		expect(body).toContain('data-testid="submission-speaker-history"');
+		expect(body).toContain('Spoke here twice, most recently 2025');
+		expect(body).toContain('Note G');
+	});
+
+	it('names a first-timer rather than hiding them', () => {
+		// The panel exists as soon as the talk has a speaker, because "we have never
+		// had them" is an answer the meeting wants and silence is not.
+		const body = renderPage('submitted', null, null, null, 'one', null, {
+			speakerHistory: [{ speakerProfileId: 4, name: 'Grace Hopper', appearances: [] }]
+		});
+
+		expect(body).toContain('First time with us');
+	});
+
+	it('renders nothing when there is no speaker on the talk', () => {
+		const body = renderPage('submitted');
+
+		expect(body).not.toContain('data-testid="submission-speaker-history"');
 	});
 });

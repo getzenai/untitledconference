@@ -28,6 +28,8 @@ import {
 } from '$lib/conference/review-visibility';
 import { byRoundWindowPriority, roundWindow, type RoundWindow } from '$lib/conference/round-window';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
+import type { SpeakerHistory } from '$lib/conference/speaker-history';
+import { speakerHistoryForSubmission } from '$lib/server/conference/speaker-history';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import {
@@ -493,6 +495,12 @@ export type ReviewerSubmission = {
 	sessionFormat: string | null;
 	/** Empty when the round is anonymised — the identity never leaves the database. */
 	speakers: string[];
+	/**
+	 * #451: what these speakers held at our earlier editions. Under the same
+	 * anonymised gate as `speakers` — "keynoted in 2024 on Rust" names a person
+	 * more reliably than a name does.
+	 */
+	speakerHistory: SpeakerHistory[];
 	anonymized: boolean;
 	/**
 	 * When this round takes answers (ABS-01). The form reads it to say why it is shut;
@@ -557,7 +565,7 @@ export async function reviewerSubmission(
 	const submission = await submissionFor(conference.id, submissionId);
 	if (!submission) return null;
 
-	const [criteria, speakers, everyReview, answers] = await Promise.all([
+	const [criteria, speakers, everyReview, answers, speakerHistory] = await Promise.all([
 		criteriaWithOwnAnswers(own.roundId, own.reviewId),
 		own.anonymized ? Promise.resolve([]) : speakersOn(submissionId),
 		reviewsOn(conference.id, [submissionId]),
@@ -567,7 +575,11 @@ export async function reviewerSubmission(
 		// every answer is honest: a field-type heuristic would still leak a name
 		// typed into a select or a boolean's label, and a reviewer in a blind round
 		// is not meant to score the person.
-		own.anonymized ? Promise.resolve([]) : answersOn(submissionId)
+		own.anonymized ? Promise.resolve([]) : answersOn(submissionId),
+		// Third thing behind the same branch (#451). The history is identity: one
+		// line of it — "spoke here in 2024 on the same subject" — points at the
+		// person harder than the name it replaces.
+		own.anonymized ? Promise.resolve([]) : speakerHistoryForSubmission(conference, submissionId)
 	]);
 
 	const visible = canSeePeerReviews(
@@ -586,6 +598,7 @@ export async function reviewerSubmission(
 	return {
 		...submission,
 		speakers,
+		speakerHistory,
 		anonymized: own.anonymized,
 		window: own.window,
 		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },

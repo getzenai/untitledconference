@@ -1,4 +1,5 @@
 import { roundWindow } from '$lib/conference/round-window';
+import type { SpeakerHistory } from '$lib/conference/speaker-history';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import type { ActionData, PageData } from './$types';
@@ -57,6 +58,8 @@ function page(
 			window: ReturnType<typeof roundWindow>;
 			submitted: boolean;
 		}[];
+		/** #451. Empty by default — the server sends nothing in an anonymised round. */
+		speakerHistory?: SpeakerHistory[];
 	} = {}
 ) {
 	const submissionStatus = opts.submissionStatus ?? 'in_review';
@@ -87,6 +90,7 @@ function page(
 					track: null,
 					sessionFormat: null,
 					speakers: [],
+					speakerHistory: opts.speakerHistory ?? [],
 					anonymized: false,
 					window,
 					own: { reviewId: 42, status, comment: null },
@@ -429,5 +433,44 @@ describe('a talk held in two rounds', () => {
 		const body = page('assigned');
 
 		expect(body).not.toContain('data-testid="round-link-2"');
+	});
+});
+
+/**
+ * #451 on the reviewer's side. The panel itself is shared with the organizer's
+ * page; what is tested here is that this surface only ever renders what the
+ * server chose to send, and shows nothing at all when that is nothing.
+ */
+describe('speaker history on the review page', () => {
+	const returning: SpeakerHistory[] = [
+		{
+			speakerProfileId: 3,
+			name: 'Ada Lovelace',
+			appearances: [
+				{ conferenceId: 2, conferenceName: 'Untitled 2025', year: 2025, talkTitle: 'Note G' },
+				{ conferenceId: 1, conferenceName: 'Untitled 2024', year: 2024, talkTitle: 'Engines' }
+			]
+		}
+	];
+
+	it('puts the count, the latest year and the talks in front of the reviewer', () => {
+		const body = page('assigned', { speakerHistory: returning });
+
+		expect(body).toContain('Speaker history');
+		expect(body).toContain('Spoke here twice, most recently 2025');
+		expect(body).toContain('Note G');
+		expect(body).toContain('Engines');
+	});
+
+	/**
+	 * The anonymised round sends an empty list, and an empty list must leave no
+	 * trace: a heading reading "Speaker history" over nothing still tells the
+	 * reviewer there is a person with a past behind the talk.
+	 */
+	it('renders no heading at all when the server sent nothing', () => {
+		const body = page('assigned');
+
+		expect(body).not.toContain('Speaker history');
+		expect(body).not.toContain('data-testid="speaker-history"');
 	});
 });
