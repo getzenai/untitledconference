@@ -15,6 +15,7 @@ describe('conferenceNav', () => {
 		expect(items.map((item) => item.href)).toEqual([
 			'/manage/devflow-2028/dashboard',
 			'/manage/devflow-2028/submissions',
+			'/manage/devflow-2028/decisions',
 			'/manage/devflow-2028/cfp',
 			'/manage/devflow-2028/agenda',
 			'/manage/devflow-2028/speakers',
@@ -26,6 +27,8 @@ describe('conferenceNav', () => {
 		]);
 		expect(items.find((item) => item.id === 'rounds')?.label).toBe('Rounds & scorecards');
 		expect(items.find((item) => item.id === 'people')?.label).toBe('Reviewer pool');
+		// The acceptance call is a place, not a mode of the submissions table (#444).
+		expect(items.find((item) => item.id === 'decisions')?.label).toBe('Decision meeting');
 	});
 });
 

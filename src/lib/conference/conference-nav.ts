@@ -18,6 +18,7 @@ export type ConferenceRail = {
 export type ConferenceNavId =
 	| 'dashboard'
 	| 'submissions'
+	| 'decisions'
 	| 'cfp'
 	| 'agenda'
 	| 'speakers'
@@ -38,6 +39,7 @@ export function conferenceNav(slug: string): ConferenceNavItem[] {
 	return [
 		{ id: 'dashboard', href: `${base}/dashboard`, label: 'Dashboard' },
 		{ id: 'submissions', href: `${base}/submissions`, label: 'Submissions' },
+		{ id: 'decisions', href: `${base}/decisions`, label: 'Decision meeting' },
 		{ id: 'cfp', href: `${base}/cfp`, label: 'Call for papers' },
 		{ id: 'agenda', href: `${base}/agenda`, label: 'Agenda' },
 		{ id: 'speakers', href: `${base}/speakers`, label: 'Speakers' },

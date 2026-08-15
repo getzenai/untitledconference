@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * The ten conference destinations, as a shadcn sidebar group.
+	 * The eleven conference destinations, as a shadcn sidebar group.
 	 *
 	 * Desktop puts this in `ConferenceSidebar`; the mobile sheet puts the same
 	 * group inside `AppSidebar`. One list, one active-state rule.
@@ -10,6 +10,7 @@
 	import { conferenceNav, type ConferenceRail } from '$lib/conference/conference-nav';
 	import CalendarDaysIcon from '@lucide/svelte/icons/calendar-days';
 	import ClipboardListIcon from '@lucide/svelte/icons/clipboard-list';
+	import GavelIcon from '@lucide/svelte/icons/gavel';
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import FolderIcon from '@lucide/svelte/icons/folder';
 	import InboxIcon from '@lucide/svelte/icons/inbox';
@@ -30,6 +31,7 @@
 	const icons = {
 		dashboard: LayoutDashboardIcon,
 		submissions: InboxIcon,
+		decisions: GavelIcon,
 		cfp: FileTextIcon,
 		agenda: CalendarDaysIcon,
 		speakers: MicIcon,
