@@ -16,12 +16,16 @@
  * The rooms come from the organizer's own settings form and the placement from
  * the slot editor, the same way the agenda specs build a board: the public grid
  * only exists once something is scheduled on it, and a fixture that wrote
- * placements directly would be testing this file.
+ * placements directly would be testing this file. Empty rooms earn no public
+ * column (#561), so each hall in the overflow fixture holds a talk.
  */
 const uniqueSlug = () => `scroll-edge-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const PHONE = { width: 390, height: 844 };
 const DESKTOP = { width: 1280, height: 800 };
+
+const ROOMS = ['Main Hall', 'Room 2A', 'Room 2B', 'Workshop Lab'];
+const TALKS = ['Fixture Talk A', 'Fixture Talk B', 'Fixture Talk C', 'Fixture Talk D'];
 
 describe('Sideways scrolling on the public site', () => {
 	let slug: string;
@@ -37,7 +41,7 @@ describe('Sideways scrolling on the public site', () => {
 					userId: user.id,
 					slug,
 					days: ['2028-05-10'],
-					sessions: ['Fixture Talk A']
+					sessions: TALKS
 				}
 			})
 				.its('status')
@@ -52,16 +56,15 @@ describe('Sideways scrolling on the public site', () => {
 		cy.get('[data-testid="cfp-publish"]').click();
 		cy.get('[data-testid="cfp-live-banner"]', { timeout: 20000 }).should('exist');
 
-		// Four rooms is the shape from the report: 652 px of grid against 342 px of
-		// phone, with two rooms falling off the right-hand side entirely.
+		// Four occupied rooms is the shape from the report: 652 px of grid against
+		// 342 px of phone, with two rooms falling off the right-hand side entirely.
 		cy.visit(`/manage/${slug}/settings`);
 		cy.waitForHydration();
 		const field = () => cy.get('[data-testid="settings-rooms"] textarea[name="names"]');
-		const rooms = ['Main Hall', 'Room 2A', 'Room 2B', 'Workshop Lab'];
 		field().clear();
-		for (const name of rooms.slice(0, -1)) field().type(`${name}{shift}{enter}`);
-		field().type(`${rooms.at(-1)}{enter}`);
-		for (const name of rooms) {
+		for (const name of ROOMS.slice(0, -1)) field().type(`${name}{shift}{enter}`);
+		field().type(`${ROOMS.at(-1)}{enter}`);
+		for (const name of ROOMS) {
 			cy.get(`[data-testid="settings-room-row"][data-name="${name}"]`).should('exist');
 		}
 
@@ -72,15 +75,17 @@ describe('Sideways scrolling on the public site', () => {
 
 		cy.visit(`/manage/${slug}/agenda`);
 		cy.waitForHydration();
-		cy.contains('[data-testid="agenda-room-card"]', 'Main Hall')
-			.find('[data-testid^="agenda-open-slot-"]')
-			.click();
-		cy.get('[data-testid="agenda-slot-editor"]').should('exist');
-		cy.chooseFromAppSelect('agenda-slot-session', 'Fixture Talk A');
-		cy.chooseFromAppSelect('agenda-slot-room', 'Main Hall');
-		cy.chooseFromAppSelect('agenda-slot-start', '09:00');
-		cy.get('[data-testid="agenda-slot-place"]').click();
-		cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
+		for (const [i, name] of ROOMS.entries()) {
+			cy.contains('[data-testid="agenda-room-card"]', name)
+				.find('[data-testid^="agenda-open-slot-"]')
+				.click();
+			cy.get('[data-testid="agenda-slot-editor"]').should('exist');
+			cy.chooseFromAppSelect('agenda-slot-session', TALKS[i]);
+			cy.chooseFromAppSelect('agenda-slot-room', name);
+			cy.chooseFromAppSelect('agenda-slot-start', '09:00');
+			cy.get('[data-testid="agenda-slot-place"]').click();
+			cy.get('[data-testid="agenda-slot-editor"]').should('not.exist');
+		}
 
 		// A placement is a draft until the organizer publishes the agenda, and a
 		// draft is invisible to the public loader. Without this click the public page

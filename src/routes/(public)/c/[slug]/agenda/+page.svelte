@@ -6,6 +6,11 @@
 	import ScrollEdge from '$lib/components/app/conference/scroll-edge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import {
+		agendaGridColumns,
+		occupiedRoomsForDay,
+		sessionColumnSpan
+	} from '$lib/conference/public-agenda-columns';
+	import {
 		buildView,
 		firstScheduledDayIndex,
 		formatFullStamp,
@@ -53,6 +58,13 @@
 
 	const day = $derived(view.conference.days[dayIndex]);
 	const daySessions = $derived(view.sessionsByDay.get(day.id) ?? []);
+	// Columns are the rooms that hold a talk today, not every room the
+	// organizer ever created. An empty room is a drop target in the builder;
+	// here it is just width a phone has to scroll past (#561).
+	const dayRooms = $derived(occupiedRoomsForDay(view.conference.rooms, daySessions));
+	const roomColumnIndexes = $derived(
+		Array.from({ length: Math.max(dayRooms.length, 1) }, (_, i) => i)
+	);
 
 	// The grid is built from what the day actually contains, not from a fixed
 	// 08:00–18:00 frame: a day with two sessions should not render eight empty
@@ -88,26 +100,20 @@
 		}));
 	});
 
-	// A session with no room spans every column — that is how a plenary or a break
-	// is meant to read on a room grid, rather than being dropped for lack of a
-	// column to sit in.
-	const columnOf = (session: ResolvedSession) => {
-		if (!session.roomId) return { start: 2, end: view.conference.rooms.length + 2 };
-		const i = view.conference.rooms.findIndex((r) => r.id === session.roomId);
-		return { start: i + 2, end: i + 3 };
-	};
+	// A session with no room spans every column of *this day* — that is how a
+	// plenary or a break is meant to read on a room grid, rather than being
+	// dropped for lack of a column to sit in.
+	const columnOf = (session: ResolvedSession) => sessionColumnSpan(session, dayRooms);
 
-	// One floor per room column, shared by the heading row and the grid below it.
+	// One floor per occupied room column, shared by the heading row and the grid
+	// below it.
 	//
 	// `1fr` alone distributes the space there is, it never asks for more: at 31
 	// rooms that left ~1.4rem a column, and a grid that never grows wider than its
 	// scroll container never offers a scrollbar either. The floor is the same
 	// 9rem the organizer agenda gives a room column (`min-w-36`), so both views
 	// read the same at the same room count.
-	const ROOM_MIN = '9rem';
-	const COLUMNS = $derived(
-		`4.5rem repeat(${view.conference.rooms.length}, minmax(${ROOM_MIN}, 1fr))`
-	);
+	const COLUMNS = $derived(agendaGridColumns(dayRooms.length));
 
 	const goToDay = (i: number) => {
 		dayIndex = i;
@@ -243,7 +249,7 @@
 				style="grid-template-columns: {COLUMNS};"
 			>
 				<span></span>
-				{#each view.conference.rooms as room (room.id)}
+				{#each dayRooms as room (room.id)}
 					<span class="px-2">{room.name}</span>
 				{/each}
 			</div>
@@ -257,7 +263,7 @@
 						class="text-muted-foreground border-border border-t pt-1 text-xs tabular-nums"
 						style="grid-column: 1; grid-row: {slot.row} / span {LABEL_EVERY};">{slot.label}</span
 					>
-					{#each view.conference.rooms as room, i (room.id)}
+					{#each roomColumnIndexes as i (i)}
 						<span
 							class="border-border border-t"
 							style="grid-column: {i + 2}; grid-row: {slot.row} / span {LABEL_EVERY};"
