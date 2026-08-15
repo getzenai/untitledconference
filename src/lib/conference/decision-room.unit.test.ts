@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCapacity, slotCount, slotSentence } from './decision-room';
+import { latestPerKey, parseCapacity, slotCount, slotSentence } from './decision-room';
 
 const line = (capacity: number | null, accepted: number) => ({
 	id: null,
@@ -78,5 +78,51 @@ describe('parseCapacity', () => {
 		expect(parseCapacity('4.5')).toBe('invalid');
 		expect(parseCapacity('-1')).toBe('invalid');
 		expect(parseCapacity(null)).toBe('invalid');
+	});
+});
+
+/**
+ * #592: the queue is keyed by submission id, and a keyed `{#each}` over a duplicate
+ * key is a hard render error — the organizer keeps looking at the page they came from.
+ */
+describe('latestPerKey', () => {
+	const review = (submissionId: number, roundPosition: number, roundId: number, note: string) => ({
+		submissionId,
+		roundPosition,
+		roundId,
+		note
+	});
+
+	it('keeps one row per key when a talk was reviewed in two rounds', () => {
+		const rows = [
+			review(1, 0, 10, 'screening'),
+			review(1, 1, 11, 'deep dive'),
+			review(2, 0, 10, 'other talk')
+		];
+
+		expect(latestPerKey(rows, (row) => row.submissionId).map((row) => row.note)).toEqual([
+			'deep dive',
+			'other talk'
+		]);
+	});
+
+	it('takes the later round, whichever order the rows arrive in', () => {
+		const later = review(1, 1, 11, 'deep dive');
+		const earlier = review(1, 0, 10, 'screening');
+
+		expect(latestPerKey([later, earlier], (row) => row.submissionId)).toEqual([later]);
+		expect(latestPerKey([earlier, later], (row) => row.submissionId)).toEqual([later]);
+	});
+
+	it('breaks a tie between two rounds at the same position by id', () => {
+		const rows = [review(1, 0, 10, 'first'), review(1, 0, 12, 'second')];
+
+		expect(latestPerKey(rows, (row) => row.submissionId)).toEqual([rows[1]]);
+	});
+
+	it('leaves a list that has no duplicates in its own order', () => {
+		const rows = [review(3, 0, 10, 'c'), review(1, 0, 10, 'a'), review(2, 0, 10, 'b')];
+
+		expect(latestPerKey(rows, (row) => row.submissionId)).toEqual(rows);
 	});
 });

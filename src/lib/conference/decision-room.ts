@@ -67,6 +67,38 @@ export function slotSentence(count: SlotCount): string {
  * that is not a non-negative whole number is rejected rather than coerced, because
  * `Number('')` is 0 and 0 is a statement about the programme.
  */
+/** A review row carries the round it was written in, so a later one can win. */
+export type RoundStamped = { roundPosition: number; roundId: number };
+
+/**
+ * One row per key, from the latest round (#592).
+ *
+ * A second review round writes a second review row for the same talk by the same
+ * person — that is the schema working as intended. The room, though, argues one
+ * talk at a time, and the queue is keyed by submission id: two rows for one talk
+ * are not a cosmetic duplicate, they abort the render and leave the organizer
+ * looking at whatever page they came from.
+ *
+ * The later round wins because that is the score and the sentence the member will
+ * read out on the call. Position first — that is the order the organizer arranged
+ * the rounds in — and the id only to break a tie between two rounds at the same
+ * position.
+ */
+export function latestPerKey<K, T extends RoundStamped>(rows: T[], keyOf: (row: T) => K): T[] {
+	const latest = new Map<K, T>();
+	for (const row of rows) {
+		const key = keyOf(row);
+		const kept = latest.get(key);
+		if (!kept || isLaterRound(row, kept)) latest.set(key, row);
+	}
+	return [...latest.values()];
+}
+
+function isLaterRound(a: RoundStamped, b: RoundStamped): boolean {
+	if (a.roundPosition !== b.roundPosition) return a.roundPosition > b.roundPosition;
+	return a.roundId > b.roundId;
+}
+
 export function parseCapacity(raw: FormDataEntryValue | null): number | null | 'invalid' {
 	if (typeof raw !== 'string') return 'invalid';
 	const trimmed = raw.trim();
