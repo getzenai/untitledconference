@@ -203,16 +203,21 @@ We want talks that show the work — **the migration that failed first**, the nu
 			title="No call for papers yet"
 			description="Create it and it already asks for a title, an abstract and who the speaker is — you add the questions you want on top of those. Nothing is public until you publish it."
 		>
+			<!-- The first screen of the CFP journey, and on a phone the field an
+			     organizer is meant to type in used to leave the right edge: a fixed
+			     288px input beside a 199px button in a row that never wrapped (#538).
+			     The row wraps and the field gives; above the breakpoint nothing moves. -->
 			<form
 				method="POST"
 				action="?/createForm"
 				use:enhance={submitting('add')}
-				class="mt-3 flex gap-2"
+				class="mt-3 flex flex-wrap justify-center gap-2"
+				data-testid="cfp-create-form"
 			>
 				<Input
 					name="title"
 					value="{data.conference.name} — Call for papers"
-					class="w-72"
+					class="w-full sm:w-72"
 					aria-label="Title"
 				/>
 				<Button type="submit" disabled={busy}>Create the call for papers</Button>
