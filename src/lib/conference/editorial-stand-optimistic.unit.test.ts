@@ -93,4 +93,11 @@ describe('applyTalkStand', () => {
 			'received'
 		);
 	});
+
+	it('applies the remaining write on the server stand when the first is dropped', () => {
+		const first: StandWrite = { kind: 'advance', submissionId: 11 };
+		const second: StandWrite = { kind: 'advance', submissionId: 11 };
+		expect(applyTalkStand('materials_requested', 11, [first, second])).toBe('reviewed');
+		expect(applyTalkStand('materials_requested', 11, [second])).toBe('received');
+	});
 });

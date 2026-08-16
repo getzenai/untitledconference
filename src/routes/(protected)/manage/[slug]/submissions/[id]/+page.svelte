@@ -78,11 +78,19 @@
 	/**
 	 * In-flight stand advances sit on top of the last server stand. Dropping
 	 * one is the rollback — the badge is back where the server left it.
+	 * Advance does not take the page-wide `busy` lock.
+	 *
+	 * One request flies for this talk. A second click paints immediately and
+	 * waits; when the answer lands, that write is sent against the server
+	 * stand we now have. Locking the button is not enough — badge, select
+	 * and Advance share the page.
 	 */
 	type QueuedStand = StandWrite & { token: number };
 	let standWrites = $state<QueuedStand[]>([]);
 	let standWriteToken = 0;
 	let standWriteError = $state<string | null>(null);
+	let standWireBusy = false;
+	let standWireForm = $state<HTMLFormElement | undefined>(undefined);
 	const paintedStand = $derived(applyTalkStand(s.editorialStand, s.id, standWrites));
 
 	const assignmentFailureMessage = (result: ActionResult): string => {
@@ -127,22 +135,56 @@
 		return 'That change could not be saved.';
 	};
 
-	const submittingStand: SubmitFunction = ({ formData }) => {
+	const settleStand =
+		(queued: QueuedStand | null) =>
+		async ({
+			result,
+			update
+		}: {
+			result: ActionResult;
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			try {
+				if (result.type === 'success') {
+					await update(formUpdateOptions('edit'));
+				} else {
+					standWriteError = standFailureMessage(result);
+					if (result.type === 'failure') await update(formUpdateOptions('edit'));
+				}
+			} finally {
+				if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
+				standWireBusy = false;
+				sendNextStand();
+			}
+		};
+
+	function sendNextStand(): void {
+		const next = standWrites[0];
+		if (!next || !standWireForm || standWireBusy) return;
+		standWireBusy = true;
+		const id = standWireForm.elements.namedItem('id');
+		if (!(id instanceof HTMLInputElement)) {
+			standWireBusy = false;
+			return;
+		}
+		id.value = String(next.submissionId);
+		standWireForm.requestSubmit();
+	}
+
+	const submittingStand: SubmitFunction = ({ formData, cancel }) => {
 		const write = standWriteFromForm(formData);
 		const queued = write ? { ...write, token: ++standWriteToken } : null;
 		if (queued) standWrites = [...standWrites, queued];
 		standWriteError = null;
-		return async ({ result, update }) => {
-			if (result.type === 'success') {
-				await update(formUpdateOptions('edit'));
-				if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
-				return;
-			}
-			if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
-			standWriteError = standFailureMessage(result);
-			if (result.type === 'failure') await update(formUpdateOptions('edit'));
-		};
+		if (standWireBusy) {
+			cancel();
+			return;
+		}
+		standWireBusy = true;
+		return settleStand(queued);
 	};
+
+	const submittingStandWire: SubmitFunction = () => settleStand(standWrites[0] ?? null);
 
 	/**
 	 * Open when the last save was refused, so a rejected edit is still on screen to
@@ -589,6 +631,16 @@
 	{/if}
 	{#if s.status === 'accepted'}
 		<div class="mt-3 flex flex-wrap items-end justify-end gap-2" data-testid="editorial-stand">
+			<form
+				method="POST"
+				action="?/advanceEditorialStand"
+				use:enhance={submittingStandWire}
+				bind:this={standWireForm}
+				hidden
+				aria-hidden="true"
+			>
+				<input type="hidden" name="id" value="" />
+			</form>
 			<form
 				method="POST"
 				action="?/setEditorialStand"

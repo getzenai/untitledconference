@@ -1,7 +1,8 @@
 /**
  * #721: advancing a stand on the talk paints the next name before the
  * action replies, and a refused write puts the badge back with a reason.
- * That form used to take the page-wide `busy` lock.
+ * That form used to take the page-wide `busy` lock. One request flies
+ * for the talk; a second click waits and is sent on the server stand.
  */
 const uniqueSlug = () => `ts721-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -85,5 +86,59 @@ describe('Advancing a stand on a talk', () => {
 			'materials_requested'
 		);
 		cy.get('[data-testid="stand-write-error"]').should('be.visible');
+	});
+
+	it('keeps the clicked stands when a second advance flies while the first is in flight', () => {
+		const slug = uniqueSlug();
+		openTalk(slug);
+
+		cy.intercept({ method: 'POST', url: new RegExp(`/manage/${slug}/submissions/`) }, (req) => {
+			req.on('response', (res) => {
+				res.setDelay(2500);
+			});
+		}).as('advance');
+
+		cy.get('[data-testid="advance-editorial-stand"]').click();
+		cy.get('[data-testid="advance-editorial-stand"]').click();
+
+		cy.get('[data-testid="submission-editorial-stand"]', { timeout: 800 }).should(
+			'have.attr',
+			'data-stand',
+			'reviewed'
+		);
+
+		cy.wait('@advance');
+		cy.wait('@advance');
+		cy.get('[data-testid="submission-editorial-stand"]').should(
+			'have.attr',
+			'data-stand',
+			'reviewed'
+		);
+	});
+
+	it('applies the waiting advance on the server stand when the first write is refused', () => {
+		const slug = uniqueSlug();
+		openTalk(slug);
+
+		let seen = 0;
+		cy.intercept({ method: 'POST', url: new RegExp(`/manage/${slug}/submissions/`) }, (req) => {
+			seen += 1;
+			if (seen === 1) {
+				req.reply({ statusCode: 500, delay: 2500, body: 'nope' });
+				return;
+			}
+			req.continue();
+		}).as('advances');
+
+		cy.get('[data-testid="advance-editorial-stand"]').click();
+		cy.get('[data-testid="advance-editorial-stand"]').click();
+
+		cy.wait('@advances');
+		cy.wait('@advances');
+		cy.get('[data-testid="submission-editorial-stand"]').should(
+			'have.attr',
+			'data-stand',
+			'received'
+		);
 	});
 });
