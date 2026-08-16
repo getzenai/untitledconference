@@ -22,6 +22,7 @@
 		firstScheduledDayIndex,
 		formatFullStamp,
 		formatTime,
+		watchableRecordingUrl,
 		type ResolvedSession
 	} from '$lib/conference/public-view';
 	import {
@@ -145,6 +146,7 @@
 
 {#if selected}
 	{@const session = selected}
+	{@const recording = watchableRecordingUrl(session)}
 	<article>
 		<Button variant="ghost" size="sm" class="mb-4 -ml-3" onclick={closeSession}>
 			← Back to agenda
@@ -161,11 +163,11 @@
 			{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span>{session.room}{/if}
 		</p>
 
-		{#if session.recordingUrl}
-			<!-- Above the abstract on purpose: after the conference this is what the page
+		{#if recording}
+			<!-- Above the abstract on purpose: after the talk this is what the page
 			     is for. Before it, the block does not exist at all. -->
 			<p class="mt-5">
-				<Button href={session.recordingUrl} rel="noopener" target="_blank">Watch recording</Button>
+				<Button href={recording} rel="noopener" target="_blank">Watch recording</Button>
 			</p>
 		{/if}
 

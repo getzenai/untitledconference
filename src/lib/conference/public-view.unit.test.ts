@@ -12,7 +12,8 @@ import {
 	firstScheduledDayIndex,
 	formatDateRange,
 	formatDayLong,
-	isoDay
+	isoDay,
+	watchableRecordingUrl
 } from './public-view';
 
 describe('isoDay', () => {
@@ -147,5 +148,31 @@ describe('formatDateRange', () => {
 		expect(formatDateRange({ startsOn: '2027-06-02', endsOn: '2027-06-04' })).toBe(
 			'Wednesday, 2 June 2027 – Friday, 4 June 2027'
 		);
+	});
+});
+
+describe('watchableRecordingUrl', () => {
+	const url = 'https://www.youtube.com/watch?v=ju73sWVtvU0';
+	const talk = { recordingUrl: url, endsAt: '2026-08-16T12:00:00.000Z' };
+
+	it('is the pasted URL once the talk has ended, and gone when the same end is pushed into the future', () => {
+		const now = new Date('2026-08-16T12:00:00.000Z');
+		expect(watchableRecordingUrl(talk, now)).toBe(url);
+		expect(watchableRecordingUrl({ ...talk, endsAt: '2027-05-12T10:00:00.000Z' }, now)).toBeNull();
+	});
+
+	it('stays hidden when there is no recording, even after the talk', () => {
+		expect(
+			watchableRecordingUrl(
+				{ recordingUrl: null, endsAt: '2026-08-16T12:00:00.000Z' },
+				new Date('2026-08-16T12:00:00.000Z')
+			)
+		).toBeNull();
+	});
+
+	it('stays hidden when the talk has no end time, which the loader hands over as an empty string', () => {
+		const now = new Date('2026-08-16T12:00:00.000Z');
+		expect(watchableRecordingUrl({ ...talk, endsAt: '' }, now)).toBeNull();
+		expect(watchableRecordingUrl({ ...talk, endsAt: 'soon' }, now)).toBeNull();
 	});
 });

@@ -22,7 +22,8 @@
 		buildView,
 		formatDateRange,
 		formatFullStamp,
-		matchesQuery
+		matchesQuery,
+		watchableRecordingUrl
 	} from '$lib/conference/public-view';
 
 	let { data } = $props();
@@ -170,6 +171,7 @@
 
 		<ul class="space-y-4">
 			{#each visible as session (session.id)}
+				{@const recording = watchableRecordingUrl(session)}
 				<li class="border-border rounded-lg border p-5">
 					<div class="flex flex-wrap items-center gap-2">
 						{#if session.track}<Badge variant="secondary">{session.track}</Badge>{/if}
@@ -183,15 +185,9 @@
 							>{session.room}{/if}
 					</p>
 
-					{#if session.recordingUrl}
+					{#if recording}
 						<p class="mt-3">
-							<Button
-								href={session.recordingUrl}
-								rel="noopener"
-								target="_blank"
-								variant="outline"
-								size="sm"
-							>
+							<Button href={recording} rel="noopener" target="_blank" variant="outline" size="sm">
 								Watch recording
 							</Button>
 						</p>

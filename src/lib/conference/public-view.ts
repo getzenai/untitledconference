@@ -98,6 +98,26 @@ export function daysUntil(at: Date | null, now = new Date()): number | null {
 }
 
 /**
+ * A pasted URL is not a recording of this talk until the talk is over.
+ * "Watch recording" before that claims something that has not happened (#794).
+ *
+ * A talk without an end time stays hidden, said out loud rather than left to
+ * arithmetic: `placement.ends_at` is nullable and the loader hands that over as
+ * `''`, so the comparison below would run against NaN and be false by accident.
+ * A conference published before its dates are fixed is a supported state (#492),
+ * and without an end we cannot know the talk is over.
+ */
+export function watchableRecordingUrl(
+	session: { recordingUrl: string | null; endsAt: string },
+	now = new Date()
+): string | null {
+	if (!session.recordingUrl) return null;
+	const endsAt = new Date(session.endsAt).getTime();
+	if (Number.isNaN(endsAt)) return null;
+	return endsAt <= now.getTime() ? session.recordingUrl : null;
+}
+
+/**
  * "Thursday 17 September 2026" for a one-day event, both ends otherwise.
  *
  * Lives here because two surfaces render it — the header on every inner page and

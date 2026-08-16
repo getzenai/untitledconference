@@ -48,8 +48,9 @@ export type PublicSession = {
 	/** Ordered, primary speaker first. */
 	speakerIds: string[];
 	/**
-	 * Set once the talk has been recorded and the organizer has pasted the link.
-	 * Null is the normal state before the conference happens.
+	 * The organizer may paste this before the talk is given. Public "Watch
+	 * recording" waits until `endsAt` — a URL is not a recording of a talk
+	 * that has not happened (#794).
 	 */
 	recordingUrl: string | null;
 };
