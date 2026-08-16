@@ -43,6 +43,14 @@ const emptyUsage = {
  */
 const RENAME_CONFERENCE = /^Rename the conference (\S+) to (.+)$/;
 
+/**
+ * An answer taller than the panel: "Tell me something long". The panel follows
+ * the message being written rather than the bottom of the list (#718), and the
+ * difference between those two is only visible on an answer that outgrows the
+ * viewport.
+ */
+const LONG_ANSWER = /^Tell me something long$/;
+
 type PromptMessage = {
 	role?: string;
 	content?: string | Array<{ type?: string; text?: string }>;
@@ -91,6 +99,10 @@ export function parseConferenceRename(
 	if (!match) return undefined;
 	const name = match[2].trim();
 	return name ? { conferenceSlug: match[1], name } : undefined;
+}
+
+export function wantsLongAnswer(prompt: unknown): boolean {
+	return LONG_ANSWER.test(lastUserText(prompt).trim());
 }
 
 /** `/manage/<slug>/agenda` in the location sentence (`…/agenda, the page titled`). */
@@ -143,6 +155,9 @@ export function createMockChatModel(
 	let step = 0;
 	return new MockLanguageModelV3({
 		doStream: async ({ prompt }) => {
+			if (wantsLongAnswer(prompt)) {
+				return { stream: simulateReadableStream({ chunks: mockLongTextChunks() as never }) };
+			}
 			if (promptAlreadyHasTool(prompt)) {
 				return { stream: simulateReadableStream({ chunks: textStep as never }) };
 			}
@@ -169,6 +184,24 @@ function mockToolChunks(id: string, name: string, input: Record<string, unknown>
 		{ type: 'tool-input-end' as const, id },
 		{ type: 'tool-call' as const, toolCallId: id, toolName: name, input: args },
 		{ type: 'finish' as const, finishReason: 'tool-calls' as const, usage: emptyUsage }
+	];
+}
+
+/**
+ * One long answer, delivered a paragraph at a time. Each paragraph is numbered
+ * so a test can point at a specific line and say where the panel was looking.
+ */
+function mockLongTextChunks(paragraphs = 24) {
+	return [
+		{ type: 'stream-start' as const, warnings: [] },
+		{ type: 'text-start' as const, id: 'text_1' },
+		...Array.from({ length: paragraphs }, (_, index) => ({
+			type: 'text-delta' as const,
+			id: 'text_1',
+			delta: `Paragraph ${index + 1} of a long answer that outgrows the panel.\n\n`
+		})),
+		{ type: 'text-end' as const, id: 'text_1' },
+		{ type: 'finish' as const, finishReason: 'stop' as const, usage: emptyUsage }
 	];
 }
 

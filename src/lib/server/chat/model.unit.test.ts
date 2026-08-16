@@ -25,7 +25,8 @@ import {
 	lastUserText,
 	parseAgendaSlug,
 	parseConferenceRename,
-	promptAlreadyHasTool
+	promptAlreadyHasTool,
+	wantsLongAnswer
 } from './model';
 
 describe('createChatModel', () => {
@@ -114,6 +115,19 @@ describe('mock chat prompt helpers', () => {
 				{ role: 'user', content: [{ type: 'text', text: 'What is on the board?' }] }
 			])
 		).toBeUndefined();
+	});
+
+	it('recognises the long-answer sentence and nothing near it', () => {
+		expect(
+			wantsLongAnswer([
+				{ role: 'user', content: [{ type: 'text', text: '  Tell me something long  ' }] }
+			])
+		).toBe(true);
+		expect(
+			wantsLongAnswer([
+				{ role: 'user', content: [{ type: 'text', text: 'Tell me something long about rooms' }] }
+			])
+		).toBe(false);
 	});
 
 	it('reads the agenda slug from the system location line', () => {

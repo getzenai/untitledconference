@@ -11,12 +11,22 @@
 	 * 2. Approval is rendered generically, over *any* tool part that asks for
 	 *    it. The client has no list of write tools — the server decides, and a
 	 *    tool it lets through writes without asking us.
+	 *
+	 * The message list follows the answer being streamed rather than the bottom
+	 * of the list (#718) — see `ai-elements/conversation/` for why those are not
+	 * the same thing.
 	 */
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
+	import {
+		Conversation,
+		ConversationContent,
+		ConversationScrollButton,
+		MessageAnchor
+	} from '$lib/components/ai-elements/conversation';
 	import { pageContext, visiblePageTitle } from '$lib/chat/page-context';
 	import { pageFocus } from '$lib/chat/page-focus.svelte';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
@@ -105,70 +115,77 @@
 			</Sheet.Description>
 		</Sheet.Header>
 
-		<ul class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4">
-			{#each chat?.messages ?? [] as message (message.id)}
-				<li class="text-sm" data-role={message.role}>
-					<div class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-						{message.role === 'user' ? 'You' : 'Assistant'}
-					</div>
-					<div class="mt-1 flex flex-col gap-1.5">
-						{#each message.parts as part, partIndex (partIndex)}
-							{#if part.type === 'text'}
-								<AssistantReply text={part.text} />
-							{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
-								<div
-									class="border-border bg-background rounded-md border p-3"
-									data-testid="assistant-approval"
-								>
-									<p class="font-medium">{toolLabel(getToolName(part))}</p>
-									<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-										{#each toolInputLines(part.input) as line (line.key)}
-											<dt class="text-muted-foreground">{line.key}</dt>
-											<dd class="break-words">{line.value}</dd>
-										{/each}
-									</dl>
-									<div class="mt-2 flex gap-2">
-										<Button
-											type="button"
-											size="sm"
-											data-testid="assistant-approve"
-											onclick={() => decide(part.approval.id, true)}
-										>
-											Do it
-										</Button>
-										<Button
-											type="button"
-											size="sm"
-											variant="outline"
-											data-testid="assistant-deny"
-											onclick={() => decide(part.approval.id, false)}
-										>
-											Don't
-										</Button>
-									</div>
+		<Conversation class="flex-1">
+			<ConversationContent class="px-4">
+				<ul class="flex flex-col gap-3" data-testid="assistant-messages">
+					{#each chat?.messages ?? [] as message (message.id)}
+						<li class="text-sm" data-role={message.role}>
+							<MessageAnchor>
+								<div class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+									{message.role === 'user' ? 'You' : 'Assistant'}
 								</div>
-							{:else if isToolUIPart(part) && part.state === 'output-denied'}
-								<p class="text-muted-foreground text-xs" data-testid="assistant-denied">
-									{toolLabel(getToolName(part))} — not done.
-								</p>
-							{:else if isToolUIPart(part)}
-								<p
-									class="bg-muted text-muted-foreground w-fit rounded-md px-2 py-0.5 font-mono text-xs"
-									data-testid="assistant-tool-name"
-								>
-									{getToolName(part)}
-								</p>
-							{/if}
-						{/each}
-					</div>
-				</li>
-			{/each}
-			{#if pending}
-				<li class="text-muted-foreground text-sm" data-testid="assistant-pending">
-					Looking that up…
-				</li>
-			{/if}
-		</ul>
+								<div class="mt-1 flex flex-col gap-1.5">
+									{#each message.parts as part, partIndex (partIndex)}
+										{#if part.type === 'text'}
+											<AssistantReply text={part.text} />
+										{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
+											<div
+												class="border-border bg-background rounded-md border p-3"
+												data-testid="assistant-approval"
+											>
+												<p class="font-medium">{toolLabel(getToolName(part))}</p>
+												<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+													{#each toolInputLines(part.input) as line (line.key)}
+														<dt class="text-muted-foreground">{line.key}</dt>
+														<dd class="break-words">{line.value}</dd>
+													{/each}
+												</dl>
+												<div class="mt-2 flex gap-2">
+													<Button
+														type="button"
+														size="sm"
+														data-testid="assistant-approve"
+														onclick={() => decide(part.approval.id, true)}
+													>
+														Do it
+													</Button>
+													<Button
+														type="button"
+														size="sm"
+														variant="outline"
+														data-testid="assistant-deny"
+														onclick={() => decide(part.approval.id, false)}
+													>
+														Don't
+													</Button>
+												</div>
+											</div>
+										{:else if isToolUIPart(part) && part.state === 'output-denied'}
+											<p class="text-muted-foreground text-xs" data-testid="assistant-denied">
+												{toolLabel(getToolName(part))} — not done.
+											</p>
+										{:else if isToolUIPart(part)}
+											<p
+												class="bg-muted text-muted-foreground w-fit rounded-md px-2 py-0.5 font-mono text-xs"
+												data-testid="assistant-tool-name"
+											>
+												{getToolName(part)}
+											</p>
+										{/if}
+									{/each}
+								</div>
+							</MessageAnchor>
+						</li>
+					{/each}
+					{#if pending}
+						<li class="text-muted-foreground text-sm" data-testid="assistant-pending">
+							Looking that up…
+						</li>
+					{/if}
+				</ul>
+			</ConversationContent>
+			<ConversationScrollButton />
+		</Conversation>
 
 		{#if chat?.error}
 			<p
