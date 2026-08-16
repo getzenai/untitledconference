@@ -5,6 +5,7 @@ import {
 } from '$lib/server/conference/public-conference';
 import { FIXTURE_CONFERENCE } from './public-fixtures';
 import type { PublicConference } from './public-types';
+import { watchableRecordingUrl } from './public-view';
 
 /**
  * The single entry point behind all five public widget surfaces.
@@ -29,8 +30,28 @@ import type { PublicConference } from './public-types';
  * from `+layout.server.ts`.
  */
 export async function publicConference(slug: string): Promise<PublicConference | null> {
-	if (slug === FIXTURE_CONFERENCE.slug) return FIXTURE_CONFERENCE;
+	if (slug === FIXTURE_CONFERENCE.slug) return watchableFixture();
 	return loadPublicConference(slug);
+}
+
+/**
+ * The fixture answers the recording question for itself.
+ *
+ * The database path applies the rule where it assembles the payload (#807), and
+ * the fixture never goes through it — so without this the one recorded talk in
+ * it would offer "Watch recording" for a September 2026 session that has not
+ * happened, which is the bug this rule exists to prevent (#794). The literal is
+ * static; whether it is over is not, so it is decided per request here rather
+ * than written into the fixture.
+ */
+function watchableFixture(): PublicConference {
+	return {
+		...FIXTURE_CONFERENCE,
+		sessions: FIXTURE_CONFERENCE.sessions.map((session) => ({
+			...session,
+			recordingUrl: watchableRecordingUrl(session)
+		}))
+	};
 }
 
 export type { PublicConferenceSummary };
