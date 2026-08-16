@@ -62,8 +62,18 @@ describe('Contact notes draft (#765)', () => {
 		cy.location('pathname').then((path) => {
 			cy.get('[data-testid="contact-notes"]').clear().type(notes);
 
+			const asked: string[] = [];
+			cy.on('window:confirm', (text: string) => {
+				asked.push(text);
+				return true;
+			});
 			cy.get('[data-testid="sidebar-home-link"]').click();
 			cy.location('pathname').should('eq', '/home');
+			cy.wrap(asked).should('have.length', 1);
+			cy.wrap(asked)
+				.its(0)
+				.should('match', /only these notes stay in this browser/i);
+			cy.wrap(asked).its(0).should('not.match', /saved/i);
 
 			cy.visit(path);
 			cy.waitForHydration();
@@ -74,5 +84,37 @@ describe('Contact notes draft (#765)', () => {
 			cy.waitForHydration();
 			cy.get('[data-testid="contact-notes"]').should('have.value', notes);
 		});
+	});
+
+	it('asks only about notes when notes and bio are both typed', () => {
+		const notes = `ORGJOURNEY-B2-${Date.now()} notes-only-warn`;
+		const bio = `ORGJOURNEY-B2-${Date.now()} unsaved-bio`;
+
+		cy.visit('/contacts');
+		cy.waitForHydration();
+		cy.get('[data-testid="contacts-add-open"]').click();
+		cy.get('[data-testid="contacts-add-name"]').type('Ada Okonkwo');
+		cy.get('[data-testid="contacts-add-submit"]').click();
+		cy.location('pathname').should('match', /\/contacts\/\d+/);
+		cy.waitForHydration();
+
+		cy.get('[data-testid="contact-notes"]').clear().type(notes);
+		cy.get('[data-testid="contact-bio"]').clear().type(bio);
+
+		const asked: string[] = [];
+		cy.on('window:confirm', (text: string) => {
+			asked.push(text);
+			return false;
+		});
+		cy.get('[data-testid="sidebar-home-link"]').click();
+
+		cy.location('pathname').should('match', /\/contacts\/\d+/);
+		cy.get('[data-testid="contact-notes"]').should('have.value', notes);
+		cy.get('[data-testid="contact-bio"]').should('have.value', bio);
+		cy.wrap(asked).should('have.length', 1);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /only these notes stay in this browser/i);
+		cy.wrap(asked).its(0).should('not.match', /saved/i);
 	});
 });

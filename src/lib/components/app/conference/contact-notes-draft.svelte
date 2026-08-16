@@ -5,7 +5,10 @@
 	 */
 	import { onMount } from 'svelte';
 	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
-	import { contactNotesDraftScope } from '$lib/conference/contact-notes-draft';
+	import {
+		CONTACT_NOTES_LEAVE_PROMPT,
+		contactNotesDraftScope
+	} from '$lib/conference/contact-notes-draft';
 	import {
 		clearBrowserDraft,
 		readBrowserDraft,
@@ -82,10 +85,7 @@
 	});
 </script>
 
-<UnsavedGuard
-	{dirty}
-	message="Your notes are saved in this browser but not on the server yet. Leave this page?"
-/>
+<UnsavedGuard {dirty} message={CONTACT_NOTES_LEAVE_PROMPT} />
 
 {#if restored}
 	<p class="text-status-good text-xs" role="status" data-testid="contact-notes-restored">
