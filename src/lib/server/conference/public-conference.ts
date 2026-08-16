@@ -18,6 +18,7 @@
  */
 import { directoryCall, type DirectoryCall } from '$lib/conference/call-window';
 import type { PublicConference, PublicSession, PublicSpeaker } from '$lib/conference/public-types';
+import { watchableRecordingUrl } from '$lib/conference/public-view';
 import { isPublishableUrl, parseSpeakerLinks } from '$lib/conference/speaker-links';
 import { db } from '$lib/server/db';
 import {
@@ -231,7 +232,10 @@ function assembleProgramme(placements: PlacementRow[], speakerRows: SpeakerRow[]
 		trackId: optionalId(row.trackId),
 		formatId: optionalId(row.formatId),
 		speakerIds: (bySubmission.get(row.submissionId) ?? []).map((s) => String(s.speakerId)),
-		recordingUrl: row.recordingUrl
+		recordingUrl: watchableRecordingUrl({
+			recordingUrl: row.recordingUrl,
+			endsAt: iso(row.endsAt)
+		})
 	}));
 
 	const speakersById = new Map<number, PublicSpeaker>();
@@ -368,7 +372,10 @@ export async function loadSpeakerAppearances(
 			startsAt: iso(row.startsAt),
 			endsAt: iso(row.endsAt),
 			room: row.room,
-			recordingUrl: row.recordingUrl
+			recordingUrl: watchableRecordingUrl({
+				recordingUrl: row.recordingUrl,
+				endsAt: iso(row.endsAt)
+			})
 		});
 	}
 
