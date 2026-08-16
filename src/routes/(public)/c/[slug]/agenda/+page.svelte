@@ -140,7 +140,7 @@
 </script>
 
 <svelte:head>
-	<title>Agenda — {view.conference.name}</title>
+	<title>{selected ? selected.title : 'Agenda'} — {view.conference.name}</title>
 </svelte:head>
 
 {#if selected}
