@@ -1,4 +1,4 @@
-import { auth, firstOrganizationFor } from '$lib/auth';
+import { auth, firstOrganizationFor, sessionCacheCookieName } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
 import { db, needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
@@ -226,6 +226,19 @@ async function adoptOrganizationForSession(
 	}
 }
 
+/** The caller's row in one organization, or `undefined` when they have none. */
+async function seatIn(
+	organizationId: string,
+	userId: string
+): Promise<{ role: string } | undefined> {
+	const [seat] = await db
+		.select({ role: member.role })
+		.from(member)
+		.where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
+		.limit(1);
+	return seat;
+}
+
 // This new handler will attempt to populate event.locals.user and organization on every request.
 const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 	logger.debug('Processing request for:', event.url.pathname);
@@ -288,17 +301,30 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 				// no caching and nothing left valid for longer: strictly fewer
 				// questions, identical answer.
 				try {
-					const [seat] = await db
-						.select({ role: member.role })
-						.from(member)
-						.where(
-							and(
-								eq(member.organizationId, activeOrganizationId),
-								eq(member.userId, session.user.id)
-							)
-						)
-						.limit(1);
+					let organizationId: string | null = activeOrganizationId;
+					let seat = await seatIn(organizationId, session.user.id);
 
+					// No seat is not a role of `null` — it is proof that the session
+					// names an organization this user cannot be in: deleted, or the
+					// membership removed (#803). The pointer can outlive both, because
+					// the session cookie cache answers `getSession` for up to five
+					// minutes without asking Postgres, and nothing in that window can
+					// correct it from another device.
+					//
+					// So drop the cache here, where it has just been shown wrong, and
+					// pick up an organization the user really has. Without this the
+					// settings page redirects to the list, the list redirects back, and
+					// the user is in a loop nobody on this device can end.
+					//
+					// The healthy path is untouched: the seat row is read either way,
+					// and everything below only runs when it came back empty.
+					if (!seat) {
+						event.cookies.delete(sessionCacheCookieName(), { path: '/' });
+						organizationId = await adoptOrganizationForSession(requestHeaders, session.user.id);
+						seat = organizationId ? await seatIn(organizationId, session.user.id) : undefined;
+					}
+
+					event.locals.organizationId = organizationId;
 					event.locals.organizationRole = seat?.role ?? null;
 				} catch (_e) {
 					event.locals.organizationRole = null;
