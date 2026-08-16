@@ -90,7 +90,26 @@
 						placeholder="https://api.openai.com/v1"
 						required
 						autocomplete="off"
+						aria-describedby="org-ai-base-url-scope"
 					/>
+					<!--
+						What the check covers, and what it does not (#741).
+
+						The address is judged on save and again before every request, and a
+						name that resolves inside a private network is refused. The part we
+						cannot cover is the moment between judging and connecting: a backend
+						whose DNS someone else controls can answer differently the second
+						time. That residue used to live in a GitHub issue, which is to say
+						nowhere the person typing the address would ever see it.
+
+						Written as what we do rather than what we disclaim, because the
+						reader is choosing a backend, not accepting terms.
+					-->
+					<p id="org-ai-base-url-scope" class="text-muted-foreground text-xs">
+						Checked when you save it and again before every request — an address that resolves
+						inside a private network is refused. What that cannot cover is a backend changing where
+						it points between the check and the connection, so use a service you trust.
+					</p>
 				</div>
 				<div class="space-y-2">
 					<Label for="org-ai-api-key">API key</Label>
