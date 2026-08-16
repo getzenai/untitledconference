@@ -52,17 +52,9 @@ const conference = {
 } satisfies PublicConference;
 
 /**
- * Compiled once, in a hook, on purpose (#770).
- *
- * The first `import()` of this page costs ~5.2s — Vite compiling the component
- * and everything it pulls in — while the render it is timing takes ~7ms. Inside
- * a test that one-off cost is charged to whichever case runs first, and the
- * 5000ms default sits *inside* its range, so the file passed or failed on luck.
- * Measured at 5112–5471ms across two commits a day apart, so this is a
- * threshold that was always marginal rather than something that got slower.
- *
- * A hook has its own (10s) budget, which is the honest place for compile time:
- * each case then pays only for what it actually asserts.
+ * Compiled once, in a hook, on purpose: the first `import()` costs ~5.2s of
+ * Vite compile while the render it times takes ~7ms, and the 5000ms default
+ * sits inside that spread (#770). A hook has its own budget.
  */
 let Page: (typeof import('./+page.svelte'))['default'];
 
