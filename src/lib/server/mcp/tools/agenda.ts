@@ -8,6 +8,7 @@
 import {
 	addRoom,
 	agendaBoard,
+	autoPlace,
 	createBlock,
 	placeSession,
 	removeBlock,
@@ -383,6 +384,27 @@ function moveTalk(ctx: McpContext): AnyMcpToolDefinition {
 	};
 }
 
+function fillSchedule(ctx: McpContext): AnyMcpToolDefinition {
+	return {
+		name: 'fill_schedule',
+		writes: true,
+		description:
+			'Fill accepted talks from the tray into the first free clash-free slots. ' +
+			'Same function as the agenda Fill button (`autoPlace`) — longest first, ' +
+			'earliest slot. Returns how many talks moved, the same number the button ' +
+			'reports as autoPlaced. Talks the packer cannot fit stay in the tray; ' +
+			'read them with get_agenda_tray. That leftover is not an error.',
+		inputSchema: { conferenceSlug: slugField },
+		handler: async ({ conferenceSlug }) => {
+			const conference = await organizerConference(conferenceSlug, ctx);
+			return {
+				conference: { slug: conference.slug, name: conference.name },
+				autoPlaced: await autoPlace(conference.id)
+			};
+		}
+	};
+}
+
 function swapTalks(ctx: McpContext): AnyMcpToolDefinition {
 	return {
 		name: 'swap_talks',
@@ -571,6 +593,7 @@ export function agendaTools(ctx: McpContext): AnyMcpToolDefinition[] {
 		getAgendaTray(ctx),
 		placeTalk(ctx),
 		moveTalk(ctx),
+		fillSchedule(ctx),
 		swapTalks(ctx),
 		unplaceTalk(ctx),
 		createBreak(ctx),

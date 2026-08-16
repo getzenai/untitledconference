@@ -96,6 +96,7 @@ function organizerWriteArgs(conferenceSlug: string): Record<string, Record<strin
 		place_talk: { conferenceSlug, placementId: 1, roomId: 1, startMinutes: 600 },
 		move_talk: { conferenceSlug, placementId: 1, roomId: 1, startMinutes: 600 },
 		swap_talks: { conferenceSlug, placementId: 1, withPlacementId: 2 },
+		fill_schedule: { conferenceSlug },
 		unplace_talk: { conferenceSlug, placementId: 1 },
 		create_break: { conferenceSlug, minutes: 30, title: 'Break by someone else' },
 		remove_break: { conferenceSlug, placementId: 1 },

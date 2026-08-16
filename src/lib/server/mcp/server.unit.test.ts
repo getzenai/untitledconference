@@ -52,6 +52,7 @@ describe('the MCP tool registry', () => {
 		expect(byName.get_agenda).toBe(false);
 		expect(byName.get_cfp_form).toBe(false);
 		expect(byName.add_cfp_field).toBe(true);
+		expect(byName.fill_schedule).toBe(true);
 		expect(byName.get_my_profile).toBe(false);
 	});
 
@@ -109,6 +110,7 @@ describe('the MCP tool registry', () => {
 				'get_agenda_tray',
 				'place_talk',
 				'move_talk',
+				'fill_schedule',
 				'swap_talks',
 				'unplace_talk'
 			])

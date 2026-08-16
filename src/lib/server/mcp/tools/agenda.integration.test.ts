@@ -3,7 +3,7 @@
  * agendaBoard — the same board the /agenda screen reads — not against the
  * columns a tool might have written.
  */
-import { agendaBoard } from '$lib/server/conference/agenda';
+import { agendaBoard, autoPlace, unplaceSession } from '$lib/server/conference/agenda';
 import { db } from '$lib/server/db';
 import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { inArray } from 'drizzle-orm';
@@ -97,6 +97,7 @@ describe('agenda tools', () => {
 				'get_agenda_tray',
 				'place_talk',
 				'move_talk',
+				'fill_schedule',
 				'swap_talks',
 				'unplace_talk',
 				'create_break',
@@ -481,6 +482,61 @@ describe('agenda tools', () => {
 			});
 			expect(refused.isError).toBe(true);
 			expect(refused.text).toContain('past the end');
+		});
+	});
+
+	describe('fill_schedule', () => {
+		async function talksBackToTray() {
+			const board = await agendaBoard(seeded.conferenceId);
+			for (const session of board.placed.filter((row) => row.kind === 'session')) {
+				await unplaceSession(seeded.conferenceId, session.placementId);
+			}
+		}
+
+		it('places from a filled tray and reports the same autoPlaced the form action would', async () => {
+			await talksBackToTray();
+			const fromForm = await autoPlace(seeded.conferenceId);
+			expect(fromForm).toBeGreaterThan(0);
+
+			await talksBackToTray();
+			const filled = await call(organizer, 'fill_schedule', {
+				conferenceSlug: seeded.conferenceSlug
+			});
+			expect(filled.isError).toBe(false);
+			expect(filled.data!.autoPlaced).toBe(fromForm);
+
+			const board = await agendaBoard(seeded.conferenceId);
+			expect(board.placed.filter((row) => row.kind === 'session')).toHaveLength(fromForm);
+		});
+
+		it('leaves what the packer cannot fit in the tray, readable with get_agenda_tray', async () => {
+			await talksBackToTray();
+			for (const day of [DAY, '2027-10-07']) {
+				const closed = await call(organizer, 'create_break', {
+					conferenceSlug: seeded.conferenceSlug,
+					day,
+					start: '09:00',
+					minutes: 540,
+					title: `Closed ${day}`
+				});
+				expect(closed.isError).toBe(false);
+			}
+
+			const filled = await call(organizer, 'fill_schedule', {
+				conferenceSlug: seeded.conferenceSlug
+			});
+			expect(filled.isError).toBe(false);
+			expect(filled.data!.autoPlaced).toBe(0);
+
+			const tray = await call(organizer, 'get_agenda_tray', {
+				conferenceSlug: seeded.conferenceSlug
+			});
+			expect(tray.isError).toBe(false);
+			expect((tray.data!.tray as Slot[]).map((row) => row.title).sort()).toEqual([
+				'Alpha',
+				'Beta',
+				'Gamma'
+			]);
 		});
 	});
 });
