@@ -28,6 +28,7 @@
 	import { tick } from 'svelte';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import * as Popover from '$lib/components/ui/popover';
@@ -175,6 +176,8 @@
 
 	let holdOpen = $state(false);
 	let holdKind = $state<'block' | 'reservation'>('block');
+	/** Incremented only after a hold the server kept — a refused submit must not clear the title. */
+	let holdCommit = $state(0);
 
 	/**
 	 * The app select listbox portals to the body. A click there is "outside" the
@@ -733,7 +736,10 @@
 							}) => {
 								try {
 									await update(formUpdateOptions('add'));
-									if (result.type === 'success') holdOpen = false;
+									if (result.type === 'success') {
+										holdCommit += 1;
+										holdOpen = false;
+									}
 								} finally {
 									busy = false;
 								}
@@ -767,12 +773,16 @@
 
 						<label class="block text-sm">
 							<span class="font-medium">Title</span>
-							<input
+							<BrowserDraftInput
 								name="title"
+								scope={`agenda-hold-title:${data.conference.id}`}
+								owner={data.user.id}
+								baseline=""
 								required
 								placeholder={holdKind === 'reservation' ? 'Gold sponsor slot' : 'Lunch'}
 								class="border-input bg-background mt-1 w-full rounded-md border px-2 py-1.5 text-sm"
-								data-testid="agenda-hold-title"
+								testId="agenda-hold-title"
+								commitToken={holdCommit}
 							/>
 						</label>
 

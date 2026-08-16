@@ -49,6 +49,12 @@ describe('An organizer holds a slot for a sponsor', () => {
 			'Gold sponsor slot'
 		);
 
+		// A kept hold must not restore the title the next time the popover opens.
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-title"]').should('have.value', '');
+		cy.get('[data-testid="agenda-hold-title-restored"]').should('not.exist');
+		cy.get('[data-testid="agenda-hold-title"]').type('{esc}');
+
 		// It reached the database, not just the page.
 		cy.reload();
 		cy.get('[data-testid="agenda-hold"][data-kind="reservation"]')
@@ -125,5 +131,59 @@ describe('An organizer holds a slot for a sponsor', () => {
 		cy.visit(`/manage/${slug}/decisions`);
 		cy.waitForHydration();
 		cy.get('[data-testid="slot-sponsor-holds"]').should('not.exist');
+	});
+
+	/**
+	 * #756: the popover unmounts on dismiss. A title that only lived in the
+	 * field would be gone on the next open, and the page would never say so.
+	 * Sidebar click *and* reload: reopening alone would also pass if the
+	 * component had merely stayed mounted.
+	 */
+	it('keeps a typed hold title after dismiss, a sidebar click, and a reload', () => {
+		const typed = `ORGJOURNEY-hold-${Date.now()}`;
+
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-title"]').type(typed);
+		cy.get('[data-testid="agenda-hold-title"]').type('{esc}');
+		cy.get('[data-testid="agenda-hold-title"]').should('not.exist');
+
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-title-restored"]').should('be.visible');
+		cy.get('[data-testid="agenda-hold-title"]').should('have.value', typed);
+
+		cy.get('[data-testid="sidebar-home-link"]').click();
+		cy.location('pathname').should('eq', '/home');
+
+		cy.visit(`/manage/${slug}/agenda`);
+		cy.waitForHydration();
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-title-restored"]').should('be.visible');
+		cy.get('[data-testid="agenda-hold-title"]').should('have.value', typed);
+	});
+
+	/**
+	 * A refused Put-it-on-the-grid must not clear the title. The request is
+	 * valid HTML (title filled, a room id present) and dies on the server —
+	 * "No such room" — so this is the error path, not the success path with
+	 * another name. After reload the hold is still not on the grid.
+	 */
+	it('keeps a rejected hold title through reload', () => {
+		const typed = `ORGJOURNEY-rejected-hold-${Date.now()}`;
+
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-title"]').type(typed);
+		cy.get('form[action="?/hold"] input[name="roomId"]').invoke('val', '999999');
+		cy.get('[data-testid="agenda-hold-submit"]').click();
+
+		cy.get('[data-testid="agenda-hold-error"]').should('contain', 'No such room');
+		cy.get('[data-testid="agenda-hold-title"]').should('have.value', typed);
+		cy.get('[data-testid="agenda-hold"]').should('not.exist');
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="agenda-hold"]').should('not.exist');
+		cy.get('[data-testid="agenda-hold-open"]').click();
+		cy.get('[data-testid="agenda-hold-title-restored"]').should('be.visible');
+		cy.get('[data-testid="agenda-hold-title"]').should('have.value', typed);
 	});
 });
