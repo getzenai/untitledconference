@@ -22,6 +22,7 @@
  * can be tested without a browser.
  */
 import {
+	ANONYMOUS_BROWSER_DRAFT_OWNER,
 	BROWSER_DRAFT_MAX_AGE_MS,
 	browserDraftKey,
 	clearBrowserDraft,
@@ -36,7 +37,6 @@ const LEGACY_PENDING_PREFIX = 'cfp-pending-proposal:';
 const LEGACY_AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
 
 const PENDING_OWNER = 'handoff';
-const ANONYMOUS_OWNER = 'anonymous';
 
 type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -69,7 +69,7 @@ function cfpAutosaveScope(slug: string): string {
 }
 
 function cfpAutosaveOwner(owner: DraftOwner): string {
-	return owner ?? ANONYMOUS_OWNER;
+	return owner ?? ANONYMOUS_BROWSER_DRAFT_OWNER;
 }
 
 export function pendingProposalKey(slug: string): string {

@@ -164,6 +164,22 @@ describe('autosaved proposal storage', () => {
 		expect(readAutosavedProposal(storage, 'devflow', 'ada')).toBeNull();
 	});
 
+	it('keeps a signed-in copy when the next visit is only anonymous', () => {
+		// Session expiry, not logout: the page loads as nobody, reads the
+		// anonymous slot, and must not treat that as a new identity claiming
+		// the machine. A stranger still cannot read Ada's key.
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
+
+		expect(readAutosavedProposal(storage, 'devflow', null)).toBeNull();
+		writeAutosavedProposal(storage, 'devflow', null, {
+			...emptyProposal(),
+			title: 'typed while the session was dead'
+		});
+
+		expect(readAutosavedProposal(storage, 'devflow', 'ada')?.draft).toEqual(draft);
+	});
+
 	it('removes the previous identity when this browser starts using the form as someone else', () => {
 		const storage = fakeStorage();
 		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
