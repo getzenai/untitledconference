@@ -1,5 +1,9 @@
 import { EventNames } from '$lib/analytics/event-names';
-import { auth } from '$lib/auth';
+import { auth, sessionCacheCookieName } from '$lib/auth';
+import {
+	LAST_MEMBER_CANNOT_LEAVE,
+	ONLY_OWNER_CAN_DELETE
+} from '$lib/conference/organization-delete';
 import { OrgAiWrapKeyMissingError } from '$lib/server/chat/org-ai-key';
 import {
 	clearOrganizationAiSettings,
@@ -8,6 +12,8 @@ import {
 	saveOrganizationAiSettings
 } from '$lib/server/chat/org-ai-settings';
 import { ChatBackendUrlError } from '$lib/server/chat/org-ai-url';
+import { conferenceCountForOrganization } from '$lib/server/conference/access';
+import { deleteEmptyOrganization } from '$lib/server/conference/organization-delete';
 import { createLogger } from '$lib/server/logger';
 import { captureEvent } from '$lib/server/posthog';
 import { transferOwnershipSafely } from '$lib/server/utils/organization-transfer';
@@ -89,7 +95,10 @@ export const load: PageServerLoad = async ({ locals, request, params }) => {
 			currentMember,
 			members,
 			invitations,
-			aiSettings
+			aiSettings,
+			// The delete card needs this to explain itself before it is used,
+			// not only after the attempt is refused (#777).
+			conferenceCount: await conferenceCountForOrganization(organization.id)
 		};
 	} catch (error) {
 		console.error('Error loading organization data:', error);
@@ -278,17 +287,23 @@ export const actions: Actions = {
 				return fail(500, { error: 'Failed to leave organization' });
 			}
 
+			const membersResponse = await auth.api.listMembers({
+				headers: request.headers,
+				query: { organizationId }
+			});
+			const otherMembers = (membersResponse?.members || []).filter(
+				(m) => m.userId !== locals.user?.id
+			);
+
+			// Walking out as the only member used to remove the membership row and
+			// leave the organization behind with nobody in it — invisible in every
+			// list, still owning its conferences and contacts (#777).
+			if (otherMembers.length === 0) {
+				return fail(400, { error: LAST_MEMBER_CANNOT_LEAVE, lastMember: true });
+			}
+
 			// Check if user is owner and needs to transfer ownership
 			if (activeMember.role === 'owner') {
-				const membersResponse = await auth.api.listMembers({
-					headers: request.headers,
-					query: { organizationId }
-				});
-
-				const otherMembers = (membersResponse?.members || []).filter(
-					(m) => m.userId !== locals.user?.id
-				);
-
 				if (otherMembers.length > 0) {
 					if (!newOwnerId) {
 						return fail(400, {
@@ -322,6 +337,67 @@ export const actions: Actions = {
 		}
 
 		// Redirect to main organization page after leaving successfully
+		throw redirect(303, '/settings/organization');
+	},
+
+	/**
+	 * Delete the organization itself (#777).
+	 *
+	 * Guarded rather than confirmed-and-hoped: `organization.id` is referenced
+	 * with `onDelete: 'cascade'` by conferences, speaker profiles, CRM rows,
+	 * members and invitations, so this is the most destructive button in the
+	 * product. The rule lives in `checkOrganizationDeletion` and the counting,
+	 * judging and deleting happen together in `deleteEmptyOrganization`; this
+	 * action only turns the verdict into a response.
+	 */
+	deleteOrganization: async ({ cookies, request, locals }) => {
+		if (!locals.user) {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const organizationId = String(formData.get('organizationId') ?? '');
+		const typedName = String(formData.get('confirmName') ?? '');
+		if (!organizationId) {
+			return fail(400, { error: 'Missing organization ID' });
+		}
+
+		try {
+			// Counted, judged and deleted in one transaction: a number read before
+			// the delete would only describe a moment that has passed (#792).
+			const verdict = await deleteEmptyOrganization({
+				organizationId,
+				userId: locals.user.id,
+				typedName
+			});
+			if (!verdict.ok) {
+				const notAllowed = verdict.reason === ONLY_OWNER_CAN_DELETE;
+				return fail(notAllowed ? 403 : 400, { error: verdict.reason, deleteScope: true });
+			}
+
+			// The session rows were cleared inside the same transaction, but the
+			// cookie cache still holds a copy of the old session — including the
+			// pointer at the organization that no longer exists — for up to five
+			// minutes. Dropping the cookie is what makes the next request read the
+			// cleared row instead.
+			//
+			// `auth.api.setActiveOrganization({ organizationId: null })` does not do
+			// this from here twice over: it returns early because the row it checks
+			// is already null, and its `Set-Cookie` would be discarded anyway, since
+			// only `/api/auth/*` responses carry Better Auth's headers back.
+			cookies.delete(sessionCacheCookieName(), { path: '/' });
+
+			captureEvent(
+				locals.user.id,
+				EventNames.ORGANIZATION_DELETED,
+				{ organizationId },
+				{ organization: organizationId }
+			);
+		} catch (error) {
+			logger.error('Failed to delete organization', error as Error, { organizationId });
+			return fail(500, { error: 'Failed to delete organization' });
+		}
+
 		throw redirect(303, '/settings/organization');
 	},
 

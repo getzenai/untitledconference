@@ -17,7 +17,7 @@ import {
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray } from 'drizzle-orm';
 
 /** Better Auth's org-wide roles that imply organizer rights on every conference below them. */
 const ORG_WIDE_ORGANIZER_ROLES = ['owner', 'admin'];
@@ -121,4 +121,20 @@ export async function organizedConferences(userId: string): Promise<Conference[]
 	// Newest first on the home list — organizers just created one and expect it
 	// at the top, not buried under older events sorted by start date.
 	return [...seen.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+}
+
+/**
+ * How many conferences hang off an organization, whatever their status (#777).
+ *
+ * Deleting the organization would take every one of them — `conference`
+ * references `organization` with `onDelete: 'cascade'`, and a conference
+ * cascades on into submissions, reviews and the agenda. This count is what
+ * turns that into a refusal with a number in it rather than a silent loss.
+ */
+export async function conferenceCountForOrganization(organizationId: string): Promise<number> {
+	const [row] = await db
+		.select({ count: count() })
+		.from(conferenceTable)
+		.where(eq(conferenceTable.organizationId, organizationId));
+	return row?.count ?? 0;
 }

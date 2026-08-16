@@ -41,11 +41,33 @@
 	let isRenaming = $state(false);
 	let nameDirty = $state(false);
 	let nameCommit = $state(0);
+	let confirmName = $state('');
+	let isDeleting = $state(false);
 
 	let organization = $derived(data.organization);
 	let members = $derived(data.members || []);
 	let invitations = $derived(data.invitations || []);
 	let currentMember = $derived(data.currentMember);
+	// Deleting is the owner's alone, and only once nothing hangs off the
+	// organization — every one of these cascades if it goes (#777).
+	let isOwner = $derived(currentMember?.role === 'owner');
+	let conferenceCount = $derived(data.conferenceCount ?? 0);
+	let otherMembers = $derived(members.filter((m) => m.userId !== currentMember?.userId).length);
+	let pendingInvitations = $derived(invitations.length);
+	let isLastMember = $derived(members.length === 1);
+	let deleteBlockers = $derived(
+		[
+			conferenceCount > 0
+				? `${conferenceCount} event${conferenceCount === 1 ? '' : 's'} — deleting would take every submission, review and agenda with them`
+				: null,
+			otherMembers > 0 ? `${otherMembers} other member${otherMembers === 1 ? '' : 's'}` : null,
+			pendingInvitations > 0
+				? `${pendingInvitations} pending invitation${pendingInvitations === 1 ? '' : 's'}`
+				: null
+		].filter((entry): entry is string => entry !== null)
+	);
+	let canDelete = $derived(isOwner && deleteBlockers.length === 0);
+
 	let pageTitle = $derived(
 		organization?.name ? `${organization.name} — Organization settings` : 'Organization settings'
 	);
@@ -154,11 +176,17 @@
 			<div class="flex items-center justify-between border-t pt-4">
 				<div>
 					<Label>Leave Organization</Label>
-					<p class="text-muted-foreground text-sm">
-						{#if currentMember?.role === 'owner' && members.length > 1}
+					<p class="text-muted-foreground text-sm" data-testid="leave-description">
+						{#if isLastMember}
+							<!--
+								It used to say "This will delete the organization". It did not:
+								leaving removed the membership row and left the organization
+								behind with nobody in it (#777).
+							-->
+							You are the only member. Leaving would leave this organization with nobody in it — delete
+							it below instead.
+						{:else if currentMember?.role === 'owner'}
 							Transfer ownership before leaving
-						{:else if members.length === 1}
-							This will delete the organization
 						{:else}
 							Remove yourself from this organization
 						{/if}
@@ -167,7 +195,9 @@
 				<Button
 					variant="destructive"
 					size="sm"
+					disabled={isLastMember}
 					onclick={() => (showLeaveDialog = true)}
+					data-testid="leave-organization"
 					class="gap-2"
 				>
 					<LogOut class="h-4 w-4" />
@@ -184,6 +214,81 @@
 		{form}
 	/>
 
+	{#if isOwner}
+		<Card class="border-status-bad/40" data-testid="organization-delete-card">
+			<CardHeader>
+				<CardTitle class="text-status-bad flex items-center gap-2">
+					<AlertTriangle class="h-4 w-4" />
+					Delete organization
+				</CardTitle>
+				<CardDescription>
+					This removes the organization and everything owned by it — contacts, speaker profiles and
+					its chat backend. It cannot be undone.
+				</CardDescription>
+			</CardHeader>
+			<CardContent class="space-y-4">
+				{#if deleteBlockers.length > 0}
+					<div class="border-border rounded-md border p-3 text-sm" data-testid="delete-blockers">
+						<p class="font-medium">Clear these first:</p>
+						<ul class="text-muted-foreground mt-1 list-disc space-y-1 pl-5">
+							{#each deleteBlockers as blocker (blocker)}
+								<li>{blocker}</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
+
+				<form
+					method="POST"
+					action="?/deleteOrganization"
+					use:enhance={() => {
+						isDeleting = true;
+						return async ({ update }) => {
+							await update();
+							isDeleting = false;
+						};
+					}}
+					class="space-y-3"
+				>
+					<input type="hidden" name="organizationId" value={organization?.id ?? ''} />
+					<div>
+						<Label for="confirmName">
+							Type <span class="font-mono">{organization?.name}</span> to confirm
+							<!--
+								Two organizations may share a name, so the name alone confirms
+								intent but not *which* one. The slug is the part that cannot
+								repeat, and this is the most destructive button in the app.
+							-->
+							<span class="text-muted-foreground mt-0.5 block text-xs font-normal">
+								This deletes <span class="font-mono">{organization?.slug}</span>. Names can repeat;
+								the address cannot.
+							</span>
+						</Label>
+						<Input
+							id="confirmName"
+							name="confirmName"
+							bind:value={confirmName}
+							disabled={!canDelete}
+							autocomplete="off"
+							data-testid="delete-confirm-name"
+							class="mt-1"
+						/>
+					</div>
+					<Button
+						type="submit"
+						variant="destructive"
+						size="sm"
+						disabled={!canDelete || isDeleting || confirmName !== organization?.name}
+						data-testid="delete-organization"
+					>
+						<Trash2 class="mr-2 h-4 w-4" />
+						{isDeleting ? 'Deleting…' : 'Delete this organization'}
+					</Button>
+				</form>
+			</CardContent>
+		</Card>
+	{/if}
+
 	<!-- Leave Organization Dialog -->
 	{#if showLeaveDialog}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -196,8 +301,6 @@
 					<CardDescription>
 						{#if currentMember?.role === 'owner' && members.length > 1}
 							As the owner, you must transfer ownership to another member before leaving.
-						{:else if members.length === 1}
-							You are the only member. Leaving will delete this organization permanently.
 						{:else}
 							Are you sure you want to leave this organization?
 						{/if}
@@ -277,8 +380,6 @@
 							>
 								{#if isLeavingOrg}
 									Leaving...
-								{:else if members.length === 1}
-									Delete & Leave
 								{:else}
 									Leave Organization
 								{/if}
