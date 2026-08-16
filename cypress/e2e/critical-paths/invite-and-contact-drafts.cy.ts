@@ -1,8 +1,8 @@
 /**
- * #764 / #765: a typed reviewer invite and contact notes must survive the
- * ordinary decision to look somewhere else before saving. Reopening and then
- * reloading distinguishes a browser draft from a value that merely stayed
- * alive in the old component.
+ * #764 / #765 / #789: a typed reviewer invite and a typed contact profile
+ * must survive the ordinary decision to look somewhere else before saving.
+ * Reopening and then reloading distinguishes a browser draft from a value
+ * that merely stayed alive in the old component.
  */
 const uniqueSlug = () => `invite-notes-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -43,10 +43,24 @@ describe('Reviewer invite draft (#764)', () => {
 	});
 });
 
-describe('Contact notes draft (#765)', () => {
+describe('Contact profile draft (#765, #789)', () => {
 	beforeEach(() => {
 		cy.createAndLogin();
 	});
+
+	function expectProfileLeavePrompt(asked: string[]) {
+		cy.wrap(asked).should('have.length', 1);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /what you typed on this profile will stay/i);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /this browser on this device/i);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /clearing your browser data/i);
+		cy.wrap(asked).its(0).should('not.match', /saved/i);
+	}
 
 	it('keeps typed notes through a sidebar click and a reload', () => {
 		const notes = `ORGJOURNEY-B2-${Date.now()} contact-notes`;
@@ -69,17 +83,7 @@ describe('Contact notes draft (#765)', () => {
 			});
 			cy.get('[data-testid="sidebar-home-link"]').click();
 			cy.location('pathname').should('eq', '/home');
-			cy.wrap(asked).should('have.length', 1);
-			cy.wrap(asked)
-				.its(0)
-				.should('match', /your notes will stay/i);
-			cy.wrap(asked)
-				.its(0)
-				.should('match', /this browser on this device/i);
-			cy.wrap(asked)
-				.its(0)
-				.should('match', /clearing your browser data/i);
-			cy.wrap(asked).its(0).should('not.match', /saved/i);
+			expectProfileLeavePrompt(asked);
 
 			cy.visit(path);
 			cy.waitForHydration();
@@ -92,8 +96,7 @@ describe('Contact notes draft (#765)', () => {
 		});
 	});
 
-	it('asks only about notes when notes and bio are both typed', () => {
-		const notes = `ORGJOURNEY-B2-${Date.now()} notes-only-warn`;
+	it('keeps typed bio through a sidebar click and a reload', () => {
 		const bio = `ORGJOURNEY-B2-${Date.now()} unsaved-bio`;
 
 		cy.visit('/contacts');
@@ -104,29 +107,26 @@ describe('Contact notes draft (#765)', () => {
 		cy.location('pathname').should('match', /\/contacts\/\d+/);
 		cy.waitForHydration();
 
-		cy.get('[data-testid="contact-notes"]').clear().type(notes);
-		cy.get('[data-testid="contact-bio"]').clear().type(bio);
+		cy.location('pathname').then((path) => {
+			cy.get('[data-testid="contact-bio"]').clear().type(bio);
 
-		const asked: string[] = [];
-		cy.on('window:confirm', (text: string) => {
-			asked.push(text);
-			return false;
+			const asked: string[] = [];
+			cy.on('window:confirm', (text: string) => {
+				asked.push(text);
+				return true;
+			});
+			cy.get('[data-testid="sidebar-home-link"]').click();
+			cy.location('pathname').should('eq', '/home');
+			expectProfileLeavePrompt(asked);
+
+			cy.visit(path);
+			cy.waitForHydration();
+			cy.get('[data-testid="contact-bio"]').should('have.value', bio);
+			cy.get('[data-testid="contact-bio-restored"]').should('be.visible');
+
+			cy.reload();
+			cy.waitForHydration();
+			cy.get('[data-testid="contact-bio"]').should('have.value', bio);
 		});
-		cy.get('[data-testid="sidebar-home-link"]').click();
-
-		cy.location('pathname').should('match', /\/contacts\/\d+/);
-		cy.get('[data-testid="contact-notes"]').should('have.value', notes);
-		cy.get('[data-testid="contact-bio"]').should('have.value', bio);
-		cy.wrap(asked).should('have.length', 1);
-		cy.wrap(asked)
-			.its(0)
-			.should('match', /your notes will stay/i);
-		cy.wrap(asked)
-			.its(0)
-			.should('match', /this browser on this device/i);
-		cy.wrap(asked)
-			.its(0)
-			.should('match', /clearing your browser data/i);
-		cy.wrap(asked).its(0).should('not.match', /saved/i);
 	});
 });
