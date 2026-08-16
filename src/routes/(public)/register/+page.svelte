@@ -8,24 +8,31 @@
 	import PasswordInput from '$lib/components/ui/password-input.svelte';
 	import PasswordStrength from '$lib/components/ui/password-strength.svelte';
 	import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '$lib/validators/password';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { superForm } from 'sveltekit-superforms';
 	import { zod4Client } from 'sveltekit-superforms/adapters';
 	import { registerSchema } from './schema';
 	import { safeReturnTo } from '$lib/safe-return-to';
 	import { readPendingProposal } from '$lib/conference/pending-proposal';
+	import type { PageData } from './$types';
 
 	// The server action's answer. It only ever renders for a submit that happened
 	// before hydration — once superForm is live it cancels the native submit.
-	let { form: actionResult }: { form?: { message?: string } | null } = $props();
+	let { data, form: actionResult }: { data: PageData; form?: { message?: string } | null } =
+		$props();
 
 	// Check for invitation code in URL
 	const invitationCode = $derived(page.url.searchParams.get('invitation'));
+	const invitation = $derived(invitationCode ? data.invitation : null);
+	const invitedEmail = $derived(invitation?.isValid ? invitation.email : null);
 	const returnTo = $derived(safeReturnTo(page.url.searchParams.get('returnTo'), page.url.origin));
 	const hasReturnTo = $derived(page.url.searchParams.has('returnTo'));
-	const loginHref = $derived(
-		hasReturnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : '/login'
-	);
+	const loginHref = $derived.by(() => {
+		if (invitationCode) {
+			return `/login?returnTo=${encodeURIComponent(`/invite/${invitationCode}`)}`;
+		}
+		return hasReturnTo ? `/login?returnTo=${encodeURIComponent(returnTo)}` : '/login';
+	});
 	const verifyEmailHref = $derived(`/verify-email?returnTo=${encodeURIComponent(returnTo)}`);
 	const verificationCallback = $derived(`/email-verified?returnTo=${encodeURIComponent(returnTo)}`);
 
@@ -39,17 +46,33 @@
 
 	// Initialize form client-side
 	const form = superForm(
-		{ email: '', password: '', invitationCode: '' },
+		{ email: invitedEmail || '', password: '', invitationCode: '' },
 		{
 			validators: zod4Client(registerSchema),
 			SPA: true, // Prevent default form submission
 			onSubmit: async ({ formData, cancel }) => {
 				// Cancel the default form submission
 				cancel();
+				// `cancel` completes the submitting state synchronously. Let that settle
+				// before setting an error that is known without an API round-trip.
+				await tick();
 
 				const email = formData.get('email') as string;
 				const password = formData.get('password') as string;
 				const invitationCodeValue = formData.get('invitationCode') as string | null;
+
+				if (invitedEmail && email.toLowerCase() !== invitedEmail.toLowerCase()) {
+					errors.set({
+						_errors: [`This invitation is for ${invitedEmail}. Register with that email address.`]
+					});
+					return;
+				}
+				if (invitationCodeValue && !invitedEmail) {
+					errors.set({
+						_errors: [invitation?.isValid === false ? invitation.error : 'Invalid invitation.']
+					});
+					return;
+				}
 
 				try {
 					// Sign up the user using Better Auth client
@@ -89,10 +112,20 @@
 								});
 
 								if (acceptError) {
-									// Don't fail completely, the account was created
+									errors.set({
+										_errors: [
+											`Your account was created, but the invitation for ${invitedEmail} could not be accepted: ${acceptError.message || 'Please try again.'}`
+										]
+									});
+									return;
 								}
 							} catch (_err) {
-								// Don't fail completely, the account was created
+								errors.set({
+									_errors: [
+										`Your account was created, but the invitation for ${invitedEmail} could not be accepted. Return to the invitation and try again.`
+									]
+								});
+								return;
 							}
 						}
 
@@ -125,6 +158,13 @@
 	);
 
 	const { form: formData, enhance, submitting, errors } = form;
+	const emailMismatch = $derived(
+		Boolean(
+			invitedEmail &&
+			$formData.email &&
+			$formData.email.toLowerCase() !== invitedEmail.toLowerCase()
+		)
+	);
 
 	onMount(() => {
 		// If we have an invitation code from URL, store it and set in form
@@ -132,6 +172,7 @@
 		if (urlInvitation) {
 			sessionStorage.setItem('pendingInvitation', urlInvitation);
 			$formData.invitationCode = urlInvitation;
+			if (invitedEmail) $formData.email = invitedEmail;
 		}
 	});
 </script>
@@ -159,10 +200,15 @@
 						bind:value={$formData.email}
 						disabled={$submitting}
 					/>
-					{#if invitationCode}
+					{#if invitedEmail}
 						<p class="text-muted-foreground mt-1 text-sm">
-							Please use the email address associated with your invitation
+							This invitation is for {invitedEmail}
 						</p>
+						{#if emailMismatch}
+							<p role="alert" class="text-destructive mt-1 text-sm">
+								This invitation is for {invitedEmail}. Register with that email address.
+							</p>
+						{/if}
 					{/if}
 				{/snippet}
 			</Form.Control>
@@ -205,7 +251,7 @@
 			</div>
 		{/if}
 
-		<Form.Button type="submit" class="w-full" disabled={$submitting}>
+		<Form.Button type="submit" class="w-full" disabled={$submitting || emailMismatch}>
 			{#if $submitting}
 				Creating account...
 			{:else}
