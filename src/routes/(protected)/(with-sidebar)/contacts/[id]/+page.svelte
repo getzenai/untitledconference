@@ -5,19 +5,39 @@
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import ContactNotesDraft from '$lib/components/app/conference/contact-notes-draft.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
+	import {
+		CONTACT_PROFILE_LEAVE_PROMPT,
+		contactFieldScope
+	} from '$lib/conference/contact-notes-draft';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+	let commitToken = $state(0);
+	const dirtyFields = new SvelteSet<string>();
+
+	function setFieldDirty(id: string, dirty: boolean) {
+		if (dirty) dirtyFields.add(id);
+		else dirtyFields.delete(id);
+	}
 
 	const submitting = () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			try {
 				await update(formUpdateOptions('edit'));
+				if (result.type === 'success') commitToken += 1;
 			} finally {
 				busy = false;
 			}
@@ -37,6 +57,8 @@
 <svelte:head>
 	<title>{data.contact.name} — Contacts</title>
 </svelte:head>
+
+<UnsavedGuard dirty={dirtyFields.size > 0} message={CONTACT_PROFILE_LEAVE_PROMPT} />
 
 <div class="space-y-6">
 	<div>
@@ -86,67 +108,93 @@
 		>
 			<div>
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="name">Name</label>
-				<Input
+				<BrowserDraftInput
 					id="name"
 					name="name"
-					value={data.contact.name}
+					scope={contactFieldScope(data.contact.id, 'name')}
+					owner={data.user.id}
+					baseline={data.contact.name}
 					required
-					data-testid="contact-name"
+					testId="contact-name"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('name', dirty)}
 				/>
 			</div>
 			<div>
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="email">Email</label
 				>
-				<Input
+				<BrowserDraftInput
 					id="email"
 					name="email"
 					type="email"
-					value={data.contact.email ?? ''}
-					data-testid="contact-email"
+					scope={contactFieldScope(data.contact.id, 'email')}
+					owner={data.user.id}
+					baseline={data.contact.email ?? ''}
+					testId="contact-email"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('email', dirty)}
 				/>
 			</div>
 			<div>
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="company"
 					>Company</label
 				>
-				<Input
+				<BrowserDraftInput
 					id="company"
 					name="company"
-					value={data.contact.company ?? ''}
-					data-testid="contact-company"
+					scope={contactFieldScope(data.contact.id, 'company')}
+					owner={data.user.id}
+					baseline={data.contact.company ?? ''}
+					testId="contact-company"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('company', dirty)}
 				/>
 			</div>
 			<div>
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="jobTitle"
 					>Job title</label
 				>
-				<Input
+				<BrowserDraftInput
 					id="jobTitle"
 					name="jobTitle"
-					value={data.contact.jobTitle ?? ''}
-					data-testid="contact-jobtitle"
+					scope={contactFieldScope(data.contact.id, 'jobTitle')}
+					owner={data.user.id}
+					baseline={data.contact.jobTitle ?? ''}
+					testId="contact-jobtitle"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('jobTitle', dirty)}
 				/>
 			</div>
 			<div class="sm:col-span-2">
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="sortName"
 					>Sort name</label
 				>
-				<Input
+				<BrowserDraftInput
 					id="sortName"
 					name="sortName"
-					value={data.contact.sortName}
-					data-testid="contact-sortname"
+					scope={contactFieldScope(data.contact.id, 'sortName')}
+					owner={data.user.id}
+					baseline={data.contact.sortName}
+					testId="contact-sortname"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('sortName', dirty)}
 				/>
 			</div>
 			<div class="sm:col-span-2">
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="bio">Bio</label>
-				<textarea
-					id="bio"
+				<ContactNotesDraft
+					contactId={data.contact.id}
+					owner={data.user.id}
+					baseline={data.contact.bio ?? ''}
+					fieldId="bio"
 					name="bio"
-					rows="3"
-					class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-					data-testid="contact-bio">{data.contact.bio ?? ''}</textarea
-				>
+					label="Bio"
+					noun="bio"
+					testId="contact-bio"
+					placeholder=""
+					scopeField="bio"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('bio', dirty)}
+				/>
 			</div>
 			<div class="sm:col-span-2">
 				<ContactNotesDraft
@@ -154,18 +202,24 @@
 					owner={data.user.id}
 					baseline={data.contact.notes ?? ''}
 					fieldId="notes"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('notes', dirty)}
 				/>
 			</div>
 			<div class="sm:col-span-2">
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="tags">
 					Tags (comma-separated)
 				</label>
-				<Input
+				<BrowserDraftInput
 					id="tags"
 					name="tags"
-					value={tagsValue}
+					scope={contactFieldScope(data.contact.id, 'tags')}
+					owner={data.user.id}
+					baseline={tagsValue}
 					placeholder="keynote, vip, alumni"
-					data-testid="contact-tags"
+					testId="contact-tags"
+					{commitToken}
+					ondirtychange={(dirty) => setFieldDirty('tags', dirty)}
 				/>
 			</div>
 			<div class="sm:col-span-2">
