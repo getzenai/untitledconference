@@ -12,6 +12,9 @@
  */
 const uniqueSlug = () => `cfp-autosave-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const autosaveKey = (slug: string, owner: string) =>
+	`unsaved-form-draft:${encodeURIComponent(`cfp-autosave:${slug}`)}:${encodeURIComponent(owner)}`;
+
 describe('A typed proposal on the public call', () => {
 	it('is still there after Agenda and Back', () => {
 		const slug = uniqueSlug();
@@ -60,9 +63,7 @@ describe('A typed proposal on the public call', () => {
 		cy.window()
 			.its('localStorage')
 			.should((storage: Storage) => {
-				expect(storage.getItem(`cfp-autosaved-proposal:${slug}:u${speakerId}`)).to.contain(
-					abstract
-				);
+				expect(storage.getItem(autosaveKey(slug, speakerId))).to.contain(abstract);
 			});
 
 		cy.get('[data-testid="conference-tabs"]').contains('a', 'Agenda').click();

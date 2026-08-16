@@ -157,11 +157,22 @@ describe('autosaved proposal storage', () => {
 		const storage = fakeStorage();
 		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
 
-		// The next account on the same browser, and the signed-out visitor:
-		// same call, same machine, and neither of them typed this.
+		// The next account on the same browser: same call, same machine, and
+		// they did not type this. The helper also drops Ada's copy — a shared
+		// browser must not keep the previous identity's name and email.
 		expect(readAutosavedProposal(storage, 'devflow', 'bo')).toBeNull();
-		expect(readAutosavedProposal(storage, 'devflow', null)).toBeNull();
-		expect(readAutosavedProposal(storage, 'devflow', 'ada')?.draft).toEqual(draft);
+		expect(readAutosavedProposal(storage, 'devflow', 'ada')).toBeNull();
+	});
+
+	it('removes the previous identity when this browser starts using the form as someone else', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
+		expect(storage.getItem(autosavedProposalKey('devflow', 'ada'))).not.toBeNull();
+
+		writeAutosavedProposal(storage, 'devflow', 'bo', { ...emptyProposal(), title: "Bo's talk" });
+
+		expect(storage.getItem(autosavedProposalKey('devflow', 'ada'))).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', 'bo')?.draft.title).toBe("Bo's talk");
 	});
 
 	it('expires, and refuses a copy whose age nobody can vouch for', () => {
@@ -197,5 +208,33 @@ describe('autosaved proposal storage', () => {
 		expect(readAutosavedProposal(storage, 'other', null)).toBeNull();
 		expect(consumePendingProposal(storage, 'devflow')).toBeNull();
 		expect(storage.getItem('unrelated')).toBe('keep me');
+	});
+
+	it('lives in the shared helper, not a private prefix', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
+		writePendingProposal(storage, 'devflow', draft, 'submit');
+
+		expect(autosavedProposalKey('devflow', 'ada').startsWith('unsaved-form-draft:')).toBe(true);
+		expect(pendingProposalKey('devflow').startsWith('unsaved-form-draft:')).toBe(true);
+		expect(storage.getItem(autosavedProposalKey('devflow', 'ada'))).not.toBeNull();
+		expect(storage.getItem(pendingProposalKey('devflow'))).not.toBeNull();
+	});
+
+	it('adopts a pre-#750 autosave once, and refuses a bare draft with no age', () => {
+		const wroteAt = 1_700_000_000_000;
+		const storage = fakeStorage({
+			'cfp-autosaved-proposal:devflow:uada': JSON.stringify({ savedAt: wroteAt, draft })
+		});
+
+		expect(readAutosavedProposal(storage, 'devflow', 'ada', wroteAt + 1)?.draft).toEqual(draft);
+		expect(storage.getItem('cfp-autosaved-proposal:devflow:uada')).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', 'ada', wroteAt + 2)?.draft).toEqual(draft);
+
+		const bare = fakeStorage({
+			'cfp-autosaved-proposal:devflow': JSON.stringify(draft)
+		});
+		expect(readAutosavedProposal(bare, 'devflow', null)).toBeNull();
+		expect(bare.getItem('cfp-autosaved-proposal:devflow')).toBeNull();
 	});
 });

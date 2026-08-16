@@ -3,8 +3,8 @@
  *
  * Storage is `$lib/forms/browser-draft`. This file only knows what a proposal
  * draft looks like and how to name the scope and baseline so a later server
- * version cannot be silently overwritten. It does not replace the public call's
- * `pending-proposal` store (#750).
+ * version cannot be silently overwritten. The public call uses the same helper
+ * through `pending-proposal` (#750).
  */
 
 import { emptyProposal, type ProposalDraft } from './proposal-draft';
