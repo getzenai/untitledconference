@@ -9,7 +9,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
-	import { BROWSER_DRAFT_LEAVE_PROMPT } from '$lib/conference/browser-draft-copy';
+	import { browserDraftLeavePrompt } from '$lib/conference/browser-draft-copy';
 	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import {
 		parkableTalkContent,
@@ -119,7 +119,7 @@
 	});
 </script>
 
-<UnsavedGuard {dirty} message={BROWSER_DRAFT_LEAVE_PROMPT} />
+<UnsavedGuard {dirty} message={browserDraftLeavePrompt('your talk edit')} />
 
 {#if restored}
 	<p class="text-status-good text-sm" role="status" data-testid="talk-content-restored">
