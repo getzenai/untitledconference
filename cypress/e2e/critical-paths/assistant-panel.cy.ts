@@ -67,8 +67,32 @@ describe('Assistant panel', () => {
 		cy.waitForHydration();
 		openAssistant();
 		cy.get('[data-testid="assistant-panel"]').contains('Close').click();
-		cy.get('[data-testid="assistant-panel"]').should('not.be.visible');
+		cy.get('[data-testid="assistant-panel"]').should('not.exist');
 		cy.get('[data-testid="assistant-open"]').should('be.visible');
+	});
+
+	it('keeps the transcript when the sheet closes, and New chat empties it', function () {
+		if (!chatEnabled) this.skip();
+
+		const asked = `Keep this turn ${Date.now()}`;
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+		cy.get('[data-testid="assistant-new-chat"]').should('not.exist');
+		sendAssistant(asked);
+		cy.get('[data-testid="assistant-messages"]').should('contain.text', asked);
+		cy.get('[data-testid="assistant-panel"]').contains('Close').click();
+		cy.get('[data-testid="assistant-panel"]').should('not.exist');
+
+		openAssistant();
+		cy.get('[data-testid="assistant-messages"]').should('contain.text', asked);
+
+		cy.get('[data-testid="assistant-new-chat"]').should('be.visible').click();
+		cy.get('[data-testid="assistant-messages"]').should('not.contain.text', asked);
+		cy.get('[data-testid="assistant-new-chat"]').should('not.exist');
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
 	});
 
 	it('sends the page context of the page the user is on, not the one the panel opened on', function () {
@@ -80,8 +104,8 @@ describe('Assistant panel', () => {
 			openAssistant();
 
 			// The overlay sits above the rail, so the sheet has to close before
-			// the client navigation. Closing does not remount the chat — the
-			// launcher keeps it — which is the point: context is read at send.
+			// the client navigation. The launcher keeps the Chat instance —
+			// context is still read at send, not at first open.
 			cy.get('[data-testid="assistant-panel"]').contains('Close').click();
 			// Desktop rail and the mobile sheet both mount the same nav.
 			cy.get('[data-testid="conference-nav-agenda"]:visible').click();

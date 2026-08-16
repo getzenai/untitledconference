@@ -2,19 +2,29 @@
 	/**
 	 * The way in: a star pinned to the right edge of every app page (#676).
 	 *
-	 * The panel itself only mounts once it has been opened, so a user who
-	 * never asks anything pays nothing for the chat runtime.
+	 * Chat is created on first open and lives here, not in the sheet. Closing
+	 * the panel unmounts the sheet and must not throw the transcript away
+	 * (#728). A user who never asks pays nothing for the chat runtime.
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import AssistantPanel from '$lib/components/app/assistant-panel.svelte';
+	import { createAssistantChat } from '$lib/chat/create-assistant-chat';
+	import {
+		clearAssistantHold,
+		openAssistantHold,
+		type AssistantHold
+	} from '$lib/chat/assistant-hold';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
+	import type { Chat } from '@ai-sdk/svelte';
 
-	let open = $state(false);
-	let everOpened = $state(false);
+	let hold = $state<AssistantHold<Chat>>({ chat: null, open: false });
 
 	function openPanel() {
-		everOpened = true;
-		open = true;
+		hold = openAssistantHold(hold, createAssistantChat);
+	}
+
+	function clearChat() {
+		hold = clearAssistantHold(createAssistantChat);
 	}
 </script>
 
@@ -29,6 +39,6 @@
 	<SparklesIcon />
 </Button>
 
-{#if everOpened}
-	<AssistantPanel bind:open />
+{#if hold.open && hold.chat}
+	<AssistantPanel bind:open={hold.open} chat={hold.chat} onclear={clearChat} />
 {/if}

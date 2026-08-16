@@ -15,9 +15,12 @@
 	 * The message list follows the answer being streamed rather than the bottom
 	 * of the list (#718) — see `ai-elements/conversation/` for why those are not
 	 * the same thing.
+	 *
+	 * The Chat instance lives in the launcher. Closing this sheet unmounts it
+	 * and must not drop the transcript; New chat is the only way to empty it
+	 * (#728).
 	 */
 	import { invalidateAll } from '$app/navigation';
-	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
@@ -29,27 +32,22 @@
 	} from '$lib/components/ai-elements/conversation';
 	import { groupMessageParts, ToolGroup, type GenericPart } from '$lib/components/ai-elements/tool';
 	import { assistantWriteRefreshesPage } from '$lib/chat/auto-run-writes';
-	import { pageContext, visiblePageTitle } from '$lib/chat/page-context';
-	import { pageFocus } from '$lib/chat/page-focus.svelte';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
 	import { chatErrorMessage } from '$lib/chat/chat-error';
 	import AssistantReply from './assistant-reply.svelte';
-	import { Chat } from '@ai-sdk/svelte';
+	import type { Chat } from '@ai-sdk/svelte';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import SquareIcon from '@lucide/svelte/icons/square';
-	import {
-		DefaultChatTransport,
-		getToolName,
-		isToolUIPart,
-		lastAssistantMessageIsCompleteWithApprovalResponses
-	} from 'ai';
-	import { onMount } from 'svelte';
+	import { getToolName, isToolUIPart } from 'ai';
 	import { SvelteSet } from 'svelte/reactivity';
 
-	let { open = $bindable(false) }: { open?: boolean } = $props();
+	let {
+		open = $bindable(false),
+		chat,
+		onclear
+	}: { open?: boolean; chat: Chat; onclear: () => void } = $props();
 
 	let input = $state('');
-	let chat = $state<Chat | null>(null);
 	// Tool calls we stopped for, so we know which results changed the page.
 	const approved = new SvelteSet<string>();
 	const invalidated = new SvelteSet<string>();
@@ -58,31 +56,11 @@
 	// earlier finished answers.
 	let stopFromIndex = $state<number | null>(null);
 
-	onMount(() => {
-		chat = new Chat({
-			transport: new DefaultChatTransport({
-				api: '/chat',
-				body: () => {
-					const context = pageContext({
-						routeId: page.route.id,
-						url: page.url,
-						params: page.params,
-						title: visiblePageTitle(document),
-						focus: pageFocus(page.route.id)
-					});
-					return context ? { pageContext: context } : {};
-				}
-			}),
-			sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses
-		});
-	});
-
-	const pending = $derived(chat?.status === 'submitted' || chat?.status === 'streaming');
+	const pending = $derived(chat.status === 'submitted' || chat.status === 'streaming');
 
 	// A write has just landed. Gated writes enter `approved` when the card
 	// appears; auto-run writes never do, and still change the page (#726).
 	$effect(() => {
-		if (!chat) return;
 		for (const message of chat.messages) {
 			for (const part of message.parts) {
 				if (!isToolUIPart(part)) continue;
@@ -99,7 +77,7 @@
 	});
 
 	$effect(() => {
-		if (stopFromIndex === null || !chat || pending) return;
+		if (stopFromIndex === null || pending) return;
 		const turnMessages = chat.messages.slice(stopFromIndex);
 		const lastAssistant = [...turnMessages]
 			.reverse()
@@ -112,13 +90,23 @@
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		const text = input.trim();
-		if (!text || !chat || pending) return;
+		if (!text || pending) return;
 		input = '';
 		void chat.sendMessage({ text });
 	}
 
+	function handleClear() {
+		if (pending || chat.messages.length === 0) return;
+		input = '';
+		approved.clear();
+		invalidated.clear();
+		stopped.clear();
+		stopFromIndex = null;
+		onclear();
+	}
+
 	function handleStop() {
-		if (!chat || !pending) return;
+		if (!pending) return;
 		stopFromIndex = Math.max(0, chat.messages.length - 1);
 		void chat.stop();
 	}
@@ -131,7 +119,7 @@
 	}
 
 	function decide(id: string, ok: boolean) {
-		void chat?.addToolApprovalResponse({ id, approved: ok });
+		void chat.addToolApprovalResponse({ id, approved: ok });
 	}
 </script>
 
@@ -142,16 +130,33 @@
 		data-testid="assistant-panel"
 	>
 		<Sheet.Header>
-			<Sheet.Title>Guus</Sheet.Title>
-			<Sheet.Description>
-				Ask about this page. It can look things up and change them once you say yes.
-			</Sheet.Description>
+			<div class="flex items-start justify-between gap-3 pr-8">
+				<div class="min-w-0">
+					<Sheet.Title>Guus</Sheet.Title>
+					<Sheet.Description>
+						Ask about this page. It can look things up and change them once you say yes.
+					</Sheet.Description>
+				</div>
+				{#if chat.messages.length > 0}
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						class="shrink-0"
+						data-testid="assistant-new-chat"
+						disabled={pending}
+						onclick={handleClear}
+					>
+						New chat
+					</Button>
+				{/if}
+			</div>
 		</Sheet.Header>
 
 		<Conversation class="flex-1">
 			<ConversationContent class="px-4">
 				<ul class="flex flex-col gap-3" data-testid="assistant-messages">
-					{#each chat?.messages ?? [] as message (message.id)}
+					{#each chat.messages as message (message.id)}
 						<li class="text-sm" data-role={message.role}>
 							<MessageAnchor>
 								<div class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
@@ -219,7 +224,7 @@
 			<ConversationScrollButton />
 		</Conversation>
 
-		{#if chat?.error}
+		{#if chat.error}
 			<p
 				class="border-status-bad text-status-bad mx-4 rounded-md border px-3 py-2 text-sm"
 				role="alert"
@@ -235,7 +240,7 @@
 				placeholder="What can I do on this page?"
 				autocomplete="off"
 				rows={1}
-				disabled={!chat || pending}
+				disabled={pending}
 				data-testid="assistant-input"
 				class="max-h-48 min-h-9 min-w-0 flex-1 resize-none overflow-y-auto py-2"
 				onkeydown={handleInputKeydown}
@@ -252,7 +257,7 @@
 					<SquareIcon />
 				</Button>
 			{:else}
-				<Button type="submit" size="icon" class="shrink-0" disabled={!chat} aria-label="Send">
+				<Button type="submit" size="icon" class="shrink-0" aria-label="Send">
 					<SendIcon />
 				</Button>
 			{/if}
