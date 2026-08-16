@@ -72,7 +72,7 @@ describe('Contact notes draft (#765)', () => {
 			cy.wrap(asked).should('have.length', 1);
 			cy.wrap(asked)
 				.its(0)
-				.should('match', /your notes/i);
+				.should('match', /your notes will stay/i);
 			cy.wrap(asked)
 				.its(0)
 				.should('match', /this browser on this device/i);
@@ -120,7 +120,7 @@ describe('Contact notes draft (#765)', () => {
 		cy.wrap(asked).should('have.length', 1);
 		cy.wrap(asked)
 			.its(0)
-			.should('match', /your notes/i);
+			.should('match', /your notes will stay/i);
 		cy.wrap(asked)
 			.its(0)
 			.should('match', /this browser on this device/i);

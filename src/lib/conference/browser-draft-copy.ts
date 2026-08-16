@@ -8,5 +8,5 @@
  * this profile.
  */
 export function browserDraftLeavePrompt(what: string): string {
-	return `Only ${what} stay in this browser on this device. Another device, another profile, or clearing your browser data, and it is gone. Leave this page?`;
+	return `Only ${what} will stay in this browser on this device. Another device, another profile, or clearing your browser data, and it is gone. Leave this page?`;
 }

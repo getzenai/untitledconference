@@ -78,7 +78,7 @@ describe('Speaker notes and organizer talk-edit drafts', () => {
 		cy.wrap(asked).should('have.length', 1);
 		cy.wrap(asked)
 			.its(0)
-			.should('match', /your talk edit/i);
+			.should('match', /your talk edit will stay/i);
 		cy.wrap(asked)
 			.its(0)
 			.should('match', /this browser on this device/i);
