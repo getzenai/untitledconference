@@ -85,12 +85,15 @@ describe('The assistant and Accept on a talk', () => {
 			});
 		});
 
-		// Same star as before the wrap: vertically centred, on the right edge.
+		// Same star as before the wrap: vertically centred, on the right
+		// edge of the content viewport. `fixed right-0` is clientWidth,
+		// not the window — CI Chrome draws a classic scrollbar.
 		cy.viewport(TABLET.width, TABLET.height);
 		cy.get('[data-testid="assistant-open"]').should(($star) => {
 			const box = $star[0].getBoundingClientRect();
+			const contentWidth = $star[0].ownerDocument.documentElement.clientWidth;
 			expect(box.width, 'star size at 768').to.be.closeTo(44, 1);
-			expect(box.right, 'star on the right edge at 768').to.be.closeTo(TABLET.width, 1);
+			expect(box.right, 'star on the right edge at 768').to.be.closeTo(contentWidth, 1);
 			expect(box.top + box.height / 2, 'star stays vertically centred at 768').to.be.closeTo(
 				TABLET.height / 2,
 				1
@@ -100,8 +103,9 @@ describe('The assistant and Accept on a talk', () => {
 		cy.viewport(DESKTOP.width, DESKTOP.height);
 		cy.get('[data-testid="assistant-open"]').should(($star) => {
 			const box = $star[0].getBoundingClientRect();
+			const contentWidth = $star[0].ownerDocument.documentElement.clientWidth;
 			expect(box.width, 'star size at 1280').to.be.closeTo(44, 1);
-			expect(box.right, 'star on the right edge at 1280').to.be.closeTo(DESKTOP.width, 1);
+			expect(box.right, 'star on the right edge at 1280').to.be.closeTo(contentWidth, 1);
 			expect(box.top + box.height / 2, 'star stays vertically centred at 1280').to.be.closeTo(
 				DESKTOP.height / 2,
 				1
