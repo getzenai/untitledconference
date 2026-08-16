@@ -22,4 +22,22 @@ describe('browser draft input', () => {
 		expect(body).toContain('data-testid="organization-name"');
 		expect(body).toContain('value="Acme"');
 	});
+
+	it('can be an email field', () => {
+		const body = render(BrowserDraftInput, {
+			props: {
+				scope: 'reviewer-invite:devflow',
+				owner: 'user-1',
+				baseline: '',
+				name: 'email',
+				type: 'email',
+				testId: 'people-invite-email',
+				required: true
+			}
+		}).body;
+
+		expect(body).toContain('name="email"');
+		expect(body).toContain('type="email"');
+		expect(body).toContain('data-testid="people-invite-email"');
+	});
 });

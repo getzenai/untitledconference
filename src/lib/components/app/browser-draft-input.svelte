@@ -23,6 +23,7 @@
 		baseline,
 		name,
 		id,
+		type,
 		class: className,
 		placeholder,
 		required = false,
@@ -37,6 +38,7 @@
 		baseline: string;
 		name: string;
 		id?: string;
+		type?: 'text' | 'email';
 		class?: string;
 		placeholder?: string;
 		required?: boolean;
@@ -162,6 +164,7 @@
 	<Input
 		{id}
 		{name}
+		{type}
 		{placeholder}
 		{required}
 		{maxlength}
