@@ -76,7 +76,7 @@ describe('assistant chat update_conference through the mock', () => {
 		};
 	}
 
-	it('writes the new name once the organizer approves', async () => {
+	it('writes the new name without a card', async () => {
 		const ask: UIMessage = {
 			id: 'u1',
 			role: 'user',
@@ -95,32 +95,7 @@ describe('assistant chat update_conference through the mock', () => {
 		expect(first.status).toBe(200);
 		const firstBody = await first.text();
 		expect(firstBody).toContain('update_conference');
-		expect(firstBody).toContain('tool-approval-request');
-
-		const approved: UIMessage[] = [
-			ask,
-			{
-				id: 'a1',
-				role: 'assistant',
-				parts: [
-					{
-						type: 'tool-update_conference',
-						toolCallId: 'call_update',
-						state: 'approval-responded',
-						input: { conferenceSlug: seeded.conferenceSlug, name: 'Beta Harness' },
-						approval: { id: 'appr_1', approved: true }
-					}
-				]
-			}
-		];
-
-		const second = await handleAssistantChatRequest(
-			event({ messages: approved }),
-			createMockChatModel()
-		);
-		expect(second.status).toBe(200);
-		const secondBody = await second.text();
-		expect(secondBody).not.toContain('"error"');
+		expect(firstBody).not.toContain('tool-approval-request');
 
 		const [row] = await db
 			.select({ name: conferenceTable.name })

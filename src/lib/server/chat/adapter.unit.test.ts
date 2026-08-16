@@ -31,8 +31,7 @@ describe('toLanguageModelTool', () => {
 
 	// The allow-list is gone (#683): a reviewer is offered `decide_submissions`
 	// like everyone else, and is refused by the handler rather than by absence.
-	// What must not go is the approval gate — a write the model reaches without
-	// asking is the failure this replaced the list with.
+	// The card (#726) is only for writes that leave the app or are hard to undo.
 	it('wires every registry tool, with the writes marked as writes', () => {
 		const names = new Set(Object.keys(assistantChatTools(ctx)));
 		expect(names.has('submit_review')).toBe(true);

@@ -23,7 +23,12 @@ import {
 	createChatModel
 } from './model';
 import { ChatToolCallLeakError, guardToolCallLeak } from './tool-call-leak';
-import { assistantChatTools, assistantChatWriteToolNames, type ReviewerToolFocus } from './tools';
+import {
+	assistantChatTools,
+	assistantChatWriteToolNames,
+	assistantWriteNeedsApproval,
+	type ReviewerToolFocus
+} from './tools';
 
 export type AssistantPageContext = {
 	routeId: string;
@@ -157,8 +162,9 @@ export function assistantSystemPrompt(page?: AssistantPageContext): string {
 		`You act as the signed-in user and can use every tool in the MCP registry. Each tool ` +
 		`enforces that user's permissions; a refusal is final and must be explained, never bypassed. ` +
 		location +
-		`Every write waits for explicit user approval. Before requesting approval, state the exact ` +
-		`change in plain language. After an approved write, report what actually changed. ` +
+		`Do not ask in prose whether to make a change. Call the tool. Some writes show an ` +
+		`approval card; that card is the question — never ask the same thing in words. After a ` +
+		`write, whether it ran on its own or after the card, report what actually changed. ` +
 		`You may use a goose emoji or one short goose-related aside occasionally, at most once per ` +
 		`conversation. Never put a goose aside in the sentence that asks for, confirms, or reports ` +
 		`a write. Do not force goose humour into routine answers. ` +
@@ -171,7 +177,9 @@ export function assistantSystemPrompt(page?: AssistantPageContext): string {
 
 export function assistantToolApproval(ctx: McpContext): Record<string, 'user-approval'> {
 	return Object.fromEntries(
-		assistantChatWriteToolNames(ctx).map((name) => [name, 'user-approval' as const])
+		assistantChatWriteToolNames(ctx)
+			.filter(assistantWriteNeedsApproval)
+			.map((name) => [name, 'user-approval' as const])
 	);
 }
 

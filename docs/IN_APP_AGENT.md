@@ -17,9 +17,10 @@ connects. This one is about the assistant that lives in the product.
 The assistant is application-wide (`src/lib/server/chat/assistant.ts`).
 Since #683 it offers every tool in `allTools`
 (`src/lib/server/mcp/server.ts`), not a per-page allow-list. Authorization
-stays inside each registry handler. Every write waits for explicit user
-approval (`writes: true` on the definition; chat builds `toolApproval`
-from that).
+stays inside each registry handler. Writes that leave the app (mail,
+publish) or are hard to undo (decision, delete) wait for a card; the rest
+run. A new write defaults to a card (`ASSISTANT_AUTO_RUN_WRITES` in
+`src/lib/server/chat/tools.ts`).
 
 The same 49 definitions are the MCP server at `/api/v1/mcp` and the REST
 adapter under `/api/v1`. There is no second registry. `docs/MCP.md` is

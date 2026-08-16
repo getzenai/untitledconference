@@ -143,8 +143,8 @@ export function parseAgendaSlug(prompt: unknown): string | undefined {
  * The default is the reviewer queue. If the system prompt places the user on
  * the agenda board, the mock calls `get_agenda` with that slug instead — the
  * global `/chat` path never passes `mockCall`. A rename sentence (see
- * `RENAME_CONFERENCE`) is the write the assistant-panel Cypress spec needs:
- * approval, then the real tool.
+ * `RENAME_CONFERENCE`) is the reversible write the assistant-panel Cypress
+ * spec needs: the real tool, no card.
  */
 export function createMockChatModel(
 	toolName = 'list_my_review_assignments',
@@ -217,8 +217,8 @@ function mockTextChunks(delta: string) {
 
 /**
  * A model that calls `submit_review` once, then names the write.
- * Tests pass a new instance per request: the first HTTP turn emits the
- * tool call (approval stops it), the second is told `afterApproval`.
+ * A fresh instance per request: the first step emits the tool call, the
+ * follow-up (after the tool result, or when `afterApproval` is set) is text.
  */
 type MockSubmitReviewInput = {
 	conferenceSlug: string;
@@ -268,8 +268,10 @@ export function createMockSubmitReviewModel(
 		{ type: 'finish' as const, finishReason: 'stop' as const, usage: emptyUsage }
 	];
 	return new MockLanguageModelV3({
-		doStream: async () => ({
-			stream: simulateReadableStream({ chunks: (afterApproval ? textStep : toolStep) as never })
+		doStream: async ({ prompt }) => ({
+			stream: simulateReadableStream({
+				chunks: (afterApproval || promptAlreadyHasTool(prompt) ? textStep : toolStep) as never
+			})
 		})
 	});
 }
