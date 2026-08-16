@@ -4,6 +4,7 @@
  */
 import { addReviewer } from '$lib/server/conference/reviewer-roster';
 import { db } from '$lib/server/db';
+import { submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import type { McpContext } from '$lib/server/mcp/context';
 import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '$lib/server/mcp/harness';
@@ -102,5 +103,35 @@ describe('assistant chat update_conference through the mock', () => {
 			.from(conferenceTable)
 			.where(eq(conferenceTable.id, seeded.conferenceId));
 		expect(row?.name).toBe('Beta Harness');
+	});
+
+	it('holds a decision behind a card and writes nothing', async () => {
+		const submissionId = seeded.submissionIds['casey-observability'];
+		const res = await handleAssistantChatRequest(
+			event({
+				messages: [
+					{
+						id: 'u1',
+						role: 'user',
+						parts: [{ type: 'text', text: 'Accept the Casey talk' }]
+					}
+				]
+			}),
+			createMockChatModel('decide_submissions', {
+				conferenceSlug: seeded.conferenceSlug,
+				submissionIds: [submissionId],
+				decision: 'accepted'
+			})
+		);
+		expect(res.status).toBe(200);
+		const body = await res.text();
+		expect(body).toContain('decide_submissions');
+		expect(body).toContain('tool-approval-request');
+
+		const [row] = await db
+			.select({ status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, submissionId));
+		expect(row?.status).toBe('submitted');
 	});
 });
