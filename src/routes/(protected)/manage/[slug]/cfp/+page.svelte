@@ -22,6 +22,7 @@
 	import {
 		applyReorderWrites,
 		reorderWriteFromForm,
+		settleReorderWrite,
 		type ReorderWrite
 	} from '$lib/conference/list-reorder-optimistic';
 	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
@@ -137,24 +138,26 @@ We want talks that show the work — **the migration that failed first**, the nu
 
 	const settleFieldMove =
 		(queued: QueuedReorder | null) =>
-		async ({
+		({
 			result,
 			update
 		}: {
 			result: ActionResult;
 			update: (opts?: { reset?: boolean }) => Promise<void>;
-		}) => {
-			if (result.type === 'success') {
-				await update(formUpdateOptions('edit'));
-				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
-			} else {
-				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
-				fieldWriteError = reorderFailureMessage(result);
-				if (result.type === 'failure') await update(formUpdateOptions('edit'));
-			}
-			fieldWireBusy = false;
-			sendNextFieldMove();
-		};
+		}) =>
+			settleReorderWrite({
+				result,
+				update: () => update(formUpdateOptions('edit')),
+				onError: async () => {
+					fieldWriteError = reorderFailureMessage(result);
+					if (result.type === 'failure') await update(formUpdateOptions('edit'));
+				},
+				release: () => {
+					if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
+					fieldWireBusy = false;
+					sendNextFieldMove();
+				}
+			});
 
 	function sendNextFieldMove(): void {
 		const next = fieldWrites[0];

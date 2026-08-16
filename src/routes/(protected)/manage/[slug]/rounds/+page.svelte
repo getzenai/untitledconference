@@ -13,6 +13,7 @@
 	import {
 		applyReorderWrites,
 		reorderWriteFromForm,
+		settleReorderWrite,
 		type ReorderWrite
 	} from '$lib/conference/list-reorder-optimistic';
 	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
@@ -89,28 +90,28 @@
 
 	const settleCriterionMove =
 		(queued: QueuedReorder | null) =>
-		async ({
+		({
 			result,
 			update
 		}: {
 			result: ActionResult;
 			update: (opts?: { reset?: boolean }) => Promise<void>;
-		}) => {
-			if (result.type === 'success') {
-				await update(formUpdateOptions('edit'));
-				if (queued) {
-					criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
+		}) =>
+			settleReorderWrite({
+				result,
+				update: () => update(formUpdateOptions('edit')),
+				onError: async () => {
+					criterionWriteError = reorderFailureMessage(result);
+					if (result.type === 'failure') await update(formUpdateOptions('edit'));
+				},
+				release: () => {
+					if (queued) {
+						criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
+					}
+					criterionWireBusy = false;
+					sendNextCriterionMove();
 				}
-			} else {
-				if (queued) {
-					criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
-				}
-				criterionWriteError = reorderFailureMessage(result);
-				if (result.type === 'failure') await update(formUpdateOptions('edit'));
-			}
-			criterionWireBusy = false;
-			sendNextCriterionMove();
-		};
+			});
 
 	function sendNextCriterionMove(): void {
 		const next = criterionWrites[0];
