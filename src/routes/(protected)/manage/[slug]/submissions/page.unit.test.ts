@@ -195,6 +195,22 @@ describe('organizer submission decisions', () => {
 	});
 
 	/**
+	 * #717: first paint has no selection. The strip stays in the markup —
+	 * desktop still shows the decide verbs — and `hidden md:flex` is what
+	 * keeps a grey Accept from eating the first screen on a phone.
+	 */
+	it('hides the empty bulk strip below the desktop breakpoint', () => {
+		const body = renderPage();
+
+		const open = body.indexOf('data-testid="bulk-toolbar"');
+		expect(open).toBeGreaterThan(-1);
+		const tag = body.slice(body.lastIndexOf('<div', open), body.indexOf('>', open) + 1);
+		expect(tag).toContain('hidden md:flex');
+		expect(body).toContain('value="accepted"');
+		expect(body).toContain('Decline');
+	});
+
+	/**
 	 * #453: first paint has no selection, so both are dead for that reason —
 	 * not "nothing decided", not a closed round. Auto-distribute's own gates
 	 * are inside the dialog now; the door names the one that comes first.

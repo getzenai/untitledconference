@@ -479,9 +479,20 @@
 				};
 			}}
 		>
-			<!-- The programme changes now; communication is a separate, explicit step. -->
+			<!--
+				The programme changes now; communication is a separate, explicit step.
+
+				#717: the empty strip is a desktop tool. On a phone it ate the first
+				screen — search, filters, and a grey Accept, no talk. Hide it until a
+				row is selected; desktop keeps the strip so the decide verbs stay
+				visible as the point of the page.
+			-->
 			<div
-				class="border-border bg-muted/40 mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2"
+				class="border-border bg-muted/40 mb-3 flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 {selected.size ===
+				0
+					? 'hidden md:flex'
+					: 'flex'}"
+				data-testid="bulk-toolbar"
 			>
 				<p class="text-muted-foreground text-sm">
 					{#if selected.size === 0}
