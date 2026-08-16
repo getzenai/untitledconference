@@ -10,6 +10,13 @@
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
+	import {
+		applyReorderWrites,
+		reorderWriteFromForm,
+		type ReorderWrite
+	} from '$lib/conference/list-reorder-optimistic';
+	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
@@ -53,6 +60,49 @@
 			}
 		};
 	};
+
+	/**
+	 * In-flight criterion moves sit on top of the last server list. Dropping
+	 * one is the rollback. Move does not take the page-wide `busy` lock.
+	 */
+	type QueuedReorder = ReorderWrite & { token: number };
+	let criterionWrites = $state<QueuedReorder[]>([]);
+	let criterionWriteToken = 0;
+	let criterionWriteError = $state<string | null>(null);
+
+	const reorderFailureMessage = (result: ActionResult): string => {
+		if (result.type === 'failure') {
+			const message = (result.data as { message?: unknown } | undefined)?.message;
+			if (typeof message === 'string' && message.length > 0) return message;
+			return 'That change could not be saved.';
+		}
+		if (result.type === 'error') return actionErrorCopy(result);
+		return 'That change could not be saved.';
+	};
+
+	const submittingMove: SubmitFunction = ({ formData }) => {
+		const write = reorderWriteFromForm(formData);
+		const queued = write ? { ...write, token: ++criterionWriteToken } : null;
+		if (queued) criterionWrites = [...criterionWrites, queued];
+		criterionWriteError = null;
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				await update(formUpdateOptions('edit'));
+				if (queued) {
+					criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
+				}
+				return;
+			}
+			if (queued) {
+				criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
+			}
+			criterionWriteError = reorderFailureMessage(result);
+			if (result.type === 'failure') await update(formUpdateOptions('edit'));
+		};
+	};
+
+	const criteriaFor = (roundId: number) =>
+		applyReorderWrites(data.criteriaByRound[roundId] ?? [], criterionWrites);
 
 	/**
 	 * The picker posts local wall time; only the browser knows which zone that was
@@ -229,7 +279,7 @@
 		{:else}
 			<ul class="mt-3 space-y-4">
 				{#each data.rounds as round (round.id)}
-					{@const criteria = data.criteriaByRound[round.id] ?? []}
+					{@const criteria = criteriaFor(round.id)}
 					<li
 						class="border-border bg-card rounded-lg border px-4 py-3"
 						data-testid="round-row"
@@ -316,6 +366,15 @@
 								Reviewers fill these in order. Weight changes the submission average — a criterion
 								at 3 pulls three times as hard as one at 1.
 							</p>
+							{#if criterionWriteError}
+								<p
+									class="text-status-bad mt-2 text-sm"
+									role="alert"
+									data-testid="criterion-reorder-error"
+								>
+									{criterionWriteError}
+								</p>
+							{/if}
 
 							{#if criteria.length === 0}
 								<p class="text-muted-foreground mt-2 text-sm" data-testid="scorecard-empty">
@@ -436,35 +495,27 @@
 											</form>
 
 											<div class="mt-2 flex flex-wrap gap-1">
-												<form
-													method="POST"
-													action="?/moveCriterion"
-													use:enhance={submitting('edit')}
-												>
+												<form method="POST" action="?/moveCriterion" use:enhance={submittingMove}>
 													<input type="hidden" name="id" value={criterion.id} />
 													<input type="hidden" name="direction" value="up" />
 													<Button
 														type="submit"
 														size="sm"
 														variant="ghost"
-														disabled={busy || index === 0}
+														disabled={index === 0}
 														data-testid="criterion-move-up"
 													>
 														Up
 													</Button>
 												</form>
-												<form
-													method="POST"
-													action="?/moveCriterion"
-													use:enhance={submitting('edit')}
-												>
+												<form method="POST" action="?/moveCriterion" use:enhance={submittingMove}>
 													<input type="hidden" name="id" value={criterion.id} />
 													<input type="hidden" name="direction" value="down" />
 													<Button
 														type="submit"
 														size="sm"
 														variant="ghost"
-														disabled={busy || index === criteria.length - 1}
+														disabled={index === criteria.length - 1}
 														data-testid="criterion-move-down"
 													>
 														Down
