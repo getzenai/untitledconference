@@ -224,3 +224,21 @@ describe('contacts directory page', () => {
 		expect(body).not.toContain('speaker directory');
 	});
 });
+
+/**
+ * The add dialog's tags field, same reason as the contact page (#831).
+ *
+ * The dialog's contents are not in the server-rendered body — bits-ui mounts
+ * them when it opens — so this reads the source. What it pins is the pair that
+ * has to move together: `rows` (which is what makes the field a textarea) and
+ * the label that tells the person a line break is a separator.
+ */
+describe('the add-contact tags field', () => {
+	it('is a textarea and says what it accepts', () => {
+		const tagsField = source.slice(source.indexOf('id="add-tags"'));
+
+		expect(tagsField.slice(0, 400)).toContain('rows={2}');
+		expect(source).toContain('Tags (one per line, or comma-separated)');
+		expect(source).not.toContain('Tags (comma-separated)');
+	});
+});

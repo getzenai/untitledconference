@@ -208,7 +208,7 @@
 			</div>
 			<div class="sm:col-span-2">
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="tags">
-					Tags (comma-separated)
+					Tags (one per line, or comma-separated)
 				</label>
 				<BrowserDraftInput
 					id="tags"
@@ -216,6 +216,7 @@
 					scope={contactFieldScope(data.contact.id, 'tags')}
 					owner={data.user.id}
 					baseline={tagsValue}
+					rows={2}
 					placeholder="keynote, vip, alumni"
 					testId="contact-tags"
 					{commitToken}

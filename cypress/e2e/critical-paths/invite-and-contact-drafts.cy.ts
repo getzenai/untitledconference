@@ -96,6 +96,45 @@ describe('Contact profile draft (#765, #789)', () => {
 		});
 	});
 
+	/**
+	 * A pasted column of tags reaches the server as a list (#831).
+	 *
+	 * `tagsFromFormInput` splits on `[\n,]+`, so a line break is a separator —
+	 * but only if the field can hold one. Typed with `{enter}` rather than set
+	 * with `.invoke('val')`: an `<input>` accepts a set value with newlines in
+	 * it and quietly turns a pasted one into `speaker sponsor`, so setting the
+	 * value is exactly the technique that cannot see this.
+	 */
+	it('turns a two-line tag paste into two tags, not one (#831)', () => {
+		const stamp = Date.now();
+		const first = `sponsor-${stamp}`;
+		const second = `keynote-${stamp}`;
+
+		cy.visit('/contacts');
+		cy.waitForHydration();
+		cy.get('[data-testid="contacts-add-open"]').click();
+		cy.get('[data-testid="contacts-add-name"]').type(`Tagged ${stamp}`);
+		cy.get('[data-testid="contacts-add-submit"]').click();
+		cy.location('pathname').should('match', /\/contacts\/\d+/);
+		cy.waitForHydration();
+
+		cy.get('[data-testid="contact-tags"]')
+			.should('have.prop', 'tagName', 'TEXTAREA')
+			.clear()
+			.type(`${first}{enter}${second}`);
+		cy.get('[data-testid="contact-tags"]').should('have.value', `${first}\n${second}`);
+		cy.get('[data-testid="contact-save"]').click();
+
+		// Saved as two tags: the page joins them with ", " when it reads them
+		// back, so one tag called "a b" and two tags called "a" and "b" are
+		// distinguishable here — which they are not in the field before saving.
+		cy.get('[data-testid="contact-tags"]').should('have.value', `${first}, ${second}`);
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="contact-tags"]').should('have.value', `${first}, ${second}`);
+	});
+
 	it('keeps typed bio through a sidebar click and a reload', () => {
 		const bio = `ORGJOURNEY-B2-${Date.now()} unsaved-bio`;
 
