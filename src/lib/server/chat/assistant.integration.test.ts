@@ -3,10 +3,16 @@
  * who only reviews a conference still cannot invoke an organizer-only tool.
  */
 import { addReviewer } from '$lib/server/conference/reviewer-roster';
+import { db } from '$lib/server/db';
+import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import type { McpContext } from '$lib/server/mcp/context';
 import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '$lib/server/mcp/harness';
+import type { UIMessage } from 'ai';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runMcpTool } from './adapter';
+import { handleAssistantChatRequest } from './assistant';
+import { createMockChatModel } from './model';
 import { assistantChatToolDefinitions } from './tools';
 
 const suffix = `assistant675-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -40,5 +46,86 @@ describe('assistant chat tool authorization', () => {
 
 		expect(result.error).toEqual(expect.stringContaining('organize'));
 		expect(result).not.toHaveProperty('abstract');
+	});
+});
+
+describe('assistant chat update_conference through the mock', () => {
+	const previousFlag = process.env.FEATURE_INAPP_CHAT;
+
+	beforeAll(() => {
+		process.env.FEATURE_INAPP_CHAT = 'true';
+	});
+
+	afterAll(() => {
+		if (previousFlag === undefined) delete process.env.FEATURE_INAPP_CHAT;
+		else process.env.FEATURE_INAPP_CHAT = previousFlag;
+	});
+
+	function event(body: { messages: UIMessage[] }) {
+		return {
+			locals: {
+				user: { id: seeded.organizerId },
+				session: null,
+				organizationId: seeded.orgId
+			} as App.Locals,
+			request: new Request('http://localhost/chat', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body)
+			})
+		};
+	}
+
+	it('writes the new name once the organizer approves', async () => {
+		const ask: UIMessage = {
+			id: 'u1',
+			role: 'user',
+			parts: [
+				{
+					type: 'text',
+					text: `Rename the conference ${seeded.conferenceSlug} to Beta Harness`
+				}
+			]
+		};
+
+		const first = await handleAssistantChatRequest(
+			event({ messages: [ask] }),
+			createMockChatModel()
+		);
+		expect(first.status).toBe(200);
+		const firstBody = await first.text();
+		expect(firstBody).toContain('update_conference');
+		expect(firstBody).toContain('tool-approval-request');
+
+		const approved: UIMessage[] = [
+			ask,
+			{
+				id: 'a1',
+				role: 'assistant',
+				parts: [
+					{
+						type: 'tool-update_conference',
+						toolCallId: 'call_update',
+						state: 'approval-responded',
+						input: { conferenceSlug: seeded.conferenceSlug, name: 'Beta Harness' },
+						approval: { id: 'appr_1', approved: true }
+					}
+				]
+			}
+		];
+
+		const second = await handleAssistantChatRequest(
+			event({ messages: approved }),
+			createMockChatModel()
+		);
+		expect(second.status).toBe(200);
+		const secondBody = await second.text();
+		expect(secondBody).not.toContain('"error"');
+
+		const [row] = await db
+			.select({ name: conferenceTable.name })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.id, seeded.conferenceId));
+		expect(row?.name).toBe('Beta Harness');
 	});
 });
