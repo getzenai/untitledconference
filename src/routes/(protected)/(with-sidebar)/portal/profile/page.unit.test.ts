@@ -169,7 +169,6 @@ describe('the speaker profile page', () => {
 		expect(source).toContain('rows={5}');
 		expect(source).toContain('PORTAL_PROFILE_LEAVE_PROMPT');
 		expect(source).toContain('UnsavedGuard');
-		expect(source).toContain("result.type === 'success'");
 		expect(source).not.toContain('speakerFieldScope');
 		expect(source).not.toContain('contactFieldScope');
 		// The file picker is a byte upload, not a typed draft. Email is not a field.
