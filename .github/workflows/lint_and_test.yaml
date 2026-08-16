@@ -317,15 +317,24 @@ jobs:
 
       # The build artifact was downloaded above, so the E2E script does not
       # need to rebuild the app.
+      #
+      # Chat is on in production (`wrangler.jsonc`). The flag is read at
+      # request time (`process.env` then the Worker binding in
+      # `src/lib/server/feature-flags.ts`), not baked into that artifact —
+      # so it is set here, not on `build`. `run-e2e.sh` copies it to
+      # CYPRESS_FEATURE_INAPP_CHAT; without that the four chat specs
+      # `this.skip()` and a deleted `$effect` on the scorecard stays green.
       - name: Run E2E tests
         run: npm run test:e2e
         env:
           SKIP_BUILD: 'true'
+          FEATURE_INAPP_CHAT: 'true'
 
       - name: Run email-verification E2E
         run: npm run test:e2e:verification
         env:
           SKIP_BUILD: 'true'
+          FEATURE_INAPP_CHAT: 'true'
 
       - name: Upload Cypress screenshots
         uses: actions/upload-artifact@v4

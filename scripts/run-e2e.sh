@@ -76,10 +76,14 @@ unset RESEND_FROM
 export AI_PROVIDER="${AI_PROVIDER:-mock}"
 export LOG_LEVEL="${LOG_LEVEL:-warn}"
 export NODE_ENV=test
-# Reviewer-chat spec reads CYPRESS_FEATURE_INAPP_CHAT instead of guessing
-# from the DOM. Default off so CI ships the panel dark. Turn both on:
-#   FEATURE_INAPP_CHAT=true ./scripts/run-e2e.sh --spec cypress/e2e/critical-paths/reviewer-chat.cy.ts
-export FEATURE_INAPP_CHAT="${FEATURE_INAPP_CHAT:-false}"
+# Chat specs read CYPRESS_FEATURE_INAPP_CHAT instead of guessing from the
+# DOM — a dead import or a 500 would otherwise look like "flag off".
+# Production has the panel on (`wrangler.jsonc`); this default matches that.
+# The flag is read at request time, so the export both shows the panel in
+# `vite preview` (process.env wins over the wrangler binding) and stops
+# Cypress skipping the four chat specs. CI sets the same value on the E2E
+# job; FEATURE_INAPP_CHAT=false still exercises the dark-panel cases.
+export FEATURE_INAPP_CHAT="${FEATURE_INAPP_CHAT:-true}"
 export CYPRESS_FEATURE_INAPP_CHAT="$FEATURE_INAPP_CHAT"
 if [ "$FEATURE_INAPP_CHAT" = "true" ] || [ "$FEATURE_INAPP_CHAT" = "1" ]; then
     export AI_CHAT_MODEL="${AI_CHAT_MODEL:-mock}"

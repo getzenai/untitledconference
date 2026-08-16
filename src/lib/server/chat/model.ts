@@ -84,15 +84,46 @@ export function parseConferenceRename(
 	return name ? { conferenceSlug: match[1], name } : undefined;
 }
 
+/** `/manage/<slug>/agenda` in the location sentence (`…/agenda, the page titled`). */
+const AGENDA_PATH = /\/manage\/([^/?#\s]+)\/agenda\b/;
+
+function promptCorpus(prompt: unknown): string {
+	if (!Array.isArray(prompt)) return '';
+	const parts: string[] = [];
+	for (const entry of prompt) {
+		const message = entry as PromptMessage;
+		if (typeof message?.content === 'string') {
+			parts.push(message.content);
+			continue;
+		}
+		if (!Array.isArray(message?.content)) continue;
+		for (const part of message.content) {
+			if (typeof part?.text === 'string') parts.push(part.text);
+		}
+	}
+	return parts.join('\n');
+}
+
+/**
+ * The slug of the agenda board the system prompt says the user is on.
+ * The global `/chat` mock has no per-surface `mockCall` (#688); without this
+ * it would always fire the reviewer default, and `agenda-chat.cy.ts` would
+ * never see `get_agenda`.
+ */
+export function parseAgendaSlug(prompt: unknown): string | undefined {
+	return promptCorpus(prompt).match(AGENDA_PATH)?.[1];
+}
+
 /**
  * A model that calls one read tool on the first step and then names that tool
  * in the follow-up text. Used when `AI_CHAT_MODEL` is `mock`, so a local
  * session can see streaming and a tool name without a Gateway key.
  *
- * The default is the reviewer queue; the agenda surface passes `get_agenda`
- * with its own arguments, since a tool that takes a conference slug cannot be
- * called with `{}`. A rename sentence (see `RENAME_CONFERENCE`) is the write
- * the assistant-panel Cypress spec needs: approval, then the real tool.
+ * The default is the reviewer queue. If the system prompt places the user on
+ * the agenda board, the mock calls `get_agenda` with that slug instead — the
+ * global `/chat` path never passes `mockCall`. A rename sentence (see
+ * `RENAME_CONFERENCE`) is the write the assistant-panel Cypress spec needs:
+ * approval, then the real tool.
  */
 export function createMockChatModel(
 	toolName = 'list_my_review_assignments',
@@ -107,11 +138,14 @@ export function createMockChatModel(
 				return { stream: simulateReadableStream({ chunks: textStep as never }) };
 			}
 			const rename = parseConferenceRename(prompt);
+			const agendaSlug = parseAgendaSlug(prompt);
 			const chunks = rename
 				? mockToolChunks('call_update', 'update_conference', rename)
-				: step++ === 0
-					? toolStep
-					: textStep;
+				: agendaSlug
+					? mockToolChunks('call_list', 'get_agenda', { conferenceSlug: agendaSlug })
+					: step++ === 0
+						? toolStep
+						: textStep;
 			return { stream: simulateReadableStream({ chunks: chunks as never }) };
 		}
 	});
@@ -199,9 +233,9 @@ export function createMockSubmitReviewModel(
 }
 
 /**
- * @param mockCall Which read tool the `mock` model should call. A surface only
- * gets the tools it was handed, so the reviewer default would be an unknown
- * tool on the agenda board — the caller names one of its own.
+ * @param mockCall Override the read tool the `mock` model calls when the
+ * prompt does not name an agenda board or a rename. The default mock reads
+ * those from the prompt itself so `/chat` does not have to pass them in.
  */
 export function createChatModel(mockCall?: {
 	toolName: string;
