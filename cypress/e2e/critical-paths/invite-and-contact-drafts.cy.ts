@@ -181,4 +181,29 @@ describe('Add-contact dialog draft (#763)', () => {
 		cy.get('[data-testid="contacts-add-email"]').should('have.value', '');
 		cy.get('[data-testid="contacts-add-company"]').should('have.value', '');
 	});
+
+	it('keeps the typed fields when add returns fail(400)', () => {
+		const stamp = Date.now();
+		const email = `fail-${stamp}@example.test`;
+		const company = `Hold-${stamp}`;
+
+		cy.visit('/contacts');
+		cy.waitForHydration();
+		cy.get('[data-testid="contacts-add-open"]').click();
+		// Spaces satisfy the HTML required attribute and still fail the action
+		// after trim — the fail(400) branch Cypress only covered via the 303.
+		cy.get('[data-testid="contacts-add-name"]').type('   ');
+		cy.get('[data-testid="contacts-add-email"]').type(email);
+		cy.get('[data-testid="contacts-add-company"]').type(company);
+		cy.get('[data-testid="contacts-add-submit"]').click();
+
+		cy.location('pathname').should('eq', '/contacts');
+		cy.get('[data-testid="contacts-add"]').should('be.visible');
+		cy.get('[data-testid="contacts-add-error"]')
+			.should('be.visible')
+			.and('contain', 'A name is required.');
+		cy.get('[data-testid="contacts-add-name"]').should('have.value', '   ');
+		cy.get('[data-testid="contacts-add-email"]').should('have.value', email);
+		cy.get('[data-testid="contacts-add-company"]').should('have.value', company);
+	});
 });
