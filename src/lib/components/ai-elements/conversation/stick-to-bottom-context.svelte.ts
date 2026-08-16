@@ -24,6 +24,34 @@ const PIN_PADDING_PX = 16;
 /** How close to the end still counts as "at the bottom". */
 const BOTTOM_THRESHOLD_PX = 32;
 
+export interface InitialPlacement {
+	/** Where the reader was when this conversation was last put away, or `null`. */
+	remembered: number | null;
+	/** Total scrollable height of the viewport. */
+	scrollHeight: number;
+	/** Visible height of the viewport. */
+	clientHeight: number;
+}
+
+/**
+ * Where a panel opens on a conversation that already has messages (#729).
+ *
+ * The end, unless the reader left it somewhere else — and clamped, because a
+ * remembered offset outlives the layout it was taken in: a narrower window, a
+ * collapsed tool block or a cleared message makes yesterday's number point
+ * past the content, and the browser would silently land at the end while the
+ * code believed it had restored something.
+ */
+export function initialScrollTop({
+	remembered,
+	scrollHeight,
+	clientHeight
+}: InitialPlacement): number {
+	const end = Math.max(0, scrollHeight - clientHeight);
+	if (remembered === null || !Number.isFinite(remembered)) return end;
+	return Math.max(0, Math.min(end, remembered));
+}
+
 export interface FollowGeometry {
 	/** Where the viewport is scrolled to now. */
 	scrollTop: number;
@@ -64,6 +92,11 @@ class StickToBottomContext {
 	#pendingApply = false;
 	#mutationObserver: MutationObserver | null = null;
 
+	/** Where this conversation was left, if the caller remembers (#729). */
+	#remembered: number | null = null;
+	/** Cleared once the viewport has been put where it belongs, or the reader moves. */
+	#placementPending = true;
+
 	isAtBottom = $derived(this.#isAtBottom);
 
 	constructor() {
@@ -79,6 +112,21 @@ class StickToBottomContext {
 	}
 
 	/**
+	 * Where to open, before anything is measured (#729).
+	 *
+	 * `null` means the end. Set from the caller that outlives the panel — the
+	 * sheet is unmounted while closed, so the offset cannot live in here.
+	 */
+	placeAt(remembered: number | null) {
+		this.#remembered = remembered;
+	}
+
+	/** Where the reader is now, for a caller that wants to remember it. */
+	offset(): number | null {
+		return this.#element ? this.#element.scrollTop : null;
+	}
+
+	/**
 	 * Marks `element` as the message to follow while content streams in.
 	 *
 	 * Returns a cleanup function that clears the target if it is still the
@@ -88,6 +136,9 @@ class StickToBottomContext {
 	followMessage = (element: HTMLElement) => {
 		this.#followTarget = element;
 		this.#followAllowed = true;
+		// A message to follow is a stronger claim on the viewport than "open
+		// where it was left"; two owners writing `scrollTop` would fight.
+		this.#placementPending = false;
 		if (this.#ready) this.#scheduleApply('smooth');
 		return () => {
 			if (this.#followTarget === element) {
@@ -101,6 +152,30 @@ class StickToBottomContext {
 		this.#followAllowed = true;
 		this.#element.scrollTo({ top: this.#element.scrollHeight, behavior });
 	};
+
+	/**
+	 * Opens the panel where the reader left it, or at the end (#729).
+	 *
+	 * Retried rather than done once: the sheet animates in, and a viewport
+	 * measured mid-transition has nothing to scroll — a `scrollTo` there is a
+	 * silent no-op the code would count as done, which is exactly how a
+	 * conversation ends up showing its oldest message. So the attempt stands
+	 * until there is something to scroll, and the mutation observer brings it
+	 * back as content lands.
+	 */
+	#tryPlace() {
+		if (!this.#element || !this.#placementPending) return;
+		const { scrollHeight, clientHeight } = this.#element;
+		if (scrollHeight <= clientHeight) return;
+		this.#element.scrollTo({
+			top: initialScrollTop({ remembered: this.#remembered, scrollHeight, clientHeight }),
+			// Never animated: a smooth scroll through fifty messages on open is
+			// a slot machine, and the reader did not ask for a journey.
+			behavior: 'auto'
+		});
+		this.#placementPending = false;
+		this.#syncAtBottom();
+	}
 
 	#scheduleApply(behavior: ScrollBehavior) {
 		if (this.#pendingApply) return;
@@ -149,6 +224,8 @@ class StickToBottomContext {
 
 	#onUserIntent = () => {
 		this.#followAllowed = false;
+		// Somebody who has already moved is not carried anywhere else.
+		this.#placementPending = false;
 	};
 
 	#setup() {
@@ -162,6 +239,7 @@ class StickToBottomContext {
 
 		this.#mutationObserver = new MutationObserver(() => {
 			if (!this.#ready) return;
+			this.#tryPlace();
 			this.#scheduleApply('auto');
 			this.#syncAtBottom();
 		});
@@ -176,7 +254,7 @@ class StickToBottomContext {
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
 				if (!this.#element) return;
-				this.#element.scrollTo({ top: this.#element.scrollHeight, behavior: 'auto' });
+				this.#tryPlace();
 				this.#ready = true;
 				this.#onScroll();
 			});
@@ -196,6 +274,7 @@ class StickToBottomContext {
 		this.#followTarget = null;
 		this.#followAllowed = false;
 		this.#ready = false;
+		this.#placementPending = true;
 	}
 }
 

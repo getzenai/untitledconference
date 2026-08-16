@@ -5,7 +5,7 @@
  * mistake there looks like "the panel just doesn't follow properly".
  */
 import { describe, expect, it } from 'vitest';
-import { followScrollTop } from './stick-to-bottom-context.svelte';
+import { followScrollTop, initialScrollTop } from './stick-to-bottom-context.svelte';
 
 /** A 400px-tall panel scrolled to the top, with 1000px of content in it. */
 const PANEL = {
@@ -40,5 +40,48 @@ describe('followScrollTop', () => {
 		expect(
 			followScrollTop({ ...PANEL, elementTop: 400, scrollHeight: 300, clientHeight: 400 })
 		).toBe(0);
+	});
+});
+
+/**
+ * Where the panel opens on a conversation that already has messages (#729).
+ *
+ * The remembered number comes from a layout that no longer exists — a
+ * narrower window, a collapsed tool block, a cleared message — so every case
+ * here is about what happens when it no longer fits. The browser clamps out
+ * of range silently, which is what makes an unclamped restore look like it
+ * worked right up until somebody notices they are at the end again.
+ */
+describe('initialScrollTop', () => {
+	const VIEWPORT = { scrollHeight: 1000, clientHeight: 400 };
+
+	it('opens at the end when nothing is remembered', () => {
+		expect(initialScrollTop({ remembered: null, ...VIEWPORT })).toBe(600);
+	});
+
+	it('opens where the reader left it', () => {
+		expect(initialScrollTop({ remembered: 220, ...VIEWPORT })).toBe(220);
+	});
+
+	it('keeps the top when that is where they were', () => {
+		// Zero is a position, not "nothing remembered" — someone who scrolled
+		// to the first message and closed the panel meant it.
+		expect(initialScrollTop({ remembered: 0, ...VIEWPORT })).toBe(0);
+	});
+
+	it('never scrolls past the end when the conversation got shorter', () => {
+		expect(initialScrollTop({ remembered: 5000, ...VIEWPORT })).toBe(600);
+	});
+
+	it('never returns a negative position', () => {
+		expect(initialScrollTop({ remembered: -50, ...VIEWPORT })).toBe(0);
+	});
+
+	it('stays at zero when the content is shorter than the panel', () => {
+		expect(initialScrollTop({ remembered: 120, scrollHeight: 300, clientHeight: 400 })).toBe(0);
+	});
+
+	it('treats a number that is not one as nothing remembered', () => {
+		expect(initialScrollTop({ remembered: Number.NaN, ...VIEWPORT })).toBe(600);
 	});
 });

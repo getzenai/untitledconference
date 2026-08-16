@@ -48,13 +48,19 @@
 		input = $bindable(''),
 		chat,
 		ledger,
-		onclear
+		onclear,
+		initialScroll = null,
+		onviewport
 	}: {
 		open?: boolean;
 		input?: string;
 		chat: Chat;
 		ledger: AssistantLedger;
 		onclear: () => void;
+		/** Where this conversation was left, from the launcher (#729). */
+		initialScroll?: number | null;
+		/** Hands the scrolling viewport to the launcher, which reads it on close (#729). */
+		onviewport?: (element: HTMLElement | null) => void;
 	} = $props();
 	// Last message that already belonged to the stopped turn — never search
 	// earlier finished answers. Lives on the ledger so a close mid-stop
@@ -66,6 +72,15 @@
 	const description = $derived(assistantDescription(page.route.id));
 	const showSuggestions = $derived(chat.messages.length === 0 && !pending);
 	let inputEl = $state<HTMLTextAreaElement | null>(null);
+	let viewport = $state<HTMLElement | null>(null);
+
+	// The launcher reads the offset when it closes the sheet, so all this does
+	// is hand over the element. Reporting the number from a teardown cleanup
+	// instead would write state while Svelte is unmounting — which reopened the
+	// sheet, because the write carried a `hold` that still said `open: true`.
+	$effect(() => {
+		onviewport?.(viewport);
+	});
 
 	$effect(() => {
 		if (stopFromIndex === null || pending) return;
@@ -150,7 +165,12 @@
 		</Sheet.Header>
 
 		<Conversation class="flex-1">
-			<ConversationContent class="px-4">
+			<ConversationContent
+				class="px-4"
+				bind:ref={viewport}
+				initialOffset={initialScroll}
+				data-testid="assistant-scroll"
+			>
 				<ul class="flex flex-col gap-5" data-testid="assistant-messages">
 					{#each chat.messages as message (message.id)}
 						<li class="text-sm" data-role={message.role}>
