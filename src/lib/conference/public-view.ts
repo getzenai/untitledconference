@@ -98,6 +98,18 @@ export function daysUntil(at: Date | null, now = new Date()): number | null {
 }
 
 /**
+ * A pasted URL is not a recording of this talk until the talk is over.
+ * "Watch recording" before that claims something that has not happened (#794).
+ */
+export function watchableRecordingUrl(
+	session: { recordingUrl: string | null; endsAt: string },
+	now = new Date()
+): string | null {
+	if (!session.recordingUrl) return null;
+	return new Date(session.endsAt).getTime() <= now.getTime() ? session.recordingUrl : null;
+}
+
+/**
  * "Thursday 17 September 2026" for a one-day event, both ends otherwise.
  *
  * Lives here because two surfaces render it — the header on every inner page and
