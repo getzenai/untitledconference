@@ -21,6 +21,7 @@
 	import { pageFocus } from '$lib/chat/page-focus.svelte';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
 	import { chatErrorMessage } from '$lib/chat/chat-error';
+	import AssistantReply from './assistant-reply.svelte';
 	import { Chat } from '@ai-sdk/svelte';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import {
@@ -113,7 +114,7 @@
 					<div class="mt-1 flex flex-col gap-1.5">
 						{#each message.parts as part, partIndex (partIndex)}
 							{#if part.type === 'text'}
-								<p class="whitespace-pre-wrap">{part.text}</p>
+								<AssistantReply text={part.text} />
 							{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
 								<div
 									class="border-border bg-background rounded-md border p-3"
