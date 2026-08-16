@@ -2,7 +2,11 @@ import { db } from '$lib/server/db';
 import { organizationAiSettings } from '$lib/server/db/organization-ai-schema';
 import { eq } from 'drizzle-orm';
 import { OrgAiUnwrapError, OrgAiWrapKeyMissingError, unwrapApiKey, wrapApiKey } from './org-ai-key';
-import { assertAllowedChatBackendUrl, ChatBackendUrlError } from './org-ai-url';
+import {
+	assertAllowedChatBackendUrl,
+	assertResolvedChatBackendUrl,
+	ChatBackendUrlError
+} from './org-ai-url';
 
 export type OrganizationAiSettingsView = {
 	configured: boolean;
@@ -45,7 +49,10 @@ export async function saveOrganizationAiSettings(input: {
 	modelId: string | undefined;
 	updatedBy: string;
 }): Promise<OrganizationAiSettingsView> {
-	const baseUrl = assertAllowedChatBackendUrl(input.baseUrl);
+	// The save path resolves the host: this is where an admin learns that the
+	// name they typed points somewhere it may not, instead of the chat failing
+	// later with a configuration error.
+	const baseUrl = await assertResolvedChatBackendUrl(input.baseUrl);
 	const modelId = normalizeModelId(input.modelId);
 	const existing = await loadRow(input.organizationId);
 	const wrapped = await resolveWrappedKey(input.organizationId, input.apiKey, existing);
@@ -76,6 +83,10 @@ export async function loadOrganizationChatBackend(
 	const row = await loadRow(organizationId);
 	if (!row) return { status: 'none' };
 	try {
+		// Shape only, and deliberately: the resolved-address check for this
+		// request happens in `org-ai-fetch.ts`, at the moment the call is made.
+		// Resolving here as well would pay for a second lookup and still not be
+		// the lookup that matters.
 		assertAllowedChatBackendUrl(row.baseUrl);
 		const apiKey = await unwrapApiKey(row.apiKeyCipher, row.apiKeyIv, organizationId);
 		return { status: 'ok', baseUrl: row.baseUrl, apiKey, modelId: row.modelId };
