@@ -6,24 +6,41 @@
 	 * list, and this only appears when an organizer actually wants to add. Creates
 	 * an org-wide profile (or reuses one by email) and puts them on this
 	 * conference.
+	 *
+	 * Closing is not a navigation, so there is no UnsavedGuard — the draft is
+	 * the fix. `add` answers with success, not a redirect, so the parent
+	 * increments `commitToken` on `success` and the fields clear.
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
+	import { NEW_SPEAKER_FIELDS, newSpeakerFieldScope } from '$lib/conference/speaker-notes-draft';
 
 	let {
+		slug,
+		owner,
+		commitToken = 0,
 		statusOptions,
 		busy,
 		enhanceForm,
 		form
 	}: {
+		slug: string;
+		owner: string;
+		commitToken?: number;
 		statusOptions: { value: string; label: string }[];
 		busy: boolean;
 		/** The page's shared enhanced-action handler (disables with the other forms). */
 		enhanceForm: Parameters<typeof enhance>[1];
 		form: { scope?: string; message?: string; error?: string } | null;
 	} = $props();
+
+	const scopes = $derived(
+		Object.fromEntries(
+			NEW_SPEAKER_FIELDS.map((field) => [field, newSpeakerFieldScope(slug, field)])
+		) as Record<(typeof NEW_SPEAKER_FIELDS)[number], string>
+	);
 </script>
 
 <form method="POST" action="?/add" use:enhance={enhanceForm} class="grid gap-3 sm:grid-cols-2">
@@ -31,20 +48,31 @@
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-name">
 			Name <span class="text-status-bad">*</span>
 		</label>
-		<Input
+		<BrowserDraftInput
 			id="add-name"
 			name="name"
+			scope={scopes.name}
+			{owner}
+			baseline=""
 			required
-			autofocus
-			autocomplete="name"
-			data-testid="add-name"
+			testId="add-name"
+			{commitToken}
 		/>
 	</div>
 	<div>
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-email">
 			Email
 		</label>
-		<Input id="add-email" name="email" type="email" autocomplete="email" data-testid="add-email" />
+		<BrowserDraftInput
+			id="add-email"
+			name="email"
+			type="email"
+			scope={scopes.email}
+			{owner}
+			baseline=""
+			testId="add-email"
+			{commitToken}
+		/>
 	</div>
 	<div>
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-status">
@@ -62,13 +90,29 @@
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-job">
 			Job title
 		</label>
-		<Input id="add-job" name="jobTitle" data-testid="add-jobTitle" />
+		<BrowserDraftInput
+			id="add-job"
+			name="jobTitle"
+			scope={scopes.jobTitle}
+			{owner}
+			baseline=""
+			testId="add-jobTitle"
+			{commitToken}
+		/>
 	</div>
 	<div>
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-company">
 			Company
 		</label>
-		<Input id="add-company" name="company" data-testid="add-company" />
+		<BrowserDraftInput
+			id="add-company"
+			name="company"
+			scope={scopes.company}
+			{owner}
+			baseline=""
+			testId="add-company"
+			{commitToken}
+		/>
 	</div>
 	<div class="sm:col-span-2">
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-bio">Bio</label>

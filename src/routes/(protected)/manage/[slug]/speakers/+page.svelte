@@ -5,18 +5,29 @@
 	 *
 	 * Filters in the URL so a search survives reload and can be pasted. Edits are
 	 * per-row forms rather than a drawer: organizers change one field and move on.
+	 *
+	 * The open row parks with BrowserDraftInput and a leave prompt. The add
+	 * dialog parks the same way, without a prompt — Escape is not a navigation.
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { clearBrowserDraft } from '$lib/forms/browser-draft';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
-	import { speakerNotesDraftScope } from '$lib/conference/speaker-notes-draft';
+	import {
+		SPEAKER_ROW_FIELDS,
+		SPEAKER_ROW_LEAVE_PROMPT,
+		speakerFieldScope,
+		speakerNotesDraftScope
+	} from '$lib/conference/speaker-notes-draft';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import SpeakerNotesDraft from '$lib/components/app/conference/speaker-notes-draft.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { humanise } from '$lib/components/status-badge.svelte';
 	import { tick } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
@@ -42,7 +53,30 @@
 	let mailSubject = $state('');
 	let mailBody = $state('');
 	let addOpen = $state(false);
+	let addCommit = $state(0);
 	let importOpen = $state(false);
+	const dirtyFields = new SvelteSet<string>();
+
+	function setFieldDirty(id: string, dirty: boolean) {
+		if (dirty) dirtyFields.add(id);
+		else dirtyFields.delete(id);
+	}
+
+	function clearRowDrafts(speakerProfileId: number) {
+		for (const field of SPEAKER_ROW_FIELDS) {
+			clearBrowserDraft(
+				localStorage,
+				speakerFieldScope(data.conference.slug, speakerProfileId, field),
+				data.user.id
+			);
+		}
+		clearBrowserDraft(
+			localStorage,
+			speakerNotesDraftScope(data.conference.slug, speakerProfileId),
+			data.user.id
+		);
+		dirtyFields.clear();
+	}
 
 	/**
 	 * The row control and the Add dialog: the status in the product's own casing.
@@ -167,6 +201,8 @@
 	<title>Speakers — {data.conference.name}</title>
 </svelte:head>
 
+<UnsavedGuard dirty={dirtyFields.size > 0} message={SPEAKER_ROW_LEAVE_PROMPT} />
+
 <div class="border-border bg-card border-b px-6 py-5">
 	<div class="flex flex-wrap items-start justify-between gap-4">
 		<div>
@@ -221,7 +257,7 @@
 				>
 					Add speaker
 				</Dialog.Trigger>
-				<Dialog.Content class="sm:max-w-lg">
+				<Dialog.Content class="sm:max-w-lg" data-testid="speakers-add-dialog">
 					<Dialog.Header>
 						<Dialog.Title>Add a speaker</Dialog.Title>
 						<Dialog.Description>
@@ -229,10 +265,16 @@
 						</Dialog.Description>
 					</Dialog.Header>
 					<AddSpeakerForm
+						slug={data.conference.slug}
+						owner={data.user.id}
+						commitToken={addCommit}
 						{statusOptions}
 						{busy}
 						{form}
-						enhanceForm={submitting('add', () => (addOpen = false))}
+						enhanceForm={submitting('add', () => {
+							addOpen = false;
+							addCommit += 1;
+						})}
 					/>
 				</Dialog.Content>
 			</Dialog.Root>
@@ -445,11 +487,7 @@
 										method="POST"
 										action="?/updateProfile"
 										use:enhance={submitting('edit', () => {
-											clearBrowserDraft(
-												localStorage,
-												speakerNotesDraftScope(data.conference.slug, speaker.speakerProfileId),
-												data.user.id
-											);
+											clearRowDrafts(speaker.speakerProfileId);
 										})}
 										class="grid max-w-3xl gap-3 sm:grid-cols-2"
 										data-testid="speaker-edit-form"
@@ -462,12 +500,20 @@
 											>
 												Name
 											</label>
-											<Input
+											<BrowserDraftInput
 												id="edit-name-{speaker.speakerProfileId}"
 												name="name"
-												value={speaker.name}
+												scope={speakerFieldScope(
+													data.conference.slug,
+													speaker.speakerProfileId,
+													'name'
+												)}
+												owner={data.user.id}
+												baseline={speaker.name}
 												required
-												data-testid="edit-name"
+												testId="edit-name"
+												ondirtychange={(dirty) =>
+													setFieldDirty(`name:${speaker.speakerProfileId}`, dirty)}
 											/>
 										</div>
 										<div>
@@ -477,12 +523,20 @@
 											>
 												Email
 											</label>
-											<Input
+											<BrowserDraftInput
 												id="edit-email-{speaker.speakerProfileId}"
 												name="email"
 												type="email"
-												value={speaker.email ?? ''}
-												data-testid="edit-email"
+												scope={speakerFieldScope(
+													data.conference.slug,
+													speaker.speakerProfileId,
+													'email'
+												)}
+												owner={data.user.id}
+												baseline={speaker.email ?? ''}
+												testId="edit-email"
+												ondirtychange={(dirty) =>
+													setFieldDirty(`email:${speaker.speakerProfileId}`, dirty)}
 											/>
 										</div>
 										<div>
@@ -492,11 +546,19 @@
 											>
 												Sort name
 											</label>
-											<Input
+											<BrowserDraftInput
 												id="edit-sortName-{speaker.speakerProfileId}"
 												name="sortName"
-												value={speaker.sortName}
-												data-testid="edit-sortName"
+												scope={speakerFieldScope(
+													data.conference.slug,
+													speaker.speakerProfileId,
+													'sortName'
+												)}
+												owner={data.user.id}
+												baseline={speaker.sortName}
+												testId="edit-sortName"
+												ondirtychange={(dirty) =>
+													setFieldDirty(`sortName:${speaker.speakerProfileId}`, dirty)}
 											/>
 										</div>
 										<div>
@@ -506,11 +568,19 @@
 											>
 												Job title
 											</label>
-											<Input
+											<BrowserDraftInput
 												id="edit-jobTitle-{speaker.speakerProfileId}"
 												name="jobTitle"
-												value={speaker.jobTitle ?? ''}
-												data-testid="edit-jobTitle"
+												scope={speakerFieldScope(
+													data.conference.slug,
+													speaker.speakerProfileId,
+													'jobTitle'
+												)}
+												owner={data.user.id}
+												baseline={speaker.jobTitle ?? ''}
+												testId="edit-jobTitle"
+												ondirtychange={(dirty) =>
+													setFieldDirty(`jobTitle:${speaker.speakerProfileId}`, dirty)}
 											/>
 										</div>
 										<div>
@@ -520,11 +590,19 @@
 											>
 												Company
 											</label>
-											<Input
+											<BrowserDraftInput
 												id="edit-company-{speaker.speakerProfileId}"
 												name="company"
-												value={speaker.company ?? ''}
-												data-testid="edit-company"
+												scope={speakerFieldScope(
+													data.conference.slug,
+													speaker.speakerProfileId,
+													'company'
+												)}
+												owner={data.user.id}
+												baseline={speaker.company ?? ''}
+												testId="edit-company"
+												ondirtychange={(dirty) =>
+													setFieldDirty(`company:${speaker.speakerProfileId}`, dirty)}
 											/>
 										</div>
 										<div class="sm:col-span-2">
