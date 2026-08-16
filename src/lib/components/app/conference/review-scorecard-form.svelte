@@ -174,7 +174,13 @@
 			baseline: draftBaseline,
 			parse: parseReviewDraft
 		});
-		if (saved.status === 'conflict') restoreConflict = saved.draft;
+		if (saved.status === 'conflict') {
+			// Same rule as the server write: a stale token is not a conflict
+			// when the parked text is already what is saved. Two identical
+			// versions must not force a choice.
+			if (sameReviewDraft(saved.draft.value, serverDraft)) forgetDraft();
+			else restoreConflict = saved.draft;
+		}
 		if (saved.status === 'current') {
 			comment = saved.draft.value.comment;
 			typed = { ...serverDraft.scores, ...saved.draft.value.scores };

@@ -67,6 +67,14 @@ describe('review draft identity', () => {
 		});
 		expect(assigned).not.toBe(submitted);
 	});
+
+	it('does not depend on the order the scores were written', () => {
+		expect(
+			reviewDraftBaseline({ status: 'assigned', comment: 'On time', scores: { 3: '4', 1: '2' } })
+		).toBe(
+			reviewDraftBaseline({ status: 'assigned', comment: 'On time', scores: { 1: '2', 3: '4' } })
+		);
+	});
 });
 
 function fakeStorage() {
@@ -110,5 +118,27 @@ describe('a review draft in the shared helper', () => {
 				now: 101
 			})
 		).toMatchObject({ status: 'conflict', draft: { value: draft, savedAt: 100 } });
+	});
+
+	it('does not treat an identical parked draft as a choice just because the token moved', () => {
+		const storage = fakeStorage();
+		writeBrowserDraft(storage, { scope, owner, baseline, value: draft, now: 100 });
+		const later = reviewDraftBaseline({
+			status: 'submitted',
+			comment: draft.comment,
+			scores: draft.scores
+		});
+		const saved = readBrowserDraft(storage, {
+			scope,
+			owner,
+			baseline: later,
+			parse: parseReviewDraft,
+			now: 101
+		});
+		expect(saved.status).toBe('conflict');
+		if (saved.status !== 'conflict') throw new Error('expected a token conflict');
+		// The helper only sees the token. The form drops this with sameReviewDraft
+		// — the same proposed===current rule the server write uses.
+		expect(sameReviewDraft(saved.draft.value, draft)).toBe(true);
 	});
 });
