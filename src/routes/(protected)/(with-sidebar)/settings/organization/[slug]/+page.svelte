@@ -301,8 +301,6 @@
 					<CardDescription>
 						{#if currentMember?.role === 'owner' && members.length > 1}
 							As the owner, you must transfer ownership to another member before leaving.
-						{:else if members.length === 1}
-							You are the only member. Leaving will delete this organization permanently.
 						{:else}
 							Are you sure you want to leave this organization?
 						{/if}

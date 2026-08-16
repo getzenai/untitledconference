@@ -26,6 +26,12 @@ export type OrganizationDeletionRequest = {
 	pendingInvitations: number;
 };
 
+/**
+ * Also the answer when the organization is not there at all: a non-member must
+ * not learn from the wording whether it exists.
+ */
+export const ONLY_OWNER_CAN_DELETE = 'Only the owner can delete this organization.';
+
 export type OrganizationDeletionVerdict =
 	| { ok: true }
 	| { ok: false; reason: string; field?: 'confirmName' };
@@ -41,7 +47,7 @@ export function checkOrganizationDeletion(
 	request: OrganizationDeletionRequest
 ): OrganizationDeletionVerdict {
 	if (!request.isOwner) {
-		return { ok: false, reason: 'Only the owner can delete this organization.' };
+		return { ok: false, reason: ONLY_OWNER_CAN_DELETE };
 	}
 
 	const blocker = firstBlocker(request);

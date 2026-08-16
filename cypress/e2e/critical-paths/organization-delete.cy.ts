@@ -55,6 +55,48 @@ describe('Deleting an organization', () => {
 		cy.get('[data-testid="delete-organization"]').should('be.disabled');
 	});
 
+	/**
+	 * The guards live on the form action, so the question is whether anything
+	 * else can delete. Better Auth's organization plugin publishes its own
+	 * `POST /api/auth/organization/delete`, and that handler checks session,
+	 * membership and the owner permission — then deletes, without ever seeing a
+	 * conference, a member, an invitation or the typed name.
+	 *
+	 * The first request is the control: a 404 on a closed path and a 404 on a
+	 * path that never existed look identical, so the neighbouring route has to
+	 * answer 200 from the same router first. And the refusal is not the 404 —
+	 * it is that the organization is still there afterwards.
+	 */
+	it('refuses the plugin route that would delete without the guards', () => {
+		const organizationName = `Router Org ${Date.now()}`;
+		cy.createAndLogin({ organizationName }).then(() => {
+			cy.setActiveOrganization(organizationName);
+		});
+
+		cy.request('/api/auth/organization/list').then((listed) => {
+			expect(listed.status, 'the organization router answers').to.eq(200);
+			const organization = listed.body.find(
+				(candidate: { name: string }) => candidate.name === organizationName
+			);
+			expect(organization, 'the organization exists to begin with').to.not.equal(undefined);
+
+			cy.request({
+				method: 'POST',
+				url: '/api/auth/organization/delete',
+				body: { organizationId: organization.id },
+				failOnStatusCode: false
+			})
+				.its('status')
+				.should('eq', 404);
+
+			cy.request('/api/auth/organization/list')
+				.its('body')
+				.should((organizations: { name: string }[]) => {
+					expect(organizations.map((candidate) => candidate.name)).to.include(organizationName);
+				});
+		});
+	});
+
 	it('deletes an empty organization once its name is typed exactly', () => {
 		const organizationName = `Gone Org ${Date.now()}`;
 		cy.createAndLogin({ organizationName }).then(() => {

@@ -244,7 +244,19 @@ function createAuth() {
 		// The jwt plugin's /token endpoint would let any session-cookie holder mint
 		// a signed JWT outside the OAuth consent flow. Access tokens must only be
 		// issued through /oauth2/token (PKCE + consent).
-		disabledPaths: ['/token'],
+		//
+		// /organization/delete is the organization plugin's own HTTP route, open by
+		// default. Its handler checks session, membership and the owner permission
+		// and then deletes — it never sees the conferences, members, invitations or
+		// typed name that `?/deleteOrganization` weighs first, and seven tables
+		// cascade off `organization.id` (#777). Closing it here is what makes the
+		// form action the *only* way in rather than merely the polite one.
+		//
+		// This list is applied in the router's `onRequest`, so it closes the HTTP
+		// route and nothing else: the action calls `auth.api.deleteOrganization`
+		// directly and is unaffected. Both halves are pinned by
+		// `organization-delete.cy.ts`.
+		disabledPaths: ['/token', '/organization/delete'],
 
 		// Undefined (Better Auth defaults) unless RELAX_AUTH_RATE_LIMIT is set,
 		// which only E2E runs do. See buildRateLimitConfig for the rationale.

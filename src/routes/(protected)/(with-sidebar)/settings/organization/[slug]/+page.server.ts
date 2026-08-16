@@ -1,8 +1,8 @@
 import { EventNames } from '$lib/analytics/event-names';
 import { auth } from '$lib/auth';
 import {
-	checkOrganizationDeletion,
-	LAST_MEMBER_CANNOT_LEAVE
+	LAST_MEMBER_CANNOT_LEAVE,
+	ONLY_OWNER_CAN_DELETE
 } from '$lib/conference/organization-delete';
 import { OrgAiWrapKeyMissingError } from '$lib/server/chat/org-ai-key';
 import {
@@ -13,6 +13,7 @@ import {
 } from '$lib/server/chat/org-ai-settings';
 import { ChatBackendUrlError } from '$lib/server/chat/org-ai-url';
 import { conferenceCountForOrganization } from '$lib/server/conference/access';
+import { deleteEmptyOrganization } from '$lib/server/conference/organization-delete';
 import { createLogger } from '$lib/server/logger';
 import { captureEvent } from '$lib/server/posthog';
 import { transferOwnershipSafely } from '$lib/server/utils/organization-transfer';
@@ -104,39 +105,6 @@ export const load: PageServerLoad = async ({ locals, request, params }) => {
 		throw redirect(303, '/settings/organization');
 	}
 };
-
-/**
- * Everything `checkOrganizationDeletion` needs, gathered in one place so the
- * action stays a decision rather than a query. `null` when the organization is
- * not one this user belongs to — indistinguishable from "not allowed", on
- * purpose.
- */
-async function organizationDeletionRequest(
-	headers: Headers,
-	organizationId: string,
-	userId: string,
-	typedName: string
-) {
-	const organizations = await auth.api.listOrganizations({ headers });
-	const organization = organizations?.find((org) => org.id === organizationId);
-	if (!organization) return null;
-
-	const [membersResponse, invitations, conferences] = await Promise.all([
-		auth.api.listMembers({ headers, query: { organizationId } }),
-		auth.api.listInvitations({ headers, query: { organizationId } }),
-		conferenceCountForOrganization(organizationId)
-	]);
-	const members = membersResponse?.members || [];
-
-	return {
-		name: organization.name,
-		typedName,
-		isOwner: members.find((m) => m.userId === userId)?.role === 'owner',
-		conferences,
-		otherMembers: members.filter((m) => m.userId !== userId).length,
-		pendingInvitations: (invitations || []).filter((inv) => inv.status === 'pending').length
-	};
-}
 
 export const actions: Actions = {
 	renameOrganization: async ({ request, locals }) => {
@@ -378,8 +346,9 @@ export const actions: Actions = {
 	 * Guarded rather than confirmed-and-hoped: `organization.id` is referenced
 	 * with `onDelete: 'cascade'` by conferences, speaker profiles, CRM rows,
 	 * members and invitations, so this is the most destructive button in the
-	 * product. `checkOrganizationDeletion` holds the rule; this action only
-	 * gathers the counts and carries out the verdict.
+	 * product. The rule lives in `checkOrganizationDeletion` and the counting,
+	 * judging and deleting happen together in `deleteEmptyOrganization`; this
+	 * action only turns the verdict into a response.
 	 */
 	deleteOrganization: async ({ request, locals }) => {
 		if (!locals.user) {
@@ -394,23 +363,18 @@ export const actions: Actions = {
 		}
 
 		try {
-			const headers = request.headers;
-			const request_ = await organizationDeletionRequest(
-				headers,
+			// Counted, judged and deleted in one transaction: a number read before
+			// the delete would only describe a moment that has passed (#792).
+			const verdict = await deleteEmptyOrganization({
 				organizationId,
-				locals.user.id,
+				userId: locals.user.id,
 				typedName
-			);
-			if (!request_) {
-				return fail(403, { error: 'Only the owner can delete this organization.' });
-			}
-
-			const verdict = checkOrganizationDeletion(request_);
+			});
 			if (!verdict.ok) {
-				return fail(400, { error: verdict.reason, deleteScope: true });
+				const notAllowed = verdict.reason === ONLY_OWNER_CAN_DELETE;
+				return fail(notAllowed ? 403 : 400, { error: verdict.reason, deleteScope: true });
 			}
 
-			await auth.api.deleteOrganization({ headers, body: { organizationId } });
 			captureEvent(
 				locals.user.id,
 				EventNames.ORGANIZATION_DELETED,
