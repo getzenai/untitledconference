@@ -16,10 +16,10 @@
 	 * of the list (#718) — see `ai-elements/conversation/` for why those are not
 	 * the same thing.
 	 *
-	 * The Chat instance and its ledger live in the launcher. Closing this
-	 * sheet unmounts it and must not drop the transcript. The refresh
-	 * effect lives next to them, not here. New chat is the only way to
-	 * empty it (#728).
+	 * The Chat instance, its ledger and the unsent input live in the
+	 * launcher. Closing this sheet unmounts it and must not drop the
+	 * transcript or a half-typed question. The refresh effect lives next
+	 * to them, not here. New chat is the only way to empty both (#728, #804).
 	 */
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -42,12 +42,17 @@
 
 	let {
 		open = $bindable(false),
+		input = $bindable(''),
 		chat,
 		ledger,
 		onclear
-	}: { open?: boolean; chat: Chat; ledger: AssistantLedger; onclear: () => void } = $props();
-
-	let input = $state('');
+	}: {
+		open?: boolean;
+		input?: string;
+		chat: Chat;
+		ledger: AssistantLedger;
+		onclear: () => void;
+	} = $props();
 	// Last message that already belonged to the stopped turn — never search
 	// earlier finished answers. Lives on the ledger so a close mid-stop
 	// still marks the turn when the sheet remounts.

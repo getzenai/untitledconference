@@ -37,5 +37,23 @@ describe('assistant hold', () => {
 		expect(hold.ledger.invalidated.size).toBe(0);
 		expect(hold.chat).toEqual({ id: 2 });
 		expect(hold.open).toBe(true);
+		expect(hold.input).toBe('');
+	});
+
+	it('close keeps a typed question; New chat empties it (#804)', () => {
+		const create = () => ({ id: 1 });
+		let hold = openAssistantHold(emptyAssistantHold(), create);
+		hold = { ...hold, input: 'half typed' };
+
+		hold = closeAssistantHold(hold);
+		expect(hold.open).toBe(false);
+		expect(hold.input).toBe('half typed');
+
+		hold = openAssistantHold(hold, create);
+		expect(hold.open).toBe(true);
+		expect(hold.input).toBe('half typed');
+
+		hold = clearAssistantHold(create);
+		expect(hold.input).toBe('');
 	});
 });
