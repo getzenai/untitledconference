@@ -34,7 +34,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, desc, eq, inArray, ne, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 
 /** "Thursday, 17 September" — the day-tab label the agenda and itinerary show. */
 function dayLabel(date: string): string {
@@ -432,6 +432,20 @@ export async function listDirectoryConferences(): Promise<PublicConferenceSummar
 }
 
 async function selectSummaries(where: SQL, now = new Date()): Promise<PublicConferenceSummary[]> {
+	// Smallest published-or-closed form id per conference — the same tiebreak
+	// `publishedFormFor` and `formOf` use (`orderBy(asc(id)).limit(1)`). A
+	// bare left join on conference_id would duplicate a conference that had
+	// two forms, and `call` could disagree with `/c/<slug>/cfp` (#709).
+	const firstForm = db
+		.select({
+			conferenceId: cfpFormTable.conferenceId,
+			formId: sql<number>`min(${cfpFormTable.id})`.as('form_id')
+		})
+		.from(cfpFormTable)
+		.where(inArray(cfpFormTable.status, ['published', 'closed']))
+		.groupBy(cfpFormTable.conferenceId)
+		.as('first_cfp_form');
+
 	const rows = await db
 		.select({
 			slug: conferenceTable.slug,
@@ -444,13 +458,8 @@ async function selectSummaries(where: SQL, now = new Date()): Promise<PublicConf
 			closesAt: cfpFormTable.closesAt
 		})
 		.from(conferenceTable)
-		.leftJoin(
-			cfpFormTable,
-			and(
-				eq(cfpFormTable.conferenceId, conferenceTable.id),
-				inArray(cfpFormTable.status, ['published', 'closed'])
-			)
-		)
+		.leftJoin(firstForm, eq(firstForm.conferenceId, conferenceTable.id))
+		.leftJoin(cfpFormTable, eq(cfpFormTable.id, firstForm.formId))
 		.where(where)
 		.orderBy(asc(conferenceTable.startsOn), asc(conferenceTable.name));
 
