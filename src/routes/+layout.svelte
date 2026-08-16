@@ -2,8 +2,9 @@
 	import { Toaster } from '$lib/components/ui/sonner';
 	import { ModeWatcher } from 'mode-watcher';
 	import ImpersonationBanner from '$lib/components/impersonation-banner.svelte';
-	import { afterNavigate } from '$app/navigation';
-	import { page } from '$app/state';
+	import { afterNavigate, beforeNavigate } from '$app/navigation';
+	import { page, updated } from '$app/state';
+	import { reloadIfBuildIsStale } from '$lib/navigation/stale-build';
 	import { capturePageview, identifyUser, initAnalytics } from '$lib/analytics/posthog';
 	import { locales, localizeHref } from '$lib/paraglide/runtime';
 	import { onMount } from 'svelte';
@@ -23,6 +24,17 @@
 		await initAnalytics(data.analytics);
 		capturePageview(window.location.href);
 	});
+
+	// When we deploy, the chunks this client would import are deleted. Rather
+	// than let the next click die on a 404 import, hand the URL to the browser
+	// and let it load the new build — the rule and the reasoning are in
+	// `$lib/navigation/stale-build`. `updated.current` is fed by the version poll
+	// configured in svelte.config.js.
+	beforeNavigate((navigation) =>
+		reloadIfBuildIsStale(navigation, updated.current, (url) => {
+			window.location.href = url.href;
+		})
+	);
 
 	// SvelteKit navigations do not reload the page, so pageviews are captured
 	// per navigation. The initial load is captured in onMount above.
