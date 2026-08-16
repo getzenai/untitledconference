@@ -13,7 +13,6 @@ import {
 	type SubmissionInput
 } from '$lib/server/conference/cfp-submission';
 import {
-	requireReviewer,
 	reviewedConferences,
 	reviewerSubmission,
 	reviewQueue,
@@ -28,10 +27,10 @@ import {
 } from '$lib/server/conference/speaker-profile';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
-import { isHttpError } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { McpContext } from '../context';
+import { reviewerConference } from '../reviewer';
 import { McpToolError, type AnyMcpToolDefinition } from '../tool-helpers';
 
 const slugField = z.string().min(1).describe('Conference slug.');
@@ -50,27 +49,6 @@ async function account(userId: string) {
 		.limit(1);
 	if (!row) throw new McpToolError('Your user account no longer exists.');
 	return row;
-}
-
-/**
- * `requireReviewer` throws a SvelteKit 404 — right for a route, wrong for a
- * tool. Same collapse as `organizerConference`: missing and not-yours are one
- * refusal, so the agent cannot learn which slugs exist elsewhere.
- */
-async function reviewerConference(slug: string, ctx: McpContext) {
-	try {
-		return await requireReviewer(ctx.userId, slug);
-	} catch (error) {
-		// Same rule as `organizerConference` (#684): only the refusal the guard
-		// raises on purpose becomes a refusal. Everything else — a lost
-		// connection above all — has to stay a failure, or the model reports it
-		// to the reviewer as a fact about their assignments.
-		if (!isHttpError(error)) throw error;
-		throw new McpToolError(
-			`No conference "${slug}" that you review for. ` +
-				'Call list_my_review_assignments to see the ones you can reach.'
-		);
-	}
 }
 
 function saveFailure(result: Awaited<ReturnType<typeof saveSubmission>>): never {
