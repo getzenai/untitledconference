@@ -1,6 +1,7 @@
 /**
  * Portal task comment drafts (#789): typed lines survive reload, a successful
- * send drops the copy, a refused send keeps it. Insert the body, do not set it —
+ * send drops the copy, a refused send keeps it, and a send on one file of a
+ * two-file task leaves the other box. Insert the body, do not set it —
  * `.invoke('val')` would hide an `<input>` that cannot hold the second line.
  */
 const uniqueSlug = () =>
@@ -33,10 +34,13 @@ function openTaskWithFile() {
 	cy.waitForHydration();
 }
 
+function commentBoxes() {
+	return cy.get('[data-testid^="task-comment-"]').filter(':not([data-testid$="-restored"])');
+}
+
 /** Type the lines. Setting `.val` would hide an `<input>` that cannot hold them. */
 function typeComment(lines: string[]) {
-	cy.get('[data-testid^="task-comment-"]')
-		.filter(':not([data-testid$="-restored"])')
+	commentBoxes()
 		.first()
 		.as('box')
 		.should('have.prop', 'tagName', 'TEXTAREA')
@@ -44,6 +48,16 @@ function typeComment(lines: string[]) {
 		.click()
 		.type(lines.join('{enter}'));
 	cy.get('@box').should('have.value', lines.join('\n'));
+}
+
+function typeInBox(index: number, lines: string[]) {
+	commentBoxes()
+		.eq(index)
+		.should('have.prop', 'tagName', 'TEXTAREA')
+		.clear()
+		.click()
+		.type(lines.join('{enter}'));
+	commentBoxes().eq(index).should('have.value', lines.join('\n'));
 }
 
 describe('Portal task comment drafts', () => {
@@ -110,5 +124,43 @@ describe('Portal task comment drafts', () => {
 			.first()
 			.should('have.value', lines.join('\n'));
 		cy.get('[data-testid$="-restored"]').should('be.visible');
+	});
+
+	/**
+	 * `contentFiles: [a, b]` is two tasks, not two boxes. Two files on one
+	 * task are versions — upload a second, then the page has two boxes.
+	 * Send the older one: a loop over every file, or a bump of `files[0]`,
+	 * would clear the latest box instead of leaving it.
+	 */
+	it('keeps a parked question on the other file of the same task', () => {
+		const stamp = Date.now();
+		const sent = [`Send the older file ${stamp}`];
+		const kept = [`Leave this standing ${stamp}`, `second line ${stamp}`];
+
+		openTaskWithFile();
+		cy.get('[data-testid="task-upload"]').selectFile({
+			contents: 'cypress/fixtures/slides.pdf',
+			fileName: `second-${stamp}.pdf`,
+			mimeType: 'application/pdf'
+		});
+		cy.get('[data-testid="file-open"]').should('have.length', 2);
+		commentBoxes().should('have.length', 2);
+
+		// Newest first. Type both, send the older — the one that is not `files[0]`.
+		typeInBox(0, kept);
+		typeInBox(1, sent);
+		commentBoxes().eq(1).closest('form').contains('button', 'Send to the programme team').click();
+		cy.contains(`Send the older file ${stamp}`).should('be.visible');
+
+		commentBoxes().eq(0).should('have.value', kept.join('\n'));
+		commentBoxes().eq(1).should('have.value', '');
+		cy.get('[data-testid$="-restored"]').should('not.exist');
+
+		cy.reload();
+		cy.waitForHydration();
+		commentBoxes().eq(0).should('have.value', kept.join('\n'));
+		commentBoxes().eq(1).should('have.value', '');
+		cy.get('[data-testid$="-restored"]').should('be.visible');
+		cy.contains(`Send the older file ${stamp}`).should('be.visible');
 	});
 });

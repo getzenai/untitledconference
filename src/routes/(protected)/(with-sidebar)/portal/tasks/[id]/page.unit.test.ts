@@ -360,6 +360,10 @@ describe('speaker task detail', () => {
 		expect(source).toContain('portalTaskCommentScope(task.id, file.id)');
 		expect(source).toContain('commitByFile[file.id]');
 		expect(source).toContain('commenting(file.id)');
+		// One writer, one file. A loop over `files` here would clear every box.
+		expect(source).toContain(
+			'commitByFile[deliverableId] = (commitByFile[deliverableId] ?? 0) + 1'
+		);
 		expect(source).toContain('rows={2}');
 		expect(source).toContain('PORTAL_TASK_COMMENT_LEAVE_PROMPT');
 		expect(source).toContain('UnsavedGuard');
@@ -369,5 +373,35 @@ describe('speaker task detail', () => {
 		expect(source).toContain('type="file"');
 		expect(source).toContain('name="file"');
 		expect(source).not.toContain('import { Textarea }');
+	});
+
+	it('gives each file on the task its own question box', () => {
+		const body = draw(task({ title: 'Upload slides', kind: 'file_request', status: 'submitted' }), [
+			{
+				id: 4,
+				filename: 'second.pdf',
+				contentType: 'application/pdf',
+				sizeBytes: 2048,
+				version: 2,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-02T12:00:00Z'),
+				comments: []
+			},
+			{
+				id: 8,
+				filename: 'slides.pdf',
+				contentType: 'application/pdf',
+				sizeBytes: 1024,
+				version: 1,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-01T12:00:00Z'),
+				comments: []
+			}
+		]);
+
+		expect(body).toContain('data-testid="task-comment-4"');
+		expect(body).toContain('data-testid="task-comment-8"');
+		expect(body).toContain('data-testid="speaker-question-form-4"');
+		expect(body).toContain('data-testid="speaker-question-form-8"');
 	});
 });
