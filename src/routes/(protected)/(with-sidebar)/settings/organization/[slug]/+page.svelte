@@ -4,6 +4,8 @@
 	import { enhance } from '$lib/forms/enhance';
 	import { formatStoredDay } from '$lib/components/app/date-value';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -37,6 +39,8 @@
 	let selectedNewOwner = $state('');
 	let isLeavingOrg = $state(false);
 	let isRenaming = $state(false);
+	let nameDirty = $state(false);
+	let nameCommit = $state(0);
 
 	let organization = $derived(data.organization);
 	let members = $derived(data.members || []);
@@ -78,6 +82,8 @@
 	<title>{pageTitle}</title>
 </svelte:head>
 
+<UnsavedGuard dirty={nameDirty} />
+
 <div class="container mx-auto max-w-6xl py-8">
 	<h1 class="mb-8 text-3xl font-bold">{organization?.name || 'Organization'}</h1>
 
@@ -97,6 +103,7 @@
 						return async ({ update }) => {
 							await update(formUpdateOptions('edit'));
 							await invalidateAll();
+							nameCommit += 1;
 							isRenaming = false;
 						};
 					}}
@@ -105,15 +112,18 @@
 					<Label for="organization-name">Organization Name</Label>
 					<input type="hidden" name="organizationId" value={organization?.id} />
 					<div class="flex gap-2">
-						<!-- Uncontrolled: the current name seeds the field, and the value is
-						     submitted with the form, so no local state is needed. -->
 						{#key organization?.id}
-							<Input
+							<BrowserDraftInput
 								id="organization-name"
 								name="name"
-								value={organization?.name ?? ''}
+								scope={`organization-name:${organization?.id ?? ''}`}
+								owner={data.user.id}
+								baseline={organization?.name ?? ''}
 								required
 								class="max-w-sm"
+								testId="organization-name"
+								commitToken={nameCommit}
+								ondirtychange={(dirty) => (nameDirty = dirty)}
 							/>
 						{/key}
 						<Button type="submit" variant="outline" disabled={isRenaming}>

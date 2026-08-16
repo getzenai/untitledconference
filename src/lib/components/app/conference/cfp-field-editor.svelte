@@ -18,6 +18,7 @@
 	 * source names.
 	 */
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import { FIELD_KINDS, parseOptions, type FieldDefinition } from '$lib/conference/form-definition';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -26,13 +27,19 @@
 		field,
 		fields,
 		formats,
-		tracks
+		tracks,
+		owner,
+		conferenceSlug,
+		ondirtychange
 	}: {
 		/** The field being edited, or `null` for the "add a field" form. */
 		field: FieldDefinition | null;
 		fields: FieldDefinition[];
 		formats: { id: number; name: string }[];
 		tracks: { id: number; name: string }[];
+		owner: string;
+		conferenceSlug: string;
+		ondirtychange?: (dirty: boolean) => void;
 	} = $props();
 
 	let kind = $state(field?.kind ?? FIELD_KINDS[0].value);
@@ -87,16 +94,35 @@
 	 */
 	const valueFor = (wanted: string) =>
 		field?.conditionSource === wanted ? (field?.conditionValue ?? '') : '';
+
+	const labelBaseline = $derived(field?.label ?? '');
+	const labelScope = $derived(`cfp-field-label:${conferenceSlug}:${field?.id ?? 'new'}`);
+	let labelCommit = $state(0);
+	const fieldKey = $derived(fields.map((entry) => entry.id).join(','));
+	// svelte-ignore state_referenced_locally
+	let lastFieldKey = fieldKey;
+
+	$effect(() => {
+		if (field !== null) return;
+		if (fieldKey === lastFieldKey) return;
+		lastFieldKey = fieldKey;
+		labelCommit += 1;
+	});
 </script>
 
 <div class="space-y-2">
 	<div class="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
-		<Input
+		<BrowserDraftInput
 			name="label"
-			value={field?.label ?? ''}
+			scope={labelScope}
+			{owner}
+			baseline={labelBaseline}
 			placeholder="Label"
 			aria-label="Label"
 			required
+			testId="cfp-field-label"
+			commitToken={labelCommit}
+			{ondirtychange}
 		/>
 		<AppSelect
 			name="kind"
