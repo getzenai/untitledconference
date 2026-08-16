@@ -76,6 +76,36 @@ describe('organization settings page', () => {
 		expect(html).not.toMatch(/id="org-ai-api-key"[^>]*value="[^"]+/);
 	});
 
+	/**
+	 * The scope of the address check is stated where the address is typed (#741).
+	 *
+	 * The assertion is on the two halves rather than the whole sentence: that we
+	 * say what we do, and that we say what is left over. A wording change should
+	 * be free; dropping either half should not be.
+	 */
+	it('says under the backend URL what the check covers and what it does not', () => {
+		const configured = {
+			...data,
+			aiSettings: {
+				configured: true,
+				baseUrl: 'https://api.openai.com/v1',
+				apiKeySuffix: '7f3a',
+				modelId: 'openai/gpt-4o'
+			}
+		};
+		const html = render(Page, { props: { data: configured as never, form: null } }).body;
+		// The markup wraps, so match the claim rather than the line breaks.
+		const text = html.replace(/\s+/g, ' ');
+
+		expect(html).toMatch(/id="org-ai-base-url-scope"/);
+		expect(html).toMatch(/aria-describedby="org-ai-base-url-scope"/);
+		// What we check.
+		expect(text).toContain('resolves inside a private network is refused');
+		// What we cannot, said as a fact about the backend rather than a disclaimer.
+		expect(text).toContain('between the check and the connection');
+		expect(text).not.toMatch(/no liability|not responsible|at your own risk/i);
+	});
+
 	it('tells a member only whether a backend is configured', () => {
 		const member = {
 			id: 'member-2',
