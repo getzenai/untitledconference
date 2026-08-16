@@ -17,6 +17,11 @@
 export const MAX_NAME = 120;
 /** A whole day. A session longer than that is a typo, not a format. */
 export const MAX_MINUTES = 24 * 60;
+export const MISSING_STRUCTURE_NAME = {
+	room: 'Give the room a name.',
+	track: 'Give the track a name.',
+	format: 'Give the format a name.'
+} as const;
 
 /**
  * The names in a block of text, one per line.
