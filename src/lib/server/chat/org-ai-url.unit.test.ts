@@ -185,7 +185,7 @@ describe('assertResolvedChatBackendUrl', () => {
 		expect(resolve).not.toHaveBeenCalled();
 	});
 
-	it('hands back the judged addresses so the connection can be bound to them', async () => {
+	it('hands back the judged addresses', async () => {
 		const resolve = resolvingTo('93.184.216.34', '2606:4700::1111');
 		await expect(
 			resolveCheckedChatBackendUrl('https://chat.example.com/v1', {

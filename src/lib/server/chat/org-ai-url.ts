@@ -11,11 +11,11 @@
  * and judges every answer, which is what stops a public name whose A record
  * points at `169.254.169.254`.
  *
- * One lookup is not a connection. `resolveCheckedChatBackendUrl` returns the
- * addresses it judged so the fetch layer can bind them to the request and
- * look the name up again at connect time — a second answer of `127.0.0.1`
- * or `169.254.169.254` is refused there, not after `fetch` has already
- * dialed it. See `org-ai-fetch.ts`.
+ * One lookup is not a connection. The fetch layer looks the name up
+ * again at connect time — a second answer of `127.0.0.1` or
+ * `169.254.169.254` is refused there, not after `fetch` has already
+ * dialed it. `fetch` then resolves the name a third time; this runtime
+ * cannot pin that hop to a judged address. See `org-ai-fetch.ts` and #741.
  */
 import { resolveHostAddresses, type ResolveHostAddresses } from './org-ai-dns';
 
@@ -127,9 +127,10 @@ function isAddressLiteral(host: string): boolean {
 /**
  * The URL after the address rules, plus the addresses those rules judged.
  *
- * `addresses` is what the connection is allowed to dial. An IP literal is
- * already that address; a name that had to be resolved carries every
- * public answer. Localhost outside production has nothing to pin.
+ * `addresses` are the ones this lookup judged. An IP literal is already
+ * that address; a name that had to be resolved carries every public
+ * answer. Localhost outside production has nothing to look up. They are
+ * not pinned to `fetch` — see `org-ai-fetch.ts`.
  */
 export type CheckedChatBackendUrl = {
 	href: string;
@@ -142,8 +143,7 @@ export type CheckedChatBackendUrl = {
  *
  * Fails closed: a host that will not resolve, or a resolver that will not
  * answer, is refused rather than passed through. The returned `addresses`
- * are the ones this lookup judged — bind them to the connection, do not
- * let `fetch` pick a new one.
+ * are the ones this lookup judged. They are not pinned to `fetch`.
  *
  * @param options.resolve Injected by the tests and by `org-ai-fetch.ts`;
  * defaults to the DNS-over-HTTPS resolver.

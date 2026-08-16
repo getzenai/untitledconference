@@ -8,8 +8,9 @@
  *
  * Every call is a real subrequest. The save path looks the name up once;
  * the fetch path looks it up twice per hop (judge, then connect) so a
- * record that flips to a private address between the two cannot be
- * dialed. They are not cached: a cache would widen exactly that window.
+ * record that flips to a private address between the two is refused
+ * before `fetch`. `fetch` still resolves a third time. They are not
+ * cached: a cache would widen exactly that window.
  */
 export type ResolveHostAddresses = (hostname: string) => Promise<string[]>;
 
