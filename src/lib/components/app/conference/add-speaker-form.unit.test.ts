@@ -58,10 +58,12 @@ describe('add speaker form', () => {
 		expect(body).toContain('That speaker is already on this conference roster.');
 	});
 
-	it('parks the four single-line fields with BrowserDraftInput and no leave prompt', () => {
+	it('parks the typed fields, including bio, with BrowserDraftInput and no leave prompt', () => {
 		expect(source).toContain('BrowserDraftInput');
 		expect(source).toContain('newSpeakerFieldScope');
 		expect(source).toContain('NEW_SPEAKER_FIELDS');
+		expect(source).toContain('scopes.bio');
+		expect(source).toContain('rows={2}');
 		expect(source).not.toContain("from '$lib/components/app/unsaved-guard.svelte'");
 	});
 });

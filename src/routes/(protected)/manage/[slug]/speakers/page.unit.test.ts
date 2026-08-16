@@ -275,12 +275,13 @@ describe('speaker roster page', () => {
 		}
 	});
 
-	it('parks the open row with BrowserDraftInput and a leave prompt, the dialog without one', () => {
-		expect(source).toContain('BrowserDraftInput');
-		expect(source).toContain('speakerFieldScope(');
+	it('parks the open row through the extracted form and a leave prompt, the dialog without one', () => {
+		expect(source).toContain('SpeakerRowEditForm');
+		expect(source).toContain('clearSpeakerRowDrafts');
 		expect(source).toContain('SPEAKER_ROW_LEAVE_PROMPT');
 		expect(source).toContain('UnsavedGuard');
 		expect(source).toContain('addCommit');
 		expect(source).toContain("result.type === 'success'");
+		expect(source).not.toContain('BrowserDraftInput');
 	});
 });

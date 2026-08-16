@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * A single-line field that parks what was typed in the browser (#761, #762, #766).
+	 * A named field that parks what was typed in the browser (#761, #762, #766).
 	 *
 	 * Same envelope as `browser-draft-textarea`: identity in the key, baseline
 	 * from the last saved value, `conflict` instead of a silent restore over
@@ -10,6 +10,7 @@
 	 */
 	import { onMount } from 'svelte';
 	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import {
 		clearBrowserDraft,
 		readBrowserDraft,
@@ -28,6 +29,7 @@
 		placeholder,
 		required = false,
 		maxlength,
+		rows,
 		testId,
 		'aria-label': ariaLabel,
 		commitToken = 0,
@@ -43,6 +45,8 @@
 		placeholder?: string;
 		required?: boolean;
 		maxlength?: number;
+		/** When set, this is a textarea with the same envelope as the input. */
+		rows?: number;
 		testId?: string;
 		'aria-label'?: string;
 		commitToken?: number;
@@ -161,17 +165,33 @@
 		</div>
 	{/if}
 
-	<Input
-		{id}
-		{name}
-		{type}
-		{placeholder}
-		{required}
-		{maxlength}
-		class="w-full"
-		aria-label={ariaLabel}
-		data-testid={testId}
-		bind:value
-		oninput={syncDraft}
-	/>
+	{#if rows}
+		<Textarea
+			{id}
+			{name}
+			{rows}
+			{placeholder}
+			{required}
+			{maxlength}
+			class="w-full"
+			aria-label={ariaLabel}
+			data-testid={testId}
+			bind:value
+			oninput={syncDraft}
+		/>
+	{:else}
+		<Input
+			{id}
+			{name}
+			{type}
+			{placeholder}
+			{required}
+			{maxlength}
+			class="w-full"
+			aria-label={ariaLabel}
+			data-testid={testId}
+			bind:value
+			oninput={syncDraft}
+		/>
+	{/if}
 </div>

@@ -23,6 +23,26 @@ describe('browser draft input', () => {
 		expect(body).toContain('value="Acme"');
 	});
 
+	it('can be a textarea that still seeds from the saved value', () => {
+		const body = render(BrowserDraftInput, {
+			props: {
+				scope: 'speaker-bio:devflow:5',
+				owner: 'user-1',
+				baseline: 'Builds things.',
+				name: 'bio',
+				id: 'edit-bio-5',
+				rows: 3,
+				testId: 'edit-bio'
+			}
+		}).body;
+
+		expect(body).toContain('<textarea');
+		expect(body).toContain('name="bio"');
+		expect(body).toContain('data-testid="edit-bio"');
+		expect(body).toContain('Builds things.');
+		expect(body).not.toContain('<input');
+	});
+
 	it('can be an email field', () => {
 		const body = render(BrowserDraftInput, {
 			props: {

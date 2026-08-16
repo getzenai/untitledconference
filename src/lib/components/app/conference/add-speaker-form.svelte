@@ -116,14 +116,16 @@
 	</div>
 	<div class="sm:col-span-2">
 		<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-bio">Bio</label>
-		<textarea
+		<BrowserDraftInput
 			id="add-bio"
 			name="bio"
-			rows="2"
-			autocomplete="off"
-			class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-			data-testid="add-bio"
-		></textarea>
+			scope={scopes.bio}
+			{owner}
+			baseline=""
+			rows={2}
+			testId="add-bio"
+			{commitToken}
+		/>
 	</div>
 	<div class="sm:col-span-2">
 		<Button type="submit" size="sm" disabled={busy} data-testid="add-submit">Add to roster</Button>

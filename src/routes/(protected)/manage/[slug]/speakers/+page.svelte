@@ -6,24 +6,20 @@
 	 * Filters in the URL so a search survives reload and can be pasted. Edits are
 	 * per-row forms rather than a drawer: organizers change one field and move on.
 	 *
-	 * The open row parks with BrowserDraftInput and a leave prompt. The add
+	 * The open row parks in `SpeakerRowEditForm` with a leave prompt. The add
 	 * dialog parks the same way, without a prompt — Escape is not a navigation.
 	 */
 	import { enhance } from '$lib/forms/enhance';
-	import { clearBrowserDraft } from '$lib/forms/browser-draft';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import {
-		SPEAKER_ROW_FIELDS,
 		SPEAKER_ROW_LEAVE_PROMPT,
-		speakerFieldScope,
-		speakerNotesDraftScope
+		clearSpeakerRowDrafts
 	} from '$lib/conference/speaker-notes-draft';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
-	import SpeakerNotesDraft from '$lib/components/app/conference/speaker-notes-draft.svelte';
+	import SpeakerRowEditForm from '$lib/components/app/conference/speaker-row-edit-form.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
-	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { humanise } from '$lib/components/status-badge.svelte';
 	import { tick } from 'svelte';
@@ -60,22 +56,6 @@
 	function setFieldDirty(id: string, dirty: boolean) {
 		if (dirty) dirtyFields.add(id);
 		else dirtyFields.delete(id);
-	}
-
-	function clearRowDrafts(speakerProfileId: number) {
-		for (const field of SPEAKER_ROW_FIELDS) {
-			clearBrowserDraft(
-				localStorage,
-				speakerFieldScope(data.conference.slug, speakerProfileId, field),
-				data.user.id
-			);
-		}
-		clearBrowserDraft(
-			localStorage,
-			speakerNotesDraftScope(data.conference.slug, speakerProfileId),
-			data.user.id
-		);
-		dirtyFields.clear();
 	}
 
 	/**
@@ -483,158 +463,23 @@
 						{#if editingId === speaker.speakerProfileId}
 							<tr class="bg-muted/20" data-testid="speaker-edit-row">
 								<td colspan="4" class="px-3 py-4">
-									<form
-										method="POST"
-										action="?/updateProfile"
-										use:enhance={submitting('edit', () => {
-											clearRowDrafts(speaker.speakerProfileId);
+									<SpeakerRowEditForm
+										slug={data.conference.slug}
+										owner={data.user.id}
+										{speaker}
+										{busy}
+										enhanceForm={submitting('edit', () => {
+											clearSpeakerRowDrafts(
+												localStorage,
+												data.conference.slug,
+												speaker.speakerProfileId,
+												data.user.id
+											);
+											dirtyFields.clear();
 										})}
-										class="grid max-w-3xl gap-3 sm:grid-cols-2"
-										data-testid="speaker-edit-form"
-									>
-										<input type="hidden" name="speakerProfileId" value={speaker.speakerProfileId} />
-										<div class="sm:col-span-2">
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-name-{speaker.speakerProfileId}"
-											>
-												Name
-											</label>
-											<BrowserDraftInput
-												id="edit-name-{speaker.speakerProfileId}"
-												name="name"
-												scope={speakerFieldScope(
-													data.conference.slug,
-													speaker.speakerProfileId,
-													'name'
-												)}
-												owner={data.user.id}
-												baseline={speaker.name}
-												required
-												testId="edit-name"
-												ondirtychange={(dirty) =>
-													setFieldDirty(`name:${speaker.speakerProfileId}`, dirty)}
-											/>
-										</div>
-										<div>
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-email-{speaker.speakerProfileId}"
-											>
-												Email
-											</label>
-											<BrowserDraftInput
-												id="edit-email-{speaker.speakerProfileId}"
-												name="email"
-												type="email"
-												scope={speakerFieldScope(
-													data.conference.slug,
-													speaker.speakerProfileId,
-													'email'
-												)}
-												owner={data.user.id}
-												baseline={speaker.email ?? ''}
-												testId="edit-email"
-												ondirtychange={(dirty) =>
-													setFieldDirty(`email:${speaker.speakerProfileId}`, dirty)}
-											/>
-										</div>
-										<div>
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-sortName-{speaker.speakerProfileId}"
-											>
-												Sort name
-											</label>
-											<BrowserDraftInput
-												id="edit-sortName-{speaker.speakerProfileId}"
-												name="sortName"
-												scope={speakerFieldScope(
-													data.conference.slug,
-													speaker.speakerProfileId,
-													'sortName'
-												)}
-												owner={data.user.id}
-												baseline={speaker.sortName}
-												testId="edit-sortName"
-												ondirtychange={(dirty) =>
-													setFieldDirty(`sortName:${speaker.speakerProfileId}`, dirty)}
-											/>
-										</div>
-										<div>
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-jobTitle-{speaker.speakerProfileId}"
-											>
-												Job title
-											</label>
-											<BrowserDraftInput
-												id="edit-jobTitle-{speaker.speakerProfileId}"
-												name="jobTitle"
-												scope={speakerFieldScope(
-													data.conference.slug,
-													speaker.speakerProfileId,
-													'jobTitle'
-												)}
-												owner={data.user.id}
-												baseline={speaker.jobTitle ?? ''}
-												testId="edit-jobTitle"
-												ondirtychange={(dirty) =>
-													setFieldDirty(`jobTitle:${speaker.speakerProfileId}`, dirty)}
-											/>
-										</div>
-										<div>
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-company-{speaker.speakerProfileId}"
-											>
-												Company
-											</label>
-											<BrowserDraftInput
-												id="edit-company-{speaker.speakerProfileId}"
-												name="company"
-												scope={speakerFieldScope(
-													data.conference.slug,
-													speaker.speakerProfileId,
-													'company'
-												)}
-												owner={data.user.id}
-												baseline={speaker.company ?? ''}
-												testId="edit-company"
-												ondirtychange={(dirty) =>
-													setFieldDirty(`company:${speaker.speakerProfileId}`, dirty)}
-											/>
-										</div>
-										<div class="sm:col-span-2">
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-bio-{speaker.speakerProfileId}"
-											>
-												Bio
-											</label>
-											<textarea
-												id="edit-bio-{speaker.speakerProfileId}"
-												name="bio"
-												rows="3"
-												class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-												data-testid="edit-bio">{speaker.bio ?? ''}</textarea
-											>
-										</div>
-										<div class="sm:col-span-2">
-											<SpeakerNotesDraft
-												slug={data.conference.slug}
-												speakerProfileId={speaker.speakerProfileId}
-												owner={data.user.id}
-												baseline={speaker.notes ?? ''}
-												fieldId={`edit-notes-${speaker.speakerProfileId}`}
-											/>
-										</div>
-										<div class="sm:col-span-2">
-											<Button type="submit" size="sm" disabled={busy} data-testid="edit-submit">
-												Save profile
-											</Button>
-										</div>
-									</form>
+										ondirtychange={(field, dirty) =>
+											setFieldDirty(`${field}:${speaker.speakerProfileId}`, dirty)}
+									/>
 								</td>
 							</tr>
 						{/if}

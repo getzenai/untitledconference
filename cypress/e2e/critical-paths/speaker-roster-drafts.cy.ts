@@ -32,19 +32,24 @@ describe('Speaker roster drafts', () => {
 		});
 	});
 
-	it('keeps a typed row name through a reload', () => {
-		const name = `ORGJOURNEY row-${Date.now()}`;
+	it('keeps a typed row name and bio through a reload', () => {
+		const stamp = Date.now();
+		const name = `ORGJOURNEY row-${stamp}`;
+		const bio = `ORGJOURNEY bio-${stamp}`;
 
 		cy.visit(`/manage/${slug}/speakers`);
 		cy.waitForHydration();
 		cy.get('[data-testid="speaker-edit-toggle"]').click();
 		cy.get('[data-testid="edit-name"]').clear().type(name);
+		cy.get('[data-testid="edit-bio"]').clear().type(bio);
 
 		cy.reload();
 		cy.waitForHydration();
 		cy.get('[data-testid="speaker-edit-toggle"]').click();
 		cy.get('[data-testid="edit-name"]').should('have.value', name);
+		cy.get('[data-testid="edit-bio"]').should('have.value', bio);
 		cy.get('[data-testid="edit-name-restored"]').should('be.visible');
+		cy.get('[data-testid="edit-bio-restored"]').should('be.visible');
 	});
 
 	it('keeps the typed add-speaker name after Escape, reopen, and reload, then clears on add', () => {
@@ -52,6 +57,7 @@ describe('Speaker roster drafts', () => {
 		const name = `ORGJOURNEY add-${stamp}`;
 		const email = `add-${stamp}@example.test`;
 		const company = `Acme-${stamp}`;
+		const bio = `ORGJOURNEY add-bio-${stamp}`;
 
 		cy.visit(`/manage/${slug}/speakers`);
 		cy.waitForHydration();
@@ -59,6 +65,7 @@ describe('Speaker roster drafts', () => {
 		cy.get('[data-testid="add-name"]').type(name);
 		cy.get('[data-testid="add-email"]').type(email);
 		cy.get('[data-testid="add-company"]').type(company);
+		cy.get('[data-testid="add-bio"]').type(bio);
 
 		const asked: string[] = [];
 		cy.on('window:confirm', (text) => {
@@ -73,6 +80,7 @@ describe('Speaker roster drafts', () => {
 		cy.get('[data-testid="add-name"]').should('have.value', name);
 		cy.get('[data-testid="add-email"]').should('have.value', email);
 		cy.get('[data-testid="add-company"]').should('have.value', company);
+		cy.get('[data-testid="add-bio"]').should('have.value', bio);
 
 		cy.reload();
 		cy.waitForHydration();
@@ -80,7 +88,9 @@ describe('Speaker roster drafts', () => {
 		cy.get('[data-testid="add-name"]').should('have.value', name);
 		cy.get('[data-testid="add-email"]').should('have.value', email);
 		cy.get('[data-testid="add-company"]').should('have.value', company);
+		cy.get('[data-testid="add-bio"]').should('have.value', bio);
 		cy.get('[data-testid="add-name-restored"]').should('be.visible');
+		cy.get('[data-testid="add-bio-restored"]').should('be.visible');
 
 		cy.get('[data-testid="add-submit"]').click();
 		cy.get('[data-testid="speakers-add-dialog"]').should('not.exist');
@@ -90,5 +100,6 @@ describe('Speaker roster drafts', () => {
 		cy.get('[data-testid="add-name"]').should('have.value', '');
 		cy.get('[data-testid="add-email"]').should('have.value', '');
 		cy.get('[data-testid="add-company"]').should('have.value', '');
+		cy.get('[data-testid="add-bio"]').should('have.value', '');
 	});
 });
