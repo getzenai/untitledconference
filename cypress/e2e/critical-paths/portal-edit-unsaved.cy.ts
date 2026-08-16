@@ -55,6 +55,11 @@ const typeUnsavedAbstract = (abstract: string) => {
 	cy.contains('a', 'Finish this proposal').click();
 	cy.location('pathname').should('match', /\/edit$/);
 	cy.waitForHydration();
+	cy.get('[data-testid="portal-edit-draft-hint"]').should(
+		'contain.text',
+		'Only your proposal edit will stay in this browser on this device.'
+	);
+	cy.get('[data-testid="portal-edit-draft-hint"]').should('not.contain.text', 'Drafts are saved');
 	cy.get('textarea[name="abstract"]').clear().type(abstract);
 	cy.window().its('localStorage').should(parkedCopy(abstract));
 };

@@ -37,6 +37,17 @@ describe('speaker draft edit (#614)', () => {
 		expect(body).not.toContain('Nobody has seen it');
 	});
 
+	it('says what stays above the fields, the same family as the public call (#816)', () => {
+		const body = draw('draft');
+
+		expect(body).toContain('data-testid="portal-edit-draft-hint"');
+		expect(body).toContain('Only your proposal edit will stay in this browser on this device.');
+		expect(body).not.toMatch(/Drafts are saved/i);
+		expect(body.indexOf('data-testid="portal-edit-draft-hint"')).toBeLessThan(
+			body.indexOf('<form')
+		);
+	});
+
 	it('does not use the draft claim once the proposal is in', () => {
 		const body = draw('in_review');
 

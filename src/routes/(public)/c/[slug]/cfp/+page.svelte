@@ -63,20 +63,21 @@
 	 * bio sitting in a browser that is plainly shared.
 	 */
 	const owner = $derived(data.user?.id ?? null);
-	const selectDraft = $derived(autosavedProposalIdentity(call.conference.slug, owner));
+	/** The server draft's id, only while this page is the second form (#815). */
+	const anotherId = $derived(startingAnother && existingDraft ? existingDraft.id : undefined);
+	const selectDraft = $derived(autosavedProposalIdentity(call.conference.slug, owner, anotherId));
 
-	onMount(() => {
-		const slug = data.call.conference.slug;
-		const mine = data.user?.id ?? null;
-		if (data.existing) {
-			// A server copy is the truth. A leftover local one would come back
-			// if this proposal were later withdrawn — and a leftover anonymous
-			// one is somebody else's, on a browser two people share.
-			clearAutosavedProposal(localStorage, slug, mine);
-			if (mine) clearAutosavedProposal(localStorage, slug, null);
-			listening = true;
-			return;
-		}
+	/** Reopen Start another when the second slot still holds typing (#815). */
+	function restoreAnotherProposal(slug: string, mine: string | null) {
+		if (data.existing?.status !== 'draft') return;
+		const next = readAutosavedProposal(localStorage, slug, mine, Date.now(), data.existing.id);
+		if (!next) return;
+		startingAnother = true;
+		restored = next.draft;
+		restoredAt = next.savedAt;
+	}
+
+	function restoreParkedProposal(slug: string, mine: string | null) {
 		// The server copy is written by the sign-up hook and survives the
 		// verification link opening in a new tab (#643). Consume the same-tab copy
 		// regardless, so the two handoff paths cannot become two future saves.
@@ -88,11 +89,28 @@
 			fromPending = true;
 			// It has made its trip; the anonymous slot is not a second copy.
 			clearAutosavedProposal(localStorage, slug, null);
-		} else {
+			return;
+		}
+		if (mine) clearAutosavedProposal(localStorage, slug, null);
+		const saved = readAutosavedProposal(localStorage, slug, mine);
+		restored = saved?.draft ?? null;
+		restoredAt = saved?.savedAt ?? null;
+	}
+
+	onMount(() => {
+		const slug = data.call.conference.slug;
+		const mine = data.user?.id ?? null;
+		if (data.existing) {
+			// A server copy is the truth for the first proposal. A leftover
+			// local one would come back if this proposal were later withdrawn
+			// — and a leftover anonymous one is somebody else's, on a browser
+			// two people share. The second-proposal slot is a different key;
+			// clearing the first must not throw that typing away (#815).
+			clearAutosavedProposal(localStorage, slug, mine);
 			if (mine) clearAutosavedProposal(localStorage, slug, null);
-			const saved = readAutosavedProposal(localStorage, slug, mine);
-			restored = saved?.draft ?? null;
-			restoredAt = saved?.savedAt ?? null;
+			restoreAnotherProposal(slug, mine);
+		} else {
+			restoreParkedProposal(slug, mine);
 		}
 		listening = true;
 	});
@@ -114,16 +132,19 @@
 
 	function persistDraft(draft: ProposalDraft) {
 		const slug = data.call.conference.slug;
-		if (data.existing) return;
+		// A server copy used to mean "do not park" — true for the first
+		// proposal, a lie for Start another, where the stay-hint is on the
+		// page and persist returned before writing (#815).
+		if (data.existing && anotherId == null) return;
 		if (!isTypedProposal(draft)) {
-			clearAutosavedProposal(localStorage, slug, owner);
+			clearAutosavedProposal(localStorage, slug, owner, anotherId);
 			return;
 		}
-		writeAutosavedProposal(localStorage, slug, owner, draft);
+		writeAutosavedProposal(localStorage, slug, owner, draft, Date.now(), anotherId);
 	}
 
 	function clearDraft() {
-		clearAutosavedProposal(localStorage, data.call.conference.slug, owner);
+		clearAutosavedProposal(localStorage, data.call.conference.slug, owner, anotherId);
 	}
 
 	/** "Not mine" — throw the parked copy away and start on an empty form. */

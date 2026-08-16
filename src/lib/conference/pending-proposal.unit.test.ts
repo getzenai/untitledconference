@@ -169,6 +169,36 @@ describe('autosaved proposal storage', () => {
 		);
 	});
 
+	it('parks a second proposal under a key the first draft does not share (#815)', () => {
+		const storage = fakeStorage();
+		const first = { ...draft, title: 'Continue this one' };
+		const second = { ...draft, title: 'A title the server has never seen' };
+
+		writeAutosavedProposal(storage, 'devflow', 'ada', first);
+		writeAutosavedProposal(storage, 'devflow', 'ada', second, Date.now(), 43);
+
+		expect(autosavedProposalIdentity('devflow', 'ada', 43)).toEqual({
+			scope: 'cfp-autosave:devflow:another:43',
+			owner: 'ada'
+		});
+		expect(autosavedProposalKey('devflow', 'ada')).not.toBe(
+			autosavedProposalKey('devflow', 'ada', 43)
+		);
+		expect(readAutosavedProposal(storage, 'devflow', 'ada')?.draft.title).toBe('Continue this one');
+		expect(readAutosavedProposal(storage, 'devflow', 'ada', Date.now(), 43)?.draft.title).toBe(
+			'A title the server has never seen'
+		);
+
+		clearAutosavedProposal(storage, 'devflow', 'ada');
+		expect(readAutosavedProposal(storage, 'devflow', 'ada')).toBeNull();
+		expect(readAutosavedProposal(storage, 'devflow', 'ada', Date.now(), 43)?.draft.title).toBe(
+			'A title the server has never seen'
+		);
+
+		clearAutosavedProposal(storage, 'devflow', 'ada', 43);
+		expect(readAutosavedProposal(storage, 'devflow', 'ada', Date.now(), 43)).toBeNull();
+	});
+
 	it('clears the parked format and track with the proposal blob (#801)', () => {
 		const storage = fakeStorage();
 		writeAutosavedProposal(storage, 'devflow', null, draft);

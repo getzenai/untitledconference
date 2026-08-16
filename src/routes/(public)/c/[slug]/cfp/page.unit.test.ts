@@ -241,6 +241,9 @@ describe('pointing a returning submitter at what they already sent', () => {
 		expect(body).toContain('/portal/submissions/43/edit');
 		expect(body).toContain('data-testid="cfp-start-another"');
 		expect(body).not.toContain('<form');
+		// The stay-hint belongs on the form it describes. Until Start another
+		// is clicked it would sit over Continue your draft and lie (#815).
+		expect(body).not.toContain('data-testid="cfp-draft-hint"');
 	});
 
 	it('says nothing when there is nothing to point at', () => {

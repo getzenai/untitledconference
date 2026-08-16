@@ -65,8 +65,14 @@ function cfpPendingScope(slug: string): string {
 	return `cfp-pending:${slug}`;
 }
 
-function cfpAutosaveScope(slug: string): string {
-	return `cfp-autosave:${slug}`;
+/**
+ * The first proposal on a call uses `cfp-autosave:${slug}`. A second one,
+ * started while a server draft already exists, cannot share that key — a
+ * reload would either wipe the new typing or overwrite the first copy (#815).
+ * `existingId` is that server draft, so the two slots cannot meet.
+ */
+function cfpAutosaveScope(slug: string, existingId?: number): string {
+	return existingId == null ? `cfp-autosave:${slug}` : `cfp-autosave:${slug}:another:${existingId}`;
 }
 
 function cfpAutosaveOwner(owner: DraftOwner): string {
@@ -76,28 +82,34 @@ function cfpAutosaveOwner(owner: DraftOwner): string {
 /** Format and track park beside the proposal blob, not inside a text field (#801). */
 const CFP_SELECT_FIELDS = ['sessionFormatId', 'trackId'] as const;
 
-function cfpSelectScope(slug: string, field: string): string {
-	return `${cfpAutosaveScope(slug)}:${field}`;
+function cfpSelectScope(slug: string, field: string, existingId?: number): string {
+	return `${cfpAutosaveScope(slug, existingId)}:${field}`;
 }
 
 /** Scope and owner the public call hands the two dropdowns. */
 export function autosavedProposalIdentity(
 	slug: string,
-	owner: DraftOwner
+	owner: DraftOwner,
+	existingId?: number
 ): { scope: string; owner: string } {
-	return { scope: cfpAutosaveScope(slug), owner: cfpAutosaveOwner(owner) };
+	return { scope: cfpAutosaveScope(slug, existingId), owner: cfpAutosaveOwner(owner) };
 }
 
-export function autosavedSelectKey(slug: string, owner: DraftOwner, field: string): string {
-	return browserDraftKey(cfpSelectScope(slug, field), cfpAutosaveOwner(owner));
+export function autosavedSelectKey(
+	slug: string,
+	owner: DraftOwner,
+	field: string,
+	existingId?: number
+): string {
+	return browserDraftKey(cfpSelectScope(slug, field, existingId), cfpAutosaveOwner(owner));
 }
 
 export function pendingProposalKey(slug: string): string {
 	return browserDraftKey(cfpPendingScope(slug), PENDING_OWNER);
 }
 
-export function autosavedProposalKey(slug: string, owner: DraftOwner): string {
-	return browserDraftKey(cfpAutosaveScope(slug), cfpAutosaveOwner(owner));
+export function autosavedProposalKey(slug: string, owner: DraftOwner, existingId?: number): string {
+	return browserDraftKey(cfpAutosaveScope(slug, existingId), cfpAutosaveOwner(owner));
 }
 
 function legacyPendingKey(slug: string): string {
@@ -353,16 +365,17 @@ export function writeAutosavedProposal(
 	slug: string,
 	owner: DraftOwner,
 	draft: ProposalDraft,
-	now: number = Date.now()
+	now: number = Date.now(),
+	existingId?: number
 ): void {
 	writeBrowserDraft(storage, {
-		scope: cfpAutosaveScope(slug),
+		scope: cfpAutosaveScope(slug, existingId),
 		owner: cfpAutosaveOwner(owner),
 		baseline: '',
 		value: draft,
 		now
 	});
-	storage.removeItem(legacyAutosavedKey(slug, owner));
+	if (existingId == null) storage.removeItem(legacyAutosavedKey(slug, owner));
 }
 
 /**
@@ -375,11 +388,12 @@ export function readAutosavedProposal(
 	storage: DraftStorage,
 	slug: string,
 	owner: DraftOwner,
-	now: number = Date.now()
+	now: number = Date.now(),
+	existingId?: number
 ): AutosavedProposal | null {
-	adoptLegacyAutosave(storage, slug, owner);
+	if (existingId == null) adoptLegacyAutosave(storage, slug, owner);
 	const saved = readBrowserDraft(storage, {
-		scope: cfpAutosaveScope(slug),
+		scope: cfpAutosaveScope(slug, existingId),
 		owner: cfpAutosaveOwner(owner),
 		baseline: '',
 		parse: parseProposalValue,
@@ -392,14 +406,15 @@ export function readAutosavedProposal(
 export function clearAutosavedProposal(
 	storage: Pick<Storage, 'removeItem'>,
 	slug: string,
-	owner: DraftOwner
+	owner: DraftOwner,
+	existingId?: number
 ): void {
 	const identity = cfpAutosaveOwner(owner);
-	clearBrowserDraft(storage, cfpAutosaveScope(slug), identity);
+	clearBrowserDraft(storage, cfpAutosaveScope(slug, existingId), identity);
 	for (const field of CFP_SELECT_FIELDS) {
-		clearBrowserDraft(storage, cfpSelectScope(slug, field), identity);
+		clearBrowserDraft(storage, cfpSelectScope(slug, field, existingId), identity);
 	}
-	storage.removeItem(legacyAutosavedKey(slug, owner));
+	if (existingId == null) storage.removeItem(legacyAutosavedKey(slug, owner));
 }
 
 /**
