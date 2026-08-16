@@ -3,6 +3,7 @@
  * the signed-in user's identity; authorization still lives in each shared
  * tool handler, exactly as it does for the bearer-token MCP route.
  */
+import { ASSISTANT_NAME_NOT_ID } from '$lib/chat/assistant-markdown';
 import { holdUntilResponseComplete } from '$lib/server/db/response-hold';
 import { ensureFeatureEnabled } from '$lib/server/feature-flags';
 import type { McpContext } from '$lib/server/mcp/context';
@@ -158,6 +159,8 @@ export function assistantSystemPrompt(page?: AssistantPageContext): string {
 		`conversation. Never put a goose aside in the sentence that asks for, confirms, or reports ` +
 		`a write. Do not force goose humour into routine answers. ` +
 		`When you use a tool, name it in the answer. ` +
+		ASSISTANT_NAME_NOT_ID +
+		' ' +
 		SERVER_INSTRUCTIONS
 	);
 }

@@ -121,6 +121,8 @@ describe('assistant chat', () => {
 		expect(prompt).toContain('untrusted navigation context');
 		expect(prompt).toContain('at most once per conversation');
 		expect(prompt).toContain('Never put a goose aside');
+		expect(prompt).toContain('Never mention internal database IDs');
+		expect(prompt).toContain('Main Stage');
 	});
 
 	it('drops a malformed page block without rejecting the request', async () => {
