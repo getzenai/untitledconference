@@ -26,7 +26,8 @@ export const EventNames = {
 	ORGANIZATION_MEMBER_REMOVED: 'organization_member_removed',
 	ORGANIZATION_MEMBER_ROLE_CHANGED: 'organization_member_role_changed',
 	ORGANIZATION_OWNERSHIP_TRANSFERRED: 'organization_ownership_transferred',
-	ORGANIZATION_LEFT: 'organization_left'
+	ORGANIZATION_LEFT: 'organization_left',
+	ORGANIZATION_DELETED: 'organization_deleted'
 } as const;
 
 export type EventName = (typeof EventNames)[keyof typeof EventNames];
