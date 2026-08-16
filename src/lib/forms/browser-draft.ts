@@ -34,6 +34,14 @@ function ownerKey(scope: string): string {
 	return `${OWNER_PREFIX}${part(scope)}`;
 }
 
+function removeBestEffort(storage: Pick<Storage, 'removeItem'>, key: string): void {
+	try {
+		storage.removeItem(key);
+	} catch {
+		// An unavailable safety copy must never interrupt the form itself.
+	}
+}
+
 /** Remove the previous identity's copy before this browser starts using the form as someone else. */
 function claimIdentity(
 	storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
@@ -56,15 +64,19 @@ export function writeBrowserDraft<T>(
 		now?: number;
 	}
 ): void {
-	claimIdentity(storage, options.scope, options.owner);
-	storage.setItem(
-		browserDraftKey(options.scope, options.owner),
-		JSON.stringify({
-			value: options.value,
-			baseline: options.baseline,
-			savedAt: options.now ?? Date.now()
-		} satisfies BrowserDraft<T>)
-	);
+	const serialized = JSON.stringify({
+		value: options.value,
+		baseline: options.baseline,
+		savedAt: options.now ?? Date.now()
+	} satisfies BrowserDraft<T>);
+
+	try {
+		claimIdentity(storage, options.scope, options.owner);
+		storage.setItem(browserDraftKey(options.scope, options.owner), serialized);
+	} catch {
+		// Browser storage is best-effort. A quota or privacy-mode refusal may
+		// remove the safety copy; it must never interrupt the form itself.
+	}
 }
 
 function parseEnvelope<T>(
@@ -97,22 +109,28 @@ export function readBrowserDraft<T>(
 		now?: number;
 	}
 ): BrowserDraftRead<T> {
-	claimIdentity(storage, options.scope, options.owner);
-	const key = browserDraftKey(options.scope, options.owner);
-	const raw = storage.getItem(key);
-	if (raw == null) return { status: 'empty' };
-
 	try {
-		const draft = parseEnvelope(raw, options.parse, options.now ?? Date.now());
-		if (!draft) {
-			storage.removeItem(key);
+		claimIdentity(storage, options.scope, options.owner);
+		const key = browserDraftKey(options.scope, options.owner);
+		const raw = storage.getItem(key);
+		if (raw == null) return { status: 'empty' };
+
+		try {
+			const draft = parseEnvelope(raw, options.parse, options.now ?? Date.now());
+			if (!draft) {
+				removeBestEffort(storage, key);
+				return { status: 'empty' };
+			}
+			return draft.baseline === options.baseline
+				? { status: 'current', draft }
+				: { status: 'conflict', draft };
+		} catch {
+			removeBestEffort(storage, key);
 			return { status: 'empty' };
 		}
-		return draft.baseline === options.baseline
-			? { status: 'current', draft }
-			: { status: 'conflict', draft };
 	} catch {
-		storage.removeItem(key);
+		// `getItem`, identity claiming and cleanup can all be refused by the
+		// browser. Treat an unavailable safety copy exactly like no copy.
 		return { status: 'empty' };
 	}
 }
@@ -122,13 +140,17 @@ export function clearBrowserDraft(
 	scope: string,
 	owner: string
 ): void {
-	storage.removeItem(browserDraftKey(scope, owner));
+	removeBestEffort(storage, browserDraftKey(scope, owner));
 }
 
 /** Logout boundary: no account-owned form text remains for the next browser user. */
 export function clearBrowserDrafts(storage: Pick<Storage, 'length' | 'key' | 'removeItem'>): void {
-	for (let index = storage.length - 1; index >= 0; index -= 1) {
-		const key = storage.key(index);
-		if (key?.startsWith(PREFIX) || key?.startsWith(OWNER_PREFIX)) storage.removeItem(key);
+	try {
+		for (let index = storage.length - 1; index >= 0; index -= 1) {
+			const key = storage.key(index);
+			if (key?.startsWith(PREFIX) || key?.startsWith(OWNER_PREFIX)) storage.removeItem(key);
+		}
+	} catch {
+		// Logout continues even when this browser does not expose storage.
 	}
 }
