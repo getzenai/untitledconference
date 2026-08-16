@@ -43,6 +43,10 @@ export type { PublicConferenceSummary };
  * checking layouts against its awkward cases, but a made-up conference on the
  * public index would be indistinguishable from a real one to anybody arriving at
  * the base URL — including a judge.
+ *
+ * Each row carries `call` from the same published-form + `callWindow` path the
+ * public CFP page uses for its 404, so the listing can mark an open call
+ * without comparing dates in the template (#709).
  */
 export async function publicConferenceDirectory(): Promise<PublicConferenceSummary[]> {
 	return listDirectoryConferences();

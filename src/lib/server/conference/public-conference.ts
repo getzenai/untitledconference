@@ -16,10 +16,15 @@
  * Ids are stringified at this boundary: the contract in `public-types` uses
  * strings so the interface never does arithmetic on a primary key.
  */
+import { directoryCall, type DirectoryCall } from '$lib/conference/call-window';
 import type { PublicConference, PublicSession, PublicSpeaker } from '$lib/conference/public-types';
 import { isPublishableUrl, parseSpeakerLinks } from '$lib/conference/speaker-links';
 import { db } from '$lib/server/db';
-import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	cfpFormTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceDayTable,
 	conferenceTable,
@@ -29,7 +34,7 @@ import {
 	trackTable
 } from '$lib/server/db/conference/conference-schema';
 import { placementTable } from '$lib/server/db/conference/program-schema';
-import { and, asc, desc, eq, inArray, ne, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 
 /** "Thursday, 17 September" — the day-tab label the agenda and itinerary show. */
 function dayLabel(date: string): string {
@@ -378,6 +383,12 @@ export type PublicConferenceSummary = {
 	/** Null when the organizer has not fixed dates yet — see PublicConference. */
 	startsOn: string | null;
 	endsOn: string | null;
+	/**
+	 * Whether `/c/<slug>/cfp` is taking submissions, exists but is shut, or 404s.
+	 * Same source as the public CFP page (`openCall` / `callWindow`), not a
+	 * second date comparison on the card (#709).
+	 */
+	call: DirectoryCall;
 };
 
 /**
@@ -420,16 +431,35 @@ export async function listDirectoryConferences(): Promise<PublicConferenceSummar
 	);
 }
 
-async function selectSummaries(where: SQL): Promise<PublicConferenceSummary[]> {
+async function selectSummaries(where: SQL, now = new Date()): Promise<PublicConferenceSummary[]> {
+	// Smallest published-or-closed form id per conference — the same tiebreak
+	// `publishedFormFor` and `formOf` use (`orderBy(asc(id)).limit(1)`). A
+	// bare left join on conference_id would duplicate a conference that had
+	// two forms, and `call` could disagree with `/c/<slug>/cfp` (#709).
+	const firstForm = db
+		.select({
+			conferenceId: cfpFormTable.conferenceId,
+			formId: sql<number>`min(${cfpFormTable.id})`.as('form_id')
+		})
+		.from(cfpFormTable)
+		.where(inArray(cfpFormTable.status, ['published', 'closed']))
+		.groupBy(cfpFormTable.conferenceId)
+		.as('first_cfp_form');
+
 	const rows = await db
 		.select({
 			slug: conferenceTable.slug,
 			name: conferenceTable.name,
 			venue: conferenceTable.venue,
 			startsOn: conferenceTable.startsOn,
-			endsOn: conferenceTable.endsOn
+			endsOn: conferenceTable.endsOn,
+			formStatus: cfpFormTable.status,
+			opensAt: cfpFormTable.opensAt,
+			closesAt: cfpFormTable.closesAt
 		})
 		.from(conferenceTable)
+		.leftJoin(firstForm, eq(firstForm.conferenceId, conferenceTable.id))
+		.leftJoin(cfpFormTable, eq(cfpFormTable.id, firstForm.formId))
 		.where(where)
 		.orderBy(asc(conferenceTable.startsOn), asc(conferenceTable.name));
 
@@ -438,6 +468,12 @@ async function selectSummaries(where: SQL): Promise<PublicConferenceSummary[]> {
 		name: row.name,
 		venue: row.venue,
 		startsOn: row.startsOn,
-		endsOn: row.endsOn
+		endsOn: row.endsOn,
+		call: directoryCall(
+			row.formStatus
+				? { opensAt: row.opensAt, closesAt: row.closesAt, status: row.formStatus }
+				: null,
+			now
+		)
 	}));
 }

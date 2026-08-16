@@ -17,6 +17,7 @@
  */
 import { db } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
+import { cfpFormTable } from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -129,7 +130,29 @@ describe('listDirectoryConferences', () => {
 			name: 'Sooner Conf',
 			venue: 'Hall A',
 			startsOn: '2027-05-12',
-			endsOn: '2027-05-12'
+			endsOn: '2027-05-12',
+			call: 'none'
 		});
+	});
+
+	it('uses the oldest published form when a conference has two (#709)', async () => {
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, laterSlug))
+			.limit(1);
+
+		// First id is closed; the later one is open. `publishedFormFor` reads the
+		// first. A join that kept both would list this conference twice and might
+		// mark the call open.
+		await db.insert(cfpFormTable).values([
+			{ conferenceId: conference.id, title: 'First', status: 'closed' },
+			{ conferenceId: conference.id, title: 'Second', status: 'published' }
+		]);
+
+		const rows = (await listDirectoryConferences()).filter((c) => c.slug === laterSlug);
+
+		expect(rows).toHaveLength(1);
+		expect(rows[0].call).toBe('closed');
 	});
 });

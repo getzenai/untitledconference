@@ -14,7 +14,9 @@ import type { PageServerLoad } from './$types';
  *
  * It lists rather than redirects to the single conference on purpose. The app is
  * multi-tenant — a redirect would have to pick a favourite, and would start
- * lying the moment a second organizer published.
+ * lying the moment a second organizer published. Each row carries `call` so
+ * the page can mark an open CFP and aim *Explore a live conference* at one
+ * without inventing a second window check (#709).
  *
  * `?home=0` is the way back out (#237). The redirect stays the default — that part
  * was right — but a signed-in user who follows a link to the product page, or wants

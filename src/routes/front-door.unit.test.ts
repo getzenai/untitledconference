@@ -37,7 +37,8 @@ describe('the front door', () => {
 				name: 'DevFlow Conf 2027',
 				venue: 'Hall A',
 				startsOn: '2027-05-12',
-				endsOn: '2027-05-13'
+				endsOn: '2027-05-13',
+				call: 'open'
 			}
 		]);
 
@@ -50,7 +51,8 @@ describe('the front door', () => {
 					name: 'DevFlow Conf 2027',
 					venue: 'Hall A',
 					startsOn: '2027-05-12',
-					endsOn: '2027-05-13'
+					endsOn: '2027-05-13',
+					call: 'open'
 				}
 			]
 		});
@@ -102,7 +104,10 @@ describe('the front page a visitor sees', () => {
 	// The loader tests above pass just as well against the old page, which was a
 	// bare conference index. These pin what #5 actually asked for: the pitch, the
 	// way in, and — still — a link to every published conference.
-	const renderFrontPage = (conferences: { slug: string; name: string }[], user?: { id: string }) =>
+	const renderFrontPage = (
+		conferences: { slug: string; name: string; call?: 'open' | 'closed' | 'none' }[],
+		user?: { id: string }
+	) =>
 		render(Page, {
 			props: {
 				data: {
@@ -116,6 +121,7 @@ describe('the front page a visitor sees', () => {
 						venue: 'Hall A',
 						startsOn: '2027-05-12',
 						endsOn: '2027-05-13',
+						call: 'none' as const,
 						...c
 					}))
 				}
@@ -177,5 +183,33 @@ describe('the front page a visitor sees', () => {
 
 		expect(body).toContain('Run the whole conference.');
 		expect(body).toContain('Nothing published yet.');
+	});
+
+	it('points Explore a live conference at an open call, not the first card (#709)', () => {
+		const body = renderFrontPage([
+			{ slug: 'ai-engineer-summit-2025', name: 'AI Engineer Summit 2025', call: 'none' },
+			{ slug: 'devflow-conf-2027', name: 'DevFlow Conf 2027', call: 'open' }
+		]);
+
+		expect(body).toContain('Explore a live conference');
+		expect(body).toContain('href="/c/devflow-conf-2027"');
+		expect(body).toContain('Call open');
+		// The first listed card is still linked as proof — just not as the live CTA.
+		expect(body).toContain('href="/c/ai-engineer-summit-2025"');
+		const live = body.indexOf('Explore a live conference');
+		const liveHref = body.lastIndexOf('href="/c/devflow-conf-2027"', live);
+		expect(liveHref).toBeGreaterThan(-1);
+		expect(body.slice(liveHref, live)).not.toContain('href="/c/ai-engineer-summit-2025"');
+	});
+
+	it('does not call a finished programme live when no call is open (#709)', () => {
+		const body = renderFrontPage([
+			{ slug: 'ai-engineer-summit-2025', name: 'AI Engineer Summit 2025', call: 'closed' }
+		]);
+
+		expect(body).not.toContain('Explore a live conference');
+		expect(body).not.toContain('Call open');
+		expect(body).toContain('See a published conference');
+		expect(body).toContain('href="#live-events"');
 	});
 });

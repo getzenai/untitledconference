@@ -10,10 +10,10 @@
 	import RouteIcon from '@lucide/svelte/icons/route';
 	import UsersRoundIcon from '@lucide/svelte/icons/users-round';
 	import Goose from '$lib/components/goose.svelte';
+	import LandingConferenceCard from '$lib/components/landing-conference-card.svelte';
 	import LandingHeader from '$lib/components/landing-header.svelte';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
-	import { formatDateRange } from '$lib/conference/public-view';
 	import { REPO_URL } from '$lib/constants';
 
 	let { data } = $props();
@@ -26,6 +26,16 @@
 	 * app, and the product page is out of reach again.
 	 */
 	const selfHref = $derived(data.user ? '/?home=0' : '/');
+
+	/**
+	 * The conference a "live" CTA may name (#709).
+	 *
+	 * `call` is computed with the same `openCall` / `callWindow` rule the CFP
+	 * page 404s on. The template does not compare dates; it only looks for
+	 * `open`. No open call means this is null — the button must not say *live*
+	 * and must not point at a finished programme.
+	 */
+	const live = $derived(data.conferences.find((conference) => conference.call === 'open'));
 </script>
 
 <svelte:head>
@@ -108,9 +118,13 @@
 							Create your conference
 							<ArrowRightIcon />
 						</Button>
-						{#if data.conferences.length > 0}
-							<Button href="/c/{data.conferences[0].slug}" variant="outline" size="lg">
+						{#if live}
+							<Button href="/c/{live.slug}" variant="outline" size="lg">
 								Explore a live conference
+							</Button>
+						{:else if data.conferences.length > 0}
+							<Button href="#live-events" variant="outline" size="lg">
+								See a published conference
 							</Button>
 						{:else}
 							<Button href={REPO_URL} variant="outline" size="lg">
@@ -438,25 +452,7 @@
 				{:else}
 					<ul class="mt-10 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{#each data.conferences as conference (conference.slug)}
-							{@const dates = formatDateRange(conference)}
-							<li>
-								<a
-									href="/c/{conference.slug}"
-									class="border-border bg-background hover:border-foreground/30 group flex h-full flex-col rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
-								>
-									<div class="flex items-start justify-between gap-4">
-										<CalendarDaysIcon class="text-muted-foreground size-5" /><ArrowRightIcon
-											class="text-muted-foreground size-4 transition-transform group-hover:translate-x-1"
-										/>
-									</div>
-									<h3 class="mt-8 font-semibold">{conference.name}</h3>
-									<p class="text-muted-foreground mt-2 text-sm">
-										{#if dates}{dates}{/if}{#if dates && conference.venue}<span class="px-1.5"
-												>·</span
-											>{/if}{#if conference.venue}{conference.venue}{/if}
-									</p>
-								</a>
-							</li>
+							<LandingConferenceCard {conference} />
 						{/each}
 					</ul>
 				{/if}
