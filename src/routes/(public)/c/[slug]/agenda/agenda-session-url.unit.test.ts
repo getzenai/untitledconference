@@ -4,7 +4,8 @@
  */
 import type { PublicConference } from '$lib/conference/public-types';
 import { render } from 'svelte/server';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import Page from './+page.svelte';
 
 const currentUrl = vi.hoisted(() => ({
 	value: new URL('https://example.test/c/short-cards/agenda')
@@ -50,17 +51,6 @@ const conference = {
 	],
 	speakers: []
 } satisfies PublicConference;
-
-/**
- * Compiled once, in a hook, on purpose: the first `import()` costs ~5.2s of
- * Vite compile while the render it times takes ~7ms, and the 5000ms default
- * sits inside that spread (#770). A hook has its own budget.
- */
-let Page: (typeof import('./+page.svelte'))['default'];
-
-beforeAll(async () => {
-	({ default: Page } = await import('./+page.svelte'));
-});
 
 function draw(search = '') {
 	currentUrl.value = new URL(`https://example.test/c/short-cards/agenda${search}`);
