@@ -30,6 +30,7 @@
 		ConversationScrollButton,
 		MessageAnchor
 	} from '$lib/components/ai-elements/conversation';
+	import { Message, MessageContent } from '$lib/components/ai-elements/message';
 	import { groupMessageParts, ToolGroup, type GenericPart } from '$lib/components/ai-elements/tool';
 	import { page } from '$app/state';
 	import type { AssistantLedger } from '$lib/chat/assistant-ledger';
@@ -150,62 +151,61 @@
 
 		<Conversation class="flex-1">
 			<ConversationContent class="px-4">
-				<ul class="flex flex-col gap-3" data-testid="assistant-messages">
+				<ul class="flex flex-col gap-5" data-testid="assistant-messages">
 					{#each chat.messages as message (message.id)}
 						<li class="text-sm" data-role={message.role}>
 							<MessageAnchor>
-								<div class="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-									{message.role === 'user' ? 'You' : 'Assistant'}
-								</div>
-								<div class="mt-1 flex flex-col gap-1.5">
-									{#each groupMessageParts(message.parts as GenericPart[]) as segment, segmentIndex (segmentIndex)}
-										{#if segment.kind === 'tool-group'}
-											<ToolGroup parts={segment.parts} streaming={pending} />
-										{:else}
-											{@const part = message.parts[segment.index]}
-											{#if part.type === 'text' && part.text}
-												<AssistantReply text={part.text} />
-											{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
-												<div
-													class="border-border bg-background rounded-md border p-3"
-													data-testid="assistant-approval"
-												>
-													<p class="font-medium">{toolLabel(getToolName(part))}</p>
-													<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-														{#each toolInputLines(part.input) as line (line.key)}
-															<dt class="text-muted-foreground">{line.key}</dt>
-															<dd class="break-words">{line.value}</dd>
-														{/each}
-													</dl>
-													<div class="mt-2 flex gap-2">
-														<Button
-															type="button"
-															size="sm"
-															data-testid="assistant-approve"
-															onclick={() => decide(part.approval.id, true)}
-														>
-															Do it
-														</Button>
-														<Button
-															type="button"
-															size="sm"
-															variant="outline"
-															data-testid="assistant-deny"
-															onclick={() => decide(part.approval.id, false)}
-														>
-															Don't
-														</Button>
+								<Message from={message.role}>
+									<MessageContent>
+										{#each groupMessageParts(message.parts as GenericPart[]) as segment, segmentIndex (segmentIndex)}
+											{#if segment.kind === 'tool-group'}
+												<ToolGroup parts={segment.parts} streaming={pending} />
+											{:else}
+												{@const part = message.parts[segment.index]}
+												{#if part.type === 'text' && part.text}
+													<AssistantReply text={part.text} />
+												{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
+													<div
+														class="border-border bg-background rounded-md border p-3"
+														data-testid="assistant-approval"
+													>
+														<p class="font-medium">{toolLabel(getToolName(part))}</p>
+														<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+															{#each toolInputLines(part.input) as line (line.key)}
+																<dt class="text-muted-foreground">{line.key}</dt>
+																<dd class="break-words">{line.value}</dd>
+															{/each}
+														</dl>
+														<div class="mt-2 flex gap-2">
+															<Button
+																type="button"
+																size="sm"
+																data-testid="assistant-approve"
+																onclick={() => decide(part.approval.id, true)}
+															>
+																Do it
+															</Button>
+															<Button
+																type="button"
+																size="sm"
+																variant="outline"
+																data-testid="assistant-deny"
+																onclick={() => decide(part.approval.id, false)}
+															>
+																Don't
+															</Button>
+														</div>
 													</div>
-												</div>
+												{/if}
 											{/if}
+										{/each}
+										{#if ledger.stopped.has(message.id)}
+											<p class="text-muted-foreground text-xs" data-testid="assistant-stopped">
+												Stopped
+											</p>
 										{/if}
-									{/each}
-									{#if ledger.stopped.has(message.id)}
-										<p class="text-muted-foreground text-xs" data-testid="assistant-stopped">
-											Stopped
-										</p>
-									{/if}
-								</div>
+									</MessageContent>
+								</Message>
 							</MessageAnchor>
 						</li>
 					{/each}
