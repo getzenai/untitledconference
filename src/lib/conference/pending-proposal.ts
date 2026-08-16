@@ -10,10 +10,11 @@
  * become a second automatic save. Callers pass sessionStorage, because that
  * trip is same-tab.
  *
- * The autosaved draft is the sentence on the call (#494): "Drafts are saved."
- * Written as they type, read (not consumed) when they come back, cleared when
- * a save actually lands. Callers pass localStorage — closing the tab is
- * exactly the thing the sentence said they could do.
+ * The autosaved draft is the sentence on the call (#494, #801): what they
+ * filled in stays in this browser. Written as they type or choose, read
+ * (not consumed) when they come back, cleared when a save actually lands.
+ * Callers pass localStorage — closing the tab is exactly the thing the
+ * sentence said they could do.
  *
  * Owner, age, and "empty form is not a draft" live in the helper. A shared
  * browser dropping the previous identity's copy is the helper too (#505).
@@ -70,6 +71,25 @@ function cfpAutosaveScope(slug: string): string {
 
 function cfpAutosaveOwner(owner: DraftOwner): string {
 	return owner ?? ANONYMOUS_BROWSER_DRAFT_OWNER;
+}
+
+/** Format and track park beside the proposal blob, not inside a text field (#801). */
+const CFP_SELECT_FIELDS = ['sessionFormatId', 'trackId'] as const;
+
+function cfpSelectScope(slug: string, field: string): string {
+	return `${cfpAutosaveScope(slug)}:${field}`;
+}
+
+/** Scope and owner the public call hands the two dropdowns. */
+export function autosavedProposalIdentity(
+	slug: string,
+	owner: DraftOwner
+): { scope: string; owner: string } {
+	return { scope: cfpAutosaveScope(slug), owner: cfpAutosaveOwner(owner) };
+}
+
+export function autosavedSelectKey(slug: string, owner: DraftOwner, field: string): string {
+	return browserDraftKey(cfpSelectScope(slug, field), cfpAutosaveOwner(owner));
 }
 
 export function pendingProposalKey(slug: string): string {
@@ -374,7 +394,11 @@ export function clearAutosavedProposal(
 	slug: string,
 	owner: DraftOwner
 ): void {
-	clearBrowserDraft(storage, cfpAutosaveScope(slug), cfpAutosaveOwner(owner));
+	const identity = cfpAutosaveOwner(owner);
+	clearBrowserDraft(storage, cfpAutosaveScope(slug), identity);
+	for (const field of CFP_SELECT_FIELDS) {
+		clearBrowserDraft(storage, cfpSelectScope(slug, field), identity);
+	}
 	storage.removeItem(legacyAutosavedKey(slug, owner));
 }
 

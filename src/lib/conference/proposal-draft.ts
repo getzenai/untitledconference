@@ -25,6 +25,43 @@ export type ProposalDraft = {
 	coSpeakers: { name: string; email: string; roleLabel: string }[];
 };
 
+/** `Number(value) || null` treats `0` as empty; ids are integers. */
+export function parseOptionalId(value: string): number | null {
+	if (!value) return null;
+	const parsed = Number(value);
+	return Number.isInteger(parsed) ? parsed : null;
+}
+
+/** Empty stays an option so a picked format or track can be cleared. */
+export const NONE_SELECT_OPTION = { value: '', label: '—' };
+
+export const YES_NO_OPTIONS = [
+	NONE_SELECT_OPTION,
+	{ value: 'true', label: 'Yes' },
+	{ value: 'false', label: 'No' }
+];
+
+export function formatSelectOptions(
+	formats: { id: number; name: string; minutes: number | null }[]
+): { value: string; label: string }[] {
+	return [
+		NONE_SELECT_OPTION,
+		...formats.map((format) => ({
+			value: String(format.id),
+			label: format.minutes ? `${format.name} (${format.minutes} min)` : format.name
+		}))
+	];
+}
+
+export function trackSelectOptions(
+	tracks: { id: number; name: string }[]
+): { value: string; label: string }[] {
+	return [
+		NONE_SELECT_OPTION,
+		...tracks.map((track) => ({ value: String(track.id), label: track.name }))
+	];
+}
+
 export function emptyProposal(): ProposalDraft {
 	return {
 		title: '',

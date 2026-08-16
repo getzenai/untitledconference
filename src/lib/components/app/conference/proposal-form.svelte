@@ -15,7 +15,7 @@
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
-	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftSelect from '$lib/components/app/browser-draft-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
@@ -32,7 +32,13 @@
 		type AnswerContext,
 		type FieldDefinition
 	} from '$lib/conference/form-definition';
-	import type { ProposalDraft } from '$lib/conference/proposal-draft';
+	import {
+		formatSelectOptions,
+		parseOptionalId,
+		trackSelectOptions,
+		YES_NO_OPTIONS,
+		type ProposalDraft
+	} from '$lib/conference/proposal-draft';
 	import ProposalAuthActions from './proposal-auth-actions.svelte';
 
 	type Props = {
@@ -71,6 +77,8 @@
 		onDraftChange?: (draft: ProposalDraft) => void;
 		/** A save that landed. The parked copy can go. */
 		onCommitted?: () => void;
+		/** Park chosen dropdowns. `BrowserDraftInput` cannot wrap `AppSelect` (#801). */
+		draft?: { scope: string; owner: string };
 	};
 
 	let {
@@ -86,7 +94,8 @@
 		onSignIn,
 		autoAction = null,
 		onDraftChange,
-		onCommitted
+		onCommitted,
+		draft
 	}: Props = $props();
 
 	let title = $state(initial.title);
@@ -129,30 +138,8 @@
 	 * organizer removed.
 	 */
 	const pairClass = (both: boolean) => (both ? 'grid gap-4 sm:grid-cols-2' : 'grid gap-4');
-
-	/**
-	 * The empty option stays an option, and is not folded into the placeholder.
-	 *
-	 * Neither format nor track is required, so "no answer" has to remain
-	 * reachable after one has been picked — a placeholder only shows while
-	 * nothing is chosen and offers no way back to it.
-	 */
-	const none = { value: '', label: '—' };
-
-	const formatOptions = $derived([
-		none,
-		...formats.map((format) => ({
-			value: String(format.id),
-			label: format.minutes ? `${format.name} (${format.minutes} min)` : format.name
-		}))
-	]);
-
-	const trackOptions = $derived([
-		none,
-		...tracks.map((track) => ({ value: String(track.id), label: track.name }))
-	]);
-
-	const YES_NO = [none, { value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }];
+	const formatOptions = $derived(formatSelectOptions(formats));
+	const trackOptions = $derived(trackSelectOptions(tracks));
 
 	/**
 	 * The sort key is a guess until someone corrects it, and it stops being one the
@@ -254,7 +241,6 @@
 		});
 	});
 
-	// Withheld until restore: an empty first paint must not wipe the parked draft.
 	$effect(() => {
 		onDraftChange?.({
 			title,
@@ -394,14 +380,17 @@
 				{#if asked('sessionFormatId')}
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Session format</span>
-						<AppSelect
+						<BrowserDraftSelect
+							scope={draft ? `${draft.scope}:sessionFormatId` : ''}
+							owner={draft?.owner ?? ''}
+							baseline=""
 							name="sessionFormatId"
 							class="mt-1"
 							aria-label="Session format"
 							placeholder="—"
-							value={initial.sessionFormatId ? String(initial.sessionFormatId) : ''}
+							value={sessionFormatId ? String(sessionFormatId) : ''}
 							options={formatOptions}
-							onValueChange={(value) => (sessionFormatId = Number(value) || null)}
+							onValueChange={(value) => (sessionFormatId = parseOptionalId(value))}
 						/>
 					</label>
 				{/if}
@@ -409,14 +398,17 @@
 				{#if asked('trackId')}
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Track</span>
-						<AppSelect
+						<BrowserDraftSelect
+							scope={draft ? `${draft.scope}:trackId` : ''}
+							owner={draft?.owner ?? ''}
+							baseline=""
 							name="trackId"
 							class="mt-1"
 							aria-label="Track"
 							placeholder="—"
-							value={initial.trackId ? String(initial.trackId) : ''}
+							value={trackId ? String(trackId) : ''}
 							options={trackOptions}
-							onValueChange={(value) => (trackId = Number(value) || null)}
+							onValueChange={(value) => (trackId = parseOptionalId(value))}
 						/>
 					</label>
 				{/if}
@@ -456,7 +448,7 @@
 							oninput={(e) => (answers[field.id] = e.currentTarget.value)}
 						/>
 					{:else if field.kind === 'select'}
-						<AppSelect
+						<BrowserDraftSelect
 							name="answer:{field.id}"
 							class="mt-1"
 							aria-label={field.label}
@@ -470,14 +462,14 @@
 							onValueChange={(value) => (answers[field.id] = value)}
 						/>
 					{:else if field.kind === 'boolean'}
-						<AppSelect
+						<BrowserDraftSelect
 							name="answer:{field.id}"
 							class="mt-1"
 							aria-label={field.label}
 							aria-invalid={Boolean(form?.fieldErrors?.[field.id])}
 							placeholder="—"
 							value={answers[field.id] ?? ''}
-							options={YES_NO}
+							options={YES_NO_OPTIONS}
 							onValueChange={(value) => (answers[field.id] = value)}
 						/>
 					{:else}
@@ -580,16 +572,16 @@
 
 			{#each coSpeakers as co (co.key)}
 				<div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-					<Input name="co-name" placeholder="Name" value={co.name} />
+					<Input name="co-name" placeholder="Name" bind:value={co.name} />
 					<Input
 						name="co-email"
 						type="email"
 						placeholder="Email"
 						aria-invalid={Boolean(form?.errors?.coSpeakerEmail) && !co.email}
-						value={co.email}
+						bind:value={co.email}
 					/>
 					<div class="flex gap-2">
-						<Input name="co-role" placeholder="Role" class="sm:w-28" value={co.roleLabel} />
+						<Input name="co-role" placeholder="Role" class="sm:w-28" bind:value={co.roleLabel} />
 						<Button
 							type="button"
 							variant="ghost"
