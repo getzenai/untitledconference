@@ -221,7 +221,7 @@
 							</div>
 							<div class="sm:col-span-2">
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-tags">
-									Tags (comma-separated)
+									Tags (one per line, or comma-separated)
 								</label>
 								<BrowserDraftInput
 									id="add-tags"
@@ -229,6 +229,7 @@
 									scope={newContactFieldScope('tags')}
 									owner={data.user.id}
 									baseline=""
+									rows={2}
 									placeholder="keynote, vip"
 									testId="contacts-add-tags"
 									commitToken={addCommit}

@@ -14,6 +14,14 @@
 	 * The paste box parks. Escape is not a navigation, so there is no leave
 	 * prompt — the draft is the fix, same as the add dialog. The file picker
 	 * is a file, not typed text.
+	 *
+	 * A refused import keeps the text on purpose (#829, #831): that is the case
+	 * the parking exists for, and rejected rows are the ones somebody most needs
+	 * back. What does not survive a reload is the *reason* — the error comes
+	 * from the action, so a person returning later meets their rows and the
+	 * restored hint rather than `Row 2 has no name.` The trade is deliberate:
+	 * pressing Import again reproduces the message, and a refused import writes
+	 * nothing. Only success clears the key, through `commitToken`.
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';

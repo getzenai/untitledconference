@@ -92,3 +92,31 @@ describe('contact detail page', () => {
 		expect(body).toContain('/contacts/99');
 	});
 });
+
+/**
+ * Tags takes a list, so the field has to be able to hold one (#831).
+ *
+ * `tagsFromFormInput` splits on `[\n,]+`, and an `<input>` cannot carry a
+ * newline: pasting a two-line column into one turns `speaker\nsponsor` into
+ * `speaker sponsor`, which the parser then reads as a single tag. Measured,
+ * not assumed — a paste is an input event, and the browser drops the break.
+ *
+ * The assertion is on the rendered element rather than on the `rows` prop:
+ * `rows` is what makes `BrowserDraftInput` a textarea, and the textarea is
+ * what the person pastes into.
+ */
+describe('the tags field', () => {
+	it('is a textarea, because the parser accepts a line-separated list', () => {
+		const { body } = render(Page, { props: { data: baseData as never, form: null } });
+
+		expect(body).toMatch(/<textarea[^>]*data-testid="contact-tags"/);
+		expect(body).not.toMatch(/<input[^>]*data-testid="contact-tags"/);
+	});
+
+	it('says in the label what it accepts', () => {
+		const { body } = render(Page, { props: { data: baseData as never, form: null } });
+
+		expect(body).toContain('Tags (one per line, or comma-separated)');
+		expect(body).not.toContain('Tags (comma-separated)');
+	});
+});
