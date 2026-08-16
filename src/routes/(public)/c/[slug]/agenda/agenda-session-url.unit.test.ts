@@ -66,12 +66,12 @@ function draw(search = '') {
 	currentUrl.value = new URL(`https://example.test/c/short-cards/agenda${search}`);
 	return render(Page, {
 		props: { data: { conference, embed: false } as never }
-	}).body;
+	});
 }
 
 describe('public agenda session URL', () => {
 	it('opens the session from ?session= instead of the grid', () => {
-		const html = draw('?session=session-1');
+		const html = draw('?session=session-1').body;
 
 		expect(html).toContain('Back to agenda');
 		expect(html).toContain('Four hundred engineers, one repository');
@@ -80,7 +80,7 @@ describe('public agenda session URL', () => {
 	});
 
 	it('stays on the grid when the URL names no session', () => {
-		const html = draw();
+		const html = draw().body;
 
 		expect(html).not.toContain('Back to agenda');
 		expect(html).toContain('aria-label="Conference days"');
@@ -88,5 +88,18 @@ describe('public agenda session URL', () => {
 		// one, so the grid — not the overlay — is what a visitor lands on.
 		expect(html).toContain('Four hundred engineers, one repository');
 		expect(html).toMatch(/aria-selected="true"[^>]*>Day 2</);
+	});
+
+	it('names the talk in the document title, and only then', () => {
+		expect(draw().head).toContain('<title>Agenda — Short Cards Conf</title>');
+		expect(draw('?session=session-1').head).toContain(
+			'<title>Four hundred engineers, one repository — Short Cards Conf</title>'
+		);
+		// A number or garbage that matches no talk is still the agenda, not
+		// `undefined —`. The page body already falls back; the tab has to as well.
+		expect(draw('?session=9999').head).toContain('<title>Agenda — Short Cards Conf</title>');
+		expect(draw('?session=abc').head).toContain('<title>Agenda — Short Cards Conf</title>');
+		expect(draw('?session=9999').head).not.toContain('undefined');
+		expect(draw('?session=abc').head).not.toContain('undefined');
 	});
 });
