@@ -116,6 +116,73 @@ describe('Assistant panel', () => {
 		});
 	});
 
+	/**
+	 * The offset survives close and reopen — measured from the middle (#844).
+	 *
+	 * The case above leaves the reader at the *top* and asks for `< 40`, which
+	 * a panel that restores nothing at all also satisfies: a freshly mounted
+	 * viewport starts at 0. So it passed while every reopen showed the oldest
+	 * message. Only a position that is neither 0 nor the end can tell "put
+	 * back where it was" apart from "never moved".
+	 */
+	it('reopens in the middle when that is where the reader was (#844)', function () {
+		if (!chatEnabled) this.skip();
+
+		const filler = (n: number) =>
+			`Question ${n}. ${'The panel needs enough height to scroll. '.repeat(12)}`;
+
+		seedConference('Middle Summit').then(({ slug }) => {
+			cy.visit(`/manage/${slug}/agenda`);
+			cy.waitForHydration();
+			openAssistant();
+
+			sendAssistant(filler(1));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+			sendAssistant(filler(2));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+
+			// The precondition: a middle has to exist. Without enough overhang
+			// the middle, the top and the end collapse into one number and the
+			// case would be green on any code.
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollHeight, 'the conversation is taller than the panel').to.be.greaterThan(
+					$el[0].clientHeight + 200
+				);
+			});
+
+			cy.get('[data-testid="assistant-scroll"]').then(($el) => {
+				const middle = Math.round(($el[0].scrollHeight - $el[0].clientHeight) / 2);
+
+				// Escape, then the X — the issue was reported through both, and
+				// they are two different controls reaching the same setter.
+				for (const close of ['escape', 'x'] as const) {
+					cy.get('[data-testid="assistant-scroll"]').scrollTo(0, middle);
+					cy.get('[data-testid="assistant-scroll"]').should(($v) => {
+						expect(
+							$v[0].scrollTop,
+							`left in the middle before closing with ${close}`
+						).to.be.closeTo(middle, 5);
+					});
+
+					if (close === 'escape') {
+						cy.get('[data-testid="assistant-input"]').type('{esc}');
+					} else {
+						cy.get('[data-testid="assistant-panel"]').contains('button', 'Close').click();
+					}
+					cy.get('[data-testid="assistant-panel"]').should('not.exist');
+					openAssistant();
+
+					cy.get('[data-testid="assistant-scroll"]').should(($v) => {
+						expect(
+							$v[0].scrollTop,
+							`reopens where it was left after ${close} (left at ${middle})`
+						).to.be.closeTo(middle, 20);
+					});
+				}
+			});
+		});
+	});
+
 	it('stays off the app while FEATURE_INAPP_CHAT is off', function () {
 		if (chatEnabled) this.skip();
 

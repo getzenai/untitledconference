@@ -172,10 +172,18 @@ class StickToBottomContext {
 	followMessage = (element: HTMLElement) => {
 		this.#followTarget = element;
 		this.#followAllowed = true;
-		// A message to follow is a stronger claim on the viewport than "open
-		// where it was left"; two owners writing `scrollTop` would fight.
-		this.#placementPending = false;
-		if (this.#ready) this.#scheduleApply('smooth');
+		// A message that arrives on an open panel is a stronger claim on the
+		// viewport than "open where it was left"; two owners writing
+		// `scrollTop` would fight. A message that mounts *with* the panel is
+		// not that: every anchor registers before the first placement is even
+		// attempted, so cancelling here threw the remembered offset away
+		// before it could be used, and the panel opened on its oldest message
+		// no matter where the reader had been (#844). `#ready` is the line
+		// between the two — it turns true once placement has had its frame.
+		if (this.#ready) {
+			this.#placementPending = false;
+			this.#scheduleApply('smooth');
+		}
 		return () => {
 			if (this.#followTarget === element) {
 				this.#followTarget = null;
@@ -211,6 +219,11 @@ class StickToBottomContext {
 		});
 		this.#placementPending = false;
 		this.#syncAtBottom();
+		// A reader restored into the middle of the conversation is a reader who
+		// scrolled up, and #718 leaves those alone: the follow stays disengaged
+		// until a new message registers, or the first mutation after opening
+		// would drag them back down to the newest line (#844).
+		this.#followAllowed = this.#isAtBottom;
 	}
 
 	#scheduleApply(behavior: ScrollBehavior) {
