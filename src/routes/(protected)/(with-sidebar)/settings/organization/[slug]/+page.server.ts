@@ -1,5 +1,5 @@
 import { EventNames } from '$lib/analytics/event-names';
-import { auth } from '$lib/auth';
+import { auth, sessionCacheCookieName } from '$lib/auth';
 import {
 	LAST_MEMBER_CANNOT_LEAVE,
 	ONLY_OWNER_CAN_DELETE
@@ -350,7 +350,7 @@ export const actions: Actions = {
 	 * judging and deleting happen together in `deleteEmptyOrganization`; this
 	 * action only turns the verdict into a response.
 	 */
-	deleteOrganization: async ({ request, locals }) => {
+	deleteOrganization: async ({ cookies, request, locals }) => {
 		if (!locals.user) {
 			return fail(401, { error: 'Unauthorized' });
 		}
@@ -374,6 +374,18 @@ export const actions: Actions = {
 				const notAllowed = verdict.reason === ONLY_OWNER_CAN_DELETE;
 				return fail(notAllowed ? 403 : 400, { error: verdict.reason, deleteScope: true });
 			}
+
+			// The session rows were cleared inside the same transaction, but the
+			// cookie cache still holds a copy of the old session — including the
+			// pointer at the organization that no longer exists — for up to five
+			// minutes. Dropping the cookie is what makes the next request read the
+			// cleared row instead.
+			//
+			// `auth.api.setActiveOrganization({ organizationId: null })` does not do
+			// this from here twice over: it returns early because the row it checks
+			// is already null, and its `Set-Cookie` would be discarded anyway, since
+			// only `/api/auth/*` responses carry Better Auth's headers back.
+			cookies.delete(sessionCacheCookieName(), { path: '/' });
 
 			captureEvent(
 				locals.user.id,

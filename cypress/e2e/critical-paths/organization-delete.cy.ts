@@ -122,4 +122,49 @@ describe('Deleting an organization', () => {
 		cy.waitForHydration();
 		cy.contains(organizationName).should('not.exist');
 	});
+
+	/**
+	 * Deleting the *active* organization while another one exists.
+	 *
+	 * The session carries `activeOrganizationId`, and that column has no foreign
+	 * key — so the pointer survives the row it points at. The single-organization
+	 * case above hides this: it lands on `/settings/organization/new`, which never
+	 * asks who the active member is. With a second organization the settings list
+	 * redirects into it, the membership is gone with the cascade, and the page
+	 * bounces back to the list — a loop the user cannot leave.
+	 *
+	 * So the assertion is not "some page appeared" but that the surviving
+	 * organization's settings actually render.
+	 */
+	it('lands on the surviving organization when the active one is deleted', () => {
+		const doomed = `Doomed Org ${Date.now()}`;
+		const survivor = `Survivor Org ${Date.now()}`;
+
+		cy.createAndLogin({ organizationName: doomed }).then(() => {
+			cy.request({
+				method: 'POST',
+				url: '/api/auth/organization/create',
+				body: { name: survivor, slug: `survivor-${Date.now()}` }
+			})
+				.its('status')
+				.should('eq', 200);
+			cy.setActiveOrganization(doomed);
+		});
+
+		// The precondition the case rests on: two organizations, not one. Without
+		// this the test would silently become the single-organization case again.
+		cy.request('/api/auth/organization/list').its('body').should('have.length', 2);
+
+		cy.visit('/settings/organization');
+		cy.waitForHydration();
+		cy.get('[data-testid="delete-confirm-name"]').type(doomed);
+		cy.get('[data-testid="delete-organization"]').click();
+
+		cy.request('/api/auth/organization/list').its('body').should('have.length', 1);
+		cy.location('pathname', { timeout: 20000 }).should('match', /^\/settings\/organization/);
+		cy.location('pathname').should('not.eq', '/settings/organization/new');
+		cy.waitForHydration();
+		cy.contains(survivor, { timeout: 20000 }).should('exist');
+		cy.contains(doomed).should('not.exist');
+	});
 });

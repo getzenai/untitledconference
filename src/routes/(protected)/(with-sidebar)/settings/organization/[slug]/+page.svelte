@@ -380,8 +380,6 @@
 							>
 								{#if isLeavingOrg}
 									Leaving...
-								{:else if members.length === 1}
-									Delete & Leave
 								{:else}
 									Leave Organization
 								{/if}

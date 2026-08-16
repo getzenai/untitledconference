@@ -28,7 +28,7 @@ import {
 	type OrganizationDeletionVerdict
 } from '$lib/conference/organization-delete';
 import { db } from '$lib/server/db';
-import { invitation, member, organization } from '$lib/server/db/auth-schema';
+import { invitation, member, organization, session } from '$lib/server/db/auth-schema';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { and, count, eq } from 'drizzle-orm';
 
@@ -44,15 +44,11 @@ export type OrganizationDeletionInput = {
  * Delete the organization if it is still empty, judged at the moment of the
  * delete. Returns the same verdict shape as the pure rule, so the caller
  * reports the reason rather than inventing one.
- *
- * `database` is a parameter so an integration test can hold a second
- * connection open against the same rows; production always passes nothing.
  */
 export async function deleteEmptyOrganization(
-	input: OrganizationDeletionInput,
-	database: typeof db = db
+	input: OrganizationDeletionInput
 ): Promise<OrganizationDeletionVerdict> {
-	return database.transaction(async (tx) => {
+	return db.transaction(async (tx) => {
 		// Everything below reads state this lock is holding still. A caller who
 		// is not a member gets the same answer as one who is not the owner: the
 		// existence of someone else's organization is not ours to confirm.
@@ -89,6 +85,17 @@ export async function deleteEmptyOrganization(
 			pendingInvitations: pending?.value ?? 0
 		});
 		if (!verdict.ok) return verdict;
+
+		// `session.activeOrganizationId` carries no foreign key, so it outlives the
+		// row it names. Better Auth's own delete cleared it; ours has to as well,
+		// or the next request asks who the active member of a deleted organization
+		// is, gets MEMBER_NOT_FOUND, and bounces between the list and a page that
+		// redirects back to it. Every session, not just this one — the same person
+		// may be signed in elsewhere.
+		await tx
+			.update(session)
+			.set({ activeOrganizationId: null })
+			.where(eq(session.activeOrganizationId, input.organizationId));
 
 		await tx.delete(organization).where(eq(organization.id, input.organizationId));
 		return verdict;

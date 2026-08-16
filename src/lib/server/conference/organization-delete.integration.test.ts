@@ -9,7 +9,7 @@
  * because two people clicked at the same second.
  */
 import { db } from '$lib/server/db';
-import { invitation, member, organization, user } from '$lib/server/db/auth-schema';
+import { invitation, member, organization, session, user } from '$lib/server/db/auth-schema';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import { closeTestDatabase, createTestDatabase } from '$lib/server/db/test-utils';
 import { eq } from 'drizzle-orm';
@@ -78,6 +78,41 @@ describe('deleteEmptyOrganization', () => {
 
 		expect(verdict).toEqual({ ok: true });
 		expect(await organizationExists()).toBe(false);
+	});
+
+	/**
+	 * The pointer, not just the row.
+	 *
+	 * `session.active_organization_id` has no foreign key, so the cascade leaves
+	 * it naming a row that is gone. The browser case only proves this for the
+	 * session doing the deleting; a second sign-in on another device has nobody
+	 * to drop its cookie, and this is the half that covers it.
+	 */
+	it('clears the pointer of every session that named the organization', async () => {
+		const sessions = ['here', 'elsewhere'].map((where) => ({
+			id: `s-${where}-${organizationId}`,
+			token: `t-${where}-${organizationId}`,
+			userId: OWNER,
+			activeOrganizationId: organizationId,
+			expiresAt: new Date(Date.now() + 86_400_000),
+			createdAt: new Date(),
+			updatedAt: new Date()
+		}));
+		await db.insert(session).values(sessions);
+
+		const verdict = await deleteEmptyOrganization({ organizationId, ...asOwner });
+		expect(verdict).toEqual({ ok: true });
+
+		const after = await db
+			.select({ id: session.id, activeOrganizationId: session.activeOrganizationId })
+			.from(session)
+			.where(eq(session.userId, OWNER));
+		expect(after).toHaveLength(2);
+		for (const row of after) {
+			expect(row.activeOrganizationId, row.id).toBeNull();
+		}
+
+		await db.delete(session).where(eq(session.userId, OWNER));
 	});
 
 	it('refuses a member who is not the owner, and leaves it standing', async () => {
@@ -185,9 +220,17 @@ describe('deleteEmptyOrganization', () => {
 		// The insert has to be in flight before the delete starts, or the two
 		// never meet and the test proves nothing about the order.
 		await insertLanded;
+		const pending = Symbol('pending');
 		const deleting = deleteEmptyOrganization({ organizationId, ...asOwner });
-		// Long enough for the delete to reach the row lock and block on it.
-		await new Promise((resolve) => setTimeout(resolve, 500));
+
+		// The proof needs the delete to be *waiting*, not merely slow: if it had
+		// already finished here, the case would say nothing about ordering.
+		const reached = await Promise.race([
+			deleting.then(() => 'finished'),
+			new Promise((resolve) => setTimeout(() => resolve(pending), 500))
+		]);
+		expect(reached, 'the delete must be blocked on the row lock').toBe(pending);
+
 		commit();
 		await inserting;
 

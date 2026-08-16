@@ -2,6 +2,7 @@ import { oauthProvider } from '@better-auth/oauth-provider';
 import { passkey } from '@better-auth/passkey';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { createCookieGetter } from 'better-auth/cookies';
 import { admin } from 'better-auth/plugins/admin';
 import { jwt } from 'better-auth/plugins/jwt';
 import { organization } from 'better-auth/plugins/organization';
@@ -222,6 +223,23 @@ export function getMcpResource(): string {
 }
 
 type Auth = ReturnType<typeof createAuth>;
+/**
+ * The name of Better Auth's session-cache cookie.
+ *
+ * `session.cookieCache` keeps a signed copy of the resolved session in a
+ * cookie for five minutes, so a change written straight to the `session` row
+ * stays invisible until it expires. Anything that invalidates a session from
+ * outside Better Auth's own endpoints — deleting the organization it points
+ * at, for one (#777) — has to drop this cookie as well.
+ *
+ * Built with the library's own `createCookieGetter` rather than a literal, so
+ * the prefix and the `__Secure-` variant follow whatever Better Auth would
+ * have written.
+ */
+export function sessionCacheCookieName(): string {
+	return createCookieGetter({ baseURL: getServerOrigin() })('session_data').name;
+}
+
 let _auth: Auth | undefined;
 
 function createAuth() {
@@ -253,9 +271,10 @@ function createAuth() {
 		// form action the *only* way in rather than merely the polite one.
 		//
 		// This list is applied in the router's `onRequest`, so it closes the HTTP
-		// route and nothing else: the action calls `auth.api.deleteOrganization`
-		// directly and is unaffected. Both halves are pinned by
-		// `organization-delete.cy.ts`.
+		// route and nothing else. The settings action does not go through it: it
+		// deletes in its own transaction (`server/conference/organization-delete`),
+		// which is also why it has to clear `activeOrganizationId` itself. Both
+		// halves are pinned by `organization-delete.cy.ts`.
 		disabledPaths: ['/token', '/organization/delete'],
 
 		// Undefined (Better Auth defaults) unless RELAX_AUTH_RATE_LIMIT is set,
