@@ -1,14 +1,17 @@
 /**
- * Empty-panel openers and the one-line description (#719, #730).
+ * Empty-panel openers and the one-line description (#719, #730, #828).
  *
  * The assistant holds the whole registry. The page is only "here", not a
  * fence. A chip that names a thing with no tool is a promise that goes
  * nowhere, so every suggestion carries the tool it is for. Click fills the
  * input; it does not send.
  *
- * The description names the *kind* of work, in the role's words. It must
- * not claim a page-scope that does not exist, and it must not describe
- * the approval card (#726): most writes no longer wait for a yes.
+ * A route with no row of its own still gets the chips for its role, not
+ * the cross-role set — otherwise an organizer page offers a speaker's
+ * proposals. The description names the *kind* of work, in the role's
+ * words. It must not claim a page-scope that does not exist, and it must
+ * not describe the approval card (#726): most writes no longer wait for
+ * a yes.
  */
 
 export type AssistantSuggestion = {
@@ -18,11 +21,26 @@ export type AssistantSuggestion = {
 
 export type AssistantRole = 'organizer' | 'reviewer' | 'speaker' | 'anyone';
 
-const FALLBACK: readonly AssistantSuggestion[] = [
-	{ text: 'List my conferences', tool: 'list_my_conferences' },
-	{ text: "What's in my review queue?", tool: 'list_my_review_assignments' },
-	{ text: 'What have I submitted?', tool: 'list_my_proposals' }
-];
+const FALLBACK: Record<AssistantRole, readonly AssistantSuggestion[]> = {
+	anyone: [
+		{ text: 'List my conferences', tool: 'list_my_conferences' },
+		{ text: "What's in my review queue?", tool: 'list_my_review_assignments' },
+		{ text: 'What have I submitted?', tool: 'list_my_proposals' }
+	],
+	organizer: [
+		{ text: 'Fill the empty slots', tool: 'fill_schedule' },
+		{ text: 'Accept or reject proposals', tool: 'decide_submissions' },
+		{ text: 'Tell speakers the decision', tool: 'notify_speakers' }
+	],
+	reviewer: [
+		{ text: "What's in my review queue?", tool: 'list_my_review_assignments' },
+		{ text: 'Open an assignment', tool: 'get_review_assignment' }
+	],
+	speaker: [
+		{ text: 'What have I submitted?', tool: 'list_my_proposals' },
+		{ text: 'Update my speaker profile', tool: 'update_my_speaker_profile' }
+	]
+};
 
 const BY_ROUTE: { match: (routeId: string) => boolean; chips: readonly AssistantSuggestion[] }[] = [
 	{
@@ -118,6 +136,14 @@ const BY_ROUTE: { match: (routeId: string) => boolean; chips: readonly Assistant
 	}
 ];
 
+export const ALL_SUGGESTIONS: readonly AssistantSuggestion[] = [
+	...BY_ROUTE.flatMap((entry) => entry.chips),
+	...FALLBACK.anyone,
+	...FALLBACK.organizer,
+	...FALLBACK.reviewer,
+	...FALLBACK.speaker
+];
+
 export function assistantRole(routeId: string | null | undefined): AssistantRole {
 	if (!routeId) return 'anyone';
 	if (routeId.includes('/review')) return 'reviewer';
@@ -153,5 +179,5 @@ export function assistantSuggestions(
 			if (entry.match(routeId)) return [...entry.chips];
 		}
 	}
-	return [...FALLBACK];
+	return [...FALLBACK[assistantRole(routeId || null)]];
 }

@@ -1,6 +1,11 @@
 import { allTools } from '$lib/server/mcp/server';
 import { describe, expect, it } from 'vitest';
-import { assistantDescription, assistantRole, assistantSuggestions } from './assistant-suggestions';
+import {
+	ALL_SUGGESTIONS,
+	assistantDescription,
+	assistantRole,
+	assistantSuggestions
+} from './assistant-suggestions';
 
 const registry = new Set(
 	allTools({ userId: 'user-1', organizationId: 'org-1' }).map((t) => t.name)
@@ -8,50 +13,26 @@ const registry = new Set(
 
 const AGENDA = '/(protected)/manage/[slug]/agenda';
 const SETTINGS = '/(protected)/manage/[slug]/settings';
-const CFP = '/(protected)/manage/[slug]/cfp';
-const DECISIONS = '/(protected)/manage/[slug]/decisions';
 const PEOPLE = '/(protected)/manage/[slug]/people';
 const ROUNDS = '/(protected)/manage/[slug]/rounds';
-const SUBMISSIONS = '/(protected)/manage/[slug]/submissions';
-const DASHBOARD = '/(protected)/manage/[slug]/dashboard';
-const NEW_CONF = '/(protected)/(with-sidebar)/manage/new';
-const MANAGE_LIST = '/(protected)/(with-sidebar)/manage';
 const SCORECARD = '/(protected)/(with-sidebar)/review/[slug]/[submissionId]';
-const REVIEW_QUEUE = '/(protected)/(with-sidebar)/review';
 const PORTAL = '/(protected)/(with-sidebar)/portal';
 const HOME = '/(protected)/(with-sidebar)/home';
-const CONTACTS = '/(protected)/(with-sidebar)/contacts';
 const ORG_SETTINGS = '/(protected)/(with-sidebar)/settings/organization/[slug]';
 const UNKNOWN = '/(public)/c/[slug]/gallery';
+const MANAGE_HOME = '/(protected)/manage/[slug]';
+const SPEAKERS = '/(protected)/manage/[slug]/speakers';
+const CONTENT = '/(protected)/manage/[slug]/content';
+const CONTENT_FILES = '/(protected)/manage/[slug]/content/files';
+const CONTENT_TASKS = '/(protected)/manage/[slug]/content/tasks';
+const EMBED = '/(protected)/manage/[slug]/embed';
+const CARRY_FORWARD = '/(protected)/manage/[slug]/carry-forward';
 
 describe('assistantSuggestions', () => {
-	it('maps every chip to a tool the assistant actually has', () => {
-		const routes = [
-			AGENDA,
-			SETTINGS,
-			CFP,
-			DECISIONS,
-			PEOPLE,
-			ROUNDS,
-			SUBMISSIONS,
-			DASHBOARD,
-			NEW_CONF,
-			MANAGE_LIST,
-			SCORECARD,
-			REVIEW_QUEUE,
-			PORTAL,
-			HOME,
-			CONTACTS,
-			ORG_SETTINGS,
-			UNKNOWN,
-			'',
-			null
-		];
-		for (const routeId of routes) {
-			for (const chip of assistantSuggestions({ routeId })) {
-				expect(registry.has(chip.tool), `${routeId ?? 'empty'} → ${chip.tool}`).toBe(true);
-				expect(chip.text.trim().length).toBeGreaterThan(0);
-			}
+	it('maps every chip in the table to a tool the assistant actually has', () => {
+		for (const chip of ALL_SUGGESTIONS) {
+			expect(registry.has(chip.tool), chip.tool).toBe(true);
+			expect(chip.text.trim().length).toBeGreaterThan(0);
 		}
 	});
 
@@ -97,6 +78,25 @@ describe('assistantSuggestions', () => {
 		expect(assistantSuggestions({ routeId: ORG_SETTINGS }).map((c) => c.tool)).toEqual(
 			assistantSuggestions({ routeId: HOME }).map((c) => c.tool)
 		);
+	});
+
+	it('offers organizer work on manage pages that have no own row', () => {
+		const expected = ['fill_schedule', 'decide_submissions', 'notify_speakers'];
+		for (const routeId of [
+			MANAGE_HOME,
+			SPEAKERS,
+			CONTENT,
+			CONTENT_FILES,
+			CONTENT_TASKS,
+			EMBED,
+			CARRY_FORWARD
+		]) {
+			expect(
+				assistantSuggestions({ routeId }).map((c) => c.tool),
+				routeId
+			).toEqual(expected);
+			expect(assistantRole(routeId)).toBe('organizer');
+		}
 	});
 });
 
