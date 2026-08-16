@@ -268,11 +268,14 @@
 			<p class="text-muted-foreground mt-0.5 text-sm">{subtitle}</p>
 		</div>
 
-		<div class="flex shrink-0 flex-col items-end gap-1">
+		<!-- #852: shrink-0 let this column grow the document, so flex-wrap on the
+		     four verbs never fired and Accept painted as Acc. Bound the column to
+		     the page below md; above it the row is unchanged. -->
+		<div class="flex w-full min-w-0 flex-col items-end gap-1 md:w-auto">
 			<form
 				method="POST"
 				action="?/decide"
-				class="flex flex-col items-end gap-2"
+				class="flex w-full max-w-full flex-col items-end gap-2"
 				use:enhance={() => {
 					busy = true;
 					// `finally`, not a trailing line: a dropped connection would otherwise
@@ -331,7 +334,7 @@
 							/>
 						</div>
 					{/if}
-					<div class="flex flex-wrap justify-end gap-2">
+					<div class="flex w-full flex-wrap justify-end gap-2" data-testid="decision-actions">
 						<Button
 							type="submit"
 							name="decision"
