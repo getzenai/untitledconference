@@ -12,7 +12,7 @@ import { createLogger } from '$lib/server/logger';
 import { captureEvent } from '$lib/server/posthog';
 import { transferOwnershipSafely } from '$lib/server/utils/organization-transfer';
 import { renameOrganizationSchema } from '$lib/validators/organization';
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, type ActionFailure } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 const logger = createLogger('OrganizationSettings');
@@ -438,7 +438,7 @@ async function requireOrgAdmin(
 	headers: Headers,
 	organizationId: string,
 	userId: string
-): Promise<{ ok: true } | { ok: false; failure: ReturnType<typeof fail> }> {
+): Promise<{ ok: true } | { ok: false; failure: ActionFailure<{ error: string }> }> {
 	if (!organizationId) {
 		return { ok: false, failure: fail(400, { error: 'Missing organization' }) };
 	}
