@@ -20,7 +20,7 @@ Since #683 it offers every tool in `allTools`
 stays inside each registry handler. Writes that leave the app (mail,
 publish) or are hard to undo (decision, delete) wait for a card; the rest
 run. A new write defaults to a card (`ASSISTANT_AUTO_RUN_WRITES` in
-`src/lib/server/chat/tools.ts`).
+`src/lib/chat/auto-run-writes.ts`).
 
 The same 49 definitions are the MCP server at `/api/v1/mcp` and the REST
 adapter under `/api/v1`. There is no second registry. `docs/MCP.md` is

@@ -13,48 +13,16 @@
  * weaker fence but the one that was always doing the work — authorization
  * inside each registry handler — plus a card only for writes that leave the
  * app or are hard to undo (#726). A new write that is not in
- * `ASSISTANT_AUTO_RUN_WRITES` needs a card.
+ * `ASSISTANT_AUTO_RUN_WRITES` (`$lib/chat/auto-run-writes`) needs a card.
  */
+import { ASSISTANT_AUTO_RUN_WRITES } from '$lib/chat/auto-run-writes';
 import type { McpContext } from '$lib/server/mcp/context';
 import { allTools } from '$lib/server/mcp/server';
 import { writingToolNames, type AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
 import type { Tool } from 'ai';
 import { toLanguageModelTool } from './adapter';
 
-/**
- * Writes that run without a card. The card stays when the action leaves the
- * app (mail, publish, anything a submitter sees) or is hard to undo
- * (decision, delete). This set is the exception — a name that is not here
- * needs approval, including a tool added to the registry later.
- */
-export const ASSISTANT_AUTO_RUN_WRITES = [
-	'add_cfp_field',
-	'assign_reviews',
-	'create_break',
-	'create_conference',
-	'create_review_round',
-	'create_room',
-	'create_session_format',
-	'create_track',
-	'fill_schedule',
-	'invite_reviewer',
-	'move_cfp_field',
-	'move_talk',
-	'place_talk',
-	'remove_break',
-	'remove_reviewer',
-	'restore_conference',
-	'set_cfp_fixed_question',
-	'submit_proposal',
-	'submit_review',
-	'swap_talks',
-	'unplace_talk',
-	'update_cfp_field',
-	'update_cfp_form',
-	'update_conference',
-	'update_my_speaker_profile',
-	'update_proposal'
-] as const;
+export { ASSISTANT_AUTO_RUN_WRITES };
 
 const AUTO_RUN_WRITES = new Set<string>(ASSISTANT_AUTO_RUN_WRITES);
 
