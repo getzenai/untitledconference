@@ -27,6 +27,7 @@ import {
 	type QueueSort,
 	type ReviewVisibility
 } from '$lib/conference/review-visibility';
+import { reviewWriteBaseline, scoresFromCriteria } from '$lib/conference/review-write-baseline';
 import { byRoundWindowPriority, roundWindow, type RoundWindow } from '$lib/conference/round-window';
 import { submissionScore, type ReviewScores } from '$lib/conference/scoring';
 import type { SpeakerHistory } from '$lib/conference/speaker-history';
@@ -515,6 +516,8 @@ export type ReviewerSubmission = {
 		reviewId: number;
 		status: string;
 		comment: string | null;
+		/** Snapshot of the saved scorecard this page was drawn from (#748). */
+		baseline: string;
 	};
 	criteria: {
 		id: number;
@@ -608,7 +611,16 @@ export async function reviewerSubmission(
 		speakerHistory,
 		anonymized: own.anonymized,
 		window: own.window,
-		own: { reviewId: own.reviewId, status: own.status, comment: own.comment },
+		own: {
+			reviewId: own.reviewId,
+			status: own.status,
+			comment: own.comment,
+			baseline: reviewWriteBaseline({
+				status: own.status,
+				comment: own.comment ?? '',
+				scores: scoresFromCriteria(criteria)
+			})
+		},
 		criteria,
 		peers: visible ? peers.map(({ submissionId: _s, userId: _u, ...peer }) => peer) : [],
 		peersPending,
@@ -790,6 +802,11 @@ export type ReviewDraft = {
 	comment: string;
 	/** `false` saves progress without unlocking peers or counting towards coverage. */
 	submit: boolean;
+	/**
+	 * The snapshot this tab loaded (#748). Omit it only from single-writer
+	 * callers (tests, MCP). The scorecard form always sends it.
+	 */
+	expectedBaseline?: string;
 };
 
 /**
@@ -851,7 +868,12 @@ export type SaveReviewResult =
 	 * The round is not taking answers (ABS-01). Two reasons rather than one, because
 	 * "come back on Monday" and "you are too late" ask opposite things of the reader.
 	 */
-	| { ok: false; reason: 'round_not_open' | 'round_closed' };
+	| { ok: false; reason: 'round_not_open' | 'round_closed' }
+	/**
+	 * Another save landed after this tab loaded (#748). `current` is what is
+	 * on the server now, so the form can offer a choice instead of overwriting.
+	 */
+	| { ok: false; reason: 'conflict'; current: { baseline: string; comment: string | null } };
 
 /** Withdrawn and unsubmitted drafts refuse a POST the same way the page hides them. */
 function refuseIfUnreviewable(
@@ -859,6 +881,30 @@ function refuseIfUnreviewable(
 ): Extract<SaveReviewResult, { ok: false; reason: 'withdrawn' | 'proposal_draft' }> | null {
 	if (status === 'withdrawn') return { ok: false, reason: 'withdrawn' };
 	if (status === 'draft') return { ok: false, reason: 'proposal_draft' };
+	return null;
+}
+
+/** Another tab saved after this one loaded (#748). */
+function staleWrite(
+	own: { status: string; comment: string | null },
+	criteria: Parameters<typeof scoresFromCriteria>[0],
+	expectedBaseline: string | undefined
+): Extract<SaveReviewResult, { ok: false; reason: 'conflict' }> | null {
+	if (expectedBaseline === undefined) return null;
+	const current = reviewWriteBaseline({
+		status: own.status,
+		comment: own.comment ?? '',
+		scores: scoresFromCriteria(criteria)
+	});
+	if (expectedBaseline === current) return null;
+	return { ok: false, reason: 'conflict', current: { baseline: current, comment: own.comment } };
+}
+
+function refuseIfRoundWindow(
+	state: string
+): Extract<SaveReviewResult, { ok: false; reason: 'round_not_open' | 'round_closed' }> | null {
+	if (state === 'not_yet_open') return { ok: false, reason: 'round_not_open' };
+	if (state === 'closed') return { ok: false, reason: 'round_closed' };
 	return null;
 }
 
@@ -912,18 +958,12 @@ export async function saveReview(
 	// a POST can go straight through is a note, not a deadline. It gates the DRAFT
 	// too: "save progress" writes the same scores the submit does, so allowing it
 	// after the close would hand back the whole edit through the quieter button.
-	if (own.window.state === 'not_yet_open') return { ok: false, reason: 'round_not_open' };
-	if (own.window.state === 'closed') return { ok: false, reason: 'round_closed' };
+	const shut = refuseIfRoundWindow(own.window.state);
+	if (shut) return shut;
 
-	const criteria = await db
-		.select({
-			id: scorecardCriterionTable.id,
-			label: scorecardCriterionTable.label,
-			kind: scorecardCriterionTable.kind,
-			scaleMax: scorecardCriterionTable.scaleMax
-		})
-		.from(scorecardCriterionTable)
-		.where(eq(scorecardCriterionTable.reviewRoundId, own.roundId));
+	const criteria = await criteriaWithOwnAnswers(own.roundId, own.reviewId);
+	const stale = staleWrite(own, criteria, draft.expectedBaseline);
+	if (stale) return stale;
 
 	// Before anything is written, and for the draft as well as the submit: an
 	// off-scale number used to reach `writeScore`, which drops it rather than

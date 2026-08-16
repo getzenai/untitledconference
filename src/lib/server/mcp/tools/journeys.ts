@@ -655,7 +655,9 @@ function submitReviewTool(ctx: McpContext): AnyMcpToolDefinition {
 					proposal_draft:
 						'This talk is still a draft. It cannot be reviewed until the speaker submits it.',
 					round_not_open: 'This review round has not opened yet.',
-					round_closed: 'This review round has closed.'
+					round_closed: 'This review round has closed.',
+					conflict:
+						'This review was saved again in another window. Open the scorecard to choose which version to keep.'
 				};
 				throw new McpToolError(messages[result.reason]);
 			}

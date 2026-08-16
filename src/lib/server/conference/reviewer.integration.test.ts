@@ -618,6 +618,67 @@ describe('saving a review', () => {
 			})
 		).toEqual({ ok: false, reason: 'not_assigned' });
 	});
+
+	it('refuses a stale save and keeps the first tab’s comment (#748)', async () => {
+		const now = await conferenceNow();
+		const loaded = await reviewerSubmission(now, ME, mine);
+		expect(loaded).not.toBeNull();
+		const firstLook = loaded!.own.baseline;
+
+		expect(
+			await saveReview(now, ME, mine, {
+				answers: { [criterionId]: '4' },
+				comment: 'tab-a',
+				submit: false,
+				expectedBaseline: firstLook
+			})
+		).toEqual({ ok: true });
+
+		const afterA = await reviewerSubmission(now, ME, mine);
+		expect(afterA?.own.comment).toBe('tab-a');
+
+		const stale = await saveReview(now, ME, mine, {
+			answers: { [criterionId]: '2' },
+			comment: 'tab-b-stale',
+			submit: false,
+			expectedBaseline: firstLook
+		});
+		expect(stale).toMatchObject({ ok: false, reason: 'conflict' });
+		expect((await reviewerSubmission(now, ME, mine))?.own.comment).toBe('tab-a');
+
+		expect(
+			await saveReview(now, ME, mine, {
+				answers: { [criterionId]: '2' },
+				comment: 'tab-b-stale',
+				submit: false,
+				expectedBaseline: afterA!.own.baseline
+			})
+		).toEqual({ ok: true });
+		expect((await reviewerSubmission(now, ME, mine))?.own.comment).toBe('tab-b-stale');
+	});
+
+	it('the same refusal if the other tab wrote first (#748)', async () => {
+		const now = await conferenceNow();
+		const firstLook = (await reviewerSubmission(now, ME, mine))!.own.baseline;
+
+		expect(
+			await saveReview(now, ME, mine, {
+				answers: { [criterionId]: '1' },
+				comment: 'tab-b',
+				submit: false,
+				expectedBaseline: firstLook
+			})
+		).toEqual({ ok: true });
+
+		const stale = await saveReview(now, ME, mine, {
+			answers: { [criterionId]: '5' },
+			comment: 'tab-a-stale',
+			submit: false,
+			expectedBaseline: firstLook
+		});
+		expect(stale).toMatchObject({ ok: false, reason: 'conflict' });
+		expect((await reviewerSubmission(now, ME, mine))?.own.comment).toBe('tab-b');
+	});
 });
 
 /**

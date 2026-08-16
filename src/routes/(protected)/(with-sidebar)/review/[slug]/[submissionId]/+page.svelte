@@ -175,6 +175,12 @@
 		value ? new Date(value).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : '';
 
 	const formOk = $derived(Boolean(form && 'ok' in form && form.ok));
+	const writeConflict = $derived(Boolean(form && 'conflict' in form && form.conflict));
+	const expectedBaseline = $derived(
+		writeConflict && form && 'currentBaseline' in form
+			? (form.currentBaseline ?? '')
+			: s.own.baseline
+	);
 </script>
 
 <FilePreviewSheet bind:preview />
@@ -365,6 +371,7 @@
 		     the talk in two open rounds would post the second round's answers into
 		     the first, which is the tie the permalink used to lose. -->
 		<input type="hidden" name="roundId" value={s.round.id} />
+		<input type="hidden" name="expectedBaseline" value={expectedBaseline} />
 		<div class="flex items-center justify-between">
 			<h2 class="text-sm font-semibold">My review — {s.round.name}</h2>
 			<StatusBadge
@@ -403,9 +410,25 @@
 					? 'border-status-good text-status-good'
 					: 'border-status-bad text-status-bad'}"
 				role={formOk ? 'status' : 'alert'}
+				data-testid={writeConflict ? 'review-write-conflict' : undefined}
 			>
 				{form.message}
 			</p>
+		{/if}
+
+		{#if writeConflict}
+			<div class="flex flex-wrap gap-2">
+				<a
+					href="?round={s.round.id}"
+					class="border-border hover:bg-muted inline-flex items-center rounded-md border px-3 py-1.5 text-sm"
+					data-testid="review-keep-saved"
+				>
+					Keep the saved version
+				</a>
+				<Button type="submit" name="intent" value="draft" size="sm" data-testid="review-overwrite">
+					Overwrite with what I typed
+				</Button>
+			</div>
 		{/if}
 
 		{#if s.criteria.length === 0}
@@ -488,7 +511,7 @@
 		</label>
 
 		<div class="flex flex-wrap gap-2">
-			{#if s.own.status === 'submitted'}
+			{#if !writeConflict && s.own.status === 'submitted'}
 				<!-- Already filed: keep edit open, but do not look like a first submit. -->
 				<Button
 					type="submit"
@@ -510,7 +533,7 @@
 				>
 					Save progress
 				</Button>
-			{:else}
+			{:else if !writeConflict}
 				<Button type="submit" name="intent" value="submit" size="sm" disabled={busy || locked}>
 					Submit review
 				</Button>
