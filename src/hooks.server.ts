@@ -3,6 +3,7 @@ import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
 import { db, needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
 import { member } from '$lib/server/db/auth-schema';
+import { htmlCacheHandler } from '$lib/server/html-cache';
 import { createLogger } from '$lib/server/logger';
 import { captureException } from '$lib/server/posthog';
 import { publicPageCacheHandler } from '$lib/server/public-page-cache';
@@ -447,6 +448,7 @@ export const handleError: HandleServerError = ({ error, status, message, event }
 // API Protection, Paraglide
 export const handle: Handle = sequence(
 	securityHeadersHandler, // Outermost, so every response below carries the headers
+	htmlCacheHandler, // Documents must never outlive the deploy that named their chunks
 	csrfHandler, // Replaces kit's csrf.checkOrigin; exempts the OAuth token endpoint
 	publicPageCacheHandler, // A hit here skips the database scope and auth entirely
 	databaseScopeHandler, // Before anything that queries — auth does, on every request
