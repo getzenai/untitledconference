@@ -8,7 +8,16 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
+	import {
+		EMPTY_SESSION_FILTERS,
+		hasSessionFilters,
+		readSessionFilters,
+		sessionFiltersHref,
+		toggleFacetValue,
+		type SessionFilters
+	} from '$lib/conference/session-filters';
 	import {
 		buildView,
 		formatDateRange,
@@ -20,55 +29,83 @@
 
 	const view = $derived(buildView(data.conference));
 
-	let query = $state('');
-	// Facets are sets, not single values: "Platform or Craft" is the question an
-	// attendee actually has. An empty set means "no opinion", which is why the
-	// filter reads as `size === 0 || has(...)` rather than defaulting to all ids.
-	const tracks = new SvelteSet<string>();
-	const formats = new SvelteSet<string>();
-	const rooms = new SvelteSet<string>();
+	// One source of truth in the component, the URL as its projection (#751,
+	// then #780).
+	//
+	// The first version derived `filters` straight from `page.url` and wrote
+	// with `replaceState`. `replaceState` does not update `page.url`, so after
+	// the first write the read side was frozen: the second filter was computed
+	// from the original address and silently dropped the first one out of the
+	// URL. The list showed one thing and the address said another, which is
+	// worse than not filtering at all — a shared link carried the wrong state.
+	//
+	// So: `filters` is the truth, every change writes it *and* projects it into
+	// the address, and the URL is only read back on a real navigation.
+	// A *writable* `$derived`: it recomputes when `page.url` changes and holds an
+	// assignment until then. `replaceState` deliberately does not touch
+	// `page.url`, so the only things that reset it are a load, a Back or a
+	// Forward — exactly the moments the address should win over the component.
+	let filters = $derived(readSessionFilters(page.url.searchParams));
 
-	const toggle = (set: SvelteSet<string>, id: string) => {
-		if (set.has(id)) set.delete(id);
-		else set.add(id);
-	};
+	const query = $derived(filters.q);
+
+	/**
+	 * `replaceState` from `$app/navigation`, not `goto(…, { replaceState: true })`.
+	 *
+	 * Because Back should step *out* of the page rather than walk backwards
+	 * through every keystroke. Shallow routing changes the address without
+	 * starting a navigation at all, which is what a filter wants.
+	 *
+	 * Not for the reason it is tempting to give: `goto` would *not* re-run the
+	 * server load. SvelteKit tracks the individual search params a load reads,
+	 * and `+layout.server.ts` reads only `embed` — changing `q` does not
+	 * invalidate it.
+	 */
+	function applyFilters(next: SessionFilters) {
+		filters = next;
+		replaceState(sessionFiltersHref(page.url, next), page.state);
+	}
+
+	const setQuery = (q: string) => applyFilters({ ...filters, q });
+
+	type FacetKey = 'tracks' | 'formats' | 'rooms';
+	const toggle = (key: FacetKey, id: string) =>
+		applyFilters({ ...filters, [key]: toggleFacetValue(filters[key], id) });
 
 	const visible = $derived(
 		view.sessions.filter(
 			(s) =>
-				matchesQuery(s, query) &&
-				(tracks.size === 0 || (s.trackId !== null && tracks.has(s.trackId))) &&
-				(formats.size === 0 || (s.formatId !== null && formats.has(s.formatId))) &&
-				(rooms.size === 0 || (s.roomId !== null && rooms.has(s.roomId)))
+				matchesQuery(s, filters.q) &&
+				(filters.tracks.length === 0 ||
+					(s.trackId !== null && filters.tracks.includes(s.trackId))) &&
+				(filters.formats.length === 0 ||
+					(s.formatId !== null && filters.formats.includes(s.formatId))) &&
+				(filters.rooms.length === 0 || (s.roomId !== null && filters.rooms.includes(s.roomId)))
 		)
 	);
 
-	const filtered = $derived(
-		query.trim() !== '' || tracks.size > 0 || formats.size > 0 || rooms.size > 0
-	);
+	const filtered = $derived(hasSessionFilters(filters));
 
-	const clearAll = () => {
-		query = '';
-		tracks.clear();
-		formats.clear();
-		rooms.clear();
-	};
+	const clearAll = () => applyFilters(EMPTY_SESSION_FILTERS);
 
 	const facets = $derived([
 		{
 			label: 'Track',
 			options: view.conference.tracks,
-			selected: tracks
+			key: 'tracks' as FacetKey,
+			selected: filters.tracks
 		},
 		{
 			label: 'Format',
 			options: view.conference.formats,
-			selected: formats
+			key: 'formats' as FacetKey,
+			selected: filters.formats
 		},
 		{
 			label: 'Location',
 			options: view.conference.rooms,
-			selected: rooms
+			key: 'rooms' as FacetKey,
+			selected: filters.rooms
 		}
 	]);
 </script>
@@ -194,7 +231,8 @@
 			<Input
 				id="session-search"
 				type="search"
-				bind:value={query}
+				value={query}
+				oninput={(event) => setQuery(event.currentTarget.value)}
 				placeholder="Session or speaker"
 				autocomplete="off"
 			/>
@@ -208,8 +246,9 @@
 						<li>
 							<label class="flex cursor-pointer items-center gap-2 text-sm">
 								<Checkbox
-									checked={facet.selected.has(option.id)}
-									onCheckedChange={() => toggle(facet.selected, option.id)}
+									checked={facet.selected.includes(option.id)}
+									onCheckedChange={() => toggle(facet.key, option.id)}
+									data-testid="session-facet-{facet.key}"
 								/>
 								<span class="text-muted-foreground">{option.name}</span>
 							</label>
