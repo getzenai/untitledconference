@@ -52,6 +52,13 @@ const RENAME_CONFERENCE = /^Rename the conference (\S+) to (.+)$/;
  */
 const LONG_ANSWER = /^Tell me something long$/;
 
+/**
+ * Three consecutive read tools in one step (#720). The panel folds finished
+ * calls behind "Used 3 tools"; this sentence is how Cypress asks for that
+ * shape without a real provider.
+ */
+const TOOL_TRACE = /^Look up rooms, tracks and formats$/;
+
 type PromptMessage = {
 	role?: string;
 	content?: string | Array<{ type?: string; text?: string }>;
@@ -106,6 +113,10 @@ export function wantsLongAnswer(prompt: unknown): boolean {
 	return LONG_ANSWER.test(lastUserText(prompt).trim());
 }
 
+export function wantsToolTrace(prompt: unknown): boolean {
+	return TOOL_TRACE.test(lastUserText(prompt).trim());
+}
+
 /** `/manage/<slug>/agenda` in the location sentence (`…/agenda, the page titled`). */
 const AGENDA_PATH = /\/manage\/([^/?#\s]+)\/agenda\b/;
 
@@ -130,7 +141,7 @@ function promptCorpus(prompt: unknown): string {
  * The slug of the agenda board the system prompt says the user is on.
  * The global `/chat` mock has no per-surface `mockCall` (#688); without this
  * it would always fire the reviewer default, and `agenda-chat.cy.ts` would
- * never see `get_agenda`.
+ * never see a `get_agenda` tool part.
  */
 export function parseAgendaSlug(prompt: unknown): string | undefined {
 	return promptCorpus(prompt).match(AGENDA_PATH)?.[1];
@@ -162,6 +173,13 @@ export function createMockChatModel(
 			if (promptAlreadyHasTool(prompt)) {
 				return { stream: simulateReadableStream({ chunks: textStep as never }) };
 			}
+			if (wantsToolTrace(prompt)) {
+				return {
+					stream: simulateReadableStream({
+						chunks: mockToolTraceChunks(manageSlugFromPrompt(prompt)) as never
+					})
+				};
+			}
 			const rename = parseConferenceRename(prompt);
 			const agendaSlug = parseAgendaSlug(prompt);
 			const chunks = rename
@@ -177,15 +195,36 @@ export function createMockChatModel(
 }
 
 function mockToolChunks(id: string, name: string, input: Record<string, unknown>) {
-	const args = JSON.stringify(input);
-	return [
-		{ type: 'stream-start' as const, warnings: [] },
-		{ type: 'tool-input-start' as const, id, toolName: name },
-		{ type: 'tool-input-delta' as const, id, delta: args },
-		{ type: 'tool-input-end' as const, id },
-		{ type: 'tool-call' as const, toolCallId: id, toolName: name, input: args },
-		{ type: 'finish' as const, finishReason: 'tool-calls' as const, usage: emptyUsage }
-	];
+	return mockManyToolChunks([{ id, name, input }]);
+}
+
+function manageSlugFromPrompt(prompt: unknown): string {
+	return promptCorpus(prompt).match(/\/manage\/([^/?#\s]+)\//)?.[1] ?? 'unknown';
+}
+
+function mockToolTraceChunks(conferenceSlug: string) {
+	return mockManyToolChunks([
+		{ id: 'call_rooms', name: 'list_rooms', input: { conferenceSlug } },
+		{ id: 'call_tracks', name: 'list_tracks', input: { conferenceSlug } },
+		{ id: 'call_formats', name: 'list_session_formats', input: { conferenceSlug } }
+	]);
+}
+
+function mockManyToolChunks(
+	calls: Array<{ id: string; name: string; input: Record<string, unknown> }>
+) {
+	const chunks: Array<Record<string, unknown>> = [{ type: 'stream-start' as const, warnings: [] }];
+	for (const call of calls) {
+		const args = JSON.stringify(call.input);
+		chunks.push(
+			{ type: 'tool-input-start' as const, id: call.id, toolName: call.name },
+			{ type: 'tool-input-delta' as const, id: call.id, delta: args },
+			{ type: 'tool-input-end' as const, id: call.id },
+			{ type: 'tool-call' as const, toolCallId: call.id, toolName: call.name, input: args }
+		);
+	}
+	chunks.push({ type: 'finish' as const, finishReason: 'tool-calls' as const, usage: emptyUsage });
+	return chunks;
 }
 
 /**

@@ -76,10 +76,9 @@ describe('Agenda board and the assistant', () => {
 
 			sendAssistant('What is on the board?');
 			cy.wait('@assistantChat');
-			cy.get('[data-testid="assistant-tool-name"]', { timeout: 20000 }).should(
-				'contain.text',
-				'get_agenda'
-			);
+			cy.get('[data-testid="assistant-tool-name"][data-tool-name="get_agenda"]', {
+				timeout: 20000
+			}).should('be.visible');
 		});
 	});
 

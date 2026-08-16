@@ -26,7 +26,8 @@ import {
 	parseAgendaSlug,
 	parseConferenceRename,
 	promptAlreadyHasTool,
-	wantsLongAnswer
+	wantsLongAnswer,
+	wantsToolTrace
 } from './model';
 
 describe('createChatModel', () => {
@@ -130,6 +131,22 @@ describe('mock chat prompt helpers', () => {
 		).toBe(false);
 	});
 
+	it('recognises the tool-trace sentence and nothing near it', () => {
+		expect(
+			wantsToolTrace([
+				{ role: 'user', content: [{ type: 'text', text: '  Look up rooms, tracks and formats  ' }] }
+			])
+		).toBe(true);
+		expect(
+			wantsToolTrace([
+				{
+					role: 'user',
+					content: [{ type: 'text', text: 'Look up rooms, tracks and formats please' }]
+				}
+			])
+		).toBe(false);
+	});
+
 	it('reads the agenda slug from the system location line', () => {
 		expect(
 			parseAgendaSlug([
@@ -213,6 +230,31 @@ describe('mock chat prompt helpers', () => {
 			toolName: 'list_my_review_assignments',
 			input: JSON.stringify({})
 		});
+	});
+
+	it('emits three read tools for the tool-trace sentence', async () => {
+		const model = createMockChatModel() as MockLanguageModelV3;
+		const result = await model.doStream({
+			prompt: [
+				{
+					role: 'system',
+					content: 'The user is on /manage/acme-2028/dashboard, the page titled "Dashboard".'
+				},
+				{
+					role: 'user',
+					content: [{ type: 'text', text: 'Look up rooms, tracks and formats' }]
+				}
+			]
+		} as never);
+		const names: string[] = [];
+		const reader = result.stream.getReader();
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			const chunk = value as { type?: string; toolName?: string };
+			if (chunk.type === 'tool-call' && chunk.toolName) names.push(chunk.toolName);
+		}
+		expect(names).toEqual(['list_rooms', 'list_tracks', 'list_session_formats']);
 	});
 
 	it('still prefers a rename sentence over the agenda page', async () => {

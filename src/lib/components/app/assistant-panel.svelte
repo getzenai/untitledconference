@@ -27,6 +27,7 @@
 		ConversationScrollButton,
 		MessageAnchor
 	} from '$lib/components/ai-elements/conversation';
+	import { groupMessageParts, ToolGroup, type GenericPart } from '$lib/components/ai-elements/tool';
 	import { assistantWriteRefreshesPage } from '$lib/chat/auto-run-writes';
 	import { pageContext, visiblePageTitle } from '$lib/chat/page-context';
 	import { pageFocus } from '$lib/chat/page-focus.svelte';
@@ -157,52 +158,46 @@
 									{message.role === 'user' ? 'You' : 'Assistant'}
 								</div>
 								<div class="mt-1 flex flex-col gap-1.5">
-									{#each message.parts as part, partIndex (partIndex)}
-										{#if part.type === 'text'}
-											<AssistantReply text={part.text} />
-										{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
-											<div
-												class="border-border bg-background rounded-md border p-3"
-												data-testid="assistant-approval"
-											>
-												<p class="font-medium">{toolLabel(getToolName(part))}</p>
-												<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
-													{#each toolInputLines(part.input) as line (line.key)}
-														<dt class="text-muted-foreground">{line.key}</dt>
-														<dd class="break-words">{line.value}</dd>
-													{/each}
-												</dl>
-												<div class="mt-2 flex gap-2">
-													<Button
-														type="button"
-														size="sm"
-														data-testid="assistant-approve"
-														onclick={() => decide(part.approval.id, true)}
-													>
-														Do it
-													</Button>
-													<Button
-														type="button"
-														size="sm"
-														variant="outline"
-														data-testid="assistant-deny"
-														onclick={() => decide(part.approval.id, false)}
-													>
-														Don't
-													</Button>
+									{#each groupMessageParts(message.parts as GenericPart[]) as segment, segmentIndex (segmentIndex)}
+										{#if segment.kind === 'tool-group'}
+											<ToolGroup parts={segment.parts} streaming={pending} />
+										{:else}
+											{@const part = message.parts[segment.index]}
+											{#if part.type === 'text' && part.text}
+												<AssistantReply text={part.text} />
+											{:else if isToolUIPart(part) && part.state === 'approval-requested' && part.approval}
+												<div
+													class="border-border bg-background rounded-md border p-3"
+													data-testid="assistant-approval"
+												>
+													<p class="font-medium">{toolLabel(getToolName(part))}</p>
+													<dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+														{#each toolInputLines(part.input) as line (line.key)}
+															<dt class="text-muted-foreground">{line.key}</dt>
+															<dd class="break-words">{line.value}</dd>
+														{/each}
+													</dl>
+													<div class="mt-2 flex gap-2">
+														<Button
+															type="button"
+															size="sm"
+															data-testid="assistant-approve"
+															onclick={() => decide(part.approval.id, true)}
+														>
+															Do it
+														</Button>
+														<Button
+															type="button"
+															size="sm"
+															variant="outline"
+															data-testid="assistant-deny"
+															onclick={() => decide(part.approval.id, false)}
+														>
+															Don't
+														</Button>
+													</div>
 												</div>
-											</div>
-										{:else if isToolUIPart(part) && part.state === 'output-denied'}
-											<p class="text-muted-foreground text-xs" data-testid="assistant-denied">
-												{toolLabel(getToolName(part))} — not done.
-											</p>
-										{:else if isToolUIPart(part)}
-											<p
-												class="bg-muted text-muted-foreground w-fit rounded-md px-2 py-0.5 font-mono text-xs"
-												data-testid="assistant-tool-name"
-											>
-												{getToolName(part)}
-											</p>
+											{/if}
 										{/if}
 									{/each}
 									{#if stopped.has(message.id)}
