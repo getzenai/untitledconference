@@ -6,7 +6,7 @@
  * All three are tested here against the database rather than through the page, because
  * a page that hides something is not the same as a server that never sent it.
  */
-import { db } from '$lib/server/db';
+import { db, withRequestScopedDb } from '$lib/server/db';
 import { organization, user } from '$lib/server/db/auth-schema';
 import {
 	cfpFormTable,
@@ -679,7 +679,67 @@ describe('saving a review', () => {
 		expect(stale).toMatchObject({ ok: false, reason: 'conflict' });
 		expect((await reviewerSubmission(now, ME, mine))?.own.comment).toBe('tab-b');
 	});
+
+	it('lets a second tab through when it wants the same review that is already there (#748)', async () => {
+		const now = await conferenceNow();
+		const firstLook = (await reviewerSubmission(now, ME, mine))!.own.baseline;
+		const same = {
+			answers: { [criterionId]: '4' },
+			comment: 'same sentence',
+			submit: false,
+			expectedBaseline: firstLook
+		};
+
+		expect(await saveReview(now, ME, mine, same)).toEqual({ ok: true });
+		// Lost response, or two tabs that typed the same thing: the baseline
+		// is stale, the desired row is not. Asking the reviewer to pick
+		// between two identical versions is the bug, not the protection.
+		expect(await saveReview(now, ME, mine, same)).toEqual({ ok: true });
+		expect((await reviewerSubmission(now, ME, mine))?.own.comment).toBe('same sentence');
+	});
+
+	it('one overlapping save wins, the other sees 409 (#748)', async () => {
+		// The process-wide client is max: 1, so two transactions on it queue
+		// rather than race. Own connections are what make the lock the thing
+		// under test, the same way the agenda-swap spec does.
+		const now = await conferenceNow();
+		const firstLook = (await reviewerSubmission(now, ME, mine))!.own.baseline;
+		const [left, right] = await Promise.all([
+			onOwnConnection(() =>
+				saveReview(now, ME, mine, {
+					answers: { [criterionId]: '1' },
+					comment: 'tab-a',
+					submit: false,
+					expectedBaseline: firstLook
+				})
+			),
+			onOwnConnection(() =>
+				saveReview(now, ME, mine, {
+					answers: { [criterionId]: '5' },
+					comment: 'tab-b',
+					submit: false,
+					expectedBaseline: firstLook
+				})
+			)
+		]);
+
+		const outcomes = [left, right];
+		expect(outcomes.filter((r) => r.ok)).toHaveLength(1);
+		const lost = outcomes.find((r) => !r.ok);
+		expect(lost).toMatchObject({ ok: false, reason: 'conflict' });
+		const kept = (await reviewerSubmission(now, ME, mine))?.own.comment;
+		expect(['tab-a', 'tab-b']).toContain(kept);
+		expect(lost && 'current' in lost ? lost.current.comment : null).toBe(kept);
+	});
 });
+
+/** A connection of this call's own, so two transactions can genuinely overlap. */
+function onOwnConnection<T>(fn: () => Promise<T>): Promise<T> {
+	let closing: Promise<void> | undefined;
+	return withRequestScopedDb(fn, (c) => {
+		closing = c;
+	}).finally(() => closing);
+}
 
 /**
  * ABS-01. #207 gave the round an `opensAt`/`closesAt` pair and recorded it without
