@@ -9,7 +9,8 @@
 	 *
 	 * `AppSelect` can fire an empty `onValueChange` while it mounts. Ignore
 	 * that until we are mounted, or a restored pick is wiped before the
-	 * parked copy is read.
+	 * parked copy is read. A later empty choice must go through — see
+	 * `chooseBrowserDraftSelect`.
 	 */
 	import { onMount } from 'svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
@@ -19,6 +20,7 @@
 		writeBrowserDraft,
 		type BrowserDraft
 	} from '$lib/forms/browser-draft';
+	import { chooseBrowserDraftSelect } from '$lib/forms/browser-draft-select';
 
 	type SelectOption = { value: string; label: string };
 
@@ -105,10 +107,17 @@
 	}
 
 	function choose(next: string): void {
-		// Mount noise: bits-ui can report empty before the parked copy is read.
-		if (!mounted && next === '' && value) return;
-		emit(next);
-		if (mounted) syncDraft();
+		const result = chooseBrowserDraftSelect(localStorage, {
+			mounted,
+			next,
+			value,
+			baseline,
+			scope,
+			owner,
+			conflict: Boolean(conflict)
+		});
+		if (!result.accepted) return;
+		emit(result.value);
 	}
 
 	onMount(() => {
