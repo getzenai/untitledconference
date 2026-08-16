@@ -5,6 +5,7 @@
  * One intentional deviation from the screen lives in refuseCollision below:
  * the builder lets clashes land (AIA-05); an agent gets the refusal instead.
  */
+import { MISSING_STRUCTURE_NAME } from '$lib/conference/structure-lines';
 import {
 	addRoom,
 	agendaBoard,
@@ -262,7 +263,7 @@ function createRoom(ctx: McpContext): AnyMcpToolDefinition {
 			const conference = await organizerConference(conferenceSlug, ctx);
 			const trimmed = name.trim();
 			if (!trimmed) {
-				throw new McpToolError('Give the room a name.');
+				throw new McpToolError(MISSING_STRUCTURE_NAME.room);
 			}
 			const before = await agendaBoard(conference.id);
 			const existing = before.rooms.find(

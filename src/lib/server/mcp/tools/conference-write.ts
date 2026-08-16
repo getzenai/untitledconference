@@ -6,6 +6,7 @@
 import {
 	MAX_MINUTES,
 	MAX_NAME,
+	MISSING_STRUCTURE_NAME,
 	parseFormatLines,
 	parseNames
 } from '$lib/conference/structure-lines';
@@ -797,7 +798,7 @@ function parseCreatedFormat(
 	}
 	const wanted = parsed.formats[0];
 	if (!wanted) {
-		throw new McpToolError('Give the format a name.');
+		throw new McpToolError(MISSING_STRUCTURE_NAME.format);
 	}
 	return wanted;
 }
@@ -924,7 +925,7 @@ function createTrackTool(ctx: McpContext): AnyMcpToolDefinition {
 			const conference = await organizerConference(conferenceSlug, ctx);
 			const [wanted] = parseNames(name);
 			if (!wanted) {
-				throw new McpToolError('Give the track a name.');
+				throw new McpToolError(MISSING_STRUCTURE_NAME.track);
 			}
 			const before = await conferenceConfig(conference.id);
 			const existing = before.tracks.find(
