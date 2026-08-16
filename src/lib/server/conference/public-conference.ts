@@ -16,10 +16,15 @@
  * Ids are stringified at this boundary: the contract in `public-types` uses
  * strings so the interface never does arithmetic on a primary key.
  */
+import { directoryCall, type DirectoryCall } from '$lib/conference/call-window';
 import type { PublicConference, PublicSession, PublicSpeaker } from '$lib/conference/public-types';
 import { isPublishableUrl, parseSpeakerLinks } from '$lib/conference/speaker-links';
 import { db } from '$lib/server/db';
-import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
+import {
+	cfpFormTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import {
 	conferenceDayTable,
 	conferenceTable,
@@ -378,6 +383,12 @@ export type PublicConferenceSummary = {
 	/** Null when the organizer has not fixed dates yet — see PublicConference. */
 	startsOn: string | null;
 	endsOn: string | null;
+	/**
+	 * Whether `/c/<slug>/cfp` is taking submissions, exists but is shut, or 404s.
+	 * Same source as the public CFP page (`openCall` / `callWindow`), not a
+	 * second date comparison on the card (#709).
+	 */
+	call: DirectoryCall;
 };
 
 /**
@@ -420,16 +431,26 @@ export async function listDirectoryConferences(): Promise<PublicConferenceSummar
 	);
 }
 
-async function selectSummaries(where: SQL): Promise<PublicConferenceSummary[]> {
+async function selectSummaries(where: SQL, now = new Date()): Promise<PublicConferenceSummary[]> {
 	const rows = await db
 		.select({
 			slug: conferenceTable.slug,
 			name: conferenceTable.name,
 			venue: conferenceTable.venue,
 			startsOn: conferenceTable.startsOn,
-			endsOn: conferenceTable.endsOn
+			endsOn: conferenceTable.endsOn,
+			formStatus: cfpFormTable.status,
+			opensAt: cfpFormTable.opensAt,
+			closesAt: cfpFormTable.closesAt
 		})
 		.from(conferenceTable)
+		.leftJoin(
+			cfpFormTable,
+			and(
+				eq(cfpFormTable.conferenceId, conferenceTable.id),
+				inArray(cfpFormTable.status, ['published', 'closed'])
+			)
+		)
 		.where(where)
 		.orderBy(asc(conferenceTable.startsOn), asc(conferenceTable.name));
 
@@ -438,6 +459,12 @@ async function selectSummaries(where: SQL): Promise<PublicConferenceSummary[]> {
 		name: row.name,
 		venue: row.venue,
 		startsOn: row.startsOn,
-		endsOn: row.endsOn
+		endsOn: row.endsOn,
+		call: directoryCall(
+			row.formStatus
+				? { opensAt: row.opensAt, closesAt: row.closesAt, status: row.formStatus }
+				: null,
+			now
+		)
 	}));
 }

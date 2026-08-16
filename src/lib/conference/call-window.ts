@@ -15,6 +15,16 @@
 /** Why the form is or is not accepting submissions right now (CFP-04, CFP-16). */
 export type CallWindow = 'open' | 'not_yet_open' | 'closed';
 
+/**
+ * What a directory card can say about the call (#709).
+ *
+ * Three values, not the four `CallWindow` ones: the front door only needs to
+ * know whether a visitor can submit, whether a CFP page exists but is shut,
+ * or whether `/c/<slug>/cfp` will 404. `not_yet_open` is `closed` here — the
+ * page is there, the form is not taking anything.
+ */
+export type DirectoryCall = 'open' | 'closed' | 'none';
+
 /** Timestamps arrive as `Date` on the server and as strings once serialized. */
 type Instant = Date | string | null | undefined;
 
@@ -35,4 +45,21 @@ export function callWindow(
 	const closes = at(closesAt);
 	if (closes && closes <= now) return 'closed';
 	return 'open';
+}
+
+/**
+ * Collapse a published-or-closed form (or its absence) to a directory answer.
+ *
+ * `none` is the CFP 404: `openCall` returns null when there is no published or
+ * closed form. A form that exists but is not taking submissions is `closed`.
+ * The window itself is `callWindow` — the same function `/c/<slug>/cfp` uses.
+ */
+export function directoryCall(
+	form: { opensAt: Instant; closesAt: Instant; status: string } | null,
+	now: Date
+): DirectoryCall {
+	if (!form || (form.status !== 'published' && form.status !== 'closed')) return 'none';
+	return callWindow(form.opensAt, form.closesAt, form.status === 'closed', now) === 'open'
+		? 'open'
+		: 'closed';
 }

@@ -3,7 +3,7 @@
  * CFP banner and the unpublish confirmation (#452). Each had its own copy before.
  */
 import { describe, expect, it } from 'vitest';
-import { callWindow } from './call-window';
+import { callWindow, directoryCall } from './call-window';
 
 const now = new Date('2027-03-10T12:00:00Z');
 
@@ -31,5 +31,23 @@ describe('call window', () => {
 	it('reads timestamps that have been through JSON', () => {
 		expect(callWindow('2027-03-10T12:00:01Z', null, false, now)).toBe('not_yet_open');
 		expect(callWindow(null, '2027-03-01T00:00:00Z', false, now)).toBe('closed');
+	});
+});
+
+describe('directory call', () => {
+	it('is none when there is no published form — the CFP 404', () => {
+		expect(directoryCall(null, now)).toBe('none');
+		expect(directoryCall({ opensAt: null, closesAt: null, status: 'draft' }, now)).toBe('none');
+	});
+
+	it('is open only while callWindow is open', () => {
+		expect(directoryCall({ opensAt: null, closesAt: null, status: 'published' }, now)).toBe('open');
+		expect(
+			directoryCall(
+				{ opensAt: new Date('2027-03-10T12:00:01Z'), closesAt: null, status: 'published' },
+				now
+			)
+		).toBe('closed');
+		expect(directoryCall({ opensAt: null, closesAt: null, status: 'closed' }, now)).toBe('closed');
 	});
 });

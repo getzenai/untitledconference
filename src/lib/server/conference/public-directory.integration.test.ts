@@ -129,7 +129,8 @@ describe('listDirectoryConferences', () => {
 			name: 'Sooner Conf',
 			venue: 'Hall A',
 			startsOn: '2027-05-12',
-			endsOn: '2027-05-12'
+			endsOn: '2027-05-12',
+			call: 'none'
 		});
 	});
 });

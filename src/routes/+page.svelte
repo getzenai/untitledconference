@@ -26,6 +26,16 @@
 	 * app, and the product page is out of reach again.
 	 */
 	const selfHref = $derived(data.user ? '/?home=0' : '/');
+
+	/**
+	 * The conference a "live" CTA may name (#709).
+	 *
+	 * `call` is computed with the same `openCall` / `callWindow` rule the CFP
+	 * page 404s on. The template does not compare dates; it only looks for
+	 * `open`. No open call means this is null — the button must not say *live*
+	 * and must not point at a finished programme.
+	 */
+	const live = $derived(data.conferences.find((conference) => conference.call === 'open'));
 </script>
 
 <svelte:head>
@@ -108,9 +118,13 @@
 							Create your conference
 							<ArrowRightIcon />
 						</Button>
-						{#if data.conferences.length > 0}
-							<Button href="/c/{data.conferences[0].slug}" variant="outline" size="lg">
+						{#if live}
+							<Button href="/c/{live.slug}" variant="outline" size="lg">
 								Explore a live conference
+							</Button>
+						{:else if data.conferences.length > 0}
+							<Button href="#live-events" variant="outline" size="lg">
+								See a published conference
 							</Button>
 						{:else}
 							<Button href={REPO_URL} variant="outline" size="lg">
@@ -445,9 +459,17 @@
 									class="border-border bg-background hover:border-foreground/30 group flex h-full flex-col rounded-2xl border p-6 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
 								>
 									<div class="flex items-start justify-between gap-4">
-										<CalendarDaysIcon class="text-muted-foreground size-5" /><ArrowRightIcon
-											class="text-muted-foreground size-4 transition-transform group-hover:translate-x-1"
-										/>
+										<CalendarDaysIcon class="text-muted-foreground size-5" />
+										<div class="flex items-center gap-2">
+											{#if conference.call === 'open'}
+												<Badge variant="outline" class="rounded-full px-2 py-0.5 text-[10px]"
+													>Call open</Badge
+												>
+											{/if}
+											<ArrowRightIcon
+												class="text-muted-foreground size-4 transition-transform group-hover:translate-x-1"
+											/>
+										</div>
 									</div>
 									<h3 class="mt-8 font-semibold">{conference.name}</h3>
 									<p class="text-muted-foreground mt-2 text-sm">
