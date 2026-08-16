@@ -15,7 +15,10 @@
 	import { onMount, tick } from 'svelte';
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
 	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
-	import { browserDraftLeavePrompt } from '$lib/conference/browser-draft-copy';
+	import {
+		browserDraftLeavePrompt,
+		browserDraftStayHint
+	} from '$lib/conference/browser-draft-copy';
 	import { formatInstant } from '$lib/conference/deadline';
 	import {
 		parsePortalProposalDraft,
@@ -180,6 +183,10 @@
 			</div>
 		</div>
 	{/if}
+
+	<p class="text-muted-foreground mt-4 text-sm" data-testid="portal-edit-draft-hint">
+		{browserDraftStayHint('your proposal edit')}
+	</p>
 
 	{#key restored}
 		<ProposalForm
