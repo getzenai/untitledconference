@@ -4,7 +4,9 @@
 	 *
 	 * One form per organization, because the profile is org-wide: someone who has
 	 * spoken for two organizers has two records and may want a different bio in
-	 * each. Merging them into one form would silently overwrite both.
+	 * each. Merging them into one form would silently overwrite both. Typed
+	 * fields park under `portal-{field}:{profileId}` (#789). The headshot is a
+	 * file and is not parked.
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
@@ -17,14 +19,19 @@
 		AlertDialogHeader,
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
-	import { Textarea } from '$lib/components/ui/textarea';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { isUploadedHeadshot } from '$lib/conference/headshot';
+	import {
+		PORTAL_PROFILE_LEAVE_PROMPT,
+		portalProfileFieldScope
+	} from '$lib/conference/portal-profile-draft';
 	import { initials } from '$lib/conference/public-view';
 	import { parseSpeakerLinks, SPEAKER_LINK_ROWS } from '$lib/conference/speaker-links';
 	import { HEADSHOT_ACCEPT } from '$lib/conference/upload-limits';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
@@ -32,6 +39,13 @@
 	// One dialog is open at a time, and which one is a profile id: a speaker who
 	// has spoken for two organizers has two headshots on this page.
 	let confirmRemoveHeadshot = $state<number | null>(null);
+	let commitByProfile = $state<Record<number, number>>({});
+	const dirtyFields = new SvelteSet<string>();
+
+	function setFieldDirty(id: string, dirty: boolean) {
+		if (dirty) dirtyFields.add(id);
+		else dirtyFields.delete(id);
+	}
 
 	const submitting = () => {
 		busy = true;
@@ -44,6 +58,27 @@
 				// `{#if isUploadedHeadshot(...)}`. A refused removal does not, and
 				// the question would stand over the answer.
 				confirmRemoveHeadshot = null;
+			}
+		};
+	};
+
+	/** Save only: a refused URL must not raise the token or the typed row is gone. */
+	const saving = (profileId: number) => () => {
+		busy = true;
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			try {
+				await update(formUpdateOptions('edit'));
+				if (result.type === 'success') {
+					commitByProfile[profileId] = (commitByProfile[profileId] ?? 0) + 1;
+				}
+			} finally {
+				busy = false;
 			}
 		};
 	};
@@ -72,6 +107,8 @@
 <svelte:head>
 	<title>Your speaker profile</title>
 </svelte:head>
+
+<UnsavedGuard dirty={dirtyFields.size > 0} message={PORTAL_PROFILE_LEAVE_PROMPT} />
 
 <div class="mx-auto max-w-4xl px-6 py-8">
 	<a href="/portal" class="text-muted-foreground hover:text-foreground text-sm">← Speaker portal</a>
@@ -231,18 +268,37 @@
 				</div>
 			</div>
 
-			<form method="POST" action="?/save" use:enhance={submitting} class="mt-6 space-y-4">
+			<form method="POST" action="?/save" use:enhance={saving(profile.id)} class="mt-6 space-y-4">
 				<input type="hidden" name="profileId" value={profile.id} />
 
 				<div class="grid gap-4 sm:grid-cols-2">
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Name *</span>
-						<Input name="name" class="mt-1" value={profile.name} required />
+						<BrowserDraftInput
+							name="name"
+							class="mt-1"
+							scope={portalProfileFieldScope(profile.id, 'name')}
+							owner={data.user.id}
+							baseline={profile.name}
+							required
+							testId="profile-name"
+							commitToken={commitByProfile[profile.id] ?? 0}
+							ondirtychange={(dirty) => setFieldDirty(`${profile.id}:name`, dirty)}
+						/>
 					</label>
 
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Sort as</span>
-						<Input name="sortName" class="mt-1" value={profile.sortName} />
+						<BrowserDraftInput
+							name="sortName"
+							class="mt-1"
+							scope={portalProfileFieldScope(profile.id, 'sortName')}
+							owner={data.user.id}
+							baseline={profile.sortName}
+							testId="profile-sort-name"
+							commitToken={commitByProfile[profile.id] ?? 0}
+							ondirtychange={(dirty) => setFieldDirty(`${profile.id}:sortName`, dirty)}
+						/>
 						<span class="text-muted-foreground mt-1 block text-xs">
 							How your name is filed in alphabetical lists.
 						</span>
@@ -252,36 +308,73 @@
 				<div class="grid gap-4 sm:grid-cols-2">
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Job title</span>
-						<Input name="jobTitle" class="mt-1" value={profile.jobTitle ?? ''} />
+						<BrowserDraftInput
+							name="jobTitle"
+							class="mt-1"
+							scope={portalProfileFieldScope(profile.id, 'jobTitle')}
+							owner={data.user.id}
+							baseline={profile.jobTitle ?? ''}
+							testId="profile-job-title"
+							commitToken={commitByProfile[profile.id] ?? 0}
+							ondirtychange={(dirty) => setFieldDirty(`${profile.id}:jobTitle`, dirty)}
+						/>
 					</label>
 
 					<label class="block text-sm">
 						<span class="text-muted-foreground text-xs">Company</span>
-						<Input name="company" class="mt-1" value={profile.company ?? ''} />
+						<BrowserDraftInput
+							name="company"
+							class="mt-1"
+							scope={portalProfileFieldScope(profile.id, 'company')}
+							owner={data.user.id}
+							baseline={profile.company ?? ''}
+							testId="profile-company"
+							commitToken={commitByProfile[profile.id] ?? 0}
+							ondirtychange={(dirty) => setFieldDirty(`${profile.id}:company`, dirty)}
+						/>
 					</label>
 				</div>
 
 				<label class="block text-sm">
 					<span class="text-muted-foreground text-xs">Short bio</span>
-					<Textarea name="bio" rows={5} class="mt-1" value={profile.bio ?? ''} />
+					<BrowserDraftInput
+						name="bio"
+						class="mt-1"
+						scope={portalProfileFieldScope(profile.id, 'bio')}
+						owner={data.user.id}
+						baseline={profile.bio ?? ''}
+						rows={5}
+						testId="profile-bio"
+						commitToken={commitByProfile[profile.id] ?? 0}
+						ondirtychange={(dirty) => setFieldDirty(`${profile.id}:bio`, dirty)}
+					/>
 				</label>
 
 				<fieldset class="space-y-2">
 					<legend class="text-muted-foreground text-xs">Links</legend>
 					{#each linkRows(profile.links) as row, i (i)}
 						<div class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-							<Input
+							<BrowserDraftInput
 								name="linkLabel{i}"
-								value={row.label}
+								scope={portalProfileFieldScope(profile.id, `linkLabel${i}`)}
+								owner={data.user.id}
+								baseline={row.label}
 								placeholder={LINK_EXAMPLES[i]?.label ?? 'Link'}
 								aria-label="Link {i + 1} label"
+								testId="profile-link-label-{i}"
+								commitToken={commitByProfile[profile.id] ?? 0}
+								ondirtychange={(dirty) => setFieldDirty(`${profile.id}:linkLabel${i}`, dirty)}
 							/>
-							<Input
+							<BrowserDraftInput
 								name="linkUrl{i}"
-								type="url"
-								value={row.url}
+								scope={portalProfileFieldScope(profile.id, `linkUrl${i}`)}
+								owner={data.user.id}
+								baseline={row.url}
 								placeholder={LINK_EXAMPLES[i]?.url ?? 'https://…'}
 								aria-label="Link {i + 1} address"
+								testId="profile-link-url-{i}"
+								commitToken={commitByProfile[profile.id] ?? 0}
+								ondirtychange={(dirty) => setFieldDirty(`${profile.id}:linkUrl${i}`, dirty)}
 							/>
 						</div>
 					{/each}

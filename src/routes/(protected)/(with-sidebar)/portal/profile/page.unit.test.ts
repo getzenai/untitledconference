@@ -10,10 +10,15 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
 
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
+
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	beforeNavigate: vi.fn()
+}));
 
 const profile = (over: Partial<Record<string, unknown>> = {}) => ({
 	id: 7,
@@ -35,7 +40,8 @@ const draw = (profiles: ReturnType<typeof profile>[], form: unknown = null) =>
 		props: {
 			data: {
 				profiles,
-				account: { name: 'Priya Raman', email: 'priya@example.test' }
+				account: { name: 'Priya Raman', email: 'priya@example.test' },
+				user: { id: 'ada', name: 'Priya Raman', email: 'priya@example.test' }
 			},
 			form
 		} as never
@@ -152,6 +158,24 @@ describe('the speaker profile page', () => {
 		// Uploading a new picture overwrites nothing a speaker cannot redo, so it
 		// stays a single click. Only the delete asks.
 		expect(source.match(/confirmRemoveHeadshot = profile\.id;/g)).toHaveLength(1);
+	});
+
+	it('parks the typed fields from portalProfileFieldScope, not the roster or a contact', () => {
+		expect(source).toContain('BrowserDraftInput');
+		expect(source).toContain('portalProfileFieldScope');
+		expect(source).toContain("portalProfileFieldScope(profile.id, 'name')");
+		expect(source).toContain("portalProfileFieldScope(profile.id, 'bio')");
+		expect(source).toContain('`linkUrl${i}`');
+		expect(source).toContain('rows={5}');
+		expect(source).toContain('PORTAL_PROFILE_LEAVE_PROMPT');
+		expect(source).toContain('UnsavedGuard');
+		expect(source).toContain("result.type === 'success'");
+		expect(source).not.toContain('speakerFieldScope');
+		expect(source).not.toContain('contactFieldScope');
+		// The file picker is a byte upload, not a typed draft. Email is not a field.
+		expect(source).toContain('type="file"');
+		expect(source).toContain('name="headshot"');
+		expect(source).not.toContain('name="email"');
 	});
 
 	it('reports a rejected save against the profile it belongs to', () => {
