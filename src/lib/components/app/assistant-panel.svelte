@@ -31,7 +31,9 @@
 		MessageAnchor
 	} from '$lib/components/ai-elements/conversation';
 	import { groupMessageParts, ToolGroup, type GenericPart } from '$lib/components/ai-elements/tool';
+	import { page } from '$app/state';
 	import type { AssistantLedger } from '$lib/chat/assistant-ledger';
+	import { assistantDescription, assistantSuggestions } from '$lib/chat/assistant-suggestions';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
 	import { chatErrorMessage } from '$lib/chat/chat-error';
 	import AssistantReply from './assistant-reply.svelte';
@@ -59,6 +61,10 @@
 	let stopFromIndex = $state<number | null>(ledger.stopFromIndex);
 
 	const pending = $derived(chat.status === 'submitted' || chat.status === 'streaming');
+	const suggestions = $derived(assistantSuggestions({ routeId: page.route.id }));
+	const description = $derived(assistantDescription(page.route.id));
+	const showSuggestions = $derived(chat.messages.length === 0 && !pending);
+	let inputEl = $state<HTMLTextAreaElement | null>(null);
 
 	$effect(() => {
 		if (stopFromIndex === null || pending) return;
@@ -104,6 +110,12 @@
 	function decide(id: string, ok: boolean) {
 		void chat.addToolApprovalResponse({ id, approved: ok });
 	}
+
+	function pickSuggestion(text: string) {
+		if (pending) return;
+		input = text;
+		inputEl?.focus();
+	}
 </script>
 
 <Sheet.Root bind:open>
@@ -116,8 +128,8 @@
 			<div class="flex items-start justify-between gap-3 pr-8">
 				<div class="min-w-0">
 					<Sheet.Title>Guus</Sheet.Title>
-					<Sheet.Description>
-						Ask about this page. It can look things up and change them once you say yes.
+					<Sheet.Description data-testid="assistant-description">
+						{description}
 					</Sheet.Description>
 				</div>
 				{#if chat.messages.length > 0}
@@ -217,10 +229,26 @@
 			</p>
 		{/if}
 
+		{#if showSuggestions}
+			<div class="flex flex-wrap gap-2 px-4 pb-2" data-testid="assistant-suggestions">
+				{#each suggestions as suggestion (suggestion.tool + suggestion.text)}
+					<button
+						type="button"
+						class="border-border hover:bg-muted rounded-full border px-3 py-1 text-left text-xs"
+						data-testid="assistant-suggestion"
+						onclick={() => pickSuggestion(suggestion.text)}
+					>
+						{suggestion.text}
+					</button>
+				{/each}
+			</div>
+		{/if}
+
 		<form class="flex items-end gap-2 px-4 pb-4" onsubmit={handleSubmit}>
 			<Textarea
+				bind:ref={inputEl}
 				bind:value={input}
-				placeholder="What can I do on this page?"
+				placeholder="Ask Guus"
 				autocomplete="off"
 				rows={1}
 				disabled={pending}

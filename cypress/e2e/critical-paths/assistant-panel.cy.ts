@@ -307,4 +307,69 @@ describe('Assistant panel', () => {
 			.find('[data-testid="assistant-stopped"]')
 			.should('be.visible');
 	});
+
+	it('fills the input from a chip and does not send', function () {
+		if (!chatEnabled) this.skip();
+
+		seedConference('Chip Summit').then(({ slug }) => {
+			cy.visit(`/manage/${slug}/agenda`);
+			cy.waitForHydration();
+			openAssistant();
+
+			cy.intercept('POST', '/chat').as('assistantChat');
+			cy.get('[data-testid="assistant-description"]').should(($line) => {
+				expect($line.text()).to.not.match(/this page|say yes|ask about/i);
+			});
+			cy.get('[data-testid="assistant-suggestion"]').should(
+				'contain.text',
+				"What's still unscheduled?"
+			);
+			cy.get('[data-testid="assistant-suggestion"]').contains("What's still unscheduled?").click();
+			cy.get('[data-testid="assistant-input"]').should('have.value', "What's still unscheduled?");
+			cy.get('@assistantChat.all').should('have.length', 0);
+			cy.get('[data-testid="assistant-messages"] [data-role="user"]').should('not.exist');
+		});
+	});
+
+	it('fills a fallback chip on a page with no specific openers', function () {
+		if (!chatEnabled) this.skip();
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+
+		cy.intercept('POST', '/chat').as('assistantChat');
+		cy.get('[data-testid="assistant-description"]').should(($line) => {
+			expect($line.text()).to.not.match(/this page|say yes|ask about/i);
+		});
+		cy.get('[data-testid="assistant-suggestion"]')
+			.first()
+			.then(($chip) => {
+				const text = $chip.text().trim();
+				expect(text.length, 'a chip names something').to.be.greaterThan(0);
+				cy.wrap($chip).click();
+				cy.get('[data-testid="assistant-input"]').should('have.value', text);
+			});
+		cy.get('@assistantChat.all').should('have.length', 0);
+		cy.get('[data-testid="assistant-messages"] [data-role="user"]').should('not.exist');
+	});
+
+	it('hides chips after a send and brings them back on a new chat', function () {
+		if (!chatEnabled) this.skip();
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+
+		cy.get('[data-testid="assistant-suggestions"]').should('be.visible');
+		sendAssistant('What can I do here?');
+		cy.get('[data-testid="assistant-pending"]').should('not.exist');
+		cy.get('[data-testid="assistant-suggestions"]').should('not.exist');
+
+		cy.get('[data-testid="assistant-new-chat"]').click();
+		cy.get('[data-testid="assistant-suggestions"]').should('be.visible');
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
+	});
 });
