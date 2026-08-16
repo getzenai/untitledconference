@@ -6,6 +6,8 @@
  * baseline so a later server version cannot be silently overwritten.
  */
 
+import { reviewWriteBaseline } from './review-write-baseline';
+
 export type ReviewDraft = {
 	comment: string;
 	scores: Record<number, string>;
@@ -18,23 +20,15 @@ export function reviewDraftScope(slug: string, submissionId: number, roundId: nu
 /**
  * Identity of the server scorecard this draft was typed from.
  *
- * Same three fields the server write compares (`reviewWriteBaseline`):
- * status, comment, scores. Score keys are sorted so the token does not
- * depend on the order the form walked the criteria.
+ * Same encoding as the write (`reviewWriteBaseline`): one function, so
+ * the two halves cannot drift.
  */
 export function reviewDraftBaseline(input: {
 	status: string;
 	comment: string;
 	scores: Record<number, string>;
 }): string {
-	const scores: Record<string, string> = {};
-	for (const id of Object.keys(input.scores)
-		.map(Number)
-		.filter((id) => Number.isInteger(id))
-		.sort((a, b) => a - b)) {
-		scores[String(id)] = input.scores[id] ?? '';
-	}
-	return JSON.stringify({ status: input.status, comment: input.comment, scores });
+	return reviewWriteBaseline(input);
 }
 
 /** A comment or any filled criterion — an empty form is not a draft. */

@@ -49,6 +49,7 @@
 
 	const stamp = (value: Date | string | null) =>
 		value ? new Date(value).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : '';
+	const writeConflict = $derived(Boolean(form && 'conflict' in form && form.conflict));
 </script>
 
 <FilePreviewSheet bind:preview />
@@ -224,10 +225,29 @@
 		</section>
 	</article>
 
-	<ReviewScorecardForm
-		submission={s}
-		conferenceSlug={data.conference.slug}
-		ownerId={data.user?.id ?? ''}
-		{form}
-	/>
+	<div>
+		{#if writeConflict}
+			<div class="mb-3 flex flex-wrap gap-2">
+				<a
+					href="?round={s.round.id}"
+					class="border-border hover:bg-muted inline-flex items-center rounded-md border px-3 py-1.5 text-sm"
+					data-testid="review-keep-saved">Keep the saved version</a
+				>
+				<button
+					type="submit"
+					form="review-scorecard"
+					name="intent"
+					value="draft"
+					class="bg-primary text-primary-foreground inline-flex items-center rounded-md px-3 py-1.5 text-sm"
+					data-testid="review-overwrite">Overwrite with what I typed</button
+				>
+			</div>
+		{/if}
+		<ReviewScorecardForm
+			submission={s}
+			conferenceSlug={data.conference.slug}
+			ownerId={data.user?.id ?? ''}
+			{form}
+		/>
+	</div>
 </div>

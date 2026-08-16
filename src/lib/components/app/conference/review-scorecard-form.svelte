@@ -1,10 +1,5 @@
 <script lang="ts">
-	/**
-	 * This reviewer's scorecard for one talk in one round (#737).
-	 *
-	 * Typed values live in `$lib/forms/browser-draft` until Save. A matching
-	 * baseline restores; a newer saved review is a visible choice.
-	 */
+	/** Scorecard for one talk in one round. Typed values live in browser-draft until Save. */
 	import { enhance } from '$lib/forms/enhance';
 	import type { SubmitFunction } from '@sveltejs/kit';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
@@ -29,10 +24,11 @@
 		writeBrowserDraft,
 		type BrowserDraft
 	} from '$lib/forms/browser-draft';
+	import { scoresFromCriteria } from '$lib/conference/review-write-baseline';
 	import {
 		isTypedReview,
+		parkableReviewDraft,
 		parseReviewDraft,
-		reviewDraftBaseline,
 		reviewDraftScope,
 		sameReviewDraft,
 		type ReviewDraft
@@ -53,7 +49,7 @@
 		title: string;
 		status: string;
 		window: { state: string; notice: string | null };
-		own: { reviewId: number; status: string; comment: string | null };
+		own: { reviewId: number; status: string; comment: string | null; baseline: string };
 		criteria: Criterion[];
 		round: { id: number; name: string };
 	};
@@ -67,7 +63,12 @@
 		submission: Submission;
 		conferenceSlug: string;
 		ownerId: string;
-		form?: { message?: string; ok?: boolean } | null;
+		form?: {
+			message?: string;
+			ok?: boolean;
+			conflict?: boolean;
+			currentBaseline?: string;
+		} | null;
 	} = $props();
 
 	const withdrawn = $derived(s.status === 'withdrawn');
@@ -85,19 +86,6 @@
 	let appliedKey = $state('');
 	let parked = $state(false);
 
-	const scoresFromCriteria = (criteria: Criterion[]): Record<number, string> => {
-		const out: Record<number, string> = {};
-		for (const criterion of criteria) {
-			out[criterion.id] =
-				criterion.kind === 'rating'
-					? criterion.value === null
-						? ''
-						: String(criterion.value)
-					: (criterion.valueText ?? '');
-		}
-		return out;
-	};
-
 	const scoreOf = (criterion: Criterion) =>
 		typed[criterion.id] ??
 		criterion.valueText ??
@@ -108,22 +96,25 @@
 		comment: s.own.comment ?? '',
 		scores: scoresFromCriteria(s.criteria)
 	});
-	const draftBaseline = $derived(
-		reviewDraftBaseline({
-			status: s.own.status,
-			comment: serverDraft.comment,
-			scores: serverDraft.scores
-		})
+	const writeConflict = $derived(Boolean(form && 'conflict' in form && form.conflict));
+	const expectedBaseline = $derived(
+		writeConflict && form && 'currentBaseline' in form
+			? (form.currentBaseline ?? '')
+			: s.own.baseline
 	);
 	const currentDraft = (): ReviewDraft => ({ comment, scores: { ...typed } });
 	const dirty = $derived(
-		!restoreConflict && !locked && !parked && !sameReviewDraft(currentDraft(), serverDraft)
+		!restoreConflict &&
+			!writeConflict &&
+			!locked &&
+			!parked &&
+			!sameReviewDraft(currentDraft(), serverDraft)
 	);
 	const formOk = $derived(Boolean(form && 'ok' in form && form.ok));
 
 	const persistDraft = () => {
-		if (!listening || !browser || locked || !ownerId || restoreConflict) return;
-		const draft = currentDraft();
+		if (!listening || !browser || locked || !ownerId || restoreConflict || writeConflict) return;
+		const draft = parkableReviewDraft(currentDraft(), serverDraft, s.criteria);
 		if (!isTypedReview(draft) || sameReviewDraft(draft, serverDraft)) {
 			clearBrowserDraft(localStorage, draftScope, ownerId);
 			restoredAt = null;
@@ -133,7 +124,7 @@
 		writeBrowserDraft(localStorage, {
 			scope: draftScope,
 			owner: ownerId,
-			baseline: draftBaseline,
+			baseline: s.own.baseline,
 			value: draft
 		});
 		parked = true;
@@ -149,11 +140,12 @@
 
 	const useBrowserDraft = () => {
 		if (!restoreConflict) return;
-		const candidate = restoreConflict;
+		const savedAt = restoreConflict.savedAt;
+		const candidate = parkableReviewDraft(restoreConflict.value, serverDraft, s.criteria);
 		restoreConflict = null;
-		comment = candidate.value.comment;
-		typed = { ...serverDraft.scores, ...candidate.value.scores };
-		restoredAt = candidate.savedAt;
+		comment = candidate.comment;
+		typed = { ...serverDraft.scores, ...candidate.scores };
+		restoredAt = savedAt;
 		persistDraft();
 	};
 
@@ -171,19 +163,17 @@
 		const saved = readBrowserDraft(localStorage, {
 			scope: draftScope,
 			owner: ownerId,
-			baseline: draftBaseline,
+			baseline: s.own.baseline,
 			parse: parseReviewDraft
 		});
 		if (saved.status === 'conflict') {
-			// Same rule as the server write: a stale token is not a conflict
-			// when the parked text is already what is saved. Two identical
-			// versions must not force a choice.
 			if (sameReviewDraft(saved.draft.value, serverDraft)) forgetDraft();
 			else restoreConflict = saved.draft;
 		}
 		if (saved.status === 'current') {
-			comment = saved.draft.value.comment;
-			typed = { ...serverDraft.scores, ...saved.draft.value.scores };
+			const parkedDraft = parkableReviewDraft(saved.draft.value, serverDraft, s.criteria);
+			comment = parkedDraft.comment;
+			typed = { ...serverDraft.scores, ...parkedDraft.scores };
 			restoredAt = saved.draft.savedAt;
 			parked = true;
 		}
@@ -270,10 +260,12 @@
 	method="POST"
 	action="?/save&round={s.round.id}"
 	novalidate
+	id="review-scorecard"
 	use:enhance={submitting}
 	class="border-border bg-card h-fit space-y-3 rounded-lg border p-4"
 >
 	<input type="hidden" name="roundId" value={s.round.id} />
+	<input type="hidden" name="expectedBaseline" value={expectedBaseline} />
 	<div class="flex items-center justify-between">
 		<h2 class="text-sm font-semibold">My review — {s.round.name}</h2>
 		<StatusBadge
@@ -304,6 +296,7 @@
 				? 'border-status-good text-status-good'
 				: 'border-status-bad text-status-bad'}"
 			role={formOk ? 'status' : 'alert'}
+			data-testid={writeConflict ? 'review-write-conflict' : undefined}
 		>
 			{form.message}
 		</p>
@@ -426,7 +419,7 @@
 	</label>
 
 	<div class="flex flex-wrap gap-2">
-		{#if s.own.status === 'submitted'}
+		{#if !writeConflict && s.own.status === 'submitted'}
 			<Button
 				type="submit"
 				name="intent"
@@ -447,7 +440,7 @@
 			>
 				Save progress
 			</Button>
-		{:else}
+		{:else if !writeConflict}
 			<Button type="submit" name="intent" value="submit" size="sm" disabled={busy || locked}>
 				Submit review
 			</Button>

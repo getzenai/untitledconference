@@ -75,6 +75,12 @@ describe('review draft identity', () => {
 			reviewDraftBaseline({ status: 'assigned', comment: 'On time', scores: { 1: '2', 3: '4' } })
 		);
 	});
+
+	it('is the same token the server write compares', async () => {
+		const { reviewWriteBaseline } = await import('./review-write-baseline');
+		const input = { status: 'assigned', comment: 'On time', scores: { 3: '4', 1: '2' } };
+		expect(reviewDraftBaseline(input)).toBe(reviewWriteBaseline(input));
+	});
 });
 
 function fakeStorage() {
