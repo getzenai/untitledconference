@@ -8,6 +8,7 @@ import {
 	assignLanes,
 	cardDensity,
 	cardHeightPx,
+	cardSubtitle,
 	floorToLabel,
 	laneStyle
 } from './public-agenda-layout';
@@ -44,6 +45,23 @@ describe('card density', () => {
 
 	it('never returns a denser card than the height allows, whatever the caller passes', () => {
 		expect(cardDensity(0)).toBe('tiny');
+	});
+});
+
+describe('card subtitle', () => {
+	it('puts the speaker on a full card, not track and format', () => {
+		expect(cardSubtitle('full', 'Ada Lovelace', 'Platform · Talk')).toBe('Ada Lovelace');
+	});
+
+	it('keeps track and format on a full card that has no speaker', () => {
+		expect(cardSubtitle('full', '', 'Platform · Talk')).toBe('Platform · Talk');
+	});
+
+	it('leaves compact and tiny with no second line, speaker or not', () => {
+		expect(cardSubtitle('compact', 'Ada Lovelace', 'Platform · Talk')).toBe('');
+		expect(cardSubtitle('tiny', 'Ada Lovelace', 'Platform · Talk')).toBe('');
+		expect(cardSubtitle('compact', '', 'Platform · Talk')).toBe('');
+		expect(cardSubtitle('tiny', '', 'Platform · Talk')).toBe('');
 	});
 });
 

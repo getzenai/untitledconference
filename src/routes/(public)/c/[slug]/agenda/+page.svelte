@@ -13,6 +13,7 @@
 	import {
 		assignLanes,
 		cardDensity,
+		cardSubtitle,
 		floorToLabel,
 		laneStyle
 	} from '$lib/conference/public-agenda-layout';
@@ -291,16 +292,21 @@
 						{@const density = cardDensity(rowOf(session.end) - rowOf(session.start))}
 						{@const lane = laneStyle(lanes.get(session.id))}
 						{@const speakers = session.speakers.map((s) => s.name).join(', ')}
+						{@const subtitle = cardSubtitle(density, speakers, meta)}
 						<!--
 							min-w-0 + overflow-hidden keep long titles inside narrow room
 							columns. Beyond that the card has to fit the height its own length
 							bought it: a 30-minute card is 47px and holds two clamped text-sm
 							lines at 4px padding, a 15-minute card is 22px and holds one
 							smaller line with no padding at all — at text-sm it cut the glyphs
-							through the middle (#588). The tooltip and the detail page carry
-							title, speakers and time — shadcn Tooltip, not title= (#269). The
-							axis stays 1.5rem per quarter hour; we do not grow the row to fit
-							the words.
+							through the middle (#588). The axis stays 1.5rem per quarter hour;
+							we do not grow the row to fit the words.
+
+							On a full card the second line is the speaker, not track · format:
+							a visitor planning on a phone cannot hover a tooltip (#706). Compact
+							and tiny have no second line; the name is on the session page the
+							tap already opens. The tooltip still carries title, speakers and
+							time for anyone who can hover — shadcn Tooltip, not title= (#269).
 						-->
 						<Tooltip>
 							<TooltipTrigger>
@@ -334,11 +340,11 @@
 													? 'line-clamp-2 text-sm leading-tight'
 													: 'block text-sm leading-tight break-words'}">{session.title}</span
 										>
-										{#if meta && density === 'full'}
+										{#if subtitle}
 											<span
 												class="text-muted-foreground mt-0.5 block w-full min-w-0 truncate text-xs"
 											>
-												{meta}
+												{subtitle}
 											</span>
 										{/if}
 									</button>

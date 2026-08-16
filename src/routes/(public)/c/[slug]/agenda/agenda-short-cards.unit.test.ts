@@ -122,13 +122,13 @@ describe('public agenda short cards', () => {
 		expect(html).not.toContain('line-clamp-2');
 	});
 
-	it('leaves a 45-minute card at the normal padding, unclamped, with its meta line', () => {
+	it('leaves a 45-minute card at the normal padding, unclamped, with its speaker line', () => {
 		const html = card(45);
 
 		expect(html).toMatch(/\bp-2\b/);
 		expect(html).not.toMatch(/\bp-1\b/);
 		expect(html).not.toContain('line-clamp-2');
-		expect(html).toContain('Platform and Infra');
+		expect(html).toContain('Ada Lovelace');
 	});
 
 	it('treats a 60-minute card as full, not compact', () => {
@@ -136,7 +136,7 @@ describe('public agenda short cards', () => {
 
 		expect(html).toContain('data-density="full"');
 		expect(html).toMatch(/\bp-2\b/);
-		expect(html).toContain('Platform and Infra');
+		expect(html).toContain('Ada Lovelace');
 	});
 });
 
