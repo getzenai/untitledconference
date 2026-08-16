@@ -70,6 +70,21 @@ export function toolGroupSplit(
 	return candidate < minCollapse ? 0 : candidate;
 }
 
+/**
+ * Folded-run line. A hidden error or a hidden denial is named here —
+ * "Used 3 tools" would otherwise swallow a write the user refused (#720).
+ */
+export function toolGroupSummary(parts: Pick<ToolPart, 'state'>[]): string {
+	const n = parts.length;
+	const noun = n === 1 ? 'tool' : 'tools';
+	const errors = parts.filter((part) => part.state === 'output-error').length;
+	const denied = parts.filter((part) => part.state === 'output-denied').length;
+	const notes: string[] = [];
+	if (errors > 0) notes.push(`${errors} ${errors === 1 ? 'error' : 'errors'}`);
+	if (denied > 0) notes.push(`${denied} not done`);
+	return notes.length > 0 ? `Used ${n} ${noun} (${notes.join(', ')})` : `Used ${n} ${noun}`;
+}
+
 export function groupMessageParts(parts: GenericPart[]): DisplaySegment[] {
 	const segments: DisplaySegment[] = [];
 	let currentToolRun: ToolPart[] = [];

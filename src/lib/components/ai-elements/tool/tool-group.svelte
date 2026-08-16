@@ -11,7 +11,7 @@
 		CollapsibleTrigger
 	} from '$lib/components/ui/collapsible/index.js';
 	import ToolLine from './tool-line.svelte';
-	import { toolGroupSplit, type ToolPart } from './group-tool-parts';
+	import { toolGroupSplit, toolGroupSummary, type ToolPart } from './group-tool-parts';
 
 	let {
 		parts,
@@ -36,11 +36,8 @@
 	const earlier = $derived(parts.slice(0, splitAt));
 	const tail = $derived(parts.slice(splitAt));
 	const errorCount = $derived(earlier.filter((part) => part.state === 'output-error').length);
-	const summary = $derived(
-		errorCount > 0
-			? `Used ${earlier.length} ${earlier.length === 1 ? 'tool' : 'tools'} (${errorCount} ${errorCount === 1 ? 'error' : 'errors'})`
-			: `Used ${earlier.length} ${earlier.length === 1 ? 'tool' : 'tools'}`
-	);
+	const deniedCount = $derived(earlier.filter((part) => part.state === 'output-denied').length);
+	const summary = $derived(toolGroupSummary(earlier));
 </script>
 
 <div class={cn('py-1', className)} data-testid="assistant-tool-group">
@@ -56,7 +53,11 @@
 				<span
 					class={cn(
 						'size-2 shrink-0 rounded-full',
-						errorCount > 0 ? 'bg-status-bad' : 'bg-status-good'
+						errorCount > 0
+							? 'bg-status-bad'
+							: deniedCount > 0
+								? 'bg-muted-foreground'
+								: 'bg-status-good'
 					)}
 				></span>
 				<span>{summary}</span>

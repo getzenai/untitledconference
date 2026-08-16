@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { groupMessageParts, toolGroupSplit, type GenericPart } from './group-tool-parts';
+import {
+	groupMessageParts,
+	toolGroupSplit,
+	toolGroupSummary,
+	type GenericPart
+} from './group-tool-parts';
 
 function textPart(text: string): GenericPart {
 	return { type: 'text', text };
@@ -77,5 +82,37 @@ describe('toolGroupSplit', () => {
 	it('keeps the last two lines open while work is in flight', () => {
 		expect(toolGroupSplit(5, true)).toBe(3);
 		expect(toolGroupSplit(3, true)).toBe(0);
+	});
+});
+
+describe('toolGroupSummary', () => {
+	it('names a hidden error the same way the fold names the count', () => {
+		expect(
+			toolGroupSummary([
+				{ state: 'output-available' },
+				{ state: 'output-error' },
+				{ state: 'output-available' }
+			])
+		).toBe('Used 3 tools (1 error)');
+	});
+
+	it('names a hidden denial so a refused write is not swallowed', () => {
+		expect(
+			toolGroupSummary([
+				{ state: 'output-available' },
+				{ state: 'output-available' },
+				{ state: 'output-denied' }
+			])
+		).toBe('Used 3 tools (1 not done)');
+	});
+
+	it('keeps both notes when the fold hides an error and a denial', () => {
+		expect(
+			toolGroupSummary([
+				{ state: 'output-error' },
+				{ state: 'output-denied' },
+				{ state: 'output-available' }
+			])
+		).toBe('Used 3 tools (1 error, 1 not done)');
 	});
 });

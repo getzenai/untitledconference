@@ -29,6 +29,21 @@ describe('toolPhrase', () => {
 		}
 	});
 
+	it('uses only the verb when the name has no object', () => {
+		expect(toolPhrase('refresh', 'input-available')).toBe('Refreshing');
+		expect(toolPhrase('refresh', 'output-available')).toBe('Refreshed');
+		expect(toolPhrase('refresh', 'output-error')).toBe("Couldn't refresh");
+		expect(toolPhrase('refresh', 'output-denied')).toBe('Refresh — not done');
+		expect(toolObject('refresh')).toBe('');
+	});
+
+	it('uses the irregular past for run, send, find and set', () => {
+		expect(toolPhrase('run_check', 'output-available')).toBe('Ran check');
+		expect(toolPhrase('send_mail', 'output-available')).toBe('Sent mail');
+		expect(toolPhrase('find_talk', 'output-available')).toBe('Found talk');
+		expect(toolPhrase('set_status', 'output-available')).toBe('Set status');
+	});
+
 	it('picks a name, title or id from the arguments', () => {
 		expect(toolContext({ name: 'Hall 1' })).toBe('Hall 1');
 		expect(toolContext({ title: 'Keynote' })).toBe('Keynote');
