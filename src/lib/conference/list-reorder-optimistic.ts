@@ -5,7 +5,8 @@
  * neighbour. The pages used to set a page-wide `busy` and leave the list
  * sitting until the server answered. Queue the write, paint the swap,
  * settle against the reply. Dropping the write is the rollback — the next
- * derive is the server list again.
+ * derive is the server list again. Settle releases the wire in `finally`
+ * so a throw from `update()` cannot keep it (#856).
  */
 
 export type ReorderWrite = {
@@ -28,6 +29,32 @@ export function applyReorderWrites<T extends { id: number }>(
 	writes: readonly ReorderWrite[]
 ): T[] {
 	return writes.reduce((next, write) => applyMove(next, write), items);
+}
+
+/**
+ * Settle one in-flight reorder. The wire is released in `finally` so a
+ * throw from `update()` on the success path cannot keep it (#856).
+ */
+export async function settleReorderWrite({
+	result,
+	update,
+	onError,
+	release
+}: {
+	result: { type: string };
+	update: () => Promise<void>;
+	onError: () => void | Promise<void>;
+	release: () => void;
+}): Promise<void> {
+	try {
+		if (result.type === 'success') {
+			await update();
+		} else {
+			await onError();
+		}
+	} finally {
+		release();
+	}
 }
 
 function applyMove<T extends { id: number }>(items: T[], write: ReorderWrite): T[] {

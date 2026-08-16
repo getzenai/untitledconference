@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	applyReorderWrites,
 	reorderWriteFromForm,
+	settleReorderWrite,
 	type ReorderWrite
 } from './list-reorder-optimistic';
 
@@ -69,5 +70,35 @@ describe('applyReorderWrites', () => {
 		const second: ReorderWrite = { kind: 'move', id: 3, direction: 'up' };
 		expect(applyReorderWrites(start, [first, second]).map((item) => item.id)).toEqual([2, 3, 1]);
 		expect(applyReorderWrites(start, [second]).map((item) => item.id)).toEqual([1, 3, 2]);
+	});
+});
+
+describe('settleReorderWrite', () => {
+	it('sends the waiting move after update throws on the success path', async () => {
+		let busy = true;
+		const waiting = ['second'];
+		const sent: string[] = [];
+		const sendNext = () => {
+			if (busy || waiting.length === 0) return;
+			busy = true;
+			const next = waiting.shift();
+			if (next) sent.push(next);
+		};
+
+		await expect(
+			settleReorderWrite({
+				result: { type: 'success' },
+				update: async () => {
+					throw new Error('paint failed');
+				},
+				onError: () => {},
+				release: () => {
+					busy = false;
+					sendNext();
+				}
+			})
+		).rejects.toThrow('paint failed');
+
+		expect(sent).toEqual(['second']);
 	});
 });
