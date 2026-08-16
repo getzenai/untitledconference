@@ -201,4 +201,39 @@ describe('Assistant panel', () => {
 		cy.wait('@nextTurn');
 		cy.get('[data-testid="assistant-input"]').should('have.value', '');
 	});
+
+	it('marks the stopped later turn, not a finished earlier answer', function () {
+		if (!chatEnabled) this.skip();
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+
+		sendAssistant('What can I do here?');
+		cy.get('[data-testid="assistant-messages"] [data-role="assistant"]').should('exist');
+		cy.get('[data-testid="assistant-pending"]').should('not.exist');
+		cy.get('[data-testid="assistant-panel"] [aria-label="Send"]').should('be.visible');
+		cy.get('[data-testid="assistant-messages"] [data-role="assistant"]').should(
+			'not.contain.text',
+			'Stopped'
+		);
+
+		cy.intercept('POST', '/chat', (req) => {
+			req.reply({ delay: 30_000, statusCode: 200, body: '' });
+		}).as('hungSecondTurn');
+
+		sendAssistant('Please go on for a while');
+		cy.get('[data-testid="assistant-stop"]').should('be.visible').click();
+		cy.get('[data-testid="assistant-stop"]').should('not.exist');
+		cy.get('[data-testid="assistant-stopped"]').should('have.length', 1);
+		cy.get('[data-testid="assistant-messages"] [data-role="assistant"]').should(
+			'not.contain.text',
+			'Stopped'
+		);
+		cy.get('[data-testid="assistant-messages"] [data-role="user"]')
+			.last()
+			.find('[data-testid="assistant-stopped"]')
+			.should('be.visible');
+	});
 });

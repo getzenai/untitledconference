@@ -53,7 +53,9 @@
 	const approved = new SvelteSet<string>();
 	const invalidated = new SvelteSet<string>();
 	const stopped = new SvelteSet<string>();
-	let stopRequested = $state(false);
+	// Last message that already belonged to the stopped turn — never search
+	// earlier finished answers.
+	let stopFromIndex = $state<number | null>(null);
 
 	onMount(() => {
 		chat = new Chat({
@@ -96,13 +98,14 @@
 	});
 
 	$effect(() => {
-		if (!stopRequested || !chat || pending) return;
-		const lastAssistant = [...chat.messages]
+		if (stopFromIndex === null || !chat || pending) return;
+		const turnMessages = chat.messages.slice(stopFromIndex);
+		const lastAssistant = [...turnMessages]
 			.reverse()
 			.find((message) => message.role === 'assistant');
-		const marked = lastAssistant ?? chat.messages.at(-1);
+		const marked = lastAssistant ?? turnMessages.at(-1);
 		if (marked) stopped.add(marked.id);
-		stopRequested = false;
+		stopFromIndex = null;
 	});
 
 	function handleSubmit(event: SubmitEvent) {
@@ -115,7 +118,7 @@
 
 	function handleStop() {
 		if (!chat || !pending) return;
-		stopRequested = true;
+		stopFromIndex = Math.max(0, chat.messages.length - 1);
 		void chat.stop();
 	}
 
