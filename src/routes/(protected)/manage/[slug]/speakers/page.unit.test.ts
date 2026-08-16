@@ -281,6 +281,7 @@ describe('speaker roster page', () => {
 		expect(source).toContain('SPEAKER_ROW_LEAVE_PROMPT');
 		expect(source).toContain('UnsavedGuard');
 		expect(source).toContain('addCommit');
+		expect(source).toContain('speakerImportCsvScope');
 		expect(source).toContain("result.type === 'success'");
 		expect(source).not.toContain('BrowserDraftInput');
 	});

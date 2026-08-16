@@ -5,6 +5,7 @@ import {
 	CONTACT_PROFILE_LEAVE_PROMPT,
 	NEW_CONTACT_FIELDS,
 	contactFieldScope,
+	contactImportCsvScope,
 	contactNotesDraftScope,
 	newContactFieldScope
 } from './contact-notes-draft';
@@ -26,6 +27,9 @@ describe('newContactFieldScope', () => {
 		expect(browserDraftKey(newContactFieldScope('name'), 'ada')).toBe(
 			`unsaved-form-draft:${encodeURIComponent('contact-new:name')}:${encodeURIComponent('ada')}`
 		);
+		expect(contactImportCsvScope('org-1')).toBe('contact-import-csv:org-1');
+		expect(contactImportCsvScope('org-1')).not.toBe(newContactFieldScope('csv'));
+		expect(contactImportCsvScope('org-1')).not.toBe(contactImportCsvScope('org-2'));
 	});
 });
 

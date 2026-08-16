@@ -7,6 +7,7 @@ import {
 	clearSpeakerRowDrafts,
 	newSpeakerFieldScope,
 	speakerFieldScope,
+	speakerImportCsvScope,
 	speakerNotesDraftScope,
 	speakerRowDraftScopes
 } from './speaker-notes-draft';
@@ -20,6 +21,8 @@ describe('speaker draft scopes', () => {
 	it('puts the field name before the conference and id, so new cannot collide', () => {
 		expect(speakerFieldScope('devflow', 5, 'name')).toBe('speaker-name:devflow:5');
 		expect(newSpeakerFieldScope('devflow', 'name')).toBe('speaker-new:devflow:name');
+		expect(speakerImportCsvScope('devflow')).toBe('speaker-import-csv:devflow');
+		expect(speakerImportCsvScope('devflow')).not.toBe(newSpeakerFieldScope('devflow', 'csv'));
 		expect(NEW_SPEAKER_FIELDS).toEqual(['name', 'email', 'jobTitle', 'company', 'bio']);
 		expect(SPEAKER_ROW_FIELDS).toEqual(['name', 'email', 'sortName', 'jobTitle', 'company', 'bio']);
 		// A field called `new` would be `speaker-new:devflow:5`. The dialog key

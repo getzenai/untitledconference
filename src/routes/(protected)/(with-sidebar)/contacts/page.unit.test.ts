@@ -186,6 +186,7 @@ describe('contacts directory page', () => {
 		expect(source).toContain('BrowserDraftInput');
 		expect(source).toContain('newContactFieldScope(');
 		expect(source).toContain("newContactFieldScope('name')");
+		expect(source).toContain('contactImportCsvScope');
 		expect(source).toContain("result.type === 'redirect'");
 		expect(source).not.toContain("from '$lib/components/app/unsaved-guard.svelte'");
 	});

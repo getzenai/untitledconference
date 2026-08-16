@@ -18,7 +18,11 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { contactFiltersHref } from '$lib/conference/contact-filters';
-	import { NEW_CONTACT_FIELDS, newContactFieldScope } from '$lib/conference/contact-notes-draft';
+	import {
+		NEW_CONTACT_FIELDS,
+		contactImportCsvScope,
+		newContactFieldScope
+	} from '$lib/conference/contact-notes-draft';
 
 	let { data, form } = $props();
 
@@ -30,12 +34,20 @@
 	let addOpen = $state(false);
 	let importOpen = $state(false);
 	let addCommit = $state(0);
+	let importCommit = $state(0);
 
-	const submitting = (kind: FormResetKind) => () => {
+	const submitting = (kind: FormResetKind, onSuccess?: () => void) => () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			update,
+			result
+		}: {
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+			result: { type: string };
+		}) => {
 			try {
 				await update(formUpdateOptions(kind));
+				if (result.type === 'success') onSuccess?.();
 			} finally {
 				busy = false;
 			}
@@ -259,7 +271,12 @@
 							embedded
 							submitLabel="Import contacts"
 							{busy}
-							enhanceForm={submitting('add')}
+							owner={data.user.id}
+							scope={contactImportCsvScope(data.organizationId ?? 'none')}
+							commitToken={importCommit}
+							enhanceForm={submitting('add', () => {
+								importCommit += 1;
+							})}
 							form={form?.scope === 'import' ? form : null}
 						/>
 					</Dialog.Content>

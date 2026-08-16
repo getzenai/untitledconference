@@ -13,7 +13,8 @@
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import {
 		SPEAKER_ROW_LEAVE_PROMPT,
-		clearSpeakerRowDrafts
+		clearSpeakerRowDrafts,
+		speakerImportCsvScope
 	} from '$lib/conference/speaker-notes-draft';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
@@ -51,6 +52,7 @@
 	let addOpen = $state(false);
 	let addCommit = $state(0);
 	let importOpen = $state(false);
+	let importCommit = $state(0);
 	const dirtyFields = new SvelteSet<string>();
 
 	function setFieldDirty(id: string, dirty: boolean) {
@@ -274,7 +276,17 @@
 							are skipped.
 						</Dialog.Description>
 					</Dialog.Header>
-					<SpeakerImport embedded {busy} enhanceForm={submitting('add')} {form} />
+					<SpeakerImport
+						embedded
+						{busy}
+						owner={data.user.id}
+						scope={speakerImportCsvScope(data.conference.slug)}
+						commitToken={importCommit}
+						enhanceForm={submitting('add', () => {
+							importCommit += 1;
+						})}
+						{form}
+					/>
 				</Dialog.Content>
 			</Dialog.Root>
 		</div>
