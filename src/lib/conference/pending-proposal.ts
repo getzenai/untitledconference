@@ -67,9 +67,10 @@ function cfpPendingScope(slug: string): string {
 
 /**
  * The first proposal on a call uses `cfp-autosave:${slug}`. A second one,
- * started while a server draft already exists, cannot share that key — a
- * reload would either wipe the new typing or overwrite the first copy (#815).
- * `existingId` is that server draft, so the two slots cannot meet.
+ * started while a server copy already exists (draft, submitted, or in review),
+ * cannot share that key — a reload would either wipe the new typing or
+ * overwrite the first copy (#815, #819). `existingId` is that server row, so
+ * the two slots cannot meet.
  */
 function cfpAutosaveScope(slug: string, existingId?: number): string {
 	return existingId == null ? `cfp-autosave:${slug}` : `cfp-autosave:${slug}:another:${existingId}`;
