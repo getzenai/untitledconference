@@ -1,12 +1,15 @@
 /**
- * The agenda chat against the isolated harness tenant.
+ * The agenda work of the one assistant, against the isolated harness tenant.
  *
  * What it has to show is not that the model is clever but that the tools it
  * was handed are the organizer's own: the same `organizerConference` refusal
  * for someone who only sits in the organization, and a stream that reaches the
  * real board rather than a fixture.
+ *
+ * The per-surface agenda chat is gone (#683). The board no longer picks the
+ * tools — the registry does, under the signed-in user — so the refusal has to
+ * come from the tool, which is exactly what it always did.
  */
-import { agendaWriteError } from '$lib/components/app/conference/agenda-chat-write';
 import { db } from '$lib/server/db';
 import { conferenceTable } from '$lib/server/db/conference/conference-schema';
 import type { McpContext } from '$lib/server/mcp/context';
@@ -14,9 +17,9 @@ import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '$lib/server/
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runMcpTool } from './adapter';
+import { streamAssistantChat } from './assistant';
 import { createMockChatModel } from './model';
-import { streamAgendaChat } from './request';
-import { agendaChatToolDefinitions } from './tools';
+import { assistantChatToolDefinitions } from './tools';
 
 const suffix = `chatagenda-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -42,12 +45,12 @@ afterAll(async () => {
 });
 
 function tool(ctx: McpContext, name: string) {
-	const def = agendaChatToolDefinitions(ctx).find((row) => row.name === name);
-	expect(def, `${name} is not on the agenda surface`).toBeDefined();
+	const def = assistantChatToolDefinitions(ctx).find((row) => row.name === name);
+	expect(def, `${name} is not in the registry`).toBeDefined();
 	return def!;
 }
 
-describe('agenda chat tools', () => {
+describe('assistant agenda tools (#302, #683)', () => {
 	it('reads the organizer their own board', async () => {
 		const result = await runMcpTool(tool(organizer, 'get_agenda'), {
 			conferenceSlug: seeded.conferenceSlug
@@ -73,18 +76,16 @@ describe('agenda chat tools', () => {
 			day: '2027-10-06',
 			start: '09:00'
 		});
+		// The refusal is the tool's output, so the model reads it and says so.
+		// The old agenda panel painted its own "Moved X" from the tool part's
+		// state and needed `agendaWriteError` to not lie; the one panel prints
+		// the tool name and lets the answer carry the outcome (#683).
 		expect(result.error).toEqual(expect.stringContaining('that you organize'));
-		// The refused call still reaches the panel as a finished tool part. This
-		// is the one place both halves are in the same test: the shape the
-		// server produces has to be the shape the panel calls a refusal, or the
-		// board gets a green "Moved X" over nothing (#302).
-		expect(agendaWriteError(result)).toEqual(expect.stringContaining('that you organize'));
 	});
 
 	it('streams a reply that names the tool and carries the real board', async () => {
-		const res = await streamAgendaChat({
+		const res = await streamAssistantChat({
 			ctx: organizer,
-			conference: { name: conferenceName, slug: seeded.conferenceSlug },
 			messages: [
 				{
 					id: 'u1',
@@ -93,7 +94,13 @@ describe('agenda chat tools', () => {
 				}
 			],
 			model: createMockChatModel('get_agenda', { conferenceSlug: seeded.conferenceSlug }),
-			focus: { day: '2027-10-06' }
+			page: {
+				routeId: '/(protected)/manage/[slug]/agenda',
+				url: `/manage/${seeded.conferenceSlug}/agenda`,
+				title: `Agenda — ${conferenceName}`,
+				params: { slug: seeded.conferenceSlug },
+				focus: { day: '2027-10-06' }
+			}
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();

@@ -15,7 +15,6 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
-	import ReviewerChat from '$lib/components/app/conference/reviewer-chat.svelte';
 
 	let { data } = $props();
 
@@ -248,8 +247,4 @@
 			</tbody>
 		</table>
 	</ScrollTable>
-{/if}
-
-{#if data.chatEnabled}
-	<ReviewerChat slug={data.conference.slug} />
 {/if}

@@ -62,6 +62,29 @@ describe('pageContext', () => {
 		expect(context?.params).toEqual({ slug: 'pyconde' });
 	});
 
+	it('carries what the page has selected', () => {
+		const context = pageContext({ ...base, focus: { day: '2027-05-04', roundId: 4 } });
+		expect(context?.focus).toEqual({ day: '2027-05-04', roundId: '4' });
+	});
+
+	it('leaves out a focus field the page has no value for', () => {
+		const context = pageContext({ ...base, focus: { day: undefined, roundId: null } });
+		expect(context?.focus).toBeUndefined();
+		expect(context?.routeId).toBe(base.routeId);
+	});
+
+	it('drops one over-long field rather than lose the whole block to it', () => {
+		const context = pageContext({
+			...base,
+			focus: { day: '2027-05-04', notes: 'x'.repeat(400) }
+		});
+		expect(context?.focus).toEqual({ day: '2027-05-04' });
+	});
+
+	it('sends no focus at all when the page offers none', () => {
+		expect(pageContext(base)).not.toHaveProperty('focus');
+	});
+
 	it('keeps the query, so a filtered list is described as filtered', () => {
 		const context = pageContext({
 			...base,

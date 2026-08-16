@@ -18,8 +18,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
 	import { pageContext, visiblePageTitle } from '$lib/chat/page-context';
+	import { pageFocus } from '$lib/chat/page-focus.svelte';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
-	import { chatErrorMessage } from '$lib/components/app/conference/reviewer-chat-error';
+	import { chatErrorMessage } from '$lib/chat/chat-error';
 	import { Chat } from '@ai-sdk/svelte';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import {
@@ -48,7 +49,8 @@
 						routeId: page.route.id,
 						url: page.url,
 						params: page.params,
-						title: visiblePageTitle(document)
+						title: visiblePageTitle(document),
+						focus: pageFocus(page.route.id)
 					});
 					return context ? { pageContext: context } : {};
 				}

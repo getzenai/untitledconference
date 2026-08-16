@@ -3,18 +3,18 @@ import { allTools } from '$lib/server/mcp/server';
 import { McpToolError, type AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
 import { describe, expect, it } from 'vitest';
 import { mcpInputSchema, runMcpTool, toLanguageModelTool } from './adapter';
-import { REVIEWER_CHAT_TOOL_NAMES, reviewerChatTools, reviewerReadTools } from './tools';
+import { assistantChatTools, assistantChatWriteToolNames } from './tools';
 
 const ctx: McpContext = { userId: 'user-1', organizationId: 'org-1' };
 
 describe('toLanguageModelTool', () => {
 	it('takes names and zod schemas from the MCP registry', () => {
 		const registry = allTools(ctx);
-		const adapted = reviewerChatTools(ctx);
+		const adapted = assistantChatTools(ctx);
 
-		expect(Object.keys(adapted).sort()).toEqual([...REVIEWER_CHAT_TOOL_NAMES].sort());
+		expect(Object.keys(adapted).sort()).toEqual(registry.map((tool) => tool.name).sort());
 
-		for (const name of REVIEWER_CHAT_TOOL_NAMES) {
+		for (const name of ['list_my_review_assignments', 'get_review_assignment', 'submit_review']) {
 			const def = registry.find((tool) => tool.name === name);
 			expect(def, name).toBeDefined();
 			const schema = mcpInputSchema(def!);
@@ -29,14 +29,19 @@ describe('toLanguageModelTool', () => {
 		expect(parsed.success).toBe(false);
 	});
 
-	it('wires submit_review from the registry and leaves organizer writes unwired', () => {
-		const names = new Set(Object.keys(reviewerChatTools(ctx)));
-		const registry = allTools(ctx).map((tool) => tool.name);
-		expect(registry).toContain('submit_review');
-		expect(registry).toContain('decide_submissions');
+	// The allow-list is gone (#683): a reviewer is offered `decide_submissions`
+	// like everyone else, and is refused by the handler rather than by absence.
+	// What must not go is the approval gate — a write the model reaches without
+	// asking is the failure this replaced the list with.
+	it('wires every registry tool, with the writes marked as writes', () => {
+		const names = new Set(Object.keys(assistantChatTools(ctx)));
 		expect(names.has('submit_review')).toBe(true);
-		expect(names.has('decide_submissions')).toBe(false);
-		expect(Object.keys(reviewerReadTools(ctx))).not.toContain('submit_review');
+		expect(names.has('decide_submissions')).toBe(true);
+
+		const writes = assistantChatWriteToolNames(ctx);
+		expect(writes).toContain('submit_review');
+		expect(writes).toContain('decide_submissions');
+		expect(writes).not.toContain('list_my_review_assignments');
 	});
 
 	it('returns a recognized refusal as { error } instead of throwing', async () => {

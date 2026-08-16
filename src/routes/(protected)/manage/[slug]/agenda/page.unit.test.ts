@@ -42,7 +42,6 @@ const renderWith = (roomCount: number, dayCount = 1, board: BoardOverrides = {})
 				user: { id: 'organizer-1', name: 'Jordan' },
 				speakerProfile: false,
 				impersonating: null,
-				chatEnabled: false,
 				analytics: { apiKey: undefined, host: undefined },
 				conference,
 				board: {
@@ -335,7 +334,6 @@ describe('agenda builder readability (#219)', () => {
 					user: { id: 'organizer-1', name: 'Jordan' },
 					speakerProfile: false,
 					impersonating: null,
-					chatEnabled: false,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					board: {
@@ -621,7 +619,6 @@ describe('agenda public state (#497)', () => {
 					user: { id: 'organizer-1', name: 'Jordan' },
 					speakerProfile: false,
 					impersonating: null,
-					chatEnabled: false,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					board: {
@@ -701,7 +698,6 @@ describe('agenda draft legend (#466)', () => {
 					user: { id: 'organizer-1', name: 'Jordan' },
 					speakerProfile: false,
 					impersonating: null,
-					chatEnabled: false,
 					analytics: { apiKey: undefined, host: undefined },
 					conference,
 					board: {

@@ -52,8 +52,7 @@ function renderQueue(
 				},
 				queue,
 				sort,
-				recused,
-				chatEnabled: false
+				recused
 			} as unknown as PageData
 		}
 	}).body;
@@ -231,36 +230,6 @@ describe('the window of the rounds a row sits in', () => {
 
 	it('says To review while the round is running', () => {
 		expect(renderQueue([row(1, 'A talk', 0)])).toContain('To review');
-	});
-});
-
-describe('the in-app chat', () => {
-	it('is absent while the flag is off', () => {
-		expect(renderPage()).not.toContain('data-testid="reviewer-chat"');
-	});
-
-	it('renders on the queue when the flag is on', () => {
-		const body = render(Page, {
-			props: {
-				data: {
-					user: { id: 'reviewer-1', name: 'Robin' },
-					impersonating: null,
-					analytics: { apiKey: undefined, host: undefined },
-					conference: {
-						id: 1,
-						name: 'Test Conf',
-						slug: 'test-conf',
-						reviewVisibility: 'open'
-					},
-					queue: [row(1, 'A talk', 0)],
-					sort: 'coverage',
-					chatEnabled: true
-				} as unknown as PageData
-			}
-		}).body;
-
-		expect(body).toContain('data-testid="reviewer-chat"');
-		expect(body).toContain('Review assistant');
 	});
 });
 

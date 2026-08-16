@@ -20,7 +20,6 @@ import {
 	swapPlacements,
 	unplaceSession
 } from '$lib/server/conference/agenda';
-import { isFeatureEnabled } from '$lib/server/feature-flags';
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -34,8 +33,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	return {
 		conference,
 		board: await agendaBoard(conference.id),
-		slots: slotOptions(),
-		chatEnabled: isFeatureEnabled('inAppChat')
+		slots: slotOptions()
 	};
 };
 
