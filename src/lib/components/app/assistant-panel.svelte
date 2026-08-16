@@ -19,7 +19,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
-	import { Input } from '$lib/components/ui/input';
+	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
 	import {
 		Conversation,
@@ -35,6 +35,7 @@
 	import AssistantReply from './assistant-reply.svelte';
 	import { Chat } from '@ai-sdk/svelte';
 	import SendIcon from '@lucide/svelte/icons/send';
+	import SquareIcon from '@lucide/svelte/icons/square';
 	import {
 		DefaultChatTransport,
 		getToolName,
@@ -51,6 +52,10 @@
 	// Tool calls we stopped for, so we know which results changed the page.
 	const approved = new SvelteSet<string>();
 	const invalidated = new SvelteSet<string>();
+	const stopped = new SvelteSet<string>();
+	// Last message that already belonged to the stopped turn — never search
+	// earlier finished answers.
+	let stopFromIndex = $state<number | null>(null);
 
 	onMount(() => {
 		chat = new Chat({
@@ -92,12 +97,36 @@
 		}
 	});
 
+	$effect(() => {
+		if (stopFromIndex === null || !chat || pending) return;
+		const turnMessages = chat.messages.slice(stopFromIndex);
+		const lastAssistant = [...turnMessages]
+			.reverse()
+			.find((message) => message.role === 'assistant');
+		const marked = lastAssistant ?? turnMessages.at(-1);
+		if (marked) stopped.add(marked.id);
+		stopFromIndex = null;
+	});
+
 	function handleSubmit(event: SubmitEvent) {
 		event.preventDefault();
 		const text = input.trim();
 		if (!text || !chat || pending) return;
 		input = '';
 		void chat.sendMessage({ text });
+	}
+
+	function handleStop() {
+		if (!chat || !pending) return;
+		stopFromIndex = Math.max(0, chat.messages.length - 1);
+		void chat.stop();
+	}
+
+	function handleInputKeydown(event: KeyboardEvent) {
+		if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+		event.preventDefault();
+		if (pending) return;
+		(event.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
 	}
 
 	function decide(id: string, ok: boolean) {
@@ -176,6 +205,11 @@
 											</p>
 										{/if}
 									{/each}
+									{#if stopped.has(message.id)}
+										<p class="text-muted-foreground text-xs" data-testid="assistant-stopped">
+											Stopped
+										</p>
+									{/if}
 								</div>
 							</MessageAnchor>
 						</li>
@@ -200,17 +234,33 @@
 			</p>
 		{/if}
 
-		<form class="flex gap-2 px-4 pb-4" onsubmit={handleSubmit}>
-			<Input
+		<form class="flex items-end gap-2 px-4 pb-4" onsubmit={handleSubmit}>
+			<Textarea
 				bind:value={input}
 				placeholder="What can I do on this page?"
 				autocomplete="off"
+				rows={1}
 				disabled={!chat || pending}
 				data-testid="assistant-input"
+				class="max-h-48 min-h-9 min-w-0 flex-1 resize-none overflow-y-auto py-2"
+				onkeydown={handleInputKeydown}
 			/>
-			<Button type="submit" size="icon" disabled={!chat || pending} aria-label="Send">
-				<SendIcon />
-			</Button>
+			{#if pending}
+				<Button
+					type="button"
+					size="icon"
+					class="shrink-0"
+					aria-label="Stop"
+					data-testid="assistant-stop"
+					onclick={handleStop}
+				>
+					<SquareIcon />
+				</Button>
+			{:else}
+				<Button type="submit" size="icon" class="shrink-0" disabled={!chat} aria-label="Send">
+					<SendIcon />
+				</Button>
+			{/if}
 		</form>
 	</Sheet.Content>
 </Sheet.Root>

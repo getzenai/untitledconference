@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockEnv = vi.hoisted(() => ({}) as Record<string, string | undefined>);
 vi.mock('$env/dynamic/private', () => ({ env: mockEnv }));
 
+import * as adapter from './adapter';
 import {
 	assistantSystemPrompt,
 	assistantToolApproval,
@@ -13,6 +14,7 @@ import {
 	readAssistantPage,
 	reviewerFocusFromPage
 } from './assistant';
+import { createMockChatModel } from './model';
 import {
 	ASSISTANT_AUTO_RUN_WRITES,
 	assistantChatToolDefinitions,
@@ -25,7 +27,7 @@ const emptyUsage = {
 	outputTokens: { total: 0, text: 0, reasoning: undefined }
 };
 
-function event(over: { user?: { id: string } | null; body?: unknown } = {}) {
+function event(over: { user?: { id: string } | null; body?: unknown; signal?: AbortSignal } = {}) {
 	return {
 		locals: {
 			user: over.user === undefined ? { id: 'user-1' } : over.user,
@@ -35,7 +37,8 @@ function event(over: { user?: { id: string } | null; body?: unknown } = {}) {
 		request: new Request('http://localhost/chat', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify(over.body ?? { messages: [] })
+			body: JSON.stringify(over.body ?? { messages: [] }),
+			signal: over.signal
 		})
 	};
 }
@@ -248,5 +251,28 @@ describe('assistant chat', () => {
 				tool.writes && assistantWriteNeedsApproval(tool.name) ? 'user-approval' : undefined
 			);
 		}
+	});
+
+	it('does not start a tool after the request is aborted', async () => {
+		mockEnv.FEATURE_INAPP_CHAT = 'true';
+		const run = vi.spyOn(adapter, 'runMcpTool');
+		const controller = new AbortController();
+		const requestEvent = event({
+			signal: controller.signal,
+			body: {
+				messages: [{ id: 'u1', role: 'user', parts: [{ type: 'text', text: 'Look around' }] }]
+			}
+		});
+		controller.abort();
+
+		try {
+			const response = await handleAssistantChatRequest(requestEvent, createMockChatModel());
+			await response.text();
+		} catch {
+			// streamText may reject an already-aborted signal; either way no tool starts.
+		}
+
+		expect(run).not.toHaveBeenCalled();
+		run.mockRestore();
 	});
 });
