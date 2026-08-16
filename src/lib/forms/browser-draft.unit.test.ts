@@ -134,4 +134,44 @@ describe('browser form drafts', () => {
 
 		expect([...storage.values.entries()]).toEqual([['unrelated', 'keep']]);
 	});
+
+	it('keeps the form usable when browser storage refuses writes', () => {
+		const storage = {
+			getItem: () => null,
+			setItem: () => {
+				throw new DOMException('Quota exceeded', 'QuotaExceededError');
+			},
+			removeItem: () => undefined
+		};
+
+		expect(() =>
+			writeBrowserDraft(storage, {
+				scope: '/review/1',
+				owner: 'reviewer-1',
+				baseline: 'v1',
+				value: 'still in the textarea'
+			})
+		).not.toThrow();
+		expect(
+			readBrowserDraft(storage, {
+				scope: '/review/1',
+				owner: 'reviewer-1',
+				baseline: 'v1',
+				parse: parseText
+			})
+		).toEqual({ status: 'empty' });
+	});
+
+	it('does not hide values the caller failed to make serializable', () => {
+		const storage = fakeStorage();
+
+		expect(() =>
+			writeBrowserDraft(storage, {
+				scope: '/review/1',
+				owner: 'reviewer-1',
+				baseline: 'v1',
+				value: 1n
+			})
+		).toThrow(TypeError);
+	});
 });
