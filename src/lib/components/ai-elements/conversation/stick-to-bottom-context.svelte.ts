@@ -52,6 +52,40 @@ export function initialScrollTop({
 	return Math.max(0, Math.min(end, remembered));
 }
 
+export interface ResizeGeometry {
+	/** Whether the reader was at the end *before* the viewport changed size. */
+	wasAtBottom: boolean;
+	/** Total scrollable height of the viewport, after the change. */
+	scrollHeight: number;
+	/** Visible height of the viewport, after the change. */
+	clientHeight: number;
+}
+
+/**
+ * Where the viewport belongs after the panel changes size (#743).
+ *
+ * Shrinking moves neither `scrollTop` nor any node, so neither a `scroll` event
+ * nor a mutation fires — the flag would go on saying "at the end" while the end
+ * has moved away below the reader, and the way back down is a button that only
+ * exists while the flag says otherwise.
+ *
+ * A reader who was at the end is put back at the end: they were watching the
+ * newest line, and the viewport moved under them rather than the other way
+ * round. A reader who was somewhere else is left alone — that is the whole
+ * distinction, and it is why `wasAtBottom` has to be read *before* the resize
+ * is applied.
+ *
+ * `null` means "do not scroll", which is not the same as `0`.
+ */
+export function afterResizeScrollTop({
+	wasAtBottom,
+	scrollHeight,
+	clientHeight
+}: ResizeGeometry): number | null {
+	if (!wasAtBottom) return null;
+	return Math.max(0, scrollHeight - clientHeight);
+}
+
 export interface FollowGeometry {
 	/** Where the viewport is scrolled to now. */
 	scrollTop: number;
@@ -91,6 +125,8 @@ class StickToBottomContext {
 	#followAllowed = true;
 	#pendingApply = false;
 	#mutationObserver: MutationObserver | null = null;
+
+	#resizeObserver: ResizeObserver | null = null;
 
 	/** Where this conversation was left, if the caller remembers (#729). */
 	#remembered: number | null = null;
@@ -222,6 +258,25 @@ class StickToBottomContext {
 		this.#syncAtBottom();
 	};
 
+	/**
+	 * The viewport changed size (#743).
+	 *
+	 * `#isAtBottom` still holds the answer from before this callback ran —
+	 * nothing has recomputed it, because a resize fires neither `scroll` nor a
+	 * mutation. That stale value is exactly what is needed here, and it is why
+	 * `#syncAtBottom()` comes after the scroll rather than before it.
+	 */
+	#onResize = () => {
+		if (!this.#element) return;
+		const target = afterResizeScrollTop({
+			wasAtBottom: this.#isAtBottom,
+			scrollHeight: this.#element.scrollHeight,
+			clientHeight: this.#element.clientHeight
+		});
+		if (target !== null) this.#element.scrollTo({ top: target, behavior: 'auto' });
+		this.#syncAtBottom();
+	};
+
 	#onUserIntent = () => {
 		this.#followAllowed = false;
 		// Somebody who has already moved is not carried anywhere else.
@@ -249,6 +304,14 @@ class StickToBottomContext {
 			characterData: true
 		});
 
+		// Sizing the panel is the one way to change the overhang without moving
+		// `scrollTop` and without touching a node (#743).
+		this.#resizeObserver = new ResizeObserver(() => {
+			if (!this.#ready) return;
+			this.#onResize();
+		});
+		this.#resizeObserver.observe(this.#element);
+
 		// Two frames: the first lets the messages render, the second measures
 		// them. Jumping to the end before that would measure an empty panel.
 		requestAnimationFrame(() => {
@@ -271,6 +334,8 @@ class StickToBottomContext {
 		}
 		this.#mutationObserver?.disconnect();
 		this.#mutationObserver = null;
+		this.#resizeObserver?.disconnect();
+		this.#resizeObserver = null;
 		this.#followTarget = null;
 		this.#followAllowed = false;
 		this.#ready = false;

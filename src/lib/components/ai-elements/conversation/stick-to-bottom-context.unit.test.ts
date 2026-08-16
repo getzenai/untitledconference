@@ -5,7 +5,11 @@
  * mistake there looks like "the panel just doesn't follow properly".
  */
 import { describe, expect, it } from 'vitest';
-import { followScrollTop, initialScrollTop } from './stick-to-bottom-context.svelte';
+import {
+	afterResizeScrollTop,
+	followScrollTop,
+	initialScrollTop
+} from './stick-to-bottom-context.svelte';
 
 /** A 400px-tall panel scrolled to the top, with 1000px of content in it. */
 const PANEL = {
@@ -83,5 +87,44 @@ describe('initialScrollTop', () => {
 
 	it('treats a number that is not one as nothing remembered', () => {
 		expect(initialScrollTop({ remembered: Number.NaN, ...VIEWPORT })).toBe(600);
+	});
+});
+
+/**
+ * Where the viewport belongs after the panel changes size (#743).
+ *
+ * The case that has no event of its own: shrinking moves neither `scrollTop`
+ * nor a node, so nothing recomputes the flag and the reader is left above an
+ * end that has moved, with no way back down offered.
+ */
+describe('afterResizeScrollTop', () => {
+	it('puts a reader who was at the end back at the new end', () => {
+		expect(afterResizeScrollTop({ wasAtBottom: true, scrollHeight: 1000, clientHeight: 300 })).toBe(
+			700
+		);
+	});
+
+	it('leaves a reader who was somewhere else alone', () => {
+		// `null`, not `0`: the caller must be able to tell "stay where you are"
+		// from "go to the top", and zero is a position.
+		expect(
+			afterResizeScrollTop({ wasAtBottom: false, scrollHeight: 1000, clientHeight: 300 })
+		).toBe(null);
+	});
+
+	it('has nowhere to go when the content is shorter than the panel', () => {
+		expect(afterResizeScrollTop({ wasAtBottom: true, scrollHeight: 200, clientHeight: 400 })).toBe(
+			0
+		);
+	});
+
+	it('follows the panel growing as well as shrinking', () => {
+		// Growing usually fires a scroll by itself, because the browser clamps
+		// `scrollTop` — but only when the clamp actually moves it. This is the
+		// same answer either way rather than a second rule for the other
+		// direction.
+		expect(afterResizeScrollTop({ wasAtBottom: true, scrollHeight: 1000, clientHeight: 900 })).toBe(
+			100
+		);
 	});
 });
