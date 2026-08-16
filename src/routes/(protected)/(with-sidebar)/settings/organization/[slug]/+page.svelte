@@ -254,6 +254,15 @@
 					<div>
 						<Label for="confirmName">
 							Type <span class="font-mono">{organization?.name}</span> to confirm
+							<!--
+								Two organizations may share a name, so the name alone confirms
+								intent but not *which* one. The slug is the part that cannot
+								repeat, and this is the most destructive button in the app.
+							-->
+							<span class="text-muted-foreground mt-0.5 block text-xs font-normal">
+								This deletes <span class="font-mono">{organization?.slug}</span>. Names can repeat;
+								the address cannot.
+							</span>
 						</Label>
 						<Input
 							id="confirmName"
