@@ -10,6 +10,7 @@
  */
 import { requireOrganizer } from '$lib/server/conference/access';
 import { requireReviewer, reviewerSubmission } from '$lib/server/conference/reviewer';
+import { holdUntilResponseComplete } from '$lib/server/db/response-hold';
 import { ensureFeatureEnabled } from '$lib/server/feature-flags';
 import type { McpContext } from '$lib/server/mcp/context';
 import { error, isHttpError } from '@sveltejs/kit';
@@ -149,9 +150,13 @@ export async function streamReviewerChat(opts: {
 		experimental_transform: guardToolCallLeak()
 	});
 
-	return createUIMessageStreamResponse({
-		stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
-	});
+	// The tools query while this body streams, long after the request handler
+	// returned — the connection has to outlive the headers (#684).
+	return holdUntilResponseComplete(
+		createUIMessageStreamResponse({
+			stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
+		})
+	);
 }
 
 /**
@@ -221,9 +226,13 @@ export async function streamAgendaChat(opts: {
 		experimental_transform: guardToolCallLeak()
 	});
 
-	return createUIMessageStreamResponse({
-		stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
-	});
+	// The tools query while this body streams, long after the request handler
+	// returned — the connection has to outlive the headers (#684).
+	return holdUntilResponseComplete(
+		createUIMessageStreamResponse({
+			stream: toUIMessageStream({ stream: result.stream, onError: streamErrorMessage })
+		})
+	);
 }
 
 export async function handleAgendaChatRequest(

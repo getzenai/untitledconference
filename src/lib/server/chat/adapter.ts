@@ -5,6 +5,7 @@
  * input shapes come from `AnyMcpToolDefinition`; this file only changes the
  * wrapper the model calls.
  */
+import { bindRequestScopedDb } from '$lib/server/db';
 import { classifyError, type AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
@@ -38,6 +39,12 @@ export function toLanguageModelTool(
 	return tool({
 		description: def.description,
 		inputSchema: mcpInputSchema(def),
-		execute: async (input) => runMcpTool(def, options.transformInput?.(input) ?? input)
+		// Bound to the request's database scope while that scope is still
+		// current. The model calls this later, from the stream's producer, which
+		// the runtime drives outside the request's promise chain — unbound, every
+		// query inside a tool ran without a connection (#684).
+		execute: bindRequestScopedDb(async (input: unknown) =>
+			runMcpTool(def, options.transformInput?.(input) ?? input)
+		)
 	});
 }

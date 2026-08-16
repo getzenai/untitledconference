@@ -93,6 +93,8 @@ function connect(override?: string): Connection {
 const requestScope = new AsyncLocalStorage<{
 	connection?: Connection;
 	connectionString?: string;
+	/** Work that must finish before the connection may be closed — see `holdRequestScopedDb`. */
+	holds: Promise<unknown>[];
 }>();
 
 /** Process-wide fallback for Node contexts — tests, scripts, the job worker. */
@@ -131,6 +133,38 @@ function resolveDb(): Db {
 }
 
 /**
+ * Keeps the current request's connection open until `work` settles.
+ *
+ * A streamed response finishes long after its headers do, and the work that
+ * fills it — a chat calling tools, say — queries in between. Without a hold,
+ * the connection is closed the moment the Response object exists and every one
+ * of those queries fails (#684). A hold is a promise the close waits for.
+ *
+ * Outside a request scope this is a no-op: the process-wide client is not
+ * closed per request, so there is nothing to hold open.
+ */
+export function holdRequestScopedDb(work: Promise<unknown>): void {
+	requestScope.getStore()?.holds.push(work);
+}
+
+/**
+ * Re-enters the current request's database scope every time `fn` is called.
+ *
+ * `AsyncLocalStorage` follows the promise chain a request already started; it
+ * does not follow a callback the runtime invokes later on its own, which is
+ * exactly how a stream's producer runs. Binding at creation time captures the
+ * scope while it is still current, so a tool executed while the body streams
+ * still finds the request's connection instead of throwing (#684).
+ */
+export function bindRequestScopedDb<Args extends unknown[], Result>(
+	fn: (...args: Args) => Result
+): (...args: Args) => Result {
+	const store = requestScope.getStore();
+	if (!store) return fn;
+	return (...args: Args) => requestScope.run(store, () => fn(...args));
+}
+
+/**
  * Runs `fn` with a connection scoped to it, closing that connection afterwards.
  *
  * `close` is handed back rather than awaited internally so the caller can defer
@@ -142,19 +176,31 @@ export async function withRequestScopedDb<T>(
 	defer: (closing: Promise<void>) => void,
 	connectionString?: string
 ): Promise<T> {
-	const store: { connection?: Connection; connectionString?: string } = { connectionString };
+	const store: {
+		connection?: Connection;
+		connectionString?: string;
+		holds: Promise<unknown>[];
+	} = { connectionString, holds: [] };
 	try {
 		return await requestScope.run(store, fn);
 	} finally {
 		// `end()` waits for queries already in flight, so no query that has started
 		// is cut short.
 		//
-		// Note what this does *not* cover: `fn` resolves when the Response is
-		// returned, not when its body is finished. A `load` that streams an
-		// unresolved promise would still be querying after this runs, and would
-		// see CONNECTION_ENDED. No load streams today; one that wants to must move
-		// the close to the end of the stream rather than the end of `fn`.
-		if (store.connection) defer(store.connection.client.end());
+		// `fn` resolves when the Response is returned, not when its body is
+		// finished, so anything still producing that body gets a hold
+		// (`holdRequestScopedDb`) and the close waits for it. A hold that rejects
+		// still releases the connection — `allSettled`, because a failed stream
+		// must not leak a socket.
+		if (store.connection) {
+			const connection = store.connection;
+			// Snapshot: a hold registered after `fn` resolved would not be waited
+			// for. Everything that holds does so from inside the request, which is
+			// the only place a scope exists to hold.
+			const held =
+				store.holds.length > 0 ? Promise.allSettled(store.holds) : Promise.resolve(undefined);
+			defer(held.then(() => connection.client.end()));
+		}
 	}
 }
 

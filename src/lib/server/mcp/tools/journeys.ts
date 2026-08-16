@@ -28,6 +28,7 @@ import {
 } from '$lib/server/conference/speaker-profile';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
+import { isHttpError } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { McpContext } from '../context';
@@ -59,7 +60,12 @@ async function account(userId: string) {
 async function reviewerConference(slug: string, ctx: McpContext) {
 	try {
 		return await requireReviewer(ctx.userId, slug);
-	} catch {
+	} catch (error) {
+		// Same rule as `organizerConference` (#684): only the refusal the guard
+		// raises on purpose becomes a refusal. Everything else — a lost
+		// connection above all — has to stay a failure, or the model reports it
+		// to the reviewer as a fact about their assignments.
+		if (!isHttpError(error)) throw error;
 		throw new McpToolError(
 			`No conference "${slug}" that you review for. ` +
 				'Call list_my_review_assignments to see the ones you can reach.'
