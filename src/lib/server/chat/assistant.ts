@@ -17,7 +17,11 @@ import {
 	type LanguageModel,
 	type UIMessage
 } from 'ai';
-import { ChatModelNotConfiguredError, createChatModel } from './model';
+import {
+	ChatBackendMisconfiguredError,
+	ChatModelNotConfiguredError,
+	createChatModel
+} from './model';
 import { ChatToolCallLeakError, guardToolCallLeak } from './tool-call-leak';
 import { assistantChatTools, assistantChatWriteToolNames, type ReviewerToolFocus } from './tools';
 
@@ -256,11 +260,14 @@ export async function handleAssistantChatRequest(
 		return await streamAssistantChat({
 			ctx: mcpContextFromLocals(event.locals),
 			messages: body.messages,
-			model: model ?? createChatModel(),
+			model: model ?? (await createChatModel(event.locals.organizationId)),
 			page: readAssistantPage(body)
 		});
 	} catch (error) {
-		if (error instanceof ChatModelNotConfiguredError) {
+		if (
+			error instanceof ChatModelNotConfiguredError ||
+			error instanceof ChatBackendMisconfiguredError
+		) {
 			return chatError(503, error.message);
 		}
 		throw error;

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockEnv = vi.hoisted(() => ({}) as Record<string, string | undefined>);
+const loadOrganizationChatBackend = vi.hoisted(() => vi.fn());
 
 vi.mock('$lib/server/env', () => ({
 	serverEnv: () => ({
@@ -10,9 +11,14 @@ vi.mock('$lib/server/env', () => ({
 	})
 }));
 
+vi.mock('./org-ai-settings', () => ({
+	loadOrganizationChatBackend: (...args: unknown[]) => loadOrganizationChatBackend(...args)
+}));
+
 import { MockLanguageModelV3 } from 'ai/test';
 import { assistantSystemPrompt } from './assistant';
 import {
+	ChatBackendMisconfiguredError,
 	ChatModelNotConfiguredError,
 	createChatModel,
 	createMockChatModel,
@@ -26,26 +32,60 @@ describe('createChatModel', () => {
 	beforeEach(() => {
 		for (const key of Object.keys(mockEnv)) delete mockEnv[key];
 		delete process.env.AI_CHAT_MODEL;
+		loadOrganizationChatBackend.mockReset();
+		loadOrganizationChatBackend.mockResolvedValue({ status: 'none' });
 	});
 
-	it('returns the local stub when AI_CHAT_MODEL is mock', () => {
+	it('returns the local stub when AI_CHAT_MODEL is mock', async () => {
 		mockEnv.AI_CHAT_MODEL = 'mock';
-		expect(createChatModel()).toEqual(expect.objectContaining({ specificationVersion: 'v3' }));
+		await expect(createChatModel()).resolves.toEqual(
+			expect.objectContaining({ specificationVersion: 'v3' })
+		);
 	});
 
-	it('lets AI_CHAT_MODEL=mock on the process win over the binding', () => {
+	it('lets AI_CHAT_MODEL=mock on the process win over the binding', async () => {
 		const previous = process.env.AI_CHAT_MODEL;
 		process.env.AI_CHAT_MODEL = 'mock';
 		try {
-			expect(createChatModel()).toEqual(expect.objectContaining({ specificationVersion: 'v3' }));
+			await expect(createChatModel()).resolves.toEqual(
+				expect.objectContaining({ specificationVersion: 'v3' })
+			);
 		} finally {
 			if (previous === undefined) delete process.env.AI_CHAT_MODEL;
 			else process.env.AI_CHAT_MODEL = previous;
 		}
 	});
 
-	it('refuses to start when the Gateway key is missing', () => {
-		expect(() => createChatModel()).toThrow(ChatModelNotConfiguredError);
+	it('refuses to start when the Gateway key is missing', async () => {
+		await expect(createChatModel()).rejects.toBeInstanceOf(ChatModelNotConfiguredError);
+	});
+
+	it('uses the organization backend when a row unwraps', async () => {
+		loadOrganizationChatBackend.mockResolvedValue({
+			status: 'ok',
+			baseUrl: 'https://api.openai.com/v1',
+			apiKey: 'sk-org',
+			modelId: 'org-model'
+		});
+		await expect(createChatModel('org-1')).resolves.toEqual(
+			expect.objectContaining({ modelId: 'org-model' })
+		);
+	});
+
+	it('falls back to the hosted pair when the org has no row', async () => {
+		mockEnv.AI_GATEWAY_API_KEY = 'platform-key';
+		mockEnv.AI_GATEWAY_BASE_URL = 'https://gateway.example.test/compat';
+		await expect(createChatModel('org-1')).resolves.toEqual(
+			expect.objectContaining({ modelId: 'openai/gpt-4o-mini' })
+		);
+	});
+
+	it('fails closed when the organization row will not unwrap', async () => {
+		mockEnv.AI_GATEWAY_API_KEY = 'platform-key';
+		mockEnv.AI_GATEWAY_BASE_URL = 'https://gateway.example.test/compat';
+		loadOrganizationChatBackend.mockResolvedValue({ status: 'broken' });
+		await expect(createChatModel('org-1')).rejects.toBeInstanceOf(ChatBackendMisconfiguredError);
+		await expect(createChatModel('org-1')).rejects.not.toBeInstanceOf(ChatModelNotConfiguredError);
 	});
 });
 

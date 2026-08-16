@@ -35,6 +35,7 @@ import * as contentSchema from './conference/content-schema';
 import * as emailSchema from './conference/email-schema';
 import * as programSchema from './conference/program-schema';
 import * as reviewSchema from './conference/review-schema';
+import * as organizationAiSchema from './organization-ai-schema';
 
 const logger = createLogger('Database');
 
@@ -45,7 +46,8 @@ const schema = {
 	...reviewSchema,
 	...programSchema,
 	...contentSchema,
-	...emailSchema
+	...emailSchema,
+	...organizationAiSchema
 };
 
 type Client = ReturnType<typeof postgres>;

@@ -100,6 +100,12 @@ export const serverEnvSchema = z
 		 * still runs the real tools. Default is a small OpenAI-compatible model.
 		 */
 		AI_CHAT_MODEL: strWithDefault('openai/gpt-4o-mini'),
+		/**
+		 * 32-byte AES-256-GCM wrapping key for organization chat API keys
+		 * (hex or standard base64). Worker secret, never a wrangler.jsonc var.
+		 * Unset: saving an org backend fails closed; the hosted fallback still works.
+		 */
+		ORG_AI_WRAP_KEY: optionalStr(),
 
 		// --- Logging ------------------------------------------------------------
 		/** Minimum log level. */

@@ -1,10 +1,18 @@
 import { EventNames } from '$lib/analytics/event-names';
 import { auth } from '$lib/auth';
+import { OrgAiWrapKeyMissingError } from '$lib/server/chat/org-ai-key';
+import {
+	clearOrganizationAiSettings,
+	OrgAiKeyRequiredError,
+	readOrganizationAiSettings,
+	saveOrganizationAiSettings
+} from '$lib/server/chat/org-ai-settings';
+import { ChatBackendUrlError } from '$lib/server/chat/org-ai-url';
 import { createLogger } from '$lib/server/logger';
 import { captureEvent } from '$lib/server/posthog';
 import { transferOwnershipSafely } from '$lib/server/utils/organization-transfer';
 import { renameOrganizationSchema } from '$lib/validators/organization';
-import { fail, redirect } from '@sveltejs/kit';
+import { fail, redirect, type ActionFailure } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 const logger = createLogger('OrganizationSettings');
@@ -58,6 +66,11 @@ export const load: PageServerLoad = async ({ locals, request, params }) => {
 			user: locals.user
 		};
 
+		const canEditAi = isOrgAdmin(currentMember.role);
+		const aiSettings = await readOrganizationAiSettings(organization.id, {
+			revealDetails: canEditAi
+		});
+
 		// Get invitations (only for admins/owners)
 		let invitations: Array<Record<string, unknown>> = [];
 		if (currentMember.role === 'admin' || currentMember.role === 'owner') {
@@ -75,7 +88,8 @@ export const load: PageServerLoad = async ({ locals, request, params }) => {
 			organization,
 			currentMember,
 			members,
-			invitations
+			invitations,
+			aiSettings
 		};
 	} catch (error) {
 		console.error('Error loading organization data:', error);
@@ -336,6 +350,49 @@ export const actions: Actions = {
 		}
 	},
 
+	saveAiSettings: async ({ request, locals }) => {
+		if (!locals.user) {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const organizationId = String(formData.get('organizationId') ?? '');
+		const access = await requireOrgAdmin(request.headers, organizationId, locals.user.id);
+		if (!access.ok) return access.failure;
+
+		try {
+			await saveOrganizationAiSettings({
+				organizationId,
+				baseUrl: String(formData.get('baseUrl') ?? ''),
+				apiKey: String(formData.get('apiKey') ?? ''),
+				modelId: String(formData.get('modelId') ?? ''),
+				updatedBy: locals.user.id
+			});
+			return { success: true, aiSaved: true };
+		} catch (error) {
+			return aiSettingsSaveFailure(error, organizationId);
+		}
+	},
+
+	clearAiSettings: async ({ request, locals }) => {
+		if (!locals.user) {
+			return fail(401, { error: 'Unauthorized' });
+		}
+
+		const formData = await request.formData();
+		const organizationId = String(formData.get('organizationId') ?? '');
+		const access = await requireOrgAdmin(request.headers, organizationId, locals.user.id);
+		if (!access.ok) return access.failure;
+
+		try {
+			await clearOrganizationAiSettings(organizationId);
+			return { success: true, aiCleared: true };
+		} catch (error) {
+			logger.error('Failed to clear organization AI settings', error, { organizationId });
+			return fail(500, { error: 'Failed to clear chat backend' });
+		}
+	},
+
 	rejectInvitation: async ({ request, locals }) => {
 		if (!locals.user) {
 			return fail(401, { error: 'Unauthorized' });
@@ -361,3 +418,44 @@ export const actions: Actions = {
 		}
 	}
 };
+
+function aiSettingsSaveFailure(error: unknown, organizationId: string) {
+	if (error instanceof OrgAiWrapKeyMissingError) {
+		return fail(503, { error: 'Chat key wrapping is not configured on this install.' });
+	}
+	if (error instanceof ChatBackendUrlError || error instanceof OrgAiKeyRequiredError) {
+		return fail(400, { error: error.message });
+	}
+	logger.error('Failed to save organization AI settings', error, { organizationId });
+	return fail(500, { error: 'Failed to save chat backend' });
+}
+
+function isOrgAdmin(role: string | undefined): boolean {
+	return role === 'admin' || role === 'owner';
+}
+
+async function requireOrgAdmin(
+	headers: Headers,
+	organizationId: string,
+	userId: string
+): Promise<{ ok: true } | { ok: false; failure: ActionFailure<{ error: string }> }> {
+	if (!organizationId) {
+		return { ok: false, failure: fail(400, { error: 'Missing organization' }) };
+	}
+
+	const membersResponse = await auth.api.listMembers({
+		headers,
+		query: { organizationId }
+	});
+	const member = (membersResponse?.members || []).find((entry) => entry.userId === userId);
+	if (!member) {
+		return { ok: false, failure: fail(403, { error: 'Not a member of this organization' }) };
+	}
+	if (!isOrgAdmin(member.role)) {
+		return {
+			ok: false,
+			failure: fail(403, { error: 'Only owners and admins can change the chat backend' })
+		};
+	}
+	return { ok: true };
+}

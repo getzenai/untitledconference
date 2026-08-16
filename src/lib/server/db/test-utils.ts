@@ -9,6 +9,7 @@ import * as contentSchema from './conference/content-schema';
 import * as emailSchema from './conference/email-schema';
 import * as programSchema from './conference/program-schema';
 import * as reviewSchema from './conference/review-schema';
+import * as organizationAiSchema from './organization-ai-schema';
 
 const logger = createLogger('TestUtils');
 
@@ -48,7 +49,8 @@ export function createTestDatabase(connectionId: string = 'default') {
 				...reviewSchema,
 				...programSchema,
 				...contentSchema,
-				...emailSchema
+				...emailSchema,
+				...organizationAiSchema
 			}
 		});
 		// Add the $client property for transaction support
@@ -96,6 +98,7 @@ export async function cleanupTestDatabase(connectionId: string = 'default') {
 		// Delete in reverse dependency order to avoid foreign key violations
 
 		// Delete organization-related data
+		await db.delete(organizationAiSchema.organizationAiSettings);
 		await db.delete(authSchema.invitation);
 		await db.delete(authSchema.member);
 		await db.delete(authSchema.organization);

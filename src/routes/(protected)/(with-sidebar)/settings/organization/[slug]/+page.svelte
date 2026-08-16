@@ -26,6 +26,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Copy, Trash2, UserPlus, LogOut, AlertTriangle } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
+	import AiBackendCard from './ai-backend-card.svelte';
 
 	let { data, form } = $props();
 
@@ -163,6 +164,13 @@
 			</div>
 		</CardContent>
 	</Card>
+
+	<AiBackendCard
+		organizationId={organization?.id ?? ''}
+		canEdit={isAdmin(currentMember)}
+		settings={data.aiSettings ?? { configured: false }}
+		{form}
+	/>
 
 	<!-- Leave Organization Dialog -->
 	{#if showLeaveDialog}
