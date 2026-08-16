@@ -1,0 +1,137 @@
+import { describe, expect, it } from 'vitest';
+import {
+	BROWSER_DRAFT_MAX_AGE_MS,
+	browserDraftKey,
+	clearBrowserDraft,
+	clearBrowserDrafts,
+	readBrowserDraft,
+	writeBrowserDraft
+} from './browser-draft';
+
+function fakeStorage(initial: Record<string, string> = {}) {
+	const values = new Map(Object.entries(initial));
+	return {
+		getItem: (key: string) => values.get(key) ?? null,
+		setItem: (key: string, value: string) => values.set(key, value),
+		removeItem: (key: string) => values.delete(key),
+		get length() {
+			return values.size;
+		},
+		key: (index: number) => [...values.keys()][index] ?? null,
+		values
+	};
+}
+
+const parseText = (value: unknown) => (typeof value === 'string' ? value : null);
+
+describe('browser form drafts', () => {
+	it('restores a draft written from the current server baseline', () => {
+		const storage = fakeStorage();
+		writeBrowserDraft(storage, {
+			scope: '/proposal/1/edit',
+			owner: 'user-1',
+			baseline: 'v1',
+			value: 'typed',
+			now: 100
+		});
+
+		expect(
+			readBrowserDraft(storage, {
+				scope: '/proposal/1/edit',
+				owner: 'user-1',
+				baseline: 'v1',
+				parse: parseText,
+				now: 101
+			})
+		).toEqual({ status: 'current', draft: { value: 'typed', baseline: 'v1', savedAt: 100 } });
+	});
+
+	it('surfaces a conflict instead of replacing a newer server baseline', () => {
+		const storage = fakeStorage();
+		writeBrowserDraft(storage, {
+			scope: '/review/1',
+			owner: 'reviewer-1',
+			baseline: 'review-v1',
+			value: 'local comment',
+			now: 100
+		});
+
+		expect(
+			readBrowserDraft(storage, {
+				scope: '/review/1',
+				owner: 'reviewer-1',
+				baseline: 'review-v2',
+				parse: parseText,
+				now: 101
+			})
+		).toMatchObject({ status: 'conflict', draft: { value: 'local comment', savedAt: 100 } });
+	});
+
+	it('removes the previous account copy when identity changes on the same route', () => {
+		const storage = fakeStorage();
+		writeBrowserDraft(storage, {
+			scope: '/review/1',
+			owner: 'reviewer-1',
+			baseline: 'v1',
+			value: 'private comment'
+		});
+		readBrowserDraft(storage, {
+			scope: '/review/1',
+			owner: 'reviewer-2',
+			baseline: 'v1',
+			parse: parseText
+		});
+
+		expect(storage.values.has(browserDraftKey('/review/1', 'reviewer-1'))).toBe(false);
+	});
+
+	it('drops malformed and expired copies and clears committed work', () => {
+		const scope = '/proposal/1/edit';
+		const owner = 'user-1';
+		const storage = fakeStorage({ [browserDraftKey(scope, owner)]: '{nope' });
+		expect(readBrowserDraft(storage, { scope, owner, baseline: 'v1', parse: parseText })).toEqual({
+			status: 'empty'
+		});
+
+		writeBrowserDraft(storage, {
+			scope,
+			owner,
+			baseline: 'v1',
+			value: 'old',
+			now: 0
+		});
+		expect(
+			readBrowserDraft(storage, {
+				scope,
+				owner,
+				baseline: 'v1',
+				parse: parseText,
+				now: BROWSER_DRAFT_MAX_AGE_MS + 1
+			})
+		).toEqual({ status: 'empty' });
+
+		writeBrowserDraft(storage, { scope, owner, baseline: 'v1', value: 'saved' });
+		clearBrowserDraft(storage, scope, owner);
+		expect(storage.values.has(browserDraftKey(scope, owner))).toBe(false);
+	});
+
+	it('clears every account-owned copy and identity marker at logout', () => {
+		const storage = fakeStorage({ unrelated: 'keep' });
+		writeBrowserDraft(storage, {
+			scope: '/proposal/1/edit',
+			owner: 'user-1',
+			baseline: 'v1',
+			value: 'proposal'
+		});
+		writeBrowserDraft(storage, {
+			scope: '/review/2',
+			owner: 'user-1',
+			baseline: 'v1',
+			value: 'review'
+		});
+
+		clearBrowserDrafts(storage);
+
+		expect([...storage.values.entries()]).toEqual([['unrelated', 'keep']]);
+	});
+});
