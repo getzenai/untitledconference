@@ -21,12 +21,19 @@
 	} from '$lib/conference/decision-summary';
 	import { draftDeleteWarning } from '$lib/conference/draft-delete-warning';
 	import { assignBlockReason } from '$lib/conference/review-assignment';
+	import {
+		applyAssignmentWrites,
+		assignmentWriteFromForm,
+		type AssignmentWrite
+	} from '$lib/conference/reviewer-assignment-optimistic';
 	import { formatScore } from '$lib/conference/scoring';
 	import {
 		EDITORIAL_STANDS,
 		EDITORIAL_STAND_LABELS,
 		nextEditorialStand
 	} from '$lib/conference/editorial-stand';
+	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
@@ -52,6 +59,48 @@
 	let busy = $state(false);
 	let confirmDelete = $state(false);
 	const deleteWarning = $derived(draftDeleteWarning('organizer'));
+
+	/**
+	 * In-flight assignment writes sit on top of the last server list. Dropping
+	 * one is the rollback — the row is back where the server left it.
+	 */
+	type QueuedAssignment = AssignmentWrite & { token: number };
+	let assignmentWrites = $state<QueuedAssignment[]>([]);
+	let assignmentWriteToken = 0;
+	let assignmentWriteError = $state<string | null>(null);
+	const assignmentRounds = $derived(applyAssignmentWrites(data.assignmentRounds, assignmentWrites));
+
+	const assignmentFailureMessage = (result: ActionResult): string => {
+		if (result.type === 'failure') {
+			const message = (result.data as { assignmentMessage?: unknown } | undefined)
+				?.assignmentMessage;
+			if (typeof message === 'string' && message.length > 0) return message;
+			return 'That change could not be saved.';
+		}
+		if (result.type === 'error') return actionErrorCopy(result);
+		return 'That change could not be saved.';
+	};
+
+	const submittingAssignment: SubmitFunction = ({ formData }) => {
+		const write = assignmentWriteFromForm(formData);
+		const queued = write ? { ...write, token: ++assignmentWriteToken } : null;
+		if (queued) assignmentWrites = [...assignmentWrites, queued];
+		assignmentWriteError = null;
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				await update(formUpdateOptions('edit'));
+				if (queued) {
+					assignmentWrites = assignmentWrites.filter((item) => item.token !== queued.token);
+				}
+				return;
+			}
+			if (queued) {
+				assignmentWrites = assignmentWrites.filter((item) => item.token !== queued.token);
+			}
+			assignmentWriteError = assignmentFailureMessage(result);
+			if (result.type === 'failure') await update(formUpdateOptions('edit'));
+		};
+	};
 
 	/**
 	 * Open when the last save was refused, so a rejected edit is still on screen to
@@ -779,7 +828,11 @@
 					<h3 class="text-sm font-semibold">Reviewer assignments</h3>
 					<span class="text-muted-foreground text-xs">One reviewer at a time</span>
 				</div>
-				{#if form?.assignmentMessage}
+				{#if assignmentWriteError}
+					<p class="text-status-bad mt-2 text-sm" role="alert" data-testid="assignment-write-error">
+						{assignmentWriteError}
+					</p>
+				{:else if form?.assignmentMessage}
 					<p class="mt-2 text-sm" role="status">{form.assignmentMessage}</p>
 				{/if}
 				{#if data.assignmentRounds.length === 0}
@@ -791,7 +844,7 @@
 					</p>
 				{:else}
 					<div class="mt-3 space-y-3">
-						{#each data.assignmentRounds as round (round.id)}
+						{#each assignmentRounds as round (round.id)}
 							<section
 								class="border-border bg-background rounded-lg border p-3"
 								data-testid="assignment-round"
@@ -807,7 +860,11 @@
 								{:else}
 									<ul class="mt-1 divide-y">
 										{#each round.reviewers as reviewer (reviewer.userId)}
-											<li class="flex items-center justify-between gap-3 py-2 text-sm">
+											<li
+												class="flex items-center justify-between gap-3 py-2 text-sm"
+												data-testid="assignment-reviewer"
+												data-reviewer-status={reviewer.status ?? 'none'}
+											>
 												<div class="min-w-0">
 													<p class="flex min-w-0 items-center gap-2">
 														<span class="truncate font-medium">{reviewer.name}</span>
@@ -817,7 +874,11 @@
 													</p>
 													<p class="text-muted-foreground truncate text-xs">{reviewer.email}</p>
 												</div>
-												<form method="POST" action="?/assignment">
+												<form
+													method="POST"
+													action="?/assignment"
+													use:enhance={submittingAssignment}
+												>
 													<input type="hidden" name="roundId" value={round.id} />
 													<input type="hidden" name="reviewerUserId" value={reviewer.userId} />
 													{#if reviewer.status && reviewer.status !== 'recused'}

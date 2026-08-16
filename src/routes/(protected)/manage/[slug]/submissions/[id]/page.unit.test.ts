@@ -265,6 +265,8 @@ describe('organizer submission detail decision workflow', () => {
 		expect(body).toContain('Riley Reviewer');
 		expect(body).toContain('action="?/assignment"');
 		expect(body).toContain('value="assign"');
+		expect(body).toContain('data-testid="assignment-reviewer"');
+		expect(body).toContain('data-reviewer-status="none"');
 	});
 
 	it('keeps Unassign visible and names why a submitted review cannot be dropped', () => {
