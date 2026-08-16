@@ -2,6 +2,7 @@
  * Settings is the home of conference structure (#63): rooms, tracks, formats.
  * Reviewer visibility lives under Team & reviewers, not here.
  */
+import { MISSING_STRUCTURE_NAME } from '$lib/conference/structure-lines';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -559,12 +560,12 @@ describe('adding structure a list at a time', () => {
 	});
 
 	it('shows a rejected line as an alert in its own section', () => {
-		const body = renderForm({ error: 'Give the room a name.', section: 'rooms' });
+		const body = renderForm({ error: MISSING_STRUCTURE_NAME.room, section: 'rooms' });
 
 		expect(body).toContain('data-testid="settings-error"');
 		expect(body).not.toContain('data-testid="settings-message"');
 		const rooms = body.slice(body.indexOf('data-testid="settings-rooms"'));
-		expect(rooms.slice(0, rooms.indexOf('</section>'))).toContain('Give the room a name.');
+		expect(rooms.slice(0, rooms.indexOf('</section>'))).toContain(MISSING_STRUCTURE_NAME.room);
 	});
 
 	// One message, in one place: the same text at the top and in the section would
