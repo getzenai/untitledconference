@@ -10,7 +10,8 @@ import {
 	assistantSystemPrompt,
 	assistantToolApproval,
 	handleAssistantChatRequest,
-	readAssistantPage
+	readAssistantPage,
+	reviewerFocusFromPage
 } from './assistant';
 import { assistantChatToolDefinitions, assistantChatWriteToolNames } from './tools';
 
@@ -148,6 +149,60 @@ describe('assistant chat', () => {
 		);
 		expect(response.status).toBe(200);
 		expect(await response.text()).toContain('which page');
+	});
+
+	it('tells the model what the page has selected', () => {
+		const page = readAssistantPage({
+			pageContext: {
+				routeId: '/(protected)/manage/[slug]/agenda',
+				url: 'https://conference.test/manage/devflow-conf-2027/agenda',
+				title: 'Agenda',
+				params: { slug: 'devflow-conf-2027' },
+				focus: { day: '2027-05-04' }
+			}
+		});
+		expect(page?.focus).toEqual({ day: '2027-05-04' });
+
+		const prompt = assistantSystemPrompt(page);
+		expect(prompt).toContain('"day"="2027-05-04"');
+		// The warning has to come after the selection, or it does not cover it.
+		expect(prompt.indexOf('"day"="2027-05-04"')).toBeLessThan(
+			prompt.indexOf('untrusted navigation context')
+		);
+	});
+
+	it('drops the whole block when the focus is not a map of short strings', () => {
+		const base = {
+			routeId: '/(protected)/manage/[slug]/agenda',
+			url: 'https://conference.test/manage/devflow-conf-2027/agenda',
+			title: 'Agenda',
+			params: { slug: 'devflow-conf-2027' }
+		};
+		expect(readAssistantPage({ pageContext: { ...base, focus: { day: { nested: 1 } } } })).toBe(
+			undefined
+		);
+		expect(readAssistantPage({ pageContext: { ...base, focus: 'day' } })).toBeUndefined();
+		expect(readAssistantPage({ pageContext: { ...base, focus: { day: 'ab' } } })).toBe(undefined);
+		// Nothing selected is not malformed: the page still says where it is.
+		expect(readAssistantPage({ pageContext: { ...base, focus: {} } })?.focus).toBeUndefined();
+	});
+
+	it('binds the scorecard round only when both halves are whole positive numbers', () => {
+		const page = (focus: Record<string, string>) => ({
+			routeId: '/(protected)/(with-sidebar)/review/[slug]/[submissionId]',
+			url: '/review/devflow-conf-2027/42',
+			title: 'Review',
+			params: { slug: 'devflow-conf-2027', submissionId: '42' },
+			focus
+		});
+		expect(reviewerFocusFromPage(page({ submissionId: '42', roundId: '4' }))).toEqual({
+			submissionId: 42,
+			roundId: 4
+		});
+		expect(reviewerFocusFromPage(page({ submissionId: '42' }))).toBeUndefined();
+		expect(reviewerFocusFromPage(page({ submissionId: '42', roundId: '0' }))).toBeUndefined();
+		expect(reviewerFocusFromPage(page({ submissionId: 'all', roundId: '4' }))).toBeUndefined();
+		expect(reviewerFocusFromPage(undefined)).toBeUndefined();
 	});
 
 	it('requires approval for every registry write and no registry read', () => {

@@ -32,9 +32,24 @@ export function assistantChatWriteToolNames(ctx: McpContext): string[] {
 	return writingToolNames(assistantChatToolDefinitions(ctx));
 }
 
-export function assistantChatTools(ctx: McpContext): Record<string, Tool> {
+/**
+ * `focus` is the scorecard's round, forwarded from the page the user has open
+ * (#659, #683). It only ever pins the round of the submission the page is
+ * about, and only after schema validation — see `bindReviewerFocus`. It cannot
+ * widen anything: the registry handler still checks that this user reviews
+ * that round, exactly as it does when the model names the round itself.
+ */
+export function assistantChatTools(
+	ctx: McpContext,
+	focus?: ReviewerToolFocus
+): Record<string, Tool> {
 	return Object.fromEntries(
-		assistantChatToolDefinitions(ctx).map((def) => [def.name, toLanguageModelTool(def)])
+		assistantChatToolDefinitions(ctx).map((def) => [
+			def.name,
+			toLanguageModelTool(def, {
+				transformInput: (input) => bindReviewerFocus(def.name, input, focus)
+			})
+		])
 	);
 }
 
