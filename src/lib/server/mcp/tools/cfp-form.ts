@@ -14,6 +14,7 @@ import {
 	type ConditionSource,
 	type FieldKind
 } from '$lib/conference/form-definition';
+import { parseSpeakerSupport } from '$lib/conference/speaker-support';
 import {
 	addField,
 	cfpFormView,
@@ -83,6 +84,52 @@ const fieldShape = {
 		.describe('The format id, track id or answer the rule matches. Required when a source is set.')
 };
 
+const fieldPatchShape = {
+	label: z.string().optional().describe('What the submitter reads. Omit to keep the current one.'),
+	kind: fieldKind
+		.optional()
+		.describe('short_text, long_text, select, file or boolean. Omit to keep it.'),
+	required: z
+		.boolean()
+		.optional()
+		.describe('Whether a visible submitter must answer. Omit to keep the current one.'),
+	options: z
+		.array(z.string())
+		.optional()
+		.describe(
+			'Choices for a select, in order. Omit to keep them. Send [] only when you mean to clear them — a select without options is refused.'
+		),
+	conditionSource: conditionSource.describe(
+		'Show this field only when a format, track or another answer matches. Null clears the rule. Omit to keep it.'
+	),
+	conditionFieldId: z
+		.number()
+		.int()
+		.positive()
+		.nullable()
+		.optional()
+		.describe(
+			'When conditionSource is field, the parent field id from get_cfp_form. Omit to keep it.'
+		),
+	conditionValue: z
+		.string()
+		.nullable()
+		.optional()
+		.describe(
+			'The format id, track id or answer the rule matches. Null clears it. Omit to keep it.'
+		)
+};
+
+type FieldPatch = {
+	label?: string;
+	kind?: FieldKind;
+	required?: boolean;
+	options?: string[];
+	conditionSource?: ConditionSource | null;
+	conditionFieldId?: number | null;
+	conditionValue?: string | null;
+};
+
 function parseInstant(value: string | null | undefined, label: string): Date | null | undefined {
 	if (value === undefined) return undefined;
 	if (value === null) return null;
@@ -148,6 +195,20 @@ function fieldInput(args: {
 	};
 }
 
+function fieldInputFromPatch(field: FormField, patch: FieldPatch): FieldInput {
+	return fieldInput({
+		label: patch.label ?? field.label,
+		kind: patch.kind ?? field.kind,
+		required: patch.required ?? field.required,
+		options: patch.options ?? parseOptions(field.options),
+		conditionSource:
+			patch.conditionSource === undefined ? field.conditionSource : patch.conditionSource,
+		conditionFieldId:
+			patch.conditionFieldId === undefined ? field.conditionFieldId : patch.conditionFieldId,
+		conditionValue: patch.conditionValue === undefined ? field.conditionValue : patch.conditionValue
+	});
+}
+
 function presentField(field: FormField) {
 	return {
 		id: field.id,
@@ -177,7 +238,7 @@ function presentForm(form: CfpForm) {
 			shown: visibility[question.key] !== false,
 			removable: isRemovable(question.key)
 		})),
-		speakerSupport: form.speakerSupport
+		speakerSupport: parseSpeakerSupport(form.speakerSupport)
 	};
 }
 
@@ -263,7 +324,18 @@ function addCfpFieldTool(ctx: McpContext): AnyMcpToolDefinition {
 		inputSchema: { conferenceSlug: slugField, ...fieldShape },
 		handler: async (args) => {
 			const conference = await organizerConference(args.conferenceSlug, ctx);
-			const result = await addField(conference.id, fieldInput(args));
+			const result = await addField(
+				conference.id,
+				fieldInput({
+					label: args.label,
+					kind: args.kind,
+					required: args.required,
+					options: args.options,
+					conditionSource: args.conditionSource,
+					conditionFieldId: args.conditionFieldId,
+					conditionValue: args.conditionValue
+				})
+			);
 			if (!result.ok) throw new McpToolError(result.message);
 			return {
 				conference: { slug: conference.slug, name: conference.name },
@@ -279,12 +351,32 @@ function updateCfpFieldTool(ctx: McpContext): AnyMcpToolDefinition {
 		writes: true,
 		description:
 			'Change an extra question on the call. Same write as the builder Save on a field. ' +
-			'fieldId comes from get_cfp_form. Send the whole field — omitted options on a ' +
-			'select clear them and are refused.',
-		inputSchema: { conferenceSlug: slugField, fieldId: fieldIdField, ...fieldShape },
+			'fieldId comes from get_cfp_form. Omit a key to leave it. Send options: [] only ' +
+			'when you mean to clear them — a select without options is refused.',
+		inputSchema: { conferenceSlug: slugField, fieldId: fieldIdField, ...fieldPatchShape },
 		handler: async (args) => {
 			const conference = await organizerConference(args.conferenceSlug, ctx);
-			const result = await updateField(conference.id, args.fieldId, fieldInput(args));
+			const view = await cfpFormView(conference.id);
+			if (!view.form) {
+				throw new McpToolError('This conference has no call for papers yet.');
+			}
+			const existing = view.fields.find((field) => field.id === args.fieldId);
+			if (!existing) {
+				throw new McpToolError('That field is not on this form.');
+			}
+			const result = await updateField(
+				conference.id,
+				args.fieldId,
+				fieldInputFromPatch(existing, {
+					label: args.label,
+					kind: args.kind,
+					required: args.required,
+					options: args.options,
+					conditionSource: args.conditionSource,
+					conditionFieldId: args.conditionFieldId,
+					conditionValue: args.conditionValue
+				})
+			);
 			if (!result.ok) throw new McpToolError(result.message);
 			return {
 				conference: { slug: conference.slug, name: conference.name },
@@ -331,6 +423,13 @@ function moveCfpFieldTool(ctx: McpContext): AnyMcpToolDefinition {
 		},
 		handler: async ({ conferenceSlug, fieldId, direction }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
+			const before = await cfpFormView(conference.id);
+			if (!before.form) {
+				throw new McpToolError('This conference has no call for papers yet.');
+			}
+			if (!before.fields.some((field) => field.id === fieldId)) {
+				throw new McpToolError('That field is not on this form.');
+			}
 			if (!(await moveField(conference.id, fieldId, direction))) {
 				throw new McpToolError('That field cannot move any further.');
 			}
@@ -361,6 +460,10 @@ function setCfpFixedQuestionTool(ctx: McpContext): AnyMcpToolDefinition {
 		},
 		handler: async ({ conferenceSlug, key, shown }) => {
 			const conference = await organizerConference(conferenceSlug, ctx);
+			const before = await cfpFormView(conference.id);
+			if (!before.form) {
+				throw new McpToolError('This conference has no call for papers yet.');
+			}
 			if (!(await setFixedQuestionShown(conference.id, key, shown))) {
 				throw new McpToolError('That question cannot be changed.');
 			}

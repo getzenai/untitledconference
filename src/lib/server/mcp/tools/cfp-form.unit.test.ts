@@ -126,6 +126,23 @@ describe('get_cfp_form', () => {
 		});
 		expect(cfpFormView).toHaveBeenCalledWith(7);
 	});
+
+	it('parses speakerSupport instead of handing out the stored column', async () => {
+		cfpFormView.mockResolvedValue({
+			form: {
+				...storedForm,
+				speakerSupport: '{"admission":"free","travel":{"kind":"covered"}}'
+			},
+			fields: [],
+			tracks: [],
+			formats: []
+		});
+
+		const result = await tool('get_cfp_form').handler({ conferenceSlug: 'devflow' });
+		expect(result).toMatchObject({
+			form: { speakerSupport: { admission: 'free', travel: { kind: 'covered' } } }
+		});
+	});
 });
 
 describe('update_cfp_form', () => {
@@ -209,6 +226,12 @@ describe('add_cfp_field', () => {
 
 describe('update_cfp_field', () => {
 	it('calls updateField with the field id from get_cfp_form', async () => {
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [storedField],
+			tracks: [],
+			formats: []
+		});
 		updateField.mockResolvedValue({ ok: true, field: { ...storedField, label: 'Allergies' } });
 
 		await tool('update_cfp_field').handler({
@@ -225,17 +248,92 @@ describe('update_cfp_field', () => {
 		);
 	});
 
-	it("surfaces updateField's refusal unchanged", async () => {
-		updateField.mockResolvedValue({ ok: false, message: 'That field is not on this form.' });
+	it('fills omitted keys from the stored field, so a rename keeps required and the condition', async () => {
+		const stored = {
+			...storedField,
+			required: true,
+			options: '["Yes","No"]',
+			conditionSource: 'track' as const,
+			conditionFieldId: null,
+			conditionValue: '42'
+		};
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [stored],
+			tracks: [],
+			formats: []
+		});
+		updateField.mockResolvedValue({ ok: true, field: { ...stored, label: 'Allergies' } });
+
+		await tool('update_cfp_field').handler({
+			conferenceSlug: 'devflow',
+			fieldId: 11,
+			label: 'Allergies'
+		});
+
+		expect(updateField).toHaveBeenCalledWith(7, 11, {
+			label: 'Allergies',
+			kind: 'short_text',
+			required: true,
+			optionsText: 'Yes\nNo',
+			conditionSource: 'track',
+			conditionFieldId: null,
+			conditionValue: '42'
+		});
+	});
+
+	it('refuses a conference with no form the same way the other tools do', async () => {
+		cfpFormView.mockResolvedValue({ form: null, fields: [], tracks: [], formats: [] });
+
+		await expect(
+			reject('update_cfp_field', {
+				conferenceSlug: 'devflow',
+				fieldId: 11,
+				label: 'Allergies'
+			})
+		).resolves.toMatchObject({ message: 'This conference has no call for papers yet.' });
+		expect(updateField).not.toHaveBeenCalled();
+	});
+
+	it("uses the screen's sentence when the field is not on this form", async () => {
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [storedField],
+			tracks: [],
+			formats: []
+		});
 
 		await expect(
 			reject('update_cfp_field', {
 				conferenceSlug: 'devflow',
 				fieldId: 99,
-				label: 'Gone',
-				kind: 'short_text'
+				label: 'Gone'
 			})
 		).resolves.toMatchObject({ message: 'That field is not on this form.' });
+		expect(updateField).not.toHaveBeenCalled();
+	});
+
+	it("surfaces updateField's refusal unchanged", async () => {
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [storedField],
+			tracks: [],
+			formats: []
+		});
+		updateField.mockResolvedValue({
+			ok: false,
+			message: 'Give the field a label — it is what the submitter reads.'
+		});
+
+		await expect(
+			reject('update_cfp_field', {
+				conferenceSlug: 'devflow',
+				fieldId: 11,
+				label: ''
+			})
+		).resolves.toMatchObject({
+			message: 'Give the field a label — it is what the submitter reads.'
+		});
 	});
 });
 
@@ -282,8 +380,37 @@ describe('move_cfp_field', () => {
 		expect(result).toMatchObject({ fields: [{ id: 11, label: 'Dietary needs' }] });
 	});
 
+	it('refuses a conference with no form the same way the other tools do', async () => {
+		cfpFormView.mockResolvedValue({ form: null, fields: [], tracks: [], formats: [] });
+
+		await expect(
+			reject('move_cfp_field', { conferenceSlug: 'devflow', fieldId: 11, direction: 'up' })
+		).resolves.toMatchObject({ message: 'This conference has no call for papers yet.' });
+		expect(moveField).not.toHaveBeenCalled();
+	});
+
+	it("uses the screen's sentence when the field is not on this form", async () => {
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [storedField],
+			tracks: [],
+			formats: []
+		});
+
+		await expect(
+			reject('move_cfp_field', { conferenceSlug: 'devflow', fieldId: 99, direction: 'up' })
+		).resolves.toMatchObject({ message: 'That field is not on this form.' });
+		expect(moveField).not.toHaveBeenCalled();
+	});
+
 	it("uses the screen's sentence at either end of the list", async () => {
 		moveField.mockResolvedValue(false);
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [storedField],
+			tracks: [],
+			formats: []
+		});
 
 		await expect(
 			reject('move_cfp_field', { conferenceSlug: 'devflow', fieldId: 11, direction: 'up' })
@@ -315,8 +442,27 @@ describe('set_cfp_fixed_question', () => {
 		});
 	});
 
+	it('refuses a conference with no form the same way the other tools do', async () => {
+		cfpFormView.mockResolvedValue({ form: null, fields: [], tracks: [], formats: [] });
+
+		await expect(
+			reject('set_cfp_fixed_question', {
+				conferenceSlug: 'devflow',
+				key: 'abstract',
+				shown: false
+			})
+		).resolves.toMatchObject({ message: 'This conference has no call for papers yet.' });
+		expect(setFixedQuestionShown).not.toHaveBeenCalled();
+	});
+
 	it("uses the screen's sentence for a question nobody may hide", async () => {
 		setFixedQuestionShown.mockResolvedValue(false);
+		cfpFormView.mockResolvedValue({
+			form: storedForm,
+			fields: [],
+			tracks: [],
+			formats: []
+		});
 
 		await expect(
 			reject('set_cfp_fixed_question', {

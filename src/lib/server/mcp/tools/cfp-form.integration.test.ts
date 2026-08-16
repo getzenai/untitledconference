@@ -143,6 +143,60 @@ describe('form-builder tools against the screen', () => {
 		expect(view.form?.description).toBe('Proposals for the playground.');
 	});
 
+	it('keeps required and the condition when update_cfp_field is only asked to rename', async () => {
+		const parent = await call(organizer, 'add_cfp_field', {
+			conferenceSlug: slug,
+			label: 'Needs a visa',
+			kind: 'boolean',
+			required: true
+		});
+		const parentId = parent.data?.field.id as number;
+
+		const child = await call(organizer, 'add_cfp_field', {
+			conferenceSlug: slug,
+			label: 'Which country',
+			kind: 'short_text',
+			required: true,
+			conditionSource: 'field',
+			conditionFieldId: parentId,
+			conditionValue: 'true'
+		});
+		const childId = child.data?.field.id as number;
+		expect(child.isError).toBe(false);
+
+		const saved = await call(organizer, 'update_cfp_field', {
+			conferenceSlug: slug,
+			fieldId: childId,
+			label: 'Passport country'
+		});
+		expect(saved.isError).toBe(false);
+		expect(saved.data).toMatchObject({
+			field: {
+				id: childId,
+				label: 'Passport country',
+				kind: 'short_text',
+				required: true,
+				conditionSource: 'field',
+				conditionFieldId: parentId,
+				conditionValue: 'true'
+			}
+		});
+
+		const view = await cfpFormView(seeded.conferenceId);
+		expect(view.fields).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					id: childId,
+					label: 'Passport country',
+					required: true,
+					conditionSource: 'field',
+					conditionFieldId: parentId,
+					conditionValue: 'true'
+				})
+			])
+		);
+	});
+
 	it('moves, updates, hides a fixed question and deletes through the same functions', async () => {
 		const first = await call(organizer, 'add_cfp_field', {
 			conferenceSlug: slug,
@@ -171,8 +225,7 @@ describe('form-builder tools against the screen', () => {
 		const saved = await call(organizer, 'update_cfp_field', {
 			conferenceSlug: slug,
 			fieldId: firstId,
-			label: 'First extra, edited',
-			kind: 'short_text'
+			label: 'First extra, edited'
 		});
 		expect(saved.isError).toBe(false);
 		expect(saved.data).toMatchObject({ field: { id: firstId, label: 'First extra, edited' } });

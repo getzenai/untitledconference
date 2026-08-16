@@ -973,7 +973,7 @@
 		},
 		{
 			"name": "update_cfp_field",
-			"description": "Change an extra question on the call. Same write as the builder Save on a field. fieldId comes from get_cfp_form. Send the whole field — omitted options on a select clear them and are refused.",
+			"description": "Change an extra question on the call. Same write as the builder Save on a field. fieldId comes from get_cfp_form. Omit a key to leave it. Send options: [] only when you mean to clear them — a select without options is refused.",
 			"parameters": {
 				"$schema": "http://json-schema.org/draft-07/schema#",
 				"type": "object",
@@ -990,10 +990,11 @@
 						"description": "Field id from get_cfp_form. Never invent one from the page title."
 					},
 					"label": {
-						"type": "string",
-						"description": "What the submitter reads."
+						"description": "What the submitter reads. Omit to keep the current one.",
+						"type": "string"
 					},
 					"kind": {
+						"description": "short_text, long_text, select, file or boolean. Omit to keep it.",
 						"type": "string",
 						"enum": [
 							"short_text",
@@ -1001,22 +1002,21 @@
 							"select",
 							"file",
 							"boolean"
-						],
-						"description": "short_text, long_text, select, file or boolean."
+						]
 					},
 					"required": {
-						"description": "Whether a visible submitter must answer. Defaults to false.",
+						"description": "Whether a visible submitter must answer. Omit to keep the current one.",
 						"type": "boolean"
 					},
 					"options": {
-						"description": "Choices for a select, in order. Ignored on other kinds. Required when kind is select.",
+						"description": "Choices for a select, in order. Omit to keep them. Send [] only when you mean to clear them — a select without options is refused.",
 						"type": "array",
 						"items": {
 							"type": "string"
 						}
 					},
 					"conditionSource": {
-						"description": "Show this field only when a format, track or another answer matches. Null means always.",
+						"description": "Show this field only when a format, track or another answer matches. Null clears the rule. Omit to keep it.",
 						"anyOf": [
 							{
 								"type": "string",
@@ -1032,7 +1032,7 @@
 						]
 					},
 					"conditionFieldId": {
-						"description": "When conditionSource is field, the parent field id from get_cfp_form.",
+						"description": "When conditionSource is field, the parent field id from get_cfp_form. Omit to keep it.",
 						"anyOf": [
 							{
 								"type": "integer",
@@ -1045,7 +1045,7 @@
 						]
 					},
 					"conditionValue": {
-						"description": "The format id, track id or answer the rule matches. Required when a source is set.",
+						"description": "The format id, track id or answer the rule matches. Null clears it. Omit to keep it.",
 						"anyOf": [
 							{
 								"type": "string"
@@ -1058,9 +1058,7 @@
 				},
 				"required": [
 					"conferenceSlug",
-					"fieldId",
-					"label",
-					"kind"
+					"fieldId"
 				],
 				"additionalProperties": false
 			}
