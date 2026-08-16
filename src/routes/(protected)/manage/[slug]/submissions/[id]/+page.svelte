@@ -18,6 +18,7 @@
 		describeNotification,
 		notificationTone
 	} from '$lib/conference/decision-summary';
+	import { draftDeleteWarning } from '$lib/conference/draft-delete-warning';
 	import { assignBlockReason } from '$lib/conference/review-assignment';
 	import { formatScore } from '$lib/conference/scoring';
 	import {
@@ -29,6 +30,15 @@
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
+	import {
+		AlertDialog,
+		AlertDialogCancel,
+		AlertDialogContent,
+		AlertDialogDescription,
+		AlertDialogFooter,
+		AlertDialogHeader,
+		AlertDialogTitle
+	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
@@ -40,6 +50,8 @@
 	const s = $derived(data.submission);
 
 	let busy = $state(false);
+	let confirmDelete = $state(false);
+	const deleteWarning = $derived(draftDeleteWarning('organizer'));
 
 	/**
 	 * Open when the last save was refused, so a rejected edit is still on screen to
@@ -317,6 +329,63 @@
 				>
 					{cannotDecide}
 				</p>
+			{/if}
+			{#if s.status === 'draft'}
+				<form
+					id="delete-draft-form"
+					method="POST"
+					action="?/deleteDraft"
+					use:enhance={() => {
+						busy = true;
+						return async ({ update }) => {
+							try {
+								await update(formUpdateOptions('edit'));
+							} finally {
+								busy = false;
+								confirmDelete = false;
+							}
+						};
+					}}
+				>
+					<Button
+						type="submit"
+						size="sm"
+						variant="outline"
+						disabled={busy}
+						data-testid="delete-draft"
+						onclick={(event: MouseEvent) => {
+							event.preventDefault();
+							confirmDelete = true;
+						}}
+					>
+						Delete this draft
+					</Button>
+				</form>
+				<AlertDialog bind:open={confirmDelete}>
+					<AlertDialogContent data-testid="delete-draft-dialog">
+						<AlertDialogHeader>
+							<AlertDialogTitle>{deleteWarning.title}</AlertDialogTitle>
+							<AlertDialogDescription>
+								{deleteWarning.consequence}
+								<span class="mt-2 block">{deleteWarning.reversal}</span>
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel data-testid="delete-draft-cancel"
+								>Keep this draft</AlertDialogCancel
+							>
+							<Button
+								type="submit"
+								form="delete-draft-form"
+								variant="destructive"
+								disabled={busy}
+								data-testid="delete-draft-confirm"
+							>
+								Delete it
+							</Button>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
 			{/if}
 		</div>
 	</div>

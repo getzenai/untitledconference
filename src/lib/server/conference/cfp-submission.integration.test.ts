@@ -29,6 +29,8 @@ import { emailLogTable } from '$lib/server/db/conference/email-schema';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+	deleteConferenceDraft,
+	deleteOwnDraft,
 	guessSortName,
 	listOpenCalls,
 	openCall,
@@ -1364,6 +1366,99 @@ describe('withdrawSubmission', () => {
 			ok: false,
 			reason: 'decided'
 		});
+	});
+});
+
+describe('deleteOwnDraft / deleteConferenceDraft (#742)', () => {
+	const remaining = async (id: number) => {
+		const [row] = await db
+			.select({ id: submissionTable.id, status: submissionTable.status })
+			.from(submissionTable)
+			.where(eq(submissionTable.id, id));
+		return row ?? null;
+	};
+
+	it('lets the author erase a draft, then refuses a second time', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Scratch this' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a draft');
+
+		expect(await deleteOwnDraft(submitterId, saved.submissionId)).toEqual({ ok: true });
+		expect(await remaining(saved.submissionId)).toBeNull();
+		expect(await deleteOwnDraft(submitterId, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'not_found'
+		});
+	});
+
+	it('refuses a stranger the same way ownedSubmission does', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Not yours to erase' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a draft');
+
+		expect(await deleteOwnDraft(strangerId, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'not_found'
+		});
+		expect(await remaining(saved.submissionId)).toMatchObject({ status: 'draft' });
+	});
+
+	it('will not delete a proposal that has been handed in', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Already in' }), {
+			submit: true
+		});
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+
+		expect(await deleteOwnDraft(submitterId, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'not_draft'
+		});
+		expect(await remaining(saved.submissionId)).toMatchObject({ status: 'submitted' });
+	});
+
+	it('lets the organizer erase a draft on their conference, and not one that left draft', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Organizer cleanup' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a draft');
+
+		const [conference] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, slug));
+
+		expect(await deleteConferenceDraft(conference.id, saved.submissionId)).toEqual({ ok: true });
+		expect(await remaining(saved.submissionId)).toBeNull();
+
+		const handed = await saveSubmission(submitterId, slug, input({ title: 'Keep this one' }), {
+			submit: true
+		});
+		if (!handed.ok) throw new Error('expected a submitted proposal');
+		expect(await deleteConferenceDraft(conference.id, handed.submissionId)).toEqual({
+			ok: false,
+			reason: 'not_draft'
+		});
+		expect(await remaining(handed.submissionId)).toMatchObject({ status: 'submitted' });
+	});
+
+	it('does not reach a draft on another conference', async () => {
+		const saved = await saveSubmission(submitterId, slug, input({ title: 'Wrong tenant' }), {
+			submit: false
+		});
+		if (!saved.ok) throw new Error('expected a draft');
+
+		const [other] = await db
+			.select({ id: conferenceTable.id })
+			.from(conferenceTable)
+			.where(eq(conferenceTable.slug, otherSlug));
+
+		expect(await deleteConferenceDraft(other.id, saved.submissionId)).toEqual({
+			ok: false,
+			reason: 'not_found'
+		});
+		expect(await remaining(saved.submissionId)).toMatchObject({ status: 'draft' });
 	});
 });
 

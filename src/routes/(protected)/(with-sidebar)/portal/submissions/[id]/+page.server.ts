@@ -1,10 +1,10 @@
 import { callWindow, type CallWindow } from '$lib/conference/call-window';
 import { parseSpeakerSupport } from '$lib/conference/speaker-support';
-import { withdrawSubmission } from '$lib/server/conference/cfp-submission';
+import { deleteOwnDraft, withdrawSubmission } from '$lib/server/conference/cfp-submission';
 import { mySubmission } from '$lib/server/conference/speaker-portal';
 import { db } from '$lib/server/db';
 import { cfpFormTable } from '$lib/server/db/conference/cfp-schema';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -73,7 +73,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		callState,
 		closedByOrganizer: call?.status === 'closed',
 		support: parseSpeakerSupport(call?.speakerSupport),
-		canWithdraw: callState === 'open' && submission.isPrimary && WITHDRAWABLE.has(submission.status)
+		canWithdraw:
+			callState === 'open' && submission.isPrimary && WITHDRAWABLE.has(submission.status),
+		// A draft was never offered, so deleting it does not wait on the call window.
+		canDelete: submission.isPrimary && submission.status === 'draft'
 	};
 };
 
@@ -107,5 +110,26 @@ export const actions: Actions = {
 		}
 
 		return { withdrawn: true };
+	},
+
+	/**
+	 * The speaker throws the unfinished draft away. Same write as
+	 * `deleteOwnDraft`. Unlike withdraw, this does not wait on the call
+	 * window — an abandoned draft after the close is the usual case.
+	 */
+	deleteDraft: async ({ params, locals }) => {
+		if (!locals.user) error(401, 'Sign in to delete a draft');
+
+		const id = submissionId(params.id);
+		const submission = await mySubmission(locals.user.id, id);
+		if (!submission) error(404, 'No such proposal');
+
+		const result = await deleteOwnDraft(locals.user.id, id);
+		if (!result.ok) {
+			if (result.reason === 'not_found') error(404, 'No such proposal');
+			return fail(409, { deleteError: 'Only an unsubmitted draft can be deleted.' });
+		}
+
+		redirect(303, '/portal');
 	}
 };

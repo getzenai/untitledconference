@@ -37,6 +37,7 @@ const draw = (
 		callState?: 'open' | 'not_yet_open' | 'closed';
 		closedByOrganizer?: boolean;
 		canWithdraw?: boolean;
+		canDelete?: boolean;
 	} = {}
 ) =>
 	render(Page, {
@@ -46,7 +47,8 @@ const draw = (
 				closesAt,
 				callState: call.callState ?? 'open',
 				closedByOrganizer: call.closedByOrganizer ?? false,
-				canWithdraw: call.canWithdraw ?? false
+				canWithdraw: call.canWithdraw ?? false,
+				canDelete: call.canDelete ?? false
 			},
 			form: null
 		} as never
@@ -161,6 +163,17 @@ describe('speaker submission detail', () => {
 		expect(body).toContain('reserve list');
 	});
 
+	it('offers delete on a draft the speaker owns, and not on a submitted one (#742)', () => {
+		const draft = draw({ status: 'draft' }, null, { canDelete: true });
+		expect(draft).toContain('data-testid="delete-draft"');
+		expect(draft).toContain('action="?/deleteDraft"');
+		expect(draft).toContain('Delete this draft');
+
+		const submitted = draw({ status: 'submitted' }, null, { canWithdraw: true, canDelete: false });
+		expect(submitted).not.toContain('data-testid="delete-draft"');
+		expect(submitted).not.toContain('action="?/deleteDraft"');
+	});
+
 	it('offers withdraw on an open submitted talk, and not on an accepted one (#663)', () => {
 		const open = draw({ status: 'submitted' }, null, { canWithdraw: true });
 		expect(open).toContain('data-testid="withdraw-proposal"');
@@ -199,6 +212,7 @@ describe('speaker expenses in the portal (#512)', () => {
 					callState: 'closed',
 					closedByOrganizer: true,
 					canWithdraw: false,
+					canDelete: false,
 					support
 				},
 				form: null

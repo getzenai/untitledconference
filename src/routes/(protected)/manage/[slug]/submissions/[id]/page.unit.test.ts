@@ -180,6 +180,17 @@ describe('organizer submission detail decision workflow', () => {
 		expect(body).not.toContain('text-status-good');
 	});
 
+	it('offers delete on a draft, and not on a submitted talk (#742)', () => {
+		const draft = renderPage('draft');
+		expect(draft).toContain('data-testid="delete-draft"');
+		expect(draft).toContain('action="?/deleteDraft"');
+		expect(draft).toContain('Delete this draft');
+
+		const submitted = renderPage('submitted');
+		expect(submitted).not.toContain('data-testid="delete-draft"');
+		expect(submitted).not.toContain('action="?/deleteDraft"');
+	});
+
 	it('hides Accept, Decline and Assign on a withdrawn talk and says why (#716)', () => {
 		const body = renderPage('withdrawn');
 		const decide = body.slice(
