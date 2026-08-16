@@ -5,15 +5,23 @@
  * renders inside a dialog (issue #220); dialog content is client-rendered only,
  * so this component is tested directly where it still renders server-side.
  */
+import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import ImportForm from './speaker-import.svelte';
+
+const source = readFileSync(new URL('./speaker-import.svelte', import.meta.url), 'utf8');
 
 vi.mock('$app/forms', () => ({
 	enhance: () => ({})
 }));
 
-const props = { busy: false, enhanceForm: (() => ({})) as never };
+const props = {
+	busy: false,
+	owner: 'ada',
+	scope: 'speaker-import-csv:devflow',
+	enhanceForm: (() => ({})) as never
+};
 
 describe('speaker import form', () => {
 	it('offers both ways into an import: a file and a paste box, one action', () => {
@@ -46,6 +54,15 @@ describe('speaker import form', () => {
 
 		expect(body).toContain('data-testid="import-message"');
 		expect(body).toContain('Imported 12 speakers.');
+	});
+
+	it('parks the paste box and leaves the file picker alone (#789)', () => {
+		expect(source).toContain('BrowserDraftInput');
+		expect(source).toContain('testId="import-csv"');
+		expect(source).toContain('baseline=""');
+		expect(source).not.toContain('<textarea');
+		expect(source).toContain('type="file"');
+		expect(source).not.toContain("from '$lib/components/app/unsaved-guard.svelte'");
 	});
 
 	it('renders a refused import as an alert in the same place', () => {

@@ -1,8 +1,8 @@
 /**
- * Speaker roster drafts: the open row survives reload, and the add dialog
- * survives Escape without a question. Reopening and then reloading
- * distinguishes a browser draft from a value that merely stayed alive in
- * the old component.
+ * Speaker roster drafts: the open row survives reload, and the add and
+ * import dialogs survive Escape without a question. Reopening and then
+ * reloading distinguishes a browser draft from a value that merely stayed
+ * alive in the old component.
  */
 const uniqueSlug = () => `spk-drafts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -101,5 +101,33 @@ describe('Speaker roster drafts', () => {
 		cy.get('[data-testid="add-email"]').should('have.value', '');
 		cy.get('[data-testid="add-company"]').should('have.value', '');
 		cy.get('[data-testid="add-bio"]').should('have.value', '');
+	});
+
+	it('keeps a pasted roster after Escape, reopen, and reload (#789)', () => {
+		const stamp = Date.now();
+		const rows = `name,email\nWalk ${stamp},walk-${stamp}@example.test`;
+
+		cy.visit(`/manage/${slug}/speakers`);
+		cy.waitForHydration();
+		cy.get('[data-testid="speakers-import-open"]').click();
+		cy.get('[data-testid="import-csv"]').click().invoke('val', rows).trigger('input');
+
+		const asked: string[] = [];
+		cy.on('window:confirm', (text) => {
+			asked.push(text);
+			return true;
+		});
+		cy.get('[data-testid="import-csv"]').type('{esc}');
+		cy.get('[data-testid="import-csv"]').should('not.exist');
+		cy.wrap(asked).should('have.length', 0);
+
+		cy.get('[data-testid="speakers-import-open"]').click();
+		cy.get('[data-testid="import-csv"]').should('have.value', rows);
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="speakers-import-open"]').click();
+		cy.get('[data-testid="import-csv"]').should('have.value', rows);
+		cy.get('[data-testid="import-csv-restored"]').should('be.visible');
 	});
 });

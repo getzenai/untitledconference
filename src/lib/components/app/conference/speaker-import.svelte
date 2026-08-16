@@ -10,14 +10,22 @@
 	 * The answer renders inside this section rather than at the top of the roster
 	 * page. A confirmation one screen away from the thing it is about is what makes
 	 * somebody reload to check.
+	 *
+	 * The paste box parks. Escape is not a navigation, so there is no leave
+	 * prompt — the draft is the fix, same as the add dialog. The file picker
+	 * is a file, not typed text.
 	 */
 	import { enhance } from '$lib/forms/enhance';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import { Button } from '$lib/components/ui/button';
 
 	let {
 		busy = false,
 		embedded = false,
 		submitLabel = 'Import speakers',
+		owner,
+		scope,
+		commitToken = 0,
 		enhanceForm,
 		form
 	}: {
@@ -26,6 +34,10 @@
 		embedded?: boolean;
 		/** Contacts says "Import contacts"; the conference roster keeps speakers (#455). */
 		submitLabel?: string;
+		owner: string;
+		/** Caller-owned: roster and contacts must not share a key (#789). */
+		scope: string;
+		commitToken?: number;
 		/** The page's shared submit handler, so this form disables with the others. */
 		enhanceForm: Parameters<typeof enhance>[1];
 		form: { scope?: string; message?: string; error?: string } | null;
@@ -81,15 +93,17 @@
 			<label class="text-muted-foreground mb-1 block text-xs font-medium" for="import-csv">
 				…or paste the rows
 			</label>
-			<textarea
+			<BrowserDraftInput
 				id="import-csv"
 				name="csv"
-				rows="4"
-				spellcheck="false"
+				{scope}
+				{owner}
+				baseline=""
+				rows={4}
 				placeholder={csvExample}
-				class="border-input bg-background w-full rounded-md border px-3 py-2 font-mono text-xs"
-				data-testid="import-csv"
-			></textarea>
+				testId="import-csv"
+				{commitToken}
+			/>
 		</div>
 
 		{#if form?.scope === 'import' && form?.error}

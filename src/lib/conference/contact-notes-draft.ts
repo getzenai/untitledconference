@@ -13,6 +13,11 @@ export function newContactFieldScope(field: string): string {
 	return `contact-new:${field}`;
 }
 
+/** Paste box on the contacts import dialog. Not the roster import. */
+export function contactImportCsvScope(organizationId: string): string {
+	return `contact-import-csv:${organizationId}`;
+}
+
 /** Scope for the contact-page internal notes safety copy (#765). */
 export function contactNotesDraftScope(contactId: number): string {
 	return contactFieldScope(contactId, 'notes');

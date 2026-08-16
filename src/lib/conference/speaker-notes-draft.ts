@@ -29,6 +29,11 @@ export function newSpeakerFieldScope(slug: string, field: string): string {
 	return `speaker-new:${slug}:${field}`;
 }
 
+/** Paste box on the roster import dialog. Not the contacts import. */
+export function speakerImportCsvScope(slug: string): string {
+	return `speaker-import-csv:${slug}`;
+}
+
 /** Every parked key on an open roster row, including the #759 notes copy. */
 export function speakerRowDraftScopes(slug: string, speakerProfileId: number): string[] {
 	return [
