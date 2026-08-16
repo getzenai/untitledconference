@@ -28,4 +28,23 @@ describe('browser draft textarea', () => {
 		expect(body).not.toContain('Main hall');
 		expect(body).not.toContain(roomsJson);
 	});
+
+	it('starts with initial when that is not empty', () => {
+		const body = render(BrowserDraftTextarea, {
+			props: {
+				draftId: 'rooms',
+				scope: 'settings:rooms',
+				owner: 'user-1',
+				baseline: JSON.stringify([{ id: 1, name: 'Hall A' }]),
+				initial: 'Main hall',
+				name: 'names',
+				label: 'New rooms — one per line',
+				testId: 'settings-new-rooms',
+				commitToken: 0,
+				ondirtychange: () => {}
+			}
+		}).body;
+
+		expect(body).toContain('Main hall');
+	});
 });
