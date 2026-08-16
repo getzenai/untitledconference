@@ -24,6 +24,15 @@
  * The four anonymous conference pages set their own `cache-control` in
  * `public-page-cache.ts` for a reason measured over three deploys (see the file
  * header). This handler never overwrites a header that is already there.
+ *
+ * One surface changes behaviour, and it is worth naming so nobody rediscovers
+ * it as a regression: `/c/[slug]/gallery` is the fifth embeddable widget
+ * (`$lib/conference/embed`) but has never been on that allow-list, so it went
+ * out header-less — the same hole that killed `/login`. It now revalidates like
+ * everything else, which costs it the freshness a cache was previously allowed
+ * to invent for it. If the photo wall should be as fast as its four siblings,
+ * the fix is to put it on the allow-list with a deliberate lifetime, not to
+ * leave it silent so an embedding site can guess.
  */
 
 import type { Handle } from '@sveltejs/kit';
