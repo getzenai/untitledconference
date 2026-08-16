@@ -1,5 +1,5 @@
 /** A single decision is saved before, and independently from, its notification. */
-import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
+import { DRAFT_DECISION_REASON, WITHDRAWN_DECISION_REASON } from '$lib/conference/decision-summary';
 import { unassignBlockReason } from '$lib/conference/review-assignment';
 import type { SpeakerHistory } from '$lib/conference/speaker-history';
 import type { NotificationResult } from '$lib/server/conference/decision-notifications';
@@ -64,7 +64,14 @@ type Extras = {
 };
 
 function renderPage(
-	status: 'accepted' | 'submitted' | 'rejected' | 'draft' | 'waitlisted' | 'resubmit_with_guidance',
+	status:
+		| 'accepted'
+		| 'submitted'
+		| 'rejected'
+		| 'draft'
+		| 'waitlisted'
+		| 'resubmit_with_guidance'
+		| 'withdrawn',
 	notificationStatus: null | 'queued' | 'sent' | 'failed' = null,
 	reviewerStatus: null | 'assigned' | 'submitted' = null,
 	ownReview: null | { reviewId: number; status: 'assigned' | 'submitted' } = null,
@@ -171,6 +178,20 @@ describe('organizer submission detail decision workflow', () => {
 		expect(body).toContain('data-testid="decision-block-reason"');
 		expect(body).toContain(DRAFT_DECISION_REASON);
 		expect(body).not.toContain('text-status-good');
+	});
+
+	it('hides Accept, Decline and Assign on a withdrawn talk and says why (#716)', () => {
+		const body = renderPage('withdrawn');
+		const decide = body.slice(
+			body.indexOf('action="?/decide"'),
+			body.indexOf('</form>', body.indexOf('action="?/decide"'))
+		);
+
+		expect(decide).not.toContain('value="rejected"');
+		expect(decide).not.toContain('value="accepted"');
+		expect(body).not.toContain('value="assign"');
+		expect(body).toContain('data-testid="decision-block-reason"');
+		expect(body).toContain(WITHDRAWN_DECISION_REASON);
 	});
 
 	it('leaves the three buttons live once the speaker has handed the talk in', () => {

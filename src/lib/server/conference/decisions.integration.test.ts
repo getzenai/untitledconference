@@ -406,6 +406,7 @@ describe('decideSubmissions — scoping', () => {
 			decided: 0,
 			unchanged: 0,
 			skippedDrafts: 0,
+			skippedWithdrawn: 0,
 			sessionsCreated: 0,
 			tasksCreated: 0,
 			sessionsRemoved: 0,
@@ -454,6 +455,51 @@ describe('decideSubmissions — drafts', () => {
 		const result = await decideSubmissions(conference, [submissionId, draft.id], 'accepted');
 
 		expect(result).toMatchObject({ decided: 1, skippedDrafts: 1, sessionsCreated: 1 });
+	});
+});
+
+describe('decideSubmissions — withdrawn', () => {
+	/**
+	 * The speaker took it back. Accepting it would put a withdrawn talk on the
+	 * programme and create speaker tasks (#716). Same refusal as a draft.
+	 */
+	it('leaves a withdrawn talk alone and says so', async () => {
+		const [withdrawn] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Taken back', status: 'withdrawn' })
+			.returning();
+		await db
+			.insert(submissionSpeakerTable)
+			.values({ submissionId: withdrawn.id, speakerProfileId, isPrimary: true, position: 0 });
+
+		for (const decision of ['accepted', 'rejected'] as const) {
+			const result = await decideSubmissions(conference, [withdrawn.id], decision);
+			expect(result).toMatchObject({ decided: 0, unchanged: 0, skippedWithdrawn: 1 });
+		}
+
+		const [after] = await db
+			.select()
+			.from(submissionTable)
+			.where(eq(submissionTable.id, withdrawn.id));
+		expect(after.status).toBe('withdrawn');
+		expect(after.decidedAt).toBeNull();
+
+		const placements = await db
+			.select()
+			.from(placementTable)
+			.where(eq(placementTable.submissionId, withdrawn.id));
+		expect(placements).toHaveLength(0);
+	});
+
+	it('still decides the submitted rows selected alongside a withdrawn talk', async () => {
+		const [withdrawn] = await db
+			.insert(submissionTable)
+			.values({ conferenceId: conference.id, title: 'Taken back', status: 'withdrawn' })
+			.returning();
+
+		const result = await decideSubmissions(conference, [submissionId, withdrawn.id], 'accepted');
+
+		expect(result).toMatchObject({ decided: 1, skippedWithdrawn: 1, sessionsCreated: 1 });
 	});
 });
 

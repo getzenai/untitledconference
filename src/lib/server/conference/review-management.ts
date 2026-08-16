@@ -1,5 +1,5 @@
 /** Organizer-side review assignments, reviewer progress, and reminders. */
-import { unassignBlockReason } from '$lib/conference/review-assignment';
+import { assignBlockReason, unassignBlockReason } from '$lib/conference/review-assignment';
 import { db } from '$lib/server/db';
 import { user } from '$lib/server/db/auth-schema';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
@@ -84,6 +84,15 @@ async function submissionTrack(submissionId: number): Promise<number | null> {
 	return submission?.trackId ?? null;
 }
 
+async function submissionStatus(submissionId: number): Promise<string | null> {
+	const [submission] = await db
+		.select({ status: submissionTable.status })
+		.from(submissionTable)
+		.where(eq(submissionTable.id, submissionId))
+		.limit(1);
+	return submission?.status ?? null;
+}
+
 async function membershipTrackRestrictions(membershipIds: number[]) {
 	if (membershipIds.length === 0) return new Map<number, Set<number>>();
 	const rows = await db
@@ -165,7 +174,8 @@ function reviewersForRound(
 	assignments: Map<string, ExistingAssignment>,
 	speakerIds: Set<string>,
 	trackId: number | null,
-	restrictions: Map<number, Set<number>>
+	restrictions: Map<number, Set<number>>,
+	assignable: boolean
 ) {
 	const candidates = new Map<string, AssignmentReviewer>();
 	for (const membership of memberships) {
@@ -178,7 +188,7 @@ function reviewersForRound(
 				membership.name ?? membership.email,
 				membership.email,
 				existing?.status ?? null,
-				true
+				assignable
 			)
 		);
 	}
@@ -206,16 +216,18 @@ export async function reviewAssignmentMatrix(
 	const rounds = await conferenceRounds(conferenceId);
 	if (rounds.length === 0) return [];
 	const roundIds = rounds.map((round) => round.id);
-	const [memberships, assignments, speakerIds, trackId] = await Promise.all([
+	const [memberships, assignments, speakerIds, trackId, status] = await Promise.all([
 		conferenceReviewerMemberships(conferenceId, roundIds),
 		submissionAssignments(submissionId, roundIds),
 		submissionSpeakerIds(submissionId),
-		submissionTrack(submissionId)
+		submissionTrack(submissionId),
+		submissionStatus(submissionId)
 	]);
 	const restrictions = await membershipTrackRestrictions(
 		memberships.map((row) => row.membershipId)
 	);
 	const byRound = assignmentsByRound(assignments);
+	const assignable = status !== null && assignBlockReason(status) === null;
 	return rounds.map((round) => ({
 		...round,
 		reviewers: reviewersForRound(
@@ -224,7 +236,8 @@ export async function reviewAssignmentMatrix(
 			byRound.get(round.id) ?? new Map(),
 			speakerIds,
 			trackId,
-			restrictions
+			restrictions,
+			assignable
 		)
 	}));
 }
@@ -235,6 +248,8 @@ export type AssignmentResult =
 	| 'unchanged'
 	| 'complete'
 	| 'invalid'
+	/** The speaker took the talk back — a new assignment is refused (#716). */
+	| 'withdrawn'
 	/** Bulk path only: an existing recusal was left alone (not restored). */
 	| 'recused';
 
@@ -253,10 +268,10 @@ type AssignOptions = {
 	restoreRecused?: boolean;
 };
 
-async function validAssignmentTarget(tx: Tx, input: AssignmentInput) {
+async function assignmentTarget(tx: Tx, input: AssignmentInput) {
 	const [[submission], [round]] = await Promise.all([
 		tx
-			.select({ id: submissionTable.id })
+			.select({ id: submissionTable.id, status: submissionTable.status })
 			.from(submissionTable)
 			.where(
 				and(
@@ -277,7 +292,7 @@ async function validAssignmentTarget(tx: Tx, input: AssignmentInput) {
 			)
 			.limit(1)
 	]);
-	return Boolean(submission && round);
+	return submission && round ? submission : null;
 }
 
 async function eligibleMemberships(tx: Tx, input: AssignmentInput) {
@@ -429,7 +444,9 @@ async function updateAssignment(
 	input: AssignmentInput,
 	options: AssignOptions = {}
 ): Promise<AssignmentResult> {
-	if (!(await validAssignmentTarget(tx, input))) return 'invalid';
+	const target = await assignmentTarget(tx, input);
+	if (!target) return 'invalid';
+	if (input.assigned && assignBlockReason(target.status)) return 'withdrawn';
 	return input.assigned ? addAssignment(tx, input, options) : removeAssignment(tx, input);
 }
 
@@ -490,6 +507,8 @@ export async function conferenceAssignmentTargets(conferenceId: number): Promise
 export type AssignSkipReason =
 	| 'not_on_conference'
 	| 'speaker_conflict'
+	/** The speaker took the talk back — assigning would score a talk that is gone. */
+	| 'withdrawn'
 	| 'not_in_round'
 	| 'track_restricted'
 	/** Auto-distribute: candidates are left, and every one of them is at the cap. */
@@ -538,11 +557,13 @@ const EMPTY_BULK: BulkAssignResult = {
  * The cause behind an `invalid` write, named the way an agent can act on it.
  *
  * `eligibleReviewer` returns a boolean; this is the same tree with the branch
- * labels left on. A cause the write path does not have (withdrawn, round window)
- * is not invented here.
+ * labels left on. A cause the write path does not have (round window) is not
+ * invented here. Withdrawn is on the write path now (#716).
  */
 async function classifySkip(tx: Tx, input: AssignmentInput): Promise<AssignSkipReason> {
-	if (!(await validAssignmentTarget(tx, input))) return 'not_on_conference';
+	const target = await assignmentTarget(tx, input);
+	if (!target) return 'not_on_conference';
+	if (assignBlockReason(target.status)) return 'withdrawn';
 	if (await isSubmissionSpeaker(tx, input)) return 'speaker_conflict';
 	const memberships = await eligibleMemberships(tx, input);
 	// A seat on another round of this conference still shows up in
@@ -643,7 +664,7 @@ export type DistributeOptions = {
 type SubmissionSeat = { userId: string; status: Review['status'] };
 
 type DistributeSnapshot = {
-	onConference: Map<number, { id: number; trackId: number | null }>;
+	onConference: Map<number, { id: number; trackId: number | null; status: string }>;
 	speakersBySubmission: Map<number, Set<string>>;
 	existingBySubmission: Map<number, SubmissionSeat[]>;
 	load: Map<string, number>;
@@ -683,7 +704,11 @@ type RunDistributeArgs = {
 
 function submissionsOnConference(conferenceId: number, ids: number[]) {
 	return db
-		.select({ id: submissionTable.id, trackId: submissionTable.trackId })
+		.select({
+			id: submissionTable.id,
+			trackId: submissionTable.trackId,
+			status: submissionTable.status
+		})
 		.from(submissionTable)
 		.where(and(eq(submissionTable.conferenceId, conferenceId), inArray(submissionTable.id, ids)));
 }
@@ -1018,6 +1043,10 @@ async function runDistribute(tx: Tx, args: RunDistributeArgs): Promise<BulkAssig
 		const submission = args.snapshot.onConference.get(submissionId);
 		if (!submission) {
 			acc.skippedItems.push({ submissionId, reason: 'not_on_conference' });
+			continue;
+		}
+		if (assignBlockReason(submission.status)) {
+			acc.skippedItems.push({ submissionId, reason: 'withdrawn' });
 			continue;
 		}
 		await fillSubmissionSeats(tx, fillArgs(args, submissionId, submission.trackId), acc);

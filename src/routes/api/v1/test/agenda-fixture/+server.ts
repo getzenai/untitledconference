@@ -60,7 +60,14 @@ type FixtureRequest = {
 	 * still-to-review filter pass `submitted`: accepted talks are decisions, not
 	 * review work, and would never show under that filter.
 	 */
-	sessionStatus?: 'submitted' | 'in_review' | 'accepted';
+	sessionStatus?: 'submitted' | 'in_review' | 'accepted' | 'withdrawn';
+	/**
+	 * Put the organizer on the review committee without assigning work (#716).
+	 *
+	 * Needed so a withdrawn-talk spec can prove Assign is absent: without a
+	 * reviewer on the round, the button is missing for the wrong reason.
+	 */
+	committee?: boolean;
 	/**
 	 * Make this user the speaker on every session, and give them the portal
 	 * (#495).
@@ -163,7 +170,7 @@ async function addSession(
 	title: string,
 	index: number,
 	trackId: number | null = null,
-	status: 'submitted' | 'in_review' | 'accepted' = 'accepted',
+	status: 'submitted' | 'in_review' | 'accepted' | 'withdrawn' = 'accepted',
 	speakerProfileId: number | null = null
 ): Promise<{ submissionId: number; speakerProfileId: number }> {
 	const decided = status === 'accepted' ? new Date() : null;
@@ -258,6 +265,8 @@ async function addSubmittedReviews(
 		scopeId: conferenceId
 	});
 
+	if (titles.length === 0) return;
+
 	const rows = await db
 		.select({ id: submissionTable.id, title: submissionTable.title })
 		.from(submissionTable)
@@ -284,9 +293,10 @@ type Fixture = {
 	name: string;
 	days: string[];
 	sessions: string[];
-	sessionStatus: 'submitted' | 'in_review' | 'accepted';
+	sessionStatus: 'submitted' | 'in_review' | 'accepted' | 'withdrawn';
 	speakerUserId: string | null;
 	reviewed: string[];
+	committee: boolean;
 	blindReview: boolean;
 	tracks: string[];
 	attachments: { label: string; url: string }[];
@@ -311,6 +321,7 @@ function withDefaults(body: FixtureRequest): Fixture | null {
 		sessionStatus: body.sessionStatus ?? 'accepted',
 		speakerUserId: body.speakerUserId ?? null,
 		reviewed: orEmpty(body.reviewed),
+		committee: body.committee ?? false,
 		blindReview: body.blindReview ?? false,
 		tracks: orEmpty(body.tracks),
 		attachments: orEmpty(body.attachments),
@@ -518,7 +529,7 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	await addContentFiles(conference.id, organizationId, fixture.contentFiles, fixture.speakerUserId);
 
-	if (fixture.reviewed.length > 0) {
+	if (fixture.reviewed.length > 0 || fixture.committee) {
 		await addSubmittedReviews(conference.id, fixture.userId, fixture.reviewed, fixture.blindReview);
 	}
 

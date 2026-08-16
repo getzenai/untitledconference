@@ -172,6 +172,46 @@ describe('organizer reviewer assignments', () => {
 		).toBe('assigned');
 	});
 
+	it('refuses a new assignment on a withdrawn talk and names the skip (#716)', async () => {
+		const [withdrawn] = await db
+			.insert(submissionTable)
+			.values({
+				conferenceId: conference.id,
+				title: `Withdrawn ${suffix}`,
+				status: 'withdrawn'
+			})
+			.returning({ id: submissionTable.id });
+
+		expect(
+			await setReviewAssignment(conference.id, withdrawn.id, roundId, CONFERENCE_REVIEWER, true)
+		).toBe('withdrawn');
+
+		const matrix = await reviewAssignmentMatrix(conference.id, withdrawn.id);
+		expect(matrix[0].reviewers.every((reviewer) => reviewer.eligible === false)).toBe(true);
+
+		const bulk = await assignReviewerToSubmissions(
+			conference.id,
+			[withdrawn.id],
+			roundId,
+			CONFERENCE_REVIEWER
+		);
+		expect(bulk).toEqual({
+			created: 0,
+			already: 0,
+			skipped: 1,
+			recused: 0,
+			skippedItems: [{ submissionId: withdrawn.id, reason: 'withdrawn' }]
+		});
+
+		const seats = await db
+			.select({ id: reviewTable.id })
+			.from(reviewTable)
+			.where(eq(reviewTable.submissionId, withdrawn.id));
+		expect(seats).toHaveLength(0);
+
+		await db.delete(submissionTable).where(eq(submissionTable.id, withdrawn.id));
+	});
+
 	/**
 	 * ABS-06: one reviewer onto many selected submissions. Existing rows stay,
 	 * speaker/outsider pairs skip, and the matrix on each submission is the
