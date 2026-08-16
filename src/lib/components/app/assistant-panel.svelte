@@ -9,8 +9,8 @@
 	 *    mount. Otherwise the first page the user opened the panel on would
 	 *    stick to the whole conversation while they navigate away.
 	 * 2. Approval is rendered generically, over *any* tool part that asks for
-	 *    it. The client has no list of write tools — the server decides, and a
-	 *    tool it lets through writes without asking us.
+	 *    it. The server decides the card. Auto-run writes skip it; the panel
+	 *    still refreshes the page behind the sheet when those land.
 	 *
 	 * The message list follows the answer being streamed rather than the bottom
 	 * of the list (#718) — see `ai-elements/conversation/` for why those are not
@@ -27,6 +27,7 @@
 		ConversationScrollButton,
 		MessageAnchor
 	} from '$lib/components/ai-elements/conversation';
+	import { assistantWriteRefreshesPage } from '$lib/chat/auto-run-writes';
 	import { pageContext, visiblePageTitle } from '$lib/chat/page-context';
 	import { pageFocus } from '$lib/chat/page-focus.svelte';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
@@ -72,9 +73,8 @@
 
 	const pending = $derived(chat?.status === 'submitted' || chat?.status === 'streaming');
 
-	// A tool the user approved has just written something. The page behind the
-	// sheet is now stale — reload its data so the change is visible without a
-	// manual refresh.
+	// A write has just landed. Gated writes enter `approved` when the card
+	// appears; auto-run writes never do, and still change the page (#726).
 	$effect(() => {
 		if (!chat) return;
 		for (const message of chat.messages) {
@@ -82,7 +82,10 @@
 				if (!isToolUIPart(part)) continue;
 				if (part.state === 'approval-requested') approved.add(part.toolCallId);
 				if (part.state !== 'output-available') continue;
-				if (!approved.has(part.toolCallId) || invalidated.has(part.toolCallId)) continue;
+				if (invalidated.has(part.toolCallId)) continue;
+				if (!assistantWriteRefreshesPage(getToolName(part), approved.has(part.toolCallId))) {
+					continue;
+				}
 				invalidated.add(part.toolCallId);
 				void invalidateAll();
 			}

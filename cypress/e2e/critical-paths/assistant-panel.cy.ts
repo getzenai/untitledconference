@@ -6,9 +6,9 @@
  * star is in the DOM — a dead import or a 500 would read as "flag off".
  *
  * CI leaves the flag off. `FEATURE_INAPP_CHAT=true AI_CHAT_MODEL=mock` is the
- * local path that asserts the sheet, send-time page context, and a write
- * approval. The mock treats `Rename the conference <slug> to <name>` as
- * `update_conference` so this spec never calls a real provider.
+ * local path that asserts the sheet, send-time page context, and a reversible
+ * write with no card (#726). The mock treats `Rename the conference <slug> to
+ * <name>` as `update_conference` so this spec never calls a real provider.
  */
 const uniqueSlug = () => `assistant-panel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -105,32 +105,7 @@ describe('Assistant panel', () => {
 		});
 	});
 
-	it('asks for approval before a write and declining runs nothing', function () {
-		if (!chatEnabled) this.skip();
-
-		const original = `Keep Name ${Date.now()}`;
-		const renamed = `Denied Name ${Date.now()}`;
-
-		seedConference(original).then(({ slug }) => {
-			cy.visit('/home');
-			cy.waitForHydration();
-			cy.get('[data-testid="home-dashboard"]').should('contain.text', original);
-			openAssistant();
-			sendAssistant(`Rename the conference ${slug} to ${renamed}`);
-
-			cy.get('[data-testid="assistant-approval"]').should('be.visible');
-			cy.get('[data-testid="assistant-approval"]').should('contain.text', 'Update conference');
-			cy.get('[data-testid="assistant-approval"]').should('contain.text', slug);
-			cy.get('[data-testid="assistant-approval"]').should('contain.text', renamed);
-
-			cy.get('[data-testid="assistant-deny"]').click();
-			cy.get('[data-testid="assistant-denied"]').should('contain.text', 'Update conference');
-			cy.get('[data-testid="home-dashboard"]').should('contain.text', original);
-			cy.get('[data-testid="home-dashboard"]').should('not.contain.text', renamed);
-		});
-	});
-
-	it('runs an approved write and refreshes the page behind the sheet', function () {
+	it('runs a reversible write without a card and refreshes the page behind the sheet', function () {
 		if (!chatEnabled) this.skip();
 
 		const original = `Old Name ${Date.now()}`;
@@ -143,8 +118,7 @@ describe('Assistant panel', () => {
 			openAssistant();
 			sendAssistant(`Rename the conference ${slug} to ${renamed}`);
 
-			cy.get('[data-testid="assistant-approval"]').should('be.visible');
-			cy.get('[data-testid="assistant-approve"]').click();
+			cy.get('[data-testid="assistant-approval"]').should('not.exist');
 
 			// The sheet stays open; the name on the hub behind it is the page
 			// data, not the transcript.

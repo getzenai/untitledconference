@@ -1,7 +1,7 @@
 /**
  * Filing a review through the chat uses the same `submit_review` the MCP
- * server exposes. The first turn asks; the write only happens after the
- * reviewer confirms (#302).
+ * server exposes. The write is reversible and stays in the app, so it runs
+ * without a card (#726).
  *
  * The reviewer chat that used to carry this is gone (#683): the one assistant
  * does the same work, and the round it writes into now comes from the page's
@@ -120,7 +120,7 @@ const userTurn = (): UIMessage => ({
 });
 
 describe('assistant submit_review (#302, #683)', () => {
-	it('does not write until the reviewer confirms', async () => {
+	it('writes through saveReview on the first turn, without a card', async () => {
 		const res = await streamAssistantChat({
 			ctx: ellis,
 			messages: [userTurn()],
@@ -134,47 +134,8 @@ describe('assistant submit_review (#302, #683)', () => {
 		expect(res.status).toBe(200);
 		const body = await res.text();
 		expect(body).toContain('submit_review');
-
-		const before = await reviewerSubmission(conference, ellis.userId, submissionId, roundId);
-		expect(before?.own.status).not.toBe('submitted');
-		expect(before?.criteria[0]?.value).not.toBe(4);
-	});
-
-	it('writes through saveReview once the call is approved', async () => {
-		const approved: UIMessage[] = [
-			userTurn(),
-			{
-				id: 'a1',
-				role: 'assistant',
-				parts: [
-					{
-						type: 'tool-submit_review',
-						toolCallId: 'call_submit',
-						state: 'approval-responded',
-						input: {
-							conferenceSlug: conference.slug,
-							submissionId,
-							answers,
-							comment: ''
-						},
-						approval: { id: 'appr_1', approved: true }
-					}
-				]
-			}
-		];
-
-		const res = await streamAssistantChat({
-			ctx: ellis,
-			messages: approved,
-			model: createMockSubmitReviewModel(
-				{ conferenceSlug: conference.slug, submissionId, answers },
-				true
-			),
-			page: scorecard()
-		});
-		expect(res.status).toBe(200);
-		const body = await res.text();
-		expect(body).toMatch(/Saved review|submit_review|4/);
+		expect(body).not.toContain('tool-approval-request');
+		expect(body).toMatch(/Saved review|4/);
 
 		const after = await reviewerSubmission(conference, ellis.userId, submissionId, roundId);
 		expect(after?.own.status).toBe('submitted');
@@ -194,36 +155,15 @@ describe('assistant submit_review (#302, #683)', () => {
 	// review that was never filed (#302, same seam as the agenda board).
 	it('streams { error } and writes nothing when the reviewer is not assigned', async () => {
 		const strangerId = seeded.submissionIds['drew-migrations'];
-		const approved: UIMessage[] = [
-			userTurn(),
-			{
-				id: 'a1',
-				role: 'assistant',
-				parts: [
-					{
-						type: 'tool-submit_review',
-						toolCallId: 'call_submit',
-						state: 'approval-responded',
-						input: {
-							conferenceSlug: conference.slug,
-							submissionId: strangerId,
-							answers,
-							comment: '',
-							roundId
-						},
-						approval: { id: 'appr_2', approved: true }
-					}
-				]
-			}
-		];
-
 		const res = await streamAssistantChat({
 			ctx: ellis,
-			messages: approved,
-			model: createMockSubmitReviewModel(
-				{ conferenceSlug: conference.slug, submissionId: strangerId, answers },
-				true
-			)
+			messages: [userTurn()],
+			model: createMockSubmitReviewModel({
+				conferenceSlug: conference.slug,
+				submissionId: strangerId,
+				answers,
+				roundId
+			})
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();

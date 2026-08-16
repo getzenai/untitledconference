@@ -13,7 +13,12 @@ import {
 	readAssistantPage,
 	reviewerFocusFromPage
 } from './assistant';
-import { assistantChatToolDefinitions, assistantChatWriteToolNames } from './tools';
+import {
+	ASSISTANT_AUTO_RUN_WRITES,
+	assistantChatToolDefinitions,
+	assistantChatWriteToolNames,
+	assistantWriteNeedsApproval
+} from './tools';
 
 const emptyUsage = {
 	inputTokens: { total: 0, noCache: 0, cacheRead: undefined, cacheWrite: undefined },
@@ -123,6 +128,9 @@ describe('assistant chat', () => {
 		expect(prompt).toContain('Never put a goose aside');
 		expect(prompt).toContain('Never mention internal database IDs');
 		expect(prompt).toContain('Main Stage');
+		expect(prompt).toContain('Do not ask in prose whether to make a change');
+		expect(prompt).not.toContain('Every write waits for explicit user approval');
+		expect(prompt).not.toContain('Before requesting approval');
 	});
 
 	it('drops a malformed page block without rejecting the request', async () => {
@@ -207,12 +215,38 @@ describe('assistant chat', () => {
 		expect(reviewerFocusFromPage(undefined)).toBeUndefined();
 	});
 
-	it('requires approval for every registry write and no registry read', () => {
+	it('puts every write in exactly one bucket and fails closed for a new name', () => {
 		const ctx = { userId: 'user-1', organizationId: 'org-1' };
+		const writes = assistantChatWriteToolNames(ctx);
+		const auto = writes.filter((name) => !assistantWriteNeedsApproval(name)).sort();
+		const gated = writes.filter(assistantWriteNeedsApproval).sort();
+
+		expect([...auto, ...gated].sort()).toEqual([...writes].sort());
+		expect(auto.filter((name) => gated.includes(name))).toEqual([]);
+		expect(auto).toEqual([...ASSISTANT_AUTO_RUN_WRITES]);
+		expect(gated).toEqual([
+			'archive_conference',
+			'close_cfp',
+			'decide_submissions',
+			'delete_cfp_field',
+			'delete_conference',
+			'finalize_proposal',
+			'notify_speakers',
+			'open_cfp',
+			'publish_conference',
+			'unpublish_conference',
+			'withdraw_proposal'
+		]);
+
+		expect(assistantWriteNeedsApproval('brand_new_write_tool')).toBe(true);
+		expect(assistantWriteNeedsApproval('move_talk')).toBe(false);
+
 		const approval = assistantToolApproval(ctx);
-		expect(Object.keys(approval).sort()).toEqual(assistantChatWriteToolNames(ctx).sort());
+		expect(Object.keys(approval).sort()).toEqual(gated);
 		for (const tool of assistantChatToolDefinitions(ctx)) {
-			expect(approval[tool.name]).toBe(tool.writes ? 'user-approval' : undefined);
+			expect(approval[tool.name]).toBe(
+				tool.writes && assistantWriteNeedsApproval(tool.name) ? 'user-approval' : undefined
+			);
 		}
 	});
 });

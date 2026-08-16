@@ -11,13 +11,20 @@
  * dropped it: the assistant follows the user through the whole application, so
  * a list keyed to a page can only guess wrong. What replaces it is not a
  * weaker fence but the one that was always doing the work — authorization
- * inside each registry handler — plus approval before every write.
+ * inside each registry handler — plus a card only for writes that leave the
+ * app or are hard to undo (#726). A new write that is not in
+ * `ASSISTANT_AUTO_RUN_WRITES` (`$lib/chat/auto-run-writes`) needs a card.
  */
+import { ASSISTANT_AUTO_RUN_WRITES } from '$lib/chat/auto-run-writes';
 import type { McpContext } from '$lib/server/mcp/context';
 import { allTools } from '$lib/server/mcp/server';
 import { writingToolNames, type AnyMcpToolDefinition } from '$lib/server/mcp/tool-helpers';
 import type { Tool } from 'ai';
 import { toLanguageModelTool } from './adapter';
+
+export { ASSISTANT_AUTO_RUN_WRITES };
+
+const AUTO_RUN_WRITES = new Set<string>(ASSISTANT_AUTO_RUN_WRITES);
 
 export function assistantChatToolDefinitions(ctx: McpContext): AnyMcpToolDefinition[] {
 	return allTools(ctx);
@@ -25,6 +32,11 @@ export function assistantChatToolDefinitions(ctx: McpContext): AnyMcpToolDefinit
 
 export function assistantChatWriteToolNames(ctx: McpContext): string[] {
 	return writingToolNames(assistantChatToolDefinitions(ctx));
+}
+
+/** True unless `name` is in the auto-run set. Unknown names fail closed. */
+export function assistantWriteNeedsApproval(name: string): boolean {
+	return !AUTO_RUN_WRITES.has(name);
 }
 
 /**
