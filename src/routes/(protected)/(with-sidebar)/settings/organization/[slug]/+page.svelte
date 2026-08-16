@@ -100,10 +100,12 @@
 					action="?/renameOrganization"
 					use:enhance={() => {
 						isRenaming = true;
-						return async ({ update }) => {
+						return async ({ result, update }) => {
 							await update(formUpdateOptions('edit'));
 							await invalidateAll();
-							nameCommit += 1;
+							// Zod trims the name, so value === baseline is not a reliable
+							// success signal. Clear the parked copy only when Save kept it.
+							if (result.type === 'success') nameCommit += 1;
 							isRenaming = false;
 						};
 					}}

@@ -68,6 +68,44 @@ describe('Organizer name and label drafts', () => {
 		cy.get('[data-testid="add-criterion-label"]').should('have.value', typed);
 	});
 
+	it('keeps a rejected scorecard criterion label through reload', () => {
+		const slug = uniqueSlug();
+		const typed = 'ORGJOURNEY rejected criterion';
+
+		cy.createAndLogin().then((organizer) => {
+			cy.request({
+				method: 'POST',
+				url: `${Cypress.config('baseUrl')}/api/v1/test/agenda-fixture`,
+				body: { userId: organizer.id, slug, days: ['2028-05-10'], sessions: [] }
+			})
+				.its('status')
+				.should('eq', 200);
+		});
+
+		cy.visit(`/manage/${slug}/rounds`);
+		cy.waitForHydration();
+		cy.get('form[action="?/add"] input[name="name"]').type('Screening');
+		cy.get('form[action="?/add"] button[type="submit"]').click();
+		cy.get('[data-testid="add-criterion"]').should('exist');
+
+		// Select with one option is valid HTML and a 400 from the server —
+		// this must not take the success path with a different name.
+		cy.chooseFromAppSelect('add-criterion-kind', 'Select');
+		cy.get('[data-testid="add-criterion-options"]').type('Only one');
+		cy.get('[data-testid="add-criterion-label"]').type(typed);
+		cy.get('[data-testid="add-criterion-submit"]').click();
+
+		cy.contains('A select criterion needs at least two options.').should('be.visible');
+		cy.get('[data-testid="add-criterion-label"]').should('have.value', typed);
+		cy.get('form[action="?/updateCriterion"]').should('not.exist');
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="add-criterion-label-restored"]').should('be.visible');
+		cy.get('[data-testid="add-criterion-label"]').should('have.value', typed);
+		cy.get('form[action="?/updateCriterion"]').should('not.exist');
+	});
+
 	it('keeps a CFP field label through a sidebar click and reload', () => {
 		const slug = uniqueSlug();
 		const typed = 'ORGJOURNEY field draft';

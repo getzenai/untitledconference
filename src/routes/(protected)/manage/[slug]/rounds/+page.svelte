@@ -36,10 +36,16 @@
 
 	const submitting = (kind: FormResetKind, roundId?: number) => () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			try {
 				await update(formUpdateOptions(kind));
-				if (kind === 'add' && roundId !== undefined) {
+				if (kind === 'add' && roundId !== undefined && result.type === 'success') {
 					labelCommitByRound[roundId] = (labelCommitByRound[roundId] ?? 0) + 1;
 				}
 			} finally {
