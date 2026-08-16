@@ -44,5 +44,7 @@ describe('speaker row edit form', () => {
 		expect(source).toContain('speakerFieldScope');
 		expect(source).toContain('rows={3}');
 		expect(source).toContain("field('bio')");
+		expect(source).toContain("initial={speaker.bio ?? ''}");
+		expect(source).toContain("baseline={speaker.bio ?? ''}");
 	});
 });

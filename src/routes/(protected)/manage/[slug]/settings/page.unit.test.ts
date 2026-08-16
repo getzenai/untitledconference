@@ -107,6 +107,14 @@ describe('conference settings config surface', () => {
 		expect(body).toContain('/manage/test-conf/people');
 	});
 
+	it('starts new rooms empty; baseline is the saved list (#812)', () => {
+		expect(source).toContain("baseline={structureBaseline('rooms')}");
+		expect(source).toContain('initial=""');
+		expect(source.indexOf('initial=""')).toBeGreaterThan(
+			source.indexOf("baseline={structureBaseline('rooms')}")
+		);
+	});
+
 	it('renders a rejected add as a red alert, not a green success', () => {
 		const { body } = render(Page, {
 			props: {

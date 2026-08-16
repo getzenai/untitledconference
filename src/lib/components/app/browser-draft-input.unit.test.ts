@@ -29,6 +29,7 @@ describe('browser draft input', () => {
 				scope: 'speaker-bio:devflow:5',
 				owner: 'user-1',
 				baseline: 'Builds things.',
+				initial: 'Builds things.',
 				name: 'bio',
 				id: 'edit-bio-5',
 				rows: 3,

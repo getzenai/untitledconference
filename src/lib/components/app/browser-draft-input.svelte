@@ -2,11 +2,10 @@
 	/**
 	 * A named field that parks what was typed in the browser (#761, #762, #766).
 	 *
-	 * Same envelope as `browser-draft-textarea`: identity in the key, baseline
-	 * from the last saved value, `conflict` instead of a silent restore over
-	 * newer saved data. This is the input half — names and labels — including
-	 * fields that already have a saved value. Dirty is "different from the
-	 * server", not "non-empty".
+	 * `baseline` is the last saved server value — the conflict marker, same
+	 * meaning as on `BrowserDraftTextarea`. `initial` is what the field shows
+	 * (defaults to `baseline`, because this field *is* that saved value).
+	 * Dirty is `value !== baseline`.
 	 */
 	import { onMount } from 'svelte';
 	import { Input } from '$lib/components/ui/input';
@@ -22,6 +21,7 @@
 		scope,
 		owner,
 		baseline,
+		initial = baseline,
 		name,
 		id,
 		type,
@@ -38,6 +38,7 @@
 		scope: string;
 		owner: string;
 		baseline: string;
+		initial?: string;
 		name: string;
 		id?: string;
 		type?: 'text' | 'email';
@@ -53,10 +54,10 @@
 		ondirtychange?: (dirty: boolean) => void;
 	} = $props();
 
-	// The saved value seeds the field once. A later baseline change is a save
+	// `initial` seeds the field once. A later baseline change is a save
 	// (cleared below) or a conflict, not a live overwrite of what is typed.
 	// svelte-ignore state_referenced_locally
-	let value = $state(baseline);
+	let value = $state(initial);
 	let mounted = false;
 	let restored = $state(false);
 	let conflict = $state<BrowserDraft<string> | null>(null);

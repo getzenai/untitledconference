@@ -128,6 +128,7 @@
 			scope={field('bio')}
 			{owner}
 			baseline={speaker.bio ?? ''}
+			initial={speaker.bio ?? ''}
 			rows={3}
 			testId="edit-bio"
 			ondirtychange={(dirty) => ondirtychange('bio', dirty)}
