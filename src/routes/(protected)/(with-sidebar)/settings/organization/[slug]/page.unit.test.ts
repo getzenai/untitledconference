@@ -10,6 +10,12 @@ vi.mock('$app/forms', () => ({
 	enhance: () => ({})
 }));
 
+// `beforeNavigate` comes with the unsaved-work guard (#761).
+vi.mock('$app/navigation', () => ({
+	invalidateAll: vi.fn(),
+	beforeNavigate: vi.fn()
+}));
+
 const owner = {
 	id: 'member-1',
 	userId: 'user-1',
@@ -33,6 +39,13 @@ function body() {
 }
 
 describe('organization settings page', () => {
+	it('keeps the organization name in a draftable field (#761)', () => {
+		const html = body();
+		expect(html).toContain('id="organization-name"');
+		expect(html).toContain('name="name"');
+		expect(html).toContain('data-testid="organization-name"');
+	});
+
 	it('exposes exactly one invite-role picker and no test-only select', () => {
 		const html = body();
 

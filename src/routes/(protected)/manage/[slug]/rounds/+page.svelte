@@ -11,7 +11,9 @@
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { optionsToText, type CriterionKind } from '$lib/conference/scorecard-criterion';
 	import { formatInstant } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
@@ -28,12 +30,24 @@
 	let addKindByRound = $state<Record<number, CriterionKind>>({});
 	/** Editing state for an existing criterion's kind (drives conditional fields). */
 	let editKindById = $state<Record<number, CriterionKind>>({});
+	let labelDirtyByRound = $state<Record<number, boolean>>({});
+	let labelCommitByRound = $state<Record<number, number>>({});
+	const anyLabelDirty = $derived(Object.values(labelDirtyByRound).some(Boolean));
 
-	const submitting = (kind: FormResetKind) => () => {
+	const submitting = (kind: FormResetKind, roundId?: number) => () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			try {
 				await update(formUpdateOptions(kind));
+				if (kind === 'add' && roundId !== undefined && result.type === 'success') {
+					labelCommitByRound[roundId] = (labelCommitByRound[roundId] ?? 0) + 1;
+				}
 			} finally {
 				busy = false;
 			}
@@ -108,6 +122,8 @@
 <svelte:head>
 	<title>Rounds &amp; scorecards — {data.conference.name}</title>
 </svelte:head>
+
+<UnsavedGuard dirty={anyLabelDirty} />
 
 <!--
 	The bar keeps its rule across the whole width; the words inside it sit on the
@@ -486,7 +502,7 @@
 							<form
 								method="POST"
 								action="?/addCriterion"
-								use:enhance={submitting('add')}
+								use:enhance={submitting('add', round.id)}
 								class="border-border mt-3 space-y-2 rounded-md border border-dashed p-3"
 								data-testid="add-criterion"
 							>
@@ -495,13 +511,20 @@
 								<div class="flex flex-wrap items-end gap-2">
 									<label class="min-w-[10rem] flex-1">
 										<span class="text-muted-foreground text-xs font-medium">Label</span>
-										<input
+										<BrowserDraftInput
 											name="label"
+											scope={`scorecard-criterion-label:${round.id}`}
+											owner={data.user.id}
+											baseline=""
 											required
-											maxlength="200"
+											maxlength={200}
 											placeholder="Relevance"
 											class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1.5 text-sm"
-											data-testid="add-criterion-label"
+											testId="add-criterion-label"
+											commitToken={labelCommitByRound[round.id] ?? 0}
+											ondirtychange={(dirty) => {
+												labelDirtyByRound[round.id] = dirty;
+											}}
 										/>
 									</label>
 									<div class="w-28">

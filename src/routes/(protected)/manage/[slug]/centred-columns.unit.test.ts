@@ -14,11 +14,16 @@
  * defect, and it fails here.
  */
 import { render } from 'svelte/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import EmbedPage from './embed/+page.svelte';
 import PeoplePage from './people/+page.svelte';
 import RoundsPage from './rounds/+page.svelte';
 import SettingsPage from './settings/+page.svelte';
+
+// `beforeNavigate` comes with the unsaved-work guard on the criterion label (#762).
+vi.mock('$app/navigation', () => ({
+	beforeNavigate: vi.fn()
+}));
 
 const conference = {
 	id: 1,

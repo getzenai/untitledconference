@@ -49,10 +49,16 @@
 		writeBrowserDraft,
 		type BrowserDraft
 	} from '$lib/forms/browser-draft';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+	const dirtyFieldLabels = new SvelteSet<string>();
+	const setFieldLabelDirty = (draftId: string, dirty: boolean) => {
+		if (dirty) dirtyFieldLabels.add(draftId);
+		else dirtyFieldLabels.delete(draftId);
+	};
 	function getSavedDescription() {
 		return data.form?.description ?? '';
 	}
@@ -263,7 +269,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 	];
 </script>
 
-<UnsavedGuard dirty={introDirty} />
+<UnsavedGuard dirty={introDirty || dirtyFieldLabels.size > 0} />
 
 <svelte:head>
 	<title>Call for papers — {data.conference.name}</title>
@@ -577,6 +583,9 @@ We want talks that show the work — **the migration that failed first**, the nu
 												{fields}
 												formats={data.formats}
 												tracks={data.tracks}
+												owner={data.user.id}
+												conferenceSlug={data.conference.slug}
+												ondirtychange={(dirty) => setFieldLabelDirty(`field-${field.id}`, dirty)}
 											/>
 											<!--
 												Every open field repeats the same four words. The row it
@@ -646,7 +655,15 @@ We want talks that show the work — **the migration that failed first**, the nu
 						class="border-border mt-4 space-y-2 border-t pt-4"
 					>
 						<h3 class="text-sm font-medium">Add a field</h3>
-						<CfpFieldEditor field={null} {fields} formats={data.formats} tracks={data.tracks} />
+						<CfpFieldEditor
+							field={null}
+							{fields}
+							formats={data.formats}
+							tracks={data.tracks}
+							owner={data.user.id}
+							conferenceSlug={data.conference.slug}
+							ondirtychange={(dirty) => setFieldLabelDirty('field-new', dirty)}
+						/>
 						<Button type="submit" size="sm" disabled={busy}>Add field</Button>
 					</form>
 				</section>
