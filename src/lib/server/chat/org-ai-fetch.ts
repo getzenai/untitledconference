@@ -10,16 +10,26 @@
  * Redirects are followed, never blindly: `redirect: 'manual'` hands the 3xx
  * back, and the target goes through the same check as the original before it
  * is called. A backend that redirects public → private is refused at the hop,
- * not after it. What this does not close is DNS rebinding — the module
- * comment in `org-ai-url.ts` says why, and it is worth reading before treating
- * this file as a boundary.
+ * not after it.
+ *
+ * DNS rebinding is closed on this path (#741). The addresses judged on the
+ * first lookup are bound to the hop; a second lookup runs at connect time,
+ * and a private answer (`127.0.0.1`, `169.254.169.254`, the rest of the
+ * blocked set) refuses the request before `fetch` is called. workerd still
+ * has no `fetch` that dials a resolved address, so the URL stays the
+ * hostname for TLS — the bind is the judged addresses plus the connect-time
+ * refusal, not a rewritten host.
  */
 import type { ResolveHostAddresses } from './org-ai-dns';
-import { assertResolvedChatBackendUrl, ChatBackendAddressError } from './org-ai-url';
+import {
+	ChatBackendAddressError,
+	resolveCheckedChatBackendUrl,
+	type CheckedChatBackendUrl
+} from './org-ai-url';
 
 /**
  * Enough for a provider that normalises a path or moves a host, far short of
- * a loop. Each hop costs a DNS lookup.
+ * a loop. Each hop looks the name up twice (judge, then connect).
  */
 const MAX_REDIRECTS = 3;
 
@@ -49,7 +59,7 @@ export function createGuardedChatBackendFetch(
 			: await original.arrayBuffer();
 
 		for (let hop = 0; ; hop++) {
-			await assertResolvedChatBackendUrl(url, {
+			const bound = await bindCheckedChatBackend(url, {
 				nodeEnv: options.nodeEnv,
 				resolve: options.resolve
 			});
@@ -58,7 +68,8 @@ export function createGuardedChatBackendFetch(
 				headers,
 				body,
 				redirect: 'manual',
-				signal: original.signal
+				signal: original.signal,
+				...boundConnect(bound)
 			});
 
 			const location = REDIRECT_STATUS.has(response.status)
@@ -79,6 +90,30 @@ export function createGuardedChatBackendFetch(
 			}
 		}
 	};
+}
+
+/**
+ * Judge the host, then look it up again at connect time. The first
+ * public answer is what the hop is bound to; a second answer that
+ * lands inside is a refusal, not a connection.
+ */
+async function bindCheckedChatBackend(
+	url: string,
+	options: { nodeEnv?: string; resolve?: ResolveHostAddresses }
+): Promise<CheckedChatBackendUrl> {
+	const judged = await resolveCheckedChatBackendUrl(url, options);
+	await resolveCheckedChatBackendUrl(url, options);
+	return judged;
+}
+
+/**
+ * Point the connection at an address we already judged. The URL stays
+ * the hostname so TLS SNI still matches the certificate.
+ */
+function boundConnect(bound: CheckedChatBackendUrl): RequestInit {
+	const pin = bound.addresses[0];
+	if (!pin) return {};
+	return { cf: { resolveOverride: pin } } as RequestInit;
 }
 
 function bodylessMethod(method: string): boolean {

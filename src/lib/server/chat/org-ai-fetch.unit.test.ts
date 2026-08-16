@@ -39,12 +39,36 @@ describe('createGuardedChatBackendFetch', () => {
 		});
 
 		expect(response.status).toBe(200);
+		expect(resolve).toHaveBeenCalledTimes(2);
 		expect(resolve).toHaveBeenCalledWith('chat.example.com');
 		const [url, init] = inner.mock.calls[0];
 		expect(url).toBe('https://chat.example.com/v1/chat/completions');
 		expect(init.method).toBe('POST');
 		expect(init.redirect).toBe('manual');
+		expect(init.cf).toEqual({ resolveOverride: PUBLIC });
 		expect(new TextDecoder().decode(init.body)).toBe('{"messages":[]}');
+	});
+
+	it('refuses when the connect-time lookup rebinds to loopback', async () => {
+		const inner = vi.fn();
+		const resolve = vi.fn().mockResolvedValueOnce([PUBLIC]).mockResolvedValueOnce(['127.0.0.1']);
+
+		await expect(
+			guarded(inner, resolve)('https://chat.example.com/v1/chat/completions', { method: 'POST' })
+		).rejects.toBeInstanceOf(ChatBackendAddressError);
+		expect(inner).not.toHaveBeenCalled();
+		expect(resolve).toHaveBeenCalledTimes(2);
+	});
+
+	it('refuses when the connect-time lookup rebinds to the metadata address', async () => {
+		const inner = vi.fn();
+		const resolve = vi.fn().mockResolvedValueOnce([PUBLIC]).mockResolvedValueOnce([INTERNAL]);
+
+		await expect(
+			guarded(inner, resolve)('https://chat.example.com/v1/chat/completions', { method: 'POST' })
+		).rejects.toBeInstanceOf(ChatBackendAddressError);
+		expect(inner).not.toHaveBeenCalled();
+		expect(resolve).toHaveBeenCalledTimes(2);
 	});
 
 	it('refuses a backend whose name resolves inside, before it is called', async () => {
@@ -104,6 +128,8 @@ describe('createGuardedChatBackendFetch', () => {
 		expect(response.status).toBe(200);
 		expect(resolve.mock.calls.map(([host]) => host)).toEqual([
 			'chat.example.com',
+			'chat.example.com',
+			'eu.example.com',
 			'eu.example.com'
 		]);
 		const [url, init] = inner.mock.calls[1];

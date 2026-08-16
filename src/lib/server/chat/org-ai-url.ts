@@ -11,16 +11,11 @@
  * and judges every answer, which is what stops a public name whose A record
  * points at `169.254.169.254`.
  *
- * **What the resolved check does not cover.** The addresses judged here are
- * the ones the resolver returned to us; they are not the address the TLS
- * connection is opened to, because `fetch` resolves the name again. Whoever
- * controls the record can answer differently for the two lookups — DNS
- * rebinding is open, and nothing below closes it. What is closed is the
- * plain case (an admin stores an internal address, directly or behind a
- * public name) and the redirect case (see `org-ai-fetch.ts`, which re-runs
- * this check on every hop). Pinning would mean dialing the address we
- * checked, which breaks certificate validation, and workerd has no `fetch`
- * that takes a resolved address.
+ * One lookup is not a connection. `resolveCheckedChatBackendUrl` returns the
+ * addresses it judged so the fetch layer can bind them to the request and
+ * look the name up again at connect time — a second answer of `127.0.0.1`
+ * or `169.254.169.254` is refused there, not after `fetch` has already
+ * dialed it. See `org-ai-fetch.ts`.
  */
 import { resolveHostAddresses, type ResolveHostAddresses } from './org-ai-dns';
 
@@ -130,28 +125,55 @@ function isAddressLiteral(host: string): boolean {
 }
 
 /**
+ * The URL after the address rules, plus the addresses those rules judged.
+ *
+ * `addresses` is what the connection is allowed to dial. An IP literal is
+ * already that address; a name that had to be resolved carries every
+ * public answer. Localhost outside production has nothing to pin.
+ */
+export type CheckedChatBackendUrl = {
+	href: string;
+	host: string;
+	addresses: string[];
+};
+
+/**
  * `assertAllowedChatBackendUrl`, plus every address the host resolves to.
  *
  * Fails closed: a host that will not resolve, or a resolver that will not
- * answer, is refused rather than passed through. Read the module comment for
- * what this does *not* cover before treating it as a boundary.
+ * answer, is refused rather than passed through. The returned `addresses`
+ * are the ones this lookup judged — bind them to the connection, do not
+ * let `fetch` pick a new one.
  *
  * @param options.resolve Injected by the tests and by `org-ai-fetch.ts`;
  * defaults to the DNS-over-HTTPS resolver.
  */
-export async function assertResolvedChatBackendUrl(
+export async function resolveCheckedChatBackendUrl(
 	raw: string,
 	options: { nodeEnv?: string; resolve?: ResolveHostAddresses } = {}
-): Promise<string> {
+): Promise<CheckedChatBackendUrl> {
 	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
 	const href = assertAllowedChatBackendUrl(raw, nodeEnv);
 	const host = new URL(href).hostname.replace(/^\[|\]$/g, '').toLowerCase();
 	// A literal was judged as itself above; localhost only got here outside
 	// production, where it is deliberately allowed and has nothing to look up.
-	if (isAddressLiteral(host) || isLoopbackHost(host)) return href;
+	if (isAddressLiteral(host)) return { href, host, addresses: [host] };
+	if (isLoopbackHost(host)) return { href, host, addresses: [] };
 
-	assertPublicAddresses(host, await lookUpHost(host, options.resolve));
-	return href;
+	const addresses = await lookUpHost(host, options.resolve);
+	assertPublicAddresses(host, addresses);
+	return { href, host, addresses };
+}
+
+/**
+ * Same as `resolveCheckedChatBackendUrl`, but only the href — the save
+ * path does not connect, so it has nothing to bind.
+ */
+export async function assertResolvedChatBackendUrl(
+	raw: string,
+	options: { nodeEnv?: string; resolve?: ResolveHostAddresses } = {}
+): Promise<string> {
+	return (await resolveCheckedChatBackendUrl(raw, options)).href;
 }
 
 async function lookUpHost(host: string, resolve?: ResolveHostAddresses): Promise<string[]> {
