@@ -126,6 +126,59 @@ describe('Assistant panel', () => {
 		cy.get('[data-testid="assistant-panel"]').should('not.exist');
 	});
 
+	/**
+	 * Shrinking the panel keeps a reader who was at the end at the end (#743).
+	 *
+	 * This is the one geometry change with no event of its own: `scrollTop`
+	 * does not move and no node changes, so without a `ResizeObserver` the flag
+	 * goes on saying "at the end" while the end has moved away below — and the
+	 * button back down only exists while the flag says otherwise.
+	 */
+	it('stays at the end when the panel gets shorter (#743)', function () {
+		if (!chatEnabled) this.skip();
+
+		const filler = (n: number) =>
+			`Question ${n}. ${'The panel needs enough height to scroll. '.repeat(12)}`;
+
+		seedConference('Resize Summit').then(({ slug }) => {
+			cy.visit(`/manage/${slug}/agenda`);
+			cy.waitForHydration();
+			openAssistant();
+
+			sendAssistant(filler(1));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+			sendAssistant(filler(2));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+
+			// The precondition: there is an overhang to lose. Without it the
+			// resize changes nothing and the case would pass on any code.
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollHeight, 'the conversation is taller than the panel').to.be.greaterThan(
+					$el[0].clientHeight + 100
+				);
+			});
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollTop, 'starts at the end').to.be.greaterThan(
+					$el[0].scrollHeight - $el[0].clientHeight - 40
+				);
+			});
+
+			// Half the height: the overhang grows by everything that no longer
+			// fits, and nothing fires a scroll or a mutation.
+			cy.viewport(1000, 400);
+
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollTop, 'still at the end after the panel shrank').to.be.greaterThan(
+					$el[0].scrollHeight - $el[0].clientHeight - 40
+				);
+			});
+			// The flag agrees with the position, which is what the button reads.
+			cy.get('[data-testid="assistant-panel"] [aria-label="Scroll to the latest message"]').should(
+				'not.exist'
+			);
+		});
+	});
+
 	it('opens the sheet from the star and closes it again', function () {
 		if (!chatEnabled) this.skip();
 
