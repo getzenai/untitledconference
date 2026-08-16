@@ -99,4 +99,113 @@ describe('Reordering CFP fields', () => {
 				cy.get('[data-testid="cfp-reorder-error"]').should('be.visible');
 			});
 	});
+
+	it('keeps the clicked order when a second row moves while the first is in flight', () => {
+		const slug = uniqueSlug();
+		openCfp(slug);
+		addField('Third question');
+
+		cy.get('[data-testid="cfp-field"]')
+			.eq(0)
+			.invoke('attr', 'data-field-id')
+			.then((firstId) => {
+				cy.get('[data-testid="cfp-field"]')
+					.eq(1)
+					.invoke('attr', 'data-field-id')
+					.then((secondId) => {
+						cy.get('[data-testid="cfp-field"]')
+							.eq(2)
+							.invoke('attr', 'data-field-id')
+							.then((thirdId) => {
+								cy.get(`[data-field-id="${secondId}"]`).find('summary').click();
+								cy.get(`[data-field-id="${thirdId}"]`).find('summary').click();
+
+								cy.intercept({ method: 'POST', url: new RegExp(`/manage/${slug}/cfp`) }, (req) => {
+									req.on('response', (res) => {
+										res.setDelay(2500);
+									});
+								}).as('move');
+
+								cy.get(`[data-field-id="${secondId}"]`)
+									.find('[data-testid="cfp-field-move-up"]')
+									.click();
+								cy.get(`[data-field-id="${thirdId}"]`)
+									.find('[data-testid="cfp-field-move-up"]')
+									.click();
+
+								cy.get('[data-testid="cfp-field"]', { timeout: 800 })
+									.eq(0)
+									.should('have.attr', 'data-field-id', secondId);
+								cy.get('[data-testid="cfp-field"]')
+									.eq(1)
+									.should('have.attr', 'data-field-id', thirdId);
+
+								cy.wait('@move');
+								cy.wait('@move');
+								cy.get('[data-testid="cfp-field"]')
+									.eq(0)
+									.should('have.attr', 'data-field-id', secondId);
+								cy.get('[data-testid="cfp-field"]')
+									.eq(1)
+									.should('have.attr', 'data-field-id', thirdId);
+								cy.get('[data-testid="cfp-field"]')
+									.eq(2)
+									.should('have.attr', 'data-field-id', firstId);
+							});
+					});
+			});
+	});
+
+	it('applies the waiting move on the server list when the first write is refused', () => {
+		const slug = uniqueSlug();
+		openCfp(slug);
+		addField('Third question');
+
+		cy.get('[data-testid="cfp-field"]')
+			.eq(0)
+			.invoke('attr', 'data-field-id')
+			.then((firstId) => {
+				cy.get('[data-testid="cfp-field"]')
+					.eq(1)
+					.invoke('attr', 'data-field-id')
+					.then((secondId) => {
+						cy.get('[data-testid="cfp-field"]')
+							.eq(2)
+							.invoke('attr', 'data-field-id')
+							.then((thirdId) => {
+								cy.get(`[data-field-id="${secondId}"]`).find('summary').click();
+								cy.get(`[data-field-id="${thirdId}"]`).find('summary').click();
+
+								let seen = 0;
+								cy.intercept({ method: 'POST', url: new RegExp(`/manage/${slug}/cfp`) }, (req) => {
+									seen += 1;
+									if (seen === 1) {
+										req.reply({ statusCode: 500, delay: 2500, body: 'nope' });
+										return;
+									}
+									req.continue();
+								}).as('moves');
+
+								cy.get(`[data-field-id="${secondId}"]`)
+									.find('[data-testid="cfp-field-move-up"]')
+									.click();
+								cy.get(`[data-field-id="${thirdId}"]`)
+									.find('[data-testid="cfp-field-move-up"]')
+									.click();
+
+								cy.wait('@moves');
+								cy.wait('@moves');
+								cy.get('[data-testid="cfp-field"]')
+									.eq(0)
+									.should('have.attr', 'data-field-id', firstId);
+								cy.get('[data-testid="cfp-field"]')
+									.eq(1)
+									.should('have.attr', 'data-field-id', thirdId);
+								cy.get('[data-testid="cfp-field"]')
+									.eq(2)
+									.should('have.attr', 'data-field-id', secondId);
+							});
+					});
+			});
+	});
 });

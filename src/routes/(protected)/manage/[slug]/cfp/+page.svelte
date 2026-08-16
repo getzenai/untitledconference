@@ -112,11 +112,18 @@ We want talks that show the work — **the migration that failed first**, the nu
 	 * In-flight field moves sit on top of the last server list. Dropping one
 	 * is the rollback — the row is back where the server left it. Move does
 	 * not take the page-wide `busy` lock: that lock is what made the list sit.
+	 *
+	 * One request flies for this list. A second click paints immediately and
+	 * waits; when the answer lands, that write is sent against the server
+	 * list we now have. Locking the button is not enough — the other row's
+	 * arrow is the collision.
 	 */
 	type QueuedReorder = ReorderWrite & { token: number };
 	let fieldWrites = $state<QueuedReorder[]>([]);
 	let fieldWriteToken = 0;
 	let fieldWriteError = $state<string | null>(null);
+	let fieldWireBusy = false;
+	let fieldWireForm = $state<HTMLFormElement | undefined>(undefined);
 
 	const reorderFailureMessage = (result: ActionResult): string => {
 		if (result.type === 'failure') {
@@ -128,22 +135,56 @@ We want talks that show the work — **the migration that failed first**, the nu
 		return 'That change could not be saved.';
 	};
 
-	const submittingMove: SubmitFunction = ({ formData }) => {
+	const settleFieldMove =
+		(queued: QueuedReorder | null) =>
+		async ({
+			result,
+			update
+		}: {
+			result: ActionResult;
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			if (result.type === 'success') {
+				await update(formUpdateOptions('edit'));
+				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
+			} else {
+				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
+				fieldWriteError = reorderFailureMessage(result);
+				if (result.type === 'failure') await update(formUpdateOptions('edit'));
+			}
+			fieldWireBusy = false;
+			sendNextFieldMove();
+		};
+
+	function sendNextFieldMove(): void {
+		const next = fieldWrites[0];
+		if (!next || !fieldWireForm || fieldWireBusy) return;
+		fieldWireBusy = true;
+		const id = fieldWireForm.elements.namedItem('id');
+		const direction = fieldWireForm.elements.namedItem('direction');
+		if (!(id instanceof HTMLInputElement) || !(direction instanceof HTMLInputElement)) {
+			fieldWireBusy = false;
+			return;
+		}
+		id.value = String(next.id);
+		direction.value = next.direction;
+		fieldWireForm.requestSubmit();
+	}
+
+	const submittingMove: SubmitFunction = ({ formData, cancel }) => {
 		const write = reorderWriteFromForm(formData);
 		const queued = write ? { ...write, token: ++fieldWriteToken } : null;
 		if (queued) fieldWrites = [...fieldWrites, queued];
 		fieldWriteError = null;
-		return async ({ result, update }) => {
-			if (result.type === 'success') {
-				await update(formUpdateOptions('edit'));
-				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
-				return;
-			}
-			if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
-			fieldWriteError = reorderFailureMessage(result);
-			if (result.type === 'failure') await update(formUpdateOptions('edit'));
-		};
+		if (fieldWireBusy) {
+			cancel();
+			return;
+		}
+		fieldWireBusy = true;
+		return settleFieldMove(queued);
 	};
+
+	const submittingFieldWire: SubmitFunction = () => settleFieldMove(fieldWrites[0] ?? null);
 
 	function syncIntroDraft(): void {
 		if (!data.form || introConflict) return;
@@ -597,6 +638,18 @@ We want talks that show the work — **the migration that failed first**, the nu
 							{fieldWriteError}
 						</p>
 					{/if}
+
+					<form
+						method="POST"
+						action="?/moveField"
+						use:enhance={submittingFieldWire}
+						bind:this={fieldWireForm}
+						hidden
+						aria-hidden="true"
+					>
+						<input type="hidden" name="id" value="" />
+						<input type="hidden" name="direction" value="up" />
+					</form>
 
 					{#if fields.length === 0}
 						<p class="text-muted-foreground mt-2 text-sm">

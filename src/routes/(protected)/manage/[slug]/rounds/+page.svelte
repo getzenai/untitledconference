@@ -64,11 +64,18 @@
 	/**
 	 * In-flight criterion moves sit on top of the last server list. Dropping
 	 * one is the rollback. Move does not take the page-wide `busy` lock.
+	 *
+	 * One request flies for this list. A second click paints immediately and
+	 * waits; when the answer lands, that write is sent against the server
+	 * list we now have. Locking the button is not enough — the other row's
+	 * arrow is the collision.
 	 */
 	type QueuedReorder = ReorderWrite & { token: number };
 	let criterionWrites = $state<QueuedReorder[]>([]);
 	let criterionWriteToken = 0;
 	let criterionWriteError = $state<string | null>(null);
+	let criterionWireBusy = false;
+	let criterionWireForm = $state<HTMLFormElement | undefined>(undefined);
 
 	const reorderFailureMessage = (result: ActionResult): string => {
 		if (result.type === 'failure') {
@@ -80,26 +87,61 @@
 		return 'That change could not be saved.';
 	};
 
-	const submittingMove: SubmitFunction = ({ formData }) => {
-		const write = reorderWriteFromForm(formData);
-		const queued = write ? { ...write, token: ++criterionWriteToken } : null;
-		if (queued) criterionWrites = [...criterionWrites, queued];
-		criterionWriteError = null;
-		return async ({ result, update }) => {
+	const settleCriterionMove =
+		(queued: QueuedReorder | null) =>
+		async ({
+			result,
+			update
+		}: {
+			result: ActionResult;
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			if (result.type === 'success') {
 				await update(formUpdateOptions('edit'));
 				if (queued) {
 					criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
 				}
-				return;
+			} else {
+				if (queued) {
+					criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
+				}
+				criterionWriteError = reorderFailureMessage(result);
+				if (result.type === 'failure') await update(formUpdateOptions('edit'));
 			}
-			if (queued) {
-				criterionWrites = criterionWrites.filter((item) => item.token !== queued.token);
-			}
-			criterionWriteError = reorderFailureMessage(result);
-			if (result.type === 'failure') await update(formUpdateOptions('edit'));
+			criterionWireBusy = false;
+			sendNextCriterionMove();
 		};
+
+	function sendNextCriterionMove(): void {
+		const next = criterionWrites[0];
+		if (!next || !criterionWireForm || criterionWireBusy) return;
+		criterionWireBusy = true;
+		const id = criterionWireForm.elements.namedItem('id');
+		const direction = criterionWireForm.elements.namedItem('direction');
+		if (!(id instanceof HTMLInputElement) || !(direction instanceof HTMLInputElement)) {
+			criterionWireBusy = false;
+			return;
+		}
+		id.value = String(next.id);
+		direction.value = next.direction;
+		criterionWireForm.requestSubmit();
+	}
+
+	const submittingMove: SubmitFunction = ({ formData, cancel }) => {
+		const write = reorderWriteFromForm(formData);
+		const queued = write ? { ...write, token: ++criterionWriteToken } : null;
+		if (queued) criterionWrites = [...criterionWrites, queued];
+		criterionWriteError = null;
+		if (criterionWireBusy) {
+			cancel();
+			return;
+		}
+		criterionWireBusy = true;
+		return settleCriterionMove(queued);
 	};
+
+	const submittingCriterionWire: SubmitFunction = () =>
+		settleCriterionMove(criterionWrites[0] ?? null);
 
 	const criteriaFor = (roundId: number) =>
 		applyReorderWrites(data.criteriaByRound[roundId] ?? [], criterionWrites);
@@ -269,6 +311,17 @@
 
 	<section class="mt-6" data-testid="rounds-list">
 		<h2 class="text-sm font-medium">Rounds</h2>
+		<form
+			method="POST"
+			action="?/moveCriterion"
+			use:enhance={submittingCriterionWire}
+			bind:this={criterionWireForm}
+			hidden
+			aria-hidden="true"
+		>
+			<input type="hidden" name="id" value="" />
+			<input type="hidden" name="direction" value="up" />
+		</form>
 
 		{#if data.rounds.length === 0}
 			<EmptyState title="No rounds yet.">

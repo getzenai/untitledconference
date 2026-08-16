@@ -112,4 +112,113 @@ describe('Reordering scorecard criteria', () => {
 				cy.get('[data-testid="criterion-reorder-error"]').should('be.visible');
 			});
 	});
+
+	it('keeps the clicked order when a second row moves while the first is in flight', () => {
+		const slug = uniqueSlug();
+		openScorecard(slug);
+		addCriterion('Depth', 3);
+
+		cy.get('[data-testid="criterion-row"]')
+			.eq(0)
+			.invoke('attr', 'data-criterion-id')
+			.then((firstId) => {
+				cy.get('[data-testid="criterion-row"]')
+					.eq(1)
+					.invoke('attr', 'data-criterion-id')
+					.then((secondId) => {
+						cy.get('[data-testid="criterion-row"]')
+							.eq(2)
+							.invoke('attr', 'data-criterion-id')
+							.then((thirdId) => {
+								cy.intercept(
+									{ method: 'POST', url: new RegExp(`/manage/${slug}/rounds`) },
+									(req) => {
+										req.on('response', (res) => {
+											res.setDelay(2500);
+										});
+									}
+								).as('move');
+
+								cy.get(`[data-criterion-id="${secondId}"]`)
+									.find('[data-testid="criterion-move-up"]')
+									.click();
+								cy.get(`[data-criterion-id="${thirdId}"]`)
+									.find('[data-testid="criterion-move-up"]')
+									.click();
+
+								cy.get('[data-testid="criterion-row"]', { timeout: 800 })
+									.eq(0)
+									.should('have.attr', 'data-criterion-id', secondId);
+								cy.get('[data-testid="criterion-row"]')
+									.eq(1)
+									.should('have.attr', 'data-criterion-id', thirdId);
+
+								cy.wait('@move');
+								cy.wait('@move');
+								cy.get('[data-testid="criterion-row"]')
+									.eq(0)
+									.should('have.attr', 'data-criterion-id', secondId);
+								cy.get('[data-testid="criterion-row"]')
+									.eq(1)
+									.should('have.attr', 'data-criterion-id', thirdId);
+								cy.get('[data-testid="criterion-row"]')
+									.eq(2)
+									.should('have.attr', 'data-criterion-id', firstId);
+							});
+					});
+			});
+	});
+
+	it('applies the waiting move on the server list when the first write is refused', () => {
+		const slug = uniqueSlug();
+		openScorecard(slug);
+		addCriterion('Depth', 3);
+
+		cy.get('[data-testid="criterion-row"]')
+			.eq(0)
+			.invoke('attr', 'data-criterion-id')
+			.then((firstId) => {
+				cy.get('[data-testid="criterion-row"]')
+					.eq(1)
+					.invoke('attr', 'data-criterion-id')
+					.then((secondId) => {
+						cy.get('[data-testid="criterion-row"]')
+							.eq(2)
+							.invoke('attr', 'data-criterion-id')
+							.then((thirdId) => {
+								let seen = 0;
+								cy.intercept(
+									{ method: 'POST', url: new RegExp(`/manage/${slug}/rounds`) },
+									(req) => {
+										seen += 1;
+										if (seen === 1) {
+											req.reply({ statusCode: 500, delay: 2500, body: 'nope' });
+											return;
+										}
+										req.continue();
+									}
+								).as('moves');
+
+								cy.get(`[data-criterion-id="${secondId}"]`)
+									.find('[data-testid="criterion-move-up"]')
+									.click();
+								cy.get(`[data-criterion-id="${thirdId}"]`)
+									.find('[data-testid="criterion-move-up"]')
+									.click();
+
+								cy.wait('@moves');
+								cy.wait('@moves');
+								cy.get('[data-testid="criterion-row"]')
+									.eq(0)
+									.should('have.attr', 'data-criterion-id', firstId);
+								cy.get('[data-testid="criterion-row"]')
+									.eq(1)
+									.should('have.attr', 'data-criterion-id', thirdId);
+								cy.get('[data-testid="criterion-row"]')
+									.eq(2)
+									.should('have.attr', 'data-criterion-id', secondId);
+							});
+					});
+			});
+	});
 });

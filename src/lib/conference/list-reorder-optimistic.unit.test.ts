@@ -62,4 +62,12 @@ describe('applyReorderWrites', () => {
 			)
 		).toEqual([1, 2]);
 	});
+
+	it('applies the remaining write on the server list when the first is dropped', () => {
+		const start = list(1, 2, 3);
+		const first: ReorderWrite = { kind: 'move', id: 2, direction: 'up' };
+		const second: ReorderWrite = { kind: 'move', id: 3, direction: 'up' };
+		expect(applyReorderWrites(start, [first, second]).map((item) => item.id)).toEqual([2, 3, 1]);
+		expect(applyReorderWrites(start, [second]).map((item) => item.id)).toEqual([1, 3, 2]);
+	});
 });
