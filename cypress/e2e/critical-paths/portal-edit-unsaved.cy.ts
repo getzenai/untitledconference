@@ -130,3 +130,73 @@ describe('Leaving a portal proposal edit', () => {
 		cy.get('textarea[name="abstract"]').should('have.value', abstract);
 	});
 });
+
+/**
+ * Change the saved proposal the way another tab would: POST the draft action
+ * with the fields currently on the form, only the abstract swapped. The parked
+ * copy stays in this browser, so the next mount must show the conflict banner.
+ */
+const changeSavedAbstractFromOutside = (abstract: string) => {
+	cy.location('pathname').then((path) => {
+		cy.get('form').then(($form) => {
+			const data = new FormData($form[0] as HTMLFormElement);
+			data.set('abstract', abstract);
+			const body: Record<string, string> = {};
+			for (const [key, value] of data.entries()) {
+				if (typeof value === 'string') body[key] = value;
+			}
+			cy.request({
+				method: 'POST',
+				url: `${Cypress.config('baseUrl')}${path}?/draft`,
+				form: true,
+				headers: { Origin: Cypress.config('baseUrl') as string },
+				body
+			})
+				.its('status')
+				.should('be.oneOf', [200, 303]);
+		});
+	});
+};
+
+const openConflictBanner = (parked: string, savedOutside: string) => {
+	openStoredDraft(uniqueSlug());
+	typeUnsavedAbstract(parked);
+	changeSavedAbstractFromOutside(savedOutside);
+	cy.reload();
+	cy.waitForHydration();
+	cy.get('[data-testid="portal-edit-conflict"]').should('be.visible');
+	cy.get('textarea[name="abstract"]').should('have.value', savedOutside);
+};
+
+describe('Portal edit while the conflict banner is open', () => {
+	it('keeps text typed after the banner through a reload', () => {
+		const parked = `LIVE portal conflict parked ${Date.now()}`;
+		const savedOutside = `LIVE portal conflict outside ${Date.now()}`;
+		const typedAfter = `LIVE portal conflict after ${Date.now()}`;
+
+		openConflictBanner(parked, savedOutside);
+		cy.get('textarea[name="abstract"]').clear().type(typedAfter);
+		cy.window().its('localStorage').should(parkedCopy(typedAfter));
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="portal-edit-conflict"]').should('not.exist');
+		cy.get('[data-testid="portal-edit-restored"]').should('be.visible');
+		cy.get('textarea[name="abstract"]').should('have.value', typedAfter);
+	});
+
+	it('keeps the pre-banner parked copy after the server draft paints', () => {
+		const parked = `LIVE portal conflict kept ${Date.now()}`;
+		const savedOutside = `LIVE portal conflict server ${Date.now()}`;
+
+		openConflictBanner(parked, savedOutside);
+		cy.window().its('localStorage').should(parkedCopy(parked));
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="portal-edit-conflict"]').should('be.visible');
+		cy.get('textarea[name="abstract"]').should('have.value', savedOutside);
+		cy.contains('button', 'Use my draft').click();
+		cy.get('textarea[name="abstract"]').should('have.value', parked);
+	});
+});
