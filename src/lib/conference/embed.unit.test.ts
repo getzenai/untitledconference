@@ -69,6 +69,13 @@ describe('urls and snippets', () => {
 		expect(withEmbed('/c/x/speakers/7', false)).toBe('/c/x/speakers/7');
 		expect(withEmbed('/c/x/speakers/7', true)).toBe('/c/x/speakers/7?embed=1');
 	});
+
+	it('keeps an existing query and adds embed beside it', () => {
+		expect(withEmbed('/c/x/agenda?session=ses-04', false)).toBe('/c/x/agenda?session=ses-04');
+		expect(withEmbed('/c/x/agenda?session=ses-04', true)).toBe(
+			'/c/x/agenda?session=ses-04&embed=1'
+		);
+	});
 });
 
 describe('isEmbeddableSurface', () => {

@@ -75,9 +75,11 @@ export const AGENDA_FEED_PATH = '/agenda.ics';
  */
 export const EMBED_PARAM = 'embed';
 
-/** Keeps `?embed=1` on links followed inside an iframe, so the chrome stays off. */
+/** Keeps `?embed=1` on links followed inside an iframe, so the chrome stays off.
+ *  Joins an existing query; a second `?` would throw the first one away. */
 export function withEmbed(href: string, embed: boolean): string {
-	return embed ? `${href}?${EMBED_PARAM}=1` : href;
+	if (!embed) return href;
+	return href.includes('?') ? `${href}&${EMBED_PARAM}=1` : `${href}?${EMBED_PARAM}=1`;
 }
 
 export function surfaceUrl(origin: string, slug: string, path: string): string {
