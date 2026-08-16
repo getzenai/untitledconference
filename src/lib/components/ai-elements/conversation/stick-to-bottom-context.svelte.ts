@@ -112,7 +112,10 @@ class StickToBottomContext {
 	}
 
 	#applyFollow(behavior: ScrollBehavior) {
-		if (!this.#element || !this.#followTarget || !this.#followAllowed || !this.#ready) return;
+		if (!this.#element || !this.#followTarget || !this.#followAllowed || !this.#ready) {
+			this.#syncAtBottom();
+			return;
+		}
 		const containerRect = this.#element.getBoundingClientRect();
 		const elementRect = this.#followTarget.getBoundingClientRect();
 		const target = followScrollTop({
@@ -127,12 +130,21 @@ class StickToBottomContext {
 		if (target > this.#element.scrollTop + 1) {
 			this.#element.scrollTo({ top: target, behavior });
 		}
+		this.#syncAtBottom();
 	}
 
-	#onScroll = () => {
+	/**
+	 * A pin that does not move `scrollTop` never fires `scroll`, so the flag
+	 * cannot live only in that handler.
+	 */
+	#syncAtBottom() {
 		if (!this.#element) return;
 		const { scrollTop, scrollHeight, clientHeight } = this.#element;
 		this.#isAtBottom = scrollTop + clientHeight >= scrollHeight - BOTTOM_THRESHOLD_PX;
+	}
+
+	#onScroll = () => {
+		this.#syncAtBottom();
 	};
 
 	#onUserIntent = () => {
@@ -151,6 +163,7 @@ class StickToBottomContext {
 		this.#mutationObserver = new MutationObserver(() => {
 			if (!this.#ready) return;
 			this.#scheduleApply('auto');
+			this.#syncAtBottom();
 		});
 		this.#mutationObserver.observe(this.#element, {
 			childList: true,
