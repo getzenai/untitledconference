@@ -30,9 +30,21 @@ const PAST_TENSE: Record<string, string> = {
 export const DRAFT_DECISION_REASON =
 	'This draft has not been submitted yet — leave it for the speaker.';
 
+/**
+ * Why Accept / Waitlist / Decline / Assign is dead on a withdrawn talk (#716).
+ *
+ * The speaker took it back. Deciding it would put it on the programme and
+ * create speaker tasks; assigning would ask a reviewer to score a talk that
+ * is no longer in the call. The server refuses the same case.
+ */
+export const WITHDRAWN_DECISION_REASON =
+	'The speaker withdrew this talk — it cannot be decided without an explicit restore.';
+
 /** `null` when Accept / Waitlist / Decline may run. */
 export function decisionBlockReason(status: string): string | null {
-	return status === 'draft' ? DRAFT_DECISION_REASON : null;
+	if (status === 'draft') return DRAFT_DECISION_REASON;
+	if (status === 'withdrawn') return WITHDRAWN_DECISION_REASON;
+	return null;
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -43,11 +55,28 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
  * `decideSubmissions` is one line here and cannot be half-added.
  */
 const SIDE_EFFECTS: [keyof DecisionResult, (n: number) => string][] = [
+	// The screen only lists handed-in work, so these should never fire there. They
+	// are still said out loud: a click that decided fewer rows than were ticked
+	// has to name which ones it left, or the organizer reads a lost write.
+	['skippedDrafts', (n) => `${plural(n, 'draft')} not submitted yet, left for the speaker.`],
+	[
+		'skippedWithdrawn',
+		(n) =>
+			`${plural(n, 'withdrawn talk')} left as the speaker took ${n === 1 ? 'it' : 'them'} back.`
+	],
 	['sessionsCreated', (n) => `${plural(n, 'talk')} added to the agenda as unscheduled.`],
 	['tasksCreated', (n) => `${plural(n, 'speaker task')} created.`],
 	['sessionsRemoved', (n) => `${plural(n, 'talk')} taken off the agenda.`],
 	['tasksRemoved', (n) => `${plural(n, 'open speaker task')} withdrawn.`]
 ];
+
+/** Why a single-talk decide POST must fail instead of looking like a save. */
+export function singleTalkDecisionBlock(result: DecisionResult): string | null {
+	if (result.decided > 0 || result.unchanged > 0) return null;
+	if (result.skippedWithdrawn > 0) return WITHDRAWN_DECISION_REASON;
+	if (result.skippedDrafts > 0) return DRAFT_DECISION_REASON;
+	return null;
+}
 
 export function describeDecision(decision: string, result: DecisionResult): string {
 	const parts: string[] = [];
@@ -63,14 +92,6 @@ export function describeDecision(decision: string, result: DecisionResult): stri
 				? `${result.unchanged} already ${PAST_TENSE[decision] ?? decision}, left untouched.`
 				: `Already ${PAST_TENSE[decision] ?? decision} — nothing to do.`
 		);
-	}
-
-	// The screen only lists handed-in work, so this should never fire here. It is
-	// still said out loud rather than folded into silence: a click that decided
-	// fewer rows than were ticked has to say which ones it left, or the organizer
-	// reads the difference as a lost write.
-	if (result.skippedDrafts > 0) {
-		parts.push(`${plural(result.skippedDrafts, 'draft')} not submitted yet, left for the speaker.`);
 	}
 
 	for (const [key, sentence] of SIDE_EFFECTS) {
@@ -126,6 +147,7 @@ const SKIP_REASON_ORDER = [
 	'pool_exhausted',
 	'track_restricted',
 	'speaker_conflict',
+	'withdrawn',
 	'not_eligible',
 	'not_in_round',
 	'not_on_conference'
@@ -144,6 +166,7 @@ const SKIP_REASON_LABEL: Record<(typeof SKIP_REASON_ORDER)[number], (n: number) 
 	pool_exhausted: (n) => `${n} over the cap`,
 	track_restricted: (n) => `${n} track-restricted`,
 	speaker_conflict: (n) => `${n} speaker conflict${n === 1 ? '' : 's'}`,
+	withdrawn: (n) => `${n} withdrawn`,
 	not_eligible: (n) => `${n} no longer eligible`,
 	not_in_round: (n) => `${n} not on this round`,
 	not_on_conference: (n) => `${n} not on this conference`

@@ -18,6 +18,7 @@
 		describeNotification,
 		notificationTone
 	} from '$lib/conference/decision-summary';
+	import { assignBlockReason } from '$lib/conference/review-assignment';
 	import { formatScore } from '$lib/conference/scoring';
 	import {
 		EDITORIAL_STANDS,
@@ -110,6 +111,8 @@
 			s.status === 'resubmit_with_guidance'
 	);
 	const cannotDecide = $derived(decisionBlockReason(s.status));
+	const hideDecisions = $derived(s.status === 'withdrawn');
+	const cannotAssign = $derived(Boolean(assignBlockReason(s.status)));
 	const inTray = $derived(s.placements.length > 0);
 	const notificationLabel = $derived(
 		data.notificationStatus === 'queued'
@@ -217,92 +220,94 @@
 					};
 				}}
 			>
-				{#if !decided}
-					<div class="flex w-64 flex-col gap-2" data-testid="accept-condition">
-						<input
-							name="condition"
-							type="text"
-							maxlength="280"
-							placeholder="If they bring a co-presenter…"
-							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-							data-testid="accept-condition-text"
-						/>
-						<AppSelect
-							name="conditionOwnerId"
-							value=""
-							options={ownerOptions}
-							size="sm"
-							aria-label="Who follows up"
-							testId="accept-condition-owner"
-						/>
+				{#if !hideDecisions}
+					{#if !decided}
+						<div class="flex w-64 flex-col gap-2" data-testid="accept-condition">
+							<input
+								name="condition"
+								type="text"
+								maxlength="280"
+								placeholder="If they bring a co-presenter…"
+								class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+								data-testid="accept-condition-text"
+							/>
+							<AppSelect
+								name="conditionOwnerId"
+								value=""
+								options={ownerOptions}
+								size="sm"
+								aria-label="Who follows up"
+								testId="accept-condition-owner"
+							/>
+						</div>
+					{/if}
+					{#if s.status !== 'resubmit_with_guidance'}
+						<div class="flex w-64 flex-col gap-2" data-testid="resubmit-guidance">
+							<input
+								name="guidance"
+								type="text"
+								maxlength="280"
+								placeholder="Resubmit with your client…"
+								class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+								data-testid="resubmit-guidance-text"
+							/>
+						</div>
+					{/if}
+					{#if s.status !== 'rejected'}
+						<div class="flex w-64 flex-col gap-2" data-testid="decline-note">
+							<input
+								name="declineNote"
+								type="text"
+								maxlength="280"
+								placeholder="Optional — one sentence from the champion"
+								class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+								data-testid="decline-note-text"
+							/>
+						</div>
+					{/if}
+					<div class="flex flex-wrap justify-end gap-2">
+						<Button
+							type="submit"
+							name="decision"
+							value="rejected"
+							variant="outline"
+							disabled={busy || Boolean(cannotDecide)}
+							aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+						>
+							Decline
+						</Button>
+						<Button
+							type="submit"
+							name="decision"
+							value="resubmit_with_guidance"
+							variant="outline"
+							disabled={busy || Boolean(cannotDecide)}
+							aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+							data-testid="decide-resubmit"
+						>
+							Ask to resubmit
+						</Button>
+						<Button
+							type="submit"
+							name="decision"
+							value="waitlisted"
+							variant="outline"
+							disabled={busy || Boolean(cannotDecide)}
+							aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+						>
+							Waitlist
+						</Button>
+						<Button
+							type="submit"
+							name="decision"
+							value="accepted"
+							disabled={busy || Boolean(cannotDecide)}
+							aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
+						>
+							Accept
+						</Button>
 					</div>
 				{/if}
-				{#if s.status !== 'resubmit_with_guidance'}
-					<div class="flex w-64 flex-col gap-2" data-testid="resubmit-guidance">
-						<input
-							name="guidance"
-							type="text"
-							maxlength="280"
-							placeholder="Resubmit with your client…"
-							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-							data-testid="resubmit-guidance-text"
-						/>
-					</div>
-				{/if}
-				{#if s.status !== 'rejected'}
-					<div class="flex w-64 flex-col gap-2" data-testid="decline-note">
-						<input
-							name="declineNote"
-							type="text"
-							maxlength="280"
-							placeholder="Optional — one sentence from the champion"
-							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-							data-testid="decline-note-text"
-						/>
-					</div>
-				{/if}
-				<div class="flex flex-wrap justify-end gap-2">
-					<Button
-						type="submit"
-						name="decision"
-						value="rejected"
-						variant="outline"
-						disabled={busy || Boolean(cannotDecide)}
-						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-					>
-						Decline
-					</Button>
-					<Button
-						type="submit"
-						name="decision"
-						value="resubmit_with_guidance"
-						variant="outline"
-						disabled={busy || Boolean(cannotDecide)}
-						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-						data-testid="decide-resubmit"
-					>
-						Ask to resubmit
-					</Button>
-					<Button
-						type="submit"
-						name="decision"
-						value="waitlisted"
-						variant="outline"
-						disabled={busy || Boolean(cannotDecide)}
-						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-					>
-						Waitlist
-					</Button>
-					<Button
-						type="submit"
-						name="decision"
-						value="accepted"
-						disabled={busy || Boolean(cannotDecide)}
-						aria-describedby={cannotDecide ? 'decision-block-reason' : undefined}
-					>
-						Accept
-					</Button>
-				</div>
 			</form>
 			{#if cannotDecide}
 				<p
@@ -781,7 +786,7 @@
 																</p>
 															{/if}
 														</div>
-													{:else}
+													{:else if !cannotAssign}
 														<Button
 															type="submit"
 															name="intent"

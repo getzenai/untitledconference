@@ -3,17 +3,20 @@ import type { DecisionResult } from '$lib/server/conference/decisions';
 import { describe, expect, it } from 'vitest';
 import {
 	DRAFT_DECISION_REASON,
+	WITHDRAWN_DECISION_REASON,
 	decisionBlockReason,
 	describeBulkAssign,
 	describeDecision,
 	describeNotification,
-	notificationTone
+	notificationTone,
+	singleTalkDecisionBlock
 } from './decision-summary';
 
 const result = (over: Partial<DecisionResult> = {}): DecisionResult => ({
 	decided: 0,
 	unchanged: 0,
 	skippedDrafts: 0,
+	skippedWithdrawn: 0,
 	sessionsCreated: 0,
 	tasksCreated: 0,
 	sessionsRemoved: 0,
@@ -54,12 +57,31 @@ describe('describeDecision', () => {
 			'1 talk accepted. 2 drafts not submitted yet, left for the speaker.'
 		);
 	});
+
+	it('names withdrawn talks it left rather than folding them into silence', () => {
+		expect(describeDecision('accepted', result({ decided: 1, skippedWithdrawn: 1 }))).toBe(
+			'1 talk accepted. 1 withdrawn talk left as the speaker took it back.'
+		);
+	});
 });
 
 describe('decisionBlockReason', () => {
 	it('names the draft so the three buttons can go grey instead of succeeding at nothing', () => {
 		expect(decisionBlockReason('draft')).toBe(DRAFT_DECISION_REASON);
 		expect(DRAFT_DECISION_REASON).toMatch(/not been submitted yet/i);
+	});
+
+	it('names a withdrawn talk so Accept cannot put it back on the programme (#716)', () => {
+		expect(decisionBlockReason('withdrawn')).toBe(WITHDRAWN_DECISION_REASON);
+		expect(WITHDRAWN_DECISION_REASON).toMatch(/withdrew/i);
+	});
+
+	it('turns a lone skipped row into the same sentence the buttons would show', () => {
+		expect(singleTalkDecisionBlock(result({ skippedDrafts: 1 }))).toBe(DRAFT_DECISION_REASON);
+		expect(singleTalkDecisionBlock(result({ skippedWithdrawn: 1 }))).toBe(
+			WITHDRAWN_DECISION_REASON
+		);
+		expect(singleTalkDecisionBlock(result({ decided: 1, skippedWithdrawn: 1 }))).toBeNull();
 	});
 
 	it('is silent once the speaker has handed the talk in', () => {
@@ -177,6 +199,17 @@ describe('describeBulkAssign', () => {
 		expect(describeBulkAssign({ created: 1, already: 0, skipped: 2 })).toBe(
 			'1 assignment created. 2 assignments skipped.'
 		);
+	});
+
+	it('names withdrawn skips so a bulk assign does not look like a miss', () => {
+		expect(
+			describeBulkAssign({
+				created: 0,
+				already: 0,
+				skipped: 1,
+				skippedItems: [{ reason: 'withdrawn' }]
+			})
+		).toBe('1 assignment skipped: 1 withdrawn.');
 	});
 
 	it('names skip reasons so the organizer knows which handle to pull', () => {

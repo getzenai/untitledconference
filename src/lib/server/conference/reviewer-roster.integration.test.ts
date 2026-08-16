@@ -17,6 +17,7 @@ import {
 	trackTable,
 	type Conference
 } from '$lib/server/db/conference/conference-schema';
+import { reviewTable } from '$lib/server/db/conference/review-schema';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { setReviewAssignment } from './review-management';
@@ -329,9 +330,14 @@ describe('outstanding seats (#631)', () => {
 			})
 			.returning({ id: submissionTable.id });
 
-		expect(
-			await setReviewAssignment(conference.id, withdrawn.id, round.id, loadReviewerId, true)
-		).toBe('assigned');
+		// The assignment had to exist before the speaker took the talk back —
+		// `setReviewAssignment` now refuses a new seat on a withdrawn row (#716).
+		await db.insert(reviewTable).values({
+			reviewRoundId: round.id,
+			submissionId: withdrawn.id,
+			reviewerUserId: loadReviewerId,
+			status: 'assigned'
+		});
 
 		const member = (await committee(conference.id)).find((row) => row.userId === loadReviewerId);
 		expect(member).toMatchObject({

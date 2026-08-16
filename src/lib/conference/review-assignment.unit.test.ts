@@ -5,7 +5,12 @@
  * a recusal do not hide Unassign. The write path and the row both ask this.
  */
 import { describe, expect, it } from 'vitest';
-import { SUBMITTED_REVIEW_UNASSIGN_REASON, unassignBlockReason } from './review-assignment';
+import {
+	SUBMITTED_REVIEW_UNASSIGN_REASON,
+	WITHDRAWN_ASSIGN_REASON,
+	assignBlockReason,
+	unassignBlockReason
+} from './review-assignment';
 
 describe('unassignBlockReason', () => {
 	it('names why a submitted review cannot be dropped', () => {
@@ -21,5 +26,26 @@ describe('unassignBlockReason', () => {
 		expect(unassignBlockReason('recused')).toBeNull();
 		expect(unassignBlockReason(null)).toBeNull();
 		expect(unassignBlockReason(undefined)).toBeNull();
+	});
+});
+
+describe('assignBlockReason', () => {
+	it('names why a withdrawn talk cannot take a new reviewer (#716)', () => {
+		expect(assignBlockReason('withdrawn')).toBe(WITHDRAWN_ASSIGN_REASON);
+		expect(WITHDRAWN_ASSIGN_REASON).toMatch(/withdrew/i);
+	});
+
+	it('is silent for every status that is still in the call', () => {
+		for (const status of [
+			'draft',
+			'submitted',
+			'in_review',
+			'accepted',
+			'rejected',
+			'waitlisted',
+			'resubmit_with_guidance'
+		]) {
+			expect(assignBlockReason(status)).toBeNull();
+		}
 	});
 });

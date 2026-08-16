@@ -1,7 +1,10 @@
-import { DRAFT_DECISION_REASON } from '$lib/conference/decision-summary';
+import { singleTalkDecisionBlock } from '$lib/conference/decision-summary';
 import { parseEditorialStand } from '$lib/conference/editorial-stand';
 import { normalizeRecordingUrl } from '$lib/conference/recording-url';
-import { SUBMITTED_REVIEW_UNASSIGN_REASON } from '$lib/conference/review-assignment';
+import {
+	SUBMITTED_REVIEW_UNASSIGN_REASON,
+	WITHDRAWN_ASSIGN_REASON
+} from '$lib/conference/review-assignment';
 import {
 	conditionForDecision,
 	conferenceOrganizers,
@@ -108,12 +111,11 @@ export const actions: Actions = {
 			note.condition,
 			sentence.sentence
 		);
-		// A disabled button is not a lock (#471). The bulk path still reports
-		// skipped drafts as a success summary; on this one talk that line used
-		// to look like confirmation. Refuse instead.
-		if (result.skippedDrafts > 0 && result.decided === 0 && result.unchanged === 0) {
-			return fail(400, { message: DRAFT_DECISION_REASON });
-		}
+		// A disabled button is not a lock (#471, #716). The bulk path still
+		// reports skipped rows as a success summary; on this one talk that
+		// line used to look like confirmation. Refuse instead.
+		const blocked = singleTalkDecisionBlock(result);
+		if (blocked) return fail(400, { message: blocked });
 		return { decision, result };
 	},
 
@@ -147,6 +149,9 @@ export const actions: Actions = {
 			reviewerUserId,
 			intent === 'assign'
 		);
+		if (result === 'withdrawn') {
+			return fail(400, { assignmentMessage: WITHDRAWN_ASSIGN_REASON });
+		}
 		if (result === 'invalid') {
 			return fail(400, { assignmentMessage: 'That reviewer cannot review this talk.' });
 		}

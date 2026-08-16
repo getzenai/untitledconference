@@ -173,7 +173,7 @@
 		},
 		{
 			"name": "decide_submissions",
-			"description": "Accept, reject, waitlist, or ask a speaker to resubmit with guidance. Accepting also places the talk in the agenda tray, confirms its speakers and creates their tasks; taking an acceptance back undoes those. Speakers are NOT emailed — notifying them is a separate organizer action. Deciding the same way twice changes nothing. Proposals still in draft are skipped and counted under skippedDrafts: they were never handed in, and only the speaker can do that. resubmit_with_guidance needs guidance — it is not a decline wearing a note.",
+			"description": "Accept, reject, waitlist, or ask a speaker to resubmit with guidance. Accepting also places the talk in the agenda tray, confirms its speakers and creates their tasks; taking an acceptance back undoes those. Speakers are NOT emailed — notifying them is a separate organizer action. Deciding the same way twice changes nothing. Proposals still in draft are skipped and counted under skippedDrafts: they were never handed in, and only the speaker can do that. Withdrawn proposals are skipped and counted under skippedWithdrawn: the speaker took them back. resubmit_with_guidance needs guidance — it is not a decline wearing a note.",
 			"parameters": {
 				"$schema": "http://json-schema.org/draft-07/schema#",
 				"type": "object",

@@ -358,8 +358,9 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 			'their tasks; taking an acceptance back undoes those. Speakers are NOT emailed — ' +
 			'notifying them is a separate organizer action. Deciding the same way twice changes ' +
 			'nothing. Proposals still in draft are skipped and counted under skippedDrafts: they ' +
-			'were never handed in, and only the speaker can do that. resubmit_with_guidance needs ' +
-			'guidance — it is not a decline wearing a note.',
+			'were never handed in, and only the speaker can do that. Withdrawn proposals are ' +
+			'skipped and counted under skippedWithdrawn: the speaker took them back. ' +
+			'resubmit_with_guidance needs guidance — it is not a decline wearing a note.',
 		inputSchema: {
 			conferenceSlug: z.string().min(1).describe('Conference slug, from list_my_conferences.'),
 			submissionIds: z
@@ -415,9 +416,14 @@ function decideSubmissionsTool(ctx: McpContext): AnyMcpToolDefinition {
 				...result,
 				// What is left once every accounted-for reason is taken out: ids already
 				// carrying this decision (`unchanged`), ids the speaker never handed in
-				// (`skippedDrafts`, from the spread above), and this — ids that are not
-				// in this conference at all.
-				notDecided: submissionIds.length - result.decided - result.unchanged - result.skippedDrafts
+				// (`skippedDrafts`) or took back (`skippedWithdrawn`), and this — ids
+				// that are not in this conference at all.
+				notDecided:
+					submissionIds.length -
+					result.decided -
+					result.unchanged -
+					result.skippedDrafts -
+					result.skippedWithdrawn
 			};
 		}
 	};

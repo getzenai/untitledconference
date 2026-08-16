@@ -9,6 +9,7 @@
  * session, no tasks — is worse than a failed click, because nothing on screen says
  * that half of it is missing.
  */
+import { decisionBlockReason } from '$lib/conference/decision-summary';
 import { db } from '$lib/server/db';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
@@ -39,6 +40,11 @@ export type DecisionResult = {
 	 * to decide and they are left untouched. See the filter in `decideSubmissions`.
 	 */
 	skippedDrafts: number;
+	/**
+	 * Rows the speaker took back. Accepting one would put a withdrawn talk on the
+	 * programme (#716). Same filter as drafts: the state, not the caller, decides.
+	 */
+	skippedWithdrawn: number;
 	sessionsCreated: number;
 	tasksCreated: number;
 	/** Undone by taking an acceptance back — see `withdrawFromProgramme`. */
@@ -50,6 +56,7 @@ const NOTHING_HAPPENED: DecisionResult = {
 	decided: 0,
 	unchanged: 0,
 	skippedDrafts: 0,
+	skippedWithdrawn: 0,
 	sessionsCreated: 0,
 	tasksCreated: 0,
 	sessionsRemoved: 0,
@@ -100,11 +107,14 @@ export async function decideSubmissions(
 		// and the organizer screens only ever offer submitted work. Deciding one
 		// produced a state the UI cannot: `status: accepted` with `submittedAt: null`,
 		// the talk sitting in the agenda tray and its speakers confirmed, all without
-		// the speaker ever pressing submit (#321). The screen reached this function
-		// with ids it had listed itself, so only the MCP surface could get here — but
-		// the rule belongs to the decision, not to one caller of it.
-		const decidable = selected.filter((s) => s.status !== 'draft');
-		result.skippedDrafts = selected.length - decidable.length;
+		// the speaker ever pressing submit (#321). Withdrawn is the other terminal
+		// the speaker owns: they took it back, and accepting it would put it on the
+		// programme (#716). The screen reached this function with ids it had listed
+		// itself, so only a rebuilt form or the MCP surface could get here — but
+		// the rule belongs to the state, not to one caller of it.
+		const decidable = selected.filter((s) => decisionBlockReason(s.status) === null);
+		result.skippedDrafts = selected.filter((s) => s.status === 'draft').length;
+		result.skippedWithdrawn = selected.filter((s) => s.status === 'withdrawn').length;
 
 		// A row that already carries this decision is left alone entirely. The
 		// separate notification action is idempotent in its own right; a second click
