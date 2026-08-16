@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	applyStandWrites,
+	applyTalkStand,
 	standWriteFromForm,
 	type OptimisticHangingStand,
 	type StandWrite
@@ -58,5 +59,38 @@ describe('applyStandWrites', () => {
 	it('ignores a write for a talk that is not on the pile', () => {
 		const start = [item({ submissionId: 11 })];
 		expect(applyStandWrites(start, [{ kind: 'advance', submissionId: 99 }])).toEqual(start);
+	});
+});
+
+describe('applyTalkStand', () => {
+	it('names the next stand on the talk itself', () => {
+		expect(applyTalkStand('received', 11, [{ kind: 'advance', submissionId: 11 }])).toBe(
+			'reviewed'
+		);
+	});
+
+	it('starts an unset talk at materials requested', () => {
+		expect(applyTalkStand(null, 11, [{ kind: 'advance', submissionId: 11 }])).toBe(
+			'materials_requested'
+		);
+	});
+
+	it('keeps final on the talk instead of taking it off', () => {
+		expect(applyTalkStand('revision_requested', 11, [{ kind: 'advance', submissionId: 11 }])).toBe(
+			'final'
+		);
+		expect(applyTalkStand('final', 11, [{ kind: 'advance', submissionId: 11 }])).toBe('final');
+	});
+
+	it('leaves the server stand alone when the write is dropped', () => {
+		const write: StandWrite = { kind: 'advance', submissionId: 11 };
+		expect(applyTalkStand('received', 11, [write])).toBe('reviewed');
+		expect(applyTalkStand('received', 11, [])).toBe('received');
+	});
+
+	it('ignores a write for a different talk', () => {
+		expect(applyTalkStand('received', 11, [{ kind: 'advance', submissionId: 99 }])).toBe(
+			'received'
+		);
 	});
 });

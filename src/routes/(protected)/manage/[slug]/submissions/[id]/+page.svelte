@@ -32,6 +32,11 @@
 		EDITORIAL_STAND_LABELS,
 		nextEditorialStand
 	} from '$lib/conference/editorial-stand';
+	import {
+		applyTalkStand,
+		standWriteFromForm,
+		type StandWrite
+	} from '$lib/conference/editorial-stand-optimistic';
 	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
 	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import AppSelect from '$lib/components/app/app-select.svelte';
@@ -70,6 +75,16 @@
 	let assignmentWriteError = $state<string | null>(null);
 	const assignmentRounds = $derived(applyAssignmentWrites(data.assignmentRounds, assignmentWrites));
 
+	/**
+	 * In-flight stand advances sit on top of the last server stand. Dropping
+	 * one is the rollback — the badge is back where the server left it.
+	 */
+	type QueuedStand = StandWrite & { token: number };
+	let standWrites = $state<QueuedStand[]>([]);
+	let standWriteToken = 0;
+	let standWriteError = $state<string | null>(null);
+	const paintedStand = $derived(applyTalkStand(s.editorialStand, s.id, standWrites));
+
 	const assignmentFailureMessage = (result: ActionResult): string => {
 		if (result.type === 'failure') {
 			const message = (result.data as { assignmentMessage?: unknown } | undefined)
@@ -98,6 +113,33 @@
 				assignmentWrites = assignmentWrites.filter((item) => item.token !== queued.token);
 			}
 			assignmentWriteError = assignmentFailureMessage(result);
+			if (result.type === 'failure') await update(formUpdateOptions('edit'));
+		};
+	};
+
+	const standFailureMessage = (result: ActionResult): string => {
+		if (result.type === 'failure') {
+			const message = (result.data as { standMessage?: unknown } | undefined)?.standMessage;
+			if (typeof message === 'string' && message.length > 0) return message;
+			return 'That change could not be saved.';
+		}
+		if (result.type === 'error') return actionErrorCopy(result);
+		return 'That change could not be saved.';
+	};
+
+	const submittingStand: SubmitFunction = ({ formData }) => {
+		const write = standWriteFromForm(formData);
+		const queued = write ? { ...write, token: ++standWriteToken } : null;
+		if (queued) standWrites = [...standWrites, queued];
+		standWriteError = null;
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				await update(formUpdateOptions('edit'));
+				if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
+				return;
+			}
+			if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
+			standWriteError = standFailureMessage(result);
 			if (result.type === 'failure') await update(formUpdateOptions('edit'));
 		};
 	};
@@ -225,7 +267,7 @@
 		value: stand,
 		label: EDITORIAL_STAND_LABELS[stand]
 	}));
-	const nextStand = $derived(s.status === 'accepted' ? nextEditorialStand(s.editorialStand) : null);
+	const nextStand = $derived(s.status === 'accepted' ? nextEditorialStand(paintedStand) : null);
 </script>
 
 <svelte:head>
@@ -249,9 +291,9 @@
 						<StatusBadge status="open" tone="warn" label={conditionLine} />
 					</span>
 				{/if}
-				{#if s.editorialStand}
-					<span data-testid="submission-editorial-stand">
-						<StatusBadge status={s.editorialStand} />
+				{#if paintedStand}
+					<span data-testid="submission-editorial-stand" data-stand={paintedStand}>
+						<StatusBadge status={paintedStand} />
 					</span>
 				{/if}
 				{#if guidanceLine}
@@ -469,7 +511,11 @@
 	{#if form?.conditionMessage}
 		<p class="text-status-good mt-3 text-sm" role="status">{form.conditionMessage}</p>
 	{/if}
-	{#if form?.standMessage}
+	{#if standWriteError}
+		<p class="text-status-bad mt-3 text-sm" role="alert" data-testid="stand-write-error">
+			{standWriteError}
+		</p>
+	{:else if form?.standMessage}
 		<p class="text-status-good mt-3 text-sm" role="status">{form.standMessage}</p>
 	{/if}
 	{#if conditionLine}
@@ -560,7 +606,7 @@
 			>
 				<AppSelect
 					name="editorialStand"
-					value={s.editorialStand ?? 'materials_requested'}
+					value={paintedStand ?? 'materials_requested'}
 					options={standOptions}
 					size="sm"
 					aria-label="Editorial stand"
@@ -577,21 +623,9 @@
 				</Button>
 			</form>
 			{#if nextStand}
-				<form
-					method="POST"
-					action="?/advanceEditorialStand"
-					use:enhance={() => {
-						busy = true;
-						return async ({ update }) => {
-							try {
-								await update(formUpdateOptions('edit'));
-							} finally {
-								busy = false;
-							}
-						};
-					}}
-				>
-					<Button type="submit" size="sm" disabled={busy} data-testid="advance-editorial-stand">
+				<form method="POST" action="?/advanceEditorialStand" use:enhance={submittingStand}>
+					<input type="hidden" name="id" value={s.id} />
+					<Button type="submit" size="sm" data-testid="advance-editorial-stand">
 						Advance to {EDITORIAL_STAND_LABELS[nextStand].toLowerCase()}
 					</Button>
 				</form>
