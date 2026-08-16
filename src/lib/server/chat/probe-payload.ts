@@ -10,7 +10,7 @@
  * fails when the registry moves and the file does not.
  */
 import type { McpContext } from '$lib/server/mcp/context';
-import { z } from 'zod';
+import { asSchema } from 'ai';
 import { mcpInputSchema } from './adapter';
 import { assistantSystemPrompt, type AssistantPageContext } from './assistant';
 import { assistantChatToolDefinitions } from './tools';
@@ -41,7 +41,10 @@ export function probeTools(ctx: McpContext): ProbeTool[] {
 	return assistantChatToolDefinitions(ctx).map((def) => ({
 		name: def.name,
 		description: def.description,
-		parameters: z.toJSONSchema(mcpInputSchema(def), { io: 'input' }) as Record<string, unknown>
+		// streamText converts `tool().inputSchema` with `asSchema(...).jsonSchema`
+		// (draft-07 + additionalProperties: false). `z.toJSONSchema` is a
+		// different form — that was the #660-shaped hole #698 closes.
+		parameters: asSchema(mcpInputSchema(def)).jsonSchema as Record<string, unknown>
 	}));
 }
 
