@@ -5,7 +5,8 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import { buildIcs, PersonalSchedule } from '$lib/conference/personal-schedule.svelte';
+	import { icalFile } from '$lib/conference/ical';
+	import { PersonalSchedule, scheduleEvents } from '$lib/conference/personal-schedule.svelte';
 	import { buildView, firstScheduledDayIndex, formatFullStamp } from '$lib/conference/public-view';
 	import { untrack } from 'svelte';
 
@@ -40,9 +41,11 @@
 	let exported = $state<string | null>(null);
 
 	function exportIcs() {
-		const blob = new Blob([buildIcs(view.conference.name, mine)], {
-			type: 'text/calendar;charset=utf-8'
-		});
+		// The same writer as the subscription feed (#822): one place decides how a
+		// calendar reads what we wrote, so an export cannot quietly become the copy
+		// without the folding, the escaping and the floating times.
+		const file = icalFile(view.conference.name, scheduleEvents(mine), new Date());
+		const blob = new Blob([file], { type: 'text/calendar;charset=utf-8' });
 		const url = URL.createObjectURL(blob);
 		const filename = `${view.conference.slug}-my-schedule.ics`;
 		const a = document.createElement('a');

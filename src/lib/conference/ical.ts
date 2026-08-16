@@ -31,19 +31,47 @@ export type CalendarEvent = {
 };
 
 /**
- * A UTC timestamp in the one shape the format has: `20270415T093000Z`.
+ * When a session happens, as a *floating* time: `20270415T093000`, no `Z` (#821).
  *
- * UTC — the `Z` form — rather than a local time with a VTIMEZONE block, because
- * the public surfaces already store and render the conference's wall clock as UTC
- * (see `public-view.ts`). A feed that named a zone the rest of the site does not
- * believe in would put every session an hour off in exactly the cases nobody
- * tests.
+ * RFC 5545 §3.3.5 has three forms, and only the third one says what this product
+ * means. A UTC instant (`…Z`) and a zoned time (`TZID=` plus a VTIMEZONE block)
+ * both name a moment on the world clock, so a calendar re-renders them in the
+ * reader's own zone. A floating time names a wall clock and no zone: every
+ * reader sees 09:30.
+ *
+ * That is exactly what the public pages do — `public-view.ts` formats every time
+ * in UTC on purpose, so the grid reads 09:30 in New York and in Auckland alike.
+ * The `…Z` this used to write meant the opposite, and the file disagreed with the
+ * page it came from: an attendee at a venue in `America/Los_Angeles` starred the
+ * 09:30 talk and their calendar showed 02:30.
+ *
+ * The trade is the one the pages already take: a floating time cannot survive the
+ * conference moving zones, and it is the wrong answer for a reader who wants
+ * "when is that for me" from an online event. Both need a real zone stored on the
+ * conference — and on the day that exists, this becomes `TZID` in the file *and*
+ * on the page, together, or the two part company again.
+ *
+ * Built from `toISOString`, never from the local getters, so the string is the
+ * same on a server in any zone: a formatter reading the host's clock would put
+ * the whole feed hours off wherever a machine is not on UTC, and CI is on UTC.
  */
-function stamp(at: Date): string {
+function wallClock(at: Date): string {
 	return at
 		.toISOString()
 		.replace(/[-:]/g, '')
-		.replace(/\.\d{3}/, '');
+		.replace(/\.\d{3}/, '')
+		.replace('Z', '');
+}
+
+/**
+ * When we wrote the file: a real instant, so it keeps its `Z`.
+ *
+ * DTSTAMP is not the session. It is the moment this line was produced, and it is
+ * what a calendar compares between two versions of the same UID — a floating
+ * DTSTAMP would make "which of these is newer" depend on who is asking.
+ */
+function instant(at: Date): string {
+	return `${wallClock(at)}Z`;
 }
 
 /**
@@ -153,9 +181,9 @@ export function icalFile(calendarName: string, events: CalendarEvent[], now: Dat
 		lines.push(
 			'BEGIN:VEVENT',
 			property('UID', icalText(event.uid)),
-			property('DTSTAMP', stamp(now)),
-			property('DTSTART', stamp(event.start)),
-			property('DTEND', stamp(event.end)),
+			property('DTSTAMP', instant(now)),
+			property('DTSTART', wallClock(event.start)),
+			property('DTEND', wallClock(event.end)),
 			property('SUMMARY', icalText(event.summary))
 		);
 		if (event.description) lines.push(property('DESCRIPTION', icalText(event.description)));
