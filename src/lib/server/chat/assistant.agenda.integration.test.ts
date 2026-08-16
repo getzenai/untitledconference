@@ -93,7 +93,7 @@ describe('assistant agenda tools (#302, #683)', () => {
 					parts: [{ type: 'text', text: 'What is on the board?' }]
 				}
 			],
-			model: createMockChatModel('get_agenda', { conferenceSlug: seeded.conferenceSlug }),
+			model: createMockChatModel(),
 			page: {
 				routeId: '/(protected)/manage/[slug]/agenda',
 				url: `/manage/${seeded.conferenceSlug}/agenda`,
