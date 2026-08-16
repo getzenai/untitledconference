@@ -6,6 +6,11 @@ src/lib/components/ui/
 
 ai-dev-docs/
 
+# Written by src/lib/server/chat/probe-payload.unit.test.ts, not by hand.
+# Prettier would collapse the short arrays and the next test run would write
+# them back — the file would flip on every commit.
+scripts/ai/chat-tools.json
+
 # Inlang (managed by paraglide)
 project.inlang/
 
