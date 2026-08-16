@@ -8,7 +8,16 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { Checkbox } from '$lib/components/ui/checkbox';
 	import { Input } from '$lib/components/ui/input';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
+	import {
+		EMPTY_SESSION_FILTERS,
+		hasSessionFilters,
+		readSessionFilters,
+		sessionFiltersHref,
+		toggleFacetValue,
+		type SessionFilters
+	} from '$lib/conference/session-filters';
 	import {
 		buildView,
 		formatDateRange,
@@ -20,55 +29,70 @@
 
 	const view = $derived(buildView(data.conference));
 
-	let query = $state('');
-	// Facets are sets, not single values: "Platform or Craft" is the question an
-	// attendee actually has. An empty set means "no opinion", which is why the
-	// filter reads as `size === 0 || has(...)` rather than defaulting to all ids.
-	const tracks = new SvelteSet<string>();
-	const formats = new SvelteSet<string>();
-	const rooms = new SvelteSet<string>();
+	// The filters are the URL, not component state (#751). Held in memory, a
+	// narrowed list was not a link and did not survive a reload — and the same
+	// address showed different content depending on something invisible, which
+	// CLAUDE.md says a route must never do. The agenda already works this way
+	// with `?session=`.
+	//
+	// Facets stay multi-valued: "Platform or Craft" is the question an attendee
+	// actually has, so an empty list means "no opinion" rather than "none".
+	const filters = $derived(readSessionFilters(page.url.searchParams));
+	const query = $derived(filters.q);
 
-	const toggle = (set: SvelteSet<string>, id: string) => {
-		if (set.has(id)) set.delete(id);
-		else set.add(id);
-	};
+	/**
+	 * `replaceState` from `$app/navigation`, not `goto(…, { replaceState: true })`.
+	 *
+	 * Two reasons, and the second is the load-bearing one. Back should step out
+	 * of the page rather than through every keystroke. And `+layout.server.ts`
+	 * reads `url` (line 57, for `embed`), so a `goto` would re-run that server
+	 * load on every character typed; shallow routing changes the address without
+	 * running load at all.
+	 */
+	function applyFilters(next: SessionFilters) {
+		replaceState(sessionFiltersHref(page.url, next), page.state);
+	}
+
+	const setQuery = (q: string) => applyFilters({ ...filters, q });
+
+	type FacetKey = 'tracks' | 'formats' | 'rooms';
+	const toggle = (key: FacetKey, id: string) =>
+		applyFilters({ ...filters, [key]: toggleFacetValue(filters[key], id) });
 
 	const visible = $derived(
 		view.sessions.filter(
 			(s) =>
-				matchesQuery(s, query) &&
-				(tracks.size === 0 || (s.trackId !== null && tracks.has(s.trackId))) &&
-				(formats.size === 0 || (s.formatId !== null && formats.has(s.formatId))) &&
-				(rooms.size === 0 || (s.roomId !== null && rooms.has(s.roomId)))
+				matchesQuery(s, filters.q) &&
+				(filters.tracks.length === 0 ||
+					(s.trackId !== null && filters.tracks.includes(s.trackId))) &&
+				(filters.formats.length === 0 ||
+					(s.formatId !== null && filters.formats.includes(s.formatId))) &&
+				(filters.rooms.length === 0 || (s.roomId !== null && filters.rooms.includes(s.roomId)))
 		)
 	);
 
-	const filtered = $derived(
-		query.trim() !== '' || tracks.size > 0 || formats.size > 0 || rooms.size > 0
-	);
+	const filtered = $derived(hasSessionFilters(filters));
 
-	const clearAll = () => {
-		query = '';
-		tracks.clear();
-		formats.clear();
-		rooms.clear();
-	};
+	const clearAll = () => applyFilters(EMPTY_SESSION_FILTERS);
 
 	const facets = $derived([
 		{
 			label: 'Track',
 			options: view.conference.tracks,
-			selected: tracks
+			key: 'tracks' as FacetKey,
+			selected: filters.tracks
 		},
 		{
 			label: 'Format',
 			options: view.conference.formats,
-			selected: formats
+			key: 'formats' as FacetKey,
+			selected: filters.formats
 		},
 		{
 			label: 'Location',
 			options: view.conference.rooms,
-			selected: rooms
+			key: 'rooms' as FacetKey,
+			selected: filters.rooms
 		}
 	]);
 </script>
@@ -194,7 +218,8 @@
 			<Input
 				id="session-search"
 				type="search"
-				bind:value={query}
+				value={query}
+				oninput={(event) => setQuery(event.currentTarget.value)}
 				placeholder="Session or speaker"
 				autocomplete="off"
 			/>
@@ -208,8 +233,8 @@
 						<li>
 							<label class="flex cursor-pointer items-center gap-2 text-sm">
 								<Checkbox
-									checked={facet.selected.has(option.id)}
-									onCheckedChange={() => toggle(facet.selected, option.id)}
+									checked={facet.selected.includes(option.id)}
+									onCheckedChange={() => toggle(facet.key, option.id)}
 								/>
 								<span class="text-muted-foreground">{option.name}</span>
 							</label>
