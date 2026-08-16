@@ -1,8 +1,8 @@
 /**
- * #764 / #765 / #789: a typed reviewer invite and a typed contact profile
- * must survive the ordinary decision to look somewhere else before saving.
- * Reopening and then reloading distinguishes a browser draft from a value
- * that merely stayed alive in the old component.
+ * #764 / #765 / #789 / #763: a typed reviewer invite, a typed contact profile,
+ * and a half-typed add-contact dialog must survive the ordinary decision to
+ * look somewhere else before saving. Reopening and then reloading distinguishes
+ * a browser draft from a value that merely stayed alive in the old component.
  */
 const uniqueSlug = () => `invite-notes-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -128,5 +128,57 @@ describe('Contact profile draft (#765, #789)', () => {
 			cy.waitForHydration();
 			cy.get('[data-testid="contact-bio"]').should('have.value', bio);
 		});
+	});
+});
+
+describe('Add-contact dialog draft (#763)', () => {
+	beforeEach(() => {
+		cy.createAndLogin();
+	});
+
+	it('keeps the typed name after Escape, reopen, and reload, then clears on add', () => {
+		const stamp = Date.now();
+		const name = `ORGJOURNEY-B-${stamp} contact`;
+		const email = `add-${stamp}@example.test`;
+		const company = `Acme-${stamp}`;
+
+		cy.visit('/contacts');
+		cy.waitForHydration();
+		cy.get('[data-testid="contacts-add-open"]').click();
+		cy.get('[data-testid="contacts-add-name"]').type(name);
+		cy.get('[data-testid="contacts-add-email"]').type(email);
+		cy.get('[data-testid="contacts-add-company"]').type(company);
+
+		const asked: string[] = [];
+		cy.on('window:confirm', (text: string) => {
+			asked.push(text);
+			return true;
+		});
+		cy.get('[data-testid="contacts-add-name"]').type('{esc}');
+		cy.get('[data-testid="contacts-add"]').should('not.exist');
+		cy.wrap(asked).should('have.length', 0);
+
+		cy.get('[data-testid="contacts-add-open"]').click();
+		cy.get('[data-testid="contacts-add-name"]').should('have.value', name);
+		cy.get('[data-testid="contacts-add-email"]').should('have.value', email);
+		cy.get('[data-testid="contacts-add-company"]').should('have.value', company);
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="contacts-add-open"]').click();
+		cy.get('[data-testid="contacts-add-name"]').should('have.value', name);
+		cy.get('[data-testid="contacts-add-email"]').should('have.value', email);
+		cy.get('[data-testid="contacts-add-company"]').should('have.value', company);
+		cy.get('[data-testid="contacts-add-name-restored"]').should('be.visible');
+
+		cy.get('[data-testid="contacts-add-submit"]').click();
+		cy.location('pathname').should('match', /\/contacts\/\d+/);
+
+		cy.visit('/contacts');
+		cy.waitForHydration();
+		cy.get('[data-testid="contacts-add-open"]').click();
+		cy.get('[data-testid="contacts-add-name"]').should('have.value', '');
+		cy.get('[data-testid="contacts-add-email"]').should('have.value', '');
+		cy.get('[data-testid="contacts-add-company"]').should('have.value', '');
 	});
 });
