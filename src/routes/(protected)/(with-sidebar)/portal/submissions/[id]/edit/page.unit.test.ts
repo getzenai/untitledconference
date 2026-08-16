@@ -21,7 +21,8 @@ const draw = (status: string) =>
 				call,
 				draft: emptyProposal(),
 				submissionId: 30,
-				status
+				status,
+				ownerId: 'speaker-1'
 			}
 		} as never
 	}).body;

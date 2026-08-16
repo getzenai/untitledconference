@@ -47,7 +47,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		call: { ...call, conference },
 		draft: editable.draft,
 		submissionId: id,
-		status: editable.status
+		status: editable.status,
+		ownerId: locals.user.id
 	};
 };
 
