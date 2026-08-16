@@ -7,10 +7,13 @@
 	 * per-row forms rather than a drawer: organizers change one field and move on.
 	 */
 	import { enhance } from '$lib/forms/enhance';
+	import { clearBrowserDraft } from '$lib/forms/browser-draft';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
+	import { speakerNotesDraftScope } from '$lib/conference/speaker-notes-draft';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
+	import SpeakerNotesDraft from '$lib/components/app/conference/speaker-notes-draft.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { humanise } from '$lib/components/status-badge.svelte';
 	import { tick } from 'svelte';
@@ -441,7 +444,13 @@
 									<form
 										method="POST"
 										action="?/updateProfile"
-										use:enhance={submitting('edit')}
+										use:enhance={submitting('edit', () => {
+											clearBrowserDraft(
+												localStorage,
+												speakerNotesDraftScope(data.conference.slug, speaker.speakerProfileId),
+												data.user.id
+											);
+										})}
 										class="grid max-w-3xl gap-3 sm:grid-cols-2"
 										data-testid="speaker-edit-form"
 									>
@@ -534,20 +543,13 @@
 											>
 										</div>
 										<div class="sm:col-span-2">
-											<label
-												class="text-muted-foreground mb-1 block text-xs font-medium"
-												for="edit-notes-{speaker.speakerProfileId}"
-											>
-												Internal notes
-											</label>
-											<textarea
-												id="edit-notes-{speaker.speakerProfileId}"
-												name="notes"
-												rows="2"
-												class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-												data-testid="edit-notes"
-												placeholder="Never shown publicly">{speaker.notes ?? ''}</textarea
-											>
+											<SpeakerNotesDraft
+												slug={data.conference.slug}
+												speakerProfileId={speaker.speakerProfileId}
+												owner={data.user.id}
+												baseline={speaker.notes ?? ''}
+												fieldId={`edit-notes-${speaker.speakerProfileId}`}
+											/>
 										</div>
 										<div class="sm:col-span-2">
 											<Button type="submit" size="sm" disabled={busy} data-testid="edit-submit">
