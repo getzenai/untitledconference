@@ -57,7 +57,11 @@ const publicConference = {
 const renderCfp = (
 	state: 'open' | 'closed' | 'not_yet_open',
 	description: string | null,
-	existing: { id: number; title: string; status: 'draft' | 'submitted' } | null = null,
+	existing: {
+		id: number;
+		title: string;
+		status: 'draft' | 'submitted' | 'in_review';
+	} | null = null,
 	closesAt: Date | null = null,
 	extras: {
 		user?: { id: string };
