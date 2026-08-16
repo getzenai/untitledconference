@@ -98,7 +98,18 @@ function organizerWriteArgs(conferenceSlug: string): Record<string, Record<strin
 		swap_talks: { conferenceSlug, placementId: 1, withPlacementId: 2 },
 		unplace_talk: { conferenceSlug, placementId: 1 },
 		create_break: { conferenceSlug, minutes: 30, title: 'Break by someone else' },
-		remove_break: { conferenceSlug, placementId: 1 }
+		remove_break: { conferenceSlug, placementId: 1 },
+		update_cfp_form: { conferenceSlug, title: 'Renamed by someone else' },
+		add_cfp_field: { conferenceSlug, label: 'Field by someone else', kind: 'short_text' },
+		update_cfp_field: {
+			conferenceSlug,
+			fieldId: 1,
+			label: 'Field by someone else',
+			kind: 'short_text'
+		},
+		delete_cfp_field: { conferenceSlug, fieldId: 1 },
+		move_cfp_field: { conferenceSlug, fieldId: 1, direction: 'up' },
+		set_cfp_fixed_question: { conferenceSlug, key: 'abstract', shown: false }
 	};
 }
 

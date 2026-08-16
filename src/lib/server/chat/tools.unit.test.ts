@@ -33,7 +33,8 @@ describe('assistantChatToolDefinitions', () => {
 			.map((tool) => tool.name)
 			.sort();
 		expect(assistantChatWriteToolNames(organizer).sort()).toEqual(registryWrites);
-		expect(registryWrites).toHaveLength(30);
+		// 30 at #683, plus the six form-builder writes #712 adds.
+		expect(registryWrites).toHaveLength(36);
 	});
 });
 

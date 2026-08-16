@@ -54,6 +54,11 @@ returns.
 | `restore_conference`                             | Bring an archived conference back exactly where it was                                                 |
 | `delete_conference`                              | Erase an archived, never-published conference for good. Slug twice; owner or admin                     |
 | `open_cfp` / `close_cfp`                         | Open the call, or stop new submissions without touching the ones already in                            |
+| `get_cfp_form`                                   | The builder: title, window, built-in questions, extra fields. Field ids come from here                 |
+| `update_cfp_form`                                | Title, description, submission window or status. Does not edit questions                               |
+| `add_cfp_field` / `update_cfp_field`             | Extra questions — same write as the builder. A select needs options                                    |
+| `delete_cfp_field` / `move_cfp_field`            | Remove an extra question, or move it one place. Answers already given stay                             |
+| `set_cfp_fixed_question`                         | Hide or show a built-in question (abstract, track…). Title and speaker identity stay                   |
 | `list_submissions`                               | The proposals, optionally filtered by status                                                           |
 | `get_submission`                                 | One proposal in full, with the reviews written for it (reviewer names are not returned)                |
 | `invite_reviewer`                                | Invite someone into the review round                                                                   |

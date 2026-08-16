@@ -23,6 +23,9 @@ export const SERVER_INSTRUCTIONS =
 	'get_conference loads one. ' +
 	'To run a conference: create_conference (always a draft), update_conference for name/venue/dates, ' +
 	'open_cfp then publish_conference so speakers can submit, ' +
+	'get_cfp_form to read the builder, update_cfp_form for title and window, ' +
+	'add_cfp_field, update_cfp_field, delete_cfp_field and move_cfp_field for extra questions, ' +
+	'set_cfp_fixed_question to hide or show a built-in question, ' +
 	'create_session_format and create_track so proposals have a length and a track, ' +
 	'create_review_round then list_reviewers or invite_reviewer then assign_reviews, ' +
 	'remove_reviewer to take someone off the committee, ' +

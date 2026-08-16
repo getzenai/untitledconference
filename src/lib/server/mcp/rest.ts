@@ -82,6 +82,29 @@ export const REST_ROUTES: RestRoute[] = [
 	},
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/cfp/open', tool: 'open_cfp' },
 	{ method: 'POST', pattern: '/conferences/:conferenceSlug/cfp/close', tool: 'close_cfp' },
+	{ method: 'GET', pattern: '/conferences/:conferenceSlug/cfp', tool: 'get_cfp_form' },
+	{ method: 'PATCH', pattern: '/conferences/:conferenceSlug/cfp', tool: 'update_cfp_form' },
+	{ method: 'POST', pattern: '/conferences/:conferenceSlug/cfp/fields', tool: 'add_cfp_field' },
+	{
+		method: 'PATCH',
+		pattern: '/conferences/:conferenceSlug/cfp/fields/:fieldId',
+		tool: 'update_cfp_field'
+	},
+	{
+		method: 'DELETE',
+		pattern: '/conferences/:conferenceSlug/cfp/fields/:fieldId',
+		tool: 'delete_cfp_field'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/cfp/fields/:fieldId/move',
+		tool: 'move_cfp_field'
+	},
+	{
+		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/cfp/fixed-questions',
+		tool: 'set_cfp_fixed_question'
+	},
 	{
 		method: 'GET',
 		pattern: '/conferences/:conferenceSlug/submissions',

@@ -50,6 +50,8 @@ describe('the MCP tool registry', () => {
 		expect(byName.list_session_formats).toBe(false);
 		expect(byName.list_tracks).toBe(false);
 		expect(byName.get_agenda).toBe(false);
+		expect(byName.get_cfp_form).toBe(false);
+		expect(byName.add_cfp_field).toBe(true);
 		expect(byName.get_my_profile).toBe(false);
 	});
 
@@ -81,6 +83,21 @@ describe('the MCP tool registry', () => {
 	it('exports the speaker and reviewer tools #299 adds', () => {
 		const names = allTools(ctx).map((tool) => tool.name);
 		expect(names).toEqual(expect.arrayContaining([...JOURNEY_TOOLS]));
+	});
+
+	it('exports the form-builder tools #712 adds', () => {
+		const names = allTools(ctx).map((tool) => tool.name);
+		expect(names).toEqual(
+			expect.arrayContaining([
+				'get_cfp_form',
+				'update_cfp_form',
+				'add_cfp_field',
+				'update_cfp_field',
+				'delete_cfp_field',
+				'move_cfp_field',
+				'set_cfp_fixed_question'
+			])
+		);
 	});
 
 	it('exports the agenda tools #300 adds', () => {

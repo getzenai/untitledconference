@@ -68,6 +68,23 @@ describe('the REST route table', () => {
 		expect(matchRestRoute('POST', '/conferences/harness/agenda/placements')?.route.tool).toBe(
 			'place_talk'
 		);
+		expect(matchRestRoute('GET', '/conferences/harness/cfp')?.route.tool).toBe('get_cfp_form');
+		expect(matchRestRoute('PATCH', '/conferences/harness/cfp')?.route.tool).toBe('update_cfp_form');
+		expect(matchRestRoute('POST', '/conferences/harness/cfp/fields')?.route.tool).toBe(
+			'add_cfp_field'
+		);
+		expect(matchRestRoute('PATCH', '/conferences/harness/cfp/fields/12')?.route.tool).toBe(
+			'update_cfp_field'
+		);
+		expect(matchRestRoute('DELETE', '/conferences/harness/cfp/fields/12')?.route.tool).toBe(
+			'delete_cfp_field'
+		);
+		expect(matchRestRoute('POST', '/conferences/harness/cfp/fields/12/move')?.route.tool).toBe(
+			'move_cfp_field'
+		);
+		expect(matchRestRoute('POST', '/conferences/harness/cfp/fixed-questions')?.route.tool).toBe(
+			'set_cfp_fixed_question'
+		);
 	});
 
 	it('keeps speaker writes under /me/proposals, not the organizer submission path', () => {

@@ -13,6 +13,7 @@ import type { McpContext } from '../context';
 import { organizerConference } from '../organizer';
 import { McpToolError, registerMcpTools, type AnyMcpToolDefinition } from '../tool-helpers';
 import { agendaTools, formatClock } from './agenda';
+import { cfpFormTools } from './cfp-form';
 import { conferenceWriteTools } from './conference-write';
 
 /**
@@ -46,7 +47,12 @@ export function conferenceReadTools(ctx: McpContext): AnyMcpToolDefinition[] {
 }
 
 export function conferenceTools(ctx: McpContext): AnyMcpToolDefinition[] {
-	return [...conferenceReadTools(ctx), ...conferenceWriteTools(ctx), ...agendaTools(ctx)];
+	return [
+		...conferenceReadTools(ctx),
+		...conferenceWriteTools(ctx),
+		...cfpFormTools(ctx),
+		...agendaTools(ctx)
+	];
 }
 
 export function registerConferenceTools(server: McpServer, ctx: McpContext): void {
