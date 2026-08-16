@@ -10,8 +10,9 @@
 	 * and what the button is about to set off (R3).
 	 */
 	import { enhance } from '$lib/forms/enhance';
+	import { clearBrowserDraft } from '$lib/forms/browser-draft';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
-	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
+	import { talkContentDraftScope } from '$lib/conference/talk-content-draft';
 	import {
 		decisionBlockReason,
 		describeDecision,
@@ -29,6 +30,7 @@
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
+	import TalkContentDraft from '$lib/components/app/conference/talk-content-draft.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import {
 		AlertDialog,
@@ -41,8 +43,6 @@
 	} from '$lib/components/ui/alert-dialog';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
-	import { Label } from '$lib/components/ui/label';
-	import { Textarea } from '$lib/components/ui/textarea';
 
 	let { data, form } = $props();
 
@@ -65,17 +65,22 @@
 	// svelte-ignore state_referenced_locally
 	let editing = $state(!!form?.contentErrors);
 
-	/**
-	 * What the fields show: the rejected text after a refused save, the stored talk
-	 * otherwise. Reading straight from `s` would answer "fix the title" by silently
-	 * restoring the old one.
-	 */
-	const draft = $derived({
-		title: form?.contentValues?.title ?? s.title,
-		abstract: form?.contentValues?.abstract ?? s.abstract ?? '',
-		keyTakeaway: form?.contentValues?.keyTakeaway ?? s.keyTakeaway ?? '',
-		audienceLevel: form?.contentValues?.audienceLevel ?? s.audienceLevel ?? ''
+	const savedTalk = $derived({
+		title: s.title,
+		abstract: s.abstract ?? '',
+		keyTakeaway: s.keyTakeaway ?? '',
+		audienceLevel: s.audienceLevel ?? ''
 	});
+	const refusedTalk = $derived(
+		form?.contentValues
+			? {
+					title: form.contentValues.title ?? s.title,
+					abstract: form.contentValues.abstract ?? '',
+					keyTakeaway: form.contentValues.keyTakeaway ?? '',
+					audienceLevel: form.contentValues.audienceLevel ?? ''
+				}
+			: null
+	);
 
 	const stamp = (value: Date | string | null) =>
 		value
@@ -571,48 +576,29 @@
 						return async ({ update, result }) => {
 							try {
 								await update(formUpdateOptions('edit'));
-								if (result.type === 'success') editing = false;
+								if (result.type === 'success') {
+									clearBrowserDraft(
+										localStorage,
+										talkContentDraftScope(data.conference.slug, s.id),
+										data.user.id
+									);
+									editing = false;
+								}
 							} finally {
 								busy = false;
 							}
 						};
 					}}
 				>
-					<div class="space-y-1">
-						<Label for="talk-title">Title</Label>
-						<Input
-							id="talk-title"
-							name="title"
-							value={draft.title}
-							required
-							maxlength={TALK_TITLE_MAX}
-						/>
-						{#if form?.contentErrors?.title}
-							<p class="text-status-bad text-sm" role="alert">{form.contentErrors.title}</p>
-						{/if}
-					</div>
-					<div class="space-y-1">
-						<Label for="talk-abstract">Abstract</Label>
-						<Textarea id="talk-abstract" name="abstract" rows={8} value={draft.abstract} />
-						{#if form?.contentErrors?.abstract}
-							<p class="text-status-bad text-sm" role="alert">{form.contentErrors.abstract}</p>
-						{/if}
-					</div>
-					<div class="grid gap-3 sm:grid-cols-2">
-						<div class="space-y-1">
-							<Label for="talk-takeaway">Key takeaway</Label>
-							<Input id="talk-takeaway" name="keyTakeaway" value={draft.keyTakeaway} />
-						</div>
-						<div class="space-y-1">
-							<Label for="talk-audience">Audience level</Label>
-							<Input
-								id="talk-audience"
-								name="audienceLevel"
-								value={draft.audienceLevel}
-								placeholder="Beginner, intermediate, advanced"
-							/>
-						</div>
-					</div>
+					<TalkContentDraft
+						slug={data.conference.slug}
+						submissionId={s.id}
+						owner={data.user.id}
+						status={s.status}
+						saved={savedTalk}
+						refused={refusedTalk}
+						errors={form?.contentErrors}
+					/>
 					<div class="flex items-center gap-3">
 						<Button type="submit" size="sm" disabled={busy}>Save talk</Button>
 						<Button
