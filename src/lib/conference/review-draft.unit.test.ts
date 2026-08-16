@@ -2,6 +2,7 @@ import { readBrowserDraft, writeBrowserDraft } from '$lib/forms/browser-draft';
 import { describe, expect, it } from 'vitest';
 import {
 	isTypedReview,
+	parkableReviewDraft,
 	parseReviewDraft,
 	reviewDraftBaseline,
 	reviewDraftScope,
@@ -39,6 +40,59 @@ describe('parseReviewDraft', () => {
 		expect(
 			parseReviewDraft({ comment: 'ok', scores: { 3: '4', nope: 'x', '2.5': '1', 7: 9 } })?.scores
 		).toEqual({ 3: '4' });
+	});
+});
+
+describe('parkableReviewDraft', () => {
+	const relevance = { id: 3, kind: 'rating', label: 'Relevance', scaleMax: 5 };
+	const notes = { id: 7, kind: 'text', label: 'Notes', scaleMax: null };
+	const saved: ReviewDraft = { comment: 'Keep the 3.', scores: { 3: '3', 7: 'as filed' } };
+
+	it('does not park a rating Save would reject', () => {
+		expect(
+			parkableReviewDraft({ comment: saved.comment, scores: { 3: '50', 7: 'as filed' } }, saved, [
+				relevance,
+				notes
+			])
+		).toEqual(saved);
+	});
+
+	it('keeps the comment and a score that fits, and drops only the refused rating', () => {
+		expect(
+			parkableReviewDraft(
+				{ comment: 'Still thinking.', scores: { 3: '50', 7: 'new note' } },
+				saved,
+				[relevance, notes]
+			)
+		).toEqual({ comment: 'Still thinking.', scores: { 3: '3', 7: 'new note' } });
+	});
+
+	it('parks a rating on the scale and an emptied one — unanswered is allowed', () => {
+		expect(
+			parkableReviewDraft(
+				{ comment: saved.comment, scores: { 3: '4', 7: saved.scores[7] } },
+				saved,
+				[relevance, notes]
+			)
+		).toEqual({ comment: saved.comment, scores: { 3: '4', 7: 'as filed' } });
+		expect(
+			parkableReviewDraft(
+				{ comment: saved.comment, scores: { 3: '', 7: saved.scores[7] } },
+				saved,
+				[relevance, notes]
+			)
+		).toEqual({ comment: saved.comment, scores: { 3: '', 7: 'as filed' } });
+	});
+
+	it('refuses a word and a negative the same way as 50', () => {
+		for (const raw of ['good', '-1']) {
+			expect(
+				parkableReviewDraft({ comment: saved.comment, scores: { 3: raw, 7: 'as filed' } }, saved, [
+					relevance,
+					notes
+				])
+			).toEqual(saved);
+		}
 	});
 });
 

@@ -6,6 +6,7 @@
  * baseline so a later server version cannot be silently overwritten.
  */
 
+import { ratingAnswerError } from './rating-answer';
 import { reviewWriteBaseline } from './review-write-baseline';
 
 export type ReviewDraft = {
@@ -34,6 +35,35 @@ export function reviewDraftBaseline(input: {
 /** A comment or any filled criterion — an empty form is not a draft. */
 export function isTypedReview(draft: ReviewDraft): boolean {
 	return Boolean(draft.comment.trim() || Object.values(draft.scores).some((value) => value.trim()));
+}
+
+export type ParkableCriterion = {
+	id: number;
+	kind: string;
+	label: string;
+	scaleMax: number | null;
+};
+
+/**
+ * What a Save would keep from this typing.
+ *
+ * A refused rating is not a draft — restoring it would look like a saved
+ * verdict. The comment and every score the form would accept stay.
+ */
+export function parkableReviewDraft(
+	typed: ReviewDraft,
+	saved: ReviewDraft,
+	criteria: ParkableCriterion[]
+): ReviewDraft {
+	const scores: Record<number, string> = { ...typed.scores };
+	for (const criterion of criteria) {
+		if (criterion.kind !== 'rating') continue;
+		const raw = typed.scores[criterion.id] ?? '';
+		if (ratingAnswerError(raw, criterion) !== null) {
+			scores[criterion.id] = saved.scores[criterion.id] ?? '';
+		}
+	}
+	return { comment: typed.comment, scores };
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
