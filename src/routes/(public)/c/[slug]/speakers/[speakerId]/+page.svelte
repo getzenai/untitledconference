@@ -95,7 +95,7 @@
 						{#if session.format}<Badge variant="outline">{session.format}</Badge>{/if}
 					</div>
 					<a
-						href={withEmbed(`/c/${view.conference.slug}/agenda`, data.embed)}
+						href={withEmbed(`/c/${view.conference.slug}/agenda?session=${session.id}`, data.embed)}
 						class="mt-2 block font-medium hover:underline">{session.title}</a
 					>
 					<p class="text-muted-foreground mt-1 text-sm">
@@ -122,6 +122,7 @@
 					<ul class="divide-border mt-1 divide-y">
 						{#each event.sessions as session (session.id)}
 							<li class="py-4">
+								<!-- Other-conference ids do not belong on this page's ?session=; the grid is the right landing. -->
 								<a
 									href={withEmbed(`/c/${event.conferenceSlug}/agenda`, data.embed)}
 									class="font-medium hover:underline">{session.title}</a
