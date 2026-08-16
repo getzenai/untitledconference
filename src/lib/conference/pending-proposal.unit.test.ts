@@ -231,8 +231,12 @@ describe('autosaved proposal storage', () => {
 		writeAutosavedProposal(storage, 'devflow', 'ada', draft);
 		writePendingProposal(storage, 'devflow', draft, 'submit');
 
-		expect(autosavedProposalKey('devflow', 'ada').startsWith('unsaved-form-draft:')).toBe(true);
-		expect(pendingProposalKey('devflow').startsWith('unsaved-form-draft:')).toBe(true);
+		expect(autosavedProposalKey('devflow', 'ada')).toBe(
+			`unsaved-form-draft:${encodeURIComponent('cfp-autosave:devflow')}:${encodeURIComponent('ada')}`
+		);
+		expect(pendingProposalKey('devflow')).toBe(
+			`unsaved-form-draft:${encodeURIComponent('cfp-pending:devflow')}:${encodeURIComponent('handoff')}`
+		);
 		expect(storage.getItem(autosavedProposalKey('devflow', 'ada'))).not.toBeNull();
 		expect(storage.getItem(pendingProposalKey('devflow'))).not.toBeNull();
 	});
