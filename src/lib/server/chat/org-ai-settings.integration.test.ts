@@ -2,7 +2,7 @@ import { db } from '$lib/server/db';
 import { organization } from '$lib/server/db/auth-schema';
 import { organizationAiSettings } from '$lib/server/db/organization-ai-schema';
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
 	ChatBackendMisconfiguredError,
 	ChatModelNotConfiguredError,
@@ -15,7 +15,18 @@ import {
 	readOrganizationAiSettings,
 	saveOrganizationAiSettings
 } from './org-ai-settings';
-import { ChatBackendUrlError } from './org-ai-url';
+import { ChatBackendAddressError, ChatBackendUrlError } from './org-ai-url';
+
+/**
+ * The save path resolves the backend host (#725). The database here is real;
+ * DNS is not — a test that asked the internet what `api.openai.com` is today
+ * would be a network dependency in CI and would fail wherever egress is shut.
+ * `hostAddresses` is what these tests pretend the resolver said.
+ */
+const hostAddresses = vi.hoisted(() => ({ current: ['93.184.216.34'] }));
+vi.mock('./org-ai-dns', () => ({
+	resolveHostAddresses: async () => hostAddresses.current
+}));
 
 const WRAP_KEY = 'ab'.repeat(32);
 const suffix = `orgai-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -142,6 +153,29 @@ describe('organization AI settings', () => {
 		await expect(createChatModel(broken.id)).rejects.not.toBeInstanceOf(
 			ChatModelNotConfiguredError
 		);
+	});
+
+	it('refuses to save a host that resolves to a private address', async () => {
+		const org = await insertOrg('resolve');
+		createdIds.push(org.id);
+		hostAddresses.current = ['169.254.169.254'];
+
+		try {
+			await expect(
+				saveOrganizationAiSettings({
+					organizationId: org.id,
+					baseUrl: 'https://chat.example.com/v1',
+					apiKey: 'sk-org-secret-7f3a',
+					modelId: undefined,
+					updatedBy: 'user-1'
+				})
+			).rejects.toBeInstanceOf(ChatBackendAddressError);
+		} finally {
+			hostAddresses.current = ['93.184.216.34'];
+		}
+
+		// Nothing was written: the check runs before the row is touched.
+		await expect(loadOrganizationChatBackend(org.id)).resolves.toEqual({ status: 'none' });
 	});
 
 	it('refuses to save when the wrap key is missing or the URL is private', async () => {

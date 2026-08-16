@@ -5,11 +5,44 @@
  * use HTTP when NODE_ENV is not production. Private, link-local and loopback
  * addresses are refused — the Worker will POST the conversation to whatever
  * the org typed.
+ *
+ * `assertAllowedChatBackendUrl` judges the URL as written, so it only sees
+ * address *literals*. `assertResolvedChatBackendUrl` also resolves the host
+ * and judges every answer, which is what stops a public name whose A record
+ * points at `169.254.169.254`.
+ *
+ * **What the resolved check does not cover.** The addresses judged here are
+ * the ones the resolver returned to us; they are not the address the TLS
+ * connection is opened to, because `fetch` resolves the name again. Whoever
+ * controls the record can answer differently for the two lookups — DNS
+ * rebinding is open, and nothing below closes it. What is closed is the
+ * plain case (an admin stores an internal address, directly or behind a
+ * public name) and the redirect case (see `org-ai-fetch.ts`, which re-runs
+ * this check on every hop). Pinning would mean dialing the address we
+ * checked, which breaks certificate validation, and workerd has no `fetch`
+ * that takes a resolved address.
  */
+import { resolveHostAddresses, type ResolveHostAddresses } from './org-ai-dns';
+
 export class ChatBackendUrlError extends Error {
 	constructor(message: string) {
 		super(message);
 		this.name = 'ChatBackendUrlError';
+	}
+}
+
+/**
+ * The host does not resolve, or resolves somewhere it may not.
+ *
+ * A subclass so that every existing `instanceof ChatBackendUrlError` — the
+ * 400 in the settings action, the `broken` row in `loadOrganizationChatBackend`
+ * — keeps treating it as a bad URL, while callers that want to tell a
+ * refused address from a malformed URL still can.
+ */
+export class ChatBackendAddressError extends ChatBackendUrlError {
+	constructor(message: string) {
+		super(message);
+		this.name = 'ChatBackendAddressError';
 	}
 }
 
@@ -61,12 +94,88 @@ function assertChatBackendProtocol(protocol: string, production: boolean, loopba
 	}
 }
 
+/**
+ * Judge one address literal: loopback, RFC1918, carrier NAT, link-local,
+ * `0.0.0.0/8`, ULA, or an IPv4 address wearing an IPv6 mapping.
+ *
+ * Exported because the resolved check has to apply *the same* rule to a DNS
+ * answer that this module applies to a typed literal — two lists would drift.
+ * `org-ai-url.unit.test.ts` asserts the two agree on every blocked literal.
+ */
+export function isBlockedAddress(address: string): boolean {
+	const host = address
+		.trim()
+		.replace(/^\[|\]$/g, '')
+		.toLowerCase();
+	if (!host) return true;
+	return isLoopbackHost(host) || isPrivateAddress(host);
+}
+
 function assertPublicChatBackendHost(host: string, production: boolean, loopback: boolean): void {
-	const privateish = loopback || isBlockedHost(host) || isPrivateAddress(host);
+	const privateish = isBlockedHost(host) || isBlockedAddress(host);
 	if (privateish && (production || !loopback)) {
 		throw new ChatBackendUrlError(
 			'The backend URL must not point at a private, link-local, or loopback address.'
 		);
+	}
+}
+
+/**
+ * True for a host that is already an address, so there is nothing to resolve.
+ * A registrable name can never contain a colon, and the brackets are gone by
+ * the time this runs.
+ */
+function isAddressLiteral(host: string): boolean {
+	return parseIPv4(host) !== null || host.includes(':');
+}
+
+/**
+ * `assertAllowedChatBackendUrl`, plus every address the host resolves to.
+ *
+ * Fails closed: a host that will not resolve, or a resolver that will not
+ * answer, is refused rather than passed through. Read the module comment for
+ * what this does *not* cover before treating it as a boundary.
+ *
+ * @param options.resolve Injected by the tests and by `org-ai-fetch.ts`;
+ * defaults to the DNS-over-HTTPS resolver.
+ */
+export async function assertResolvedChatBackendUrl(
+	raw: string,
+	options: { nodeEnv?: string; resolve?: ResolveHostAddresses } = {}
+): Promise<string> {
+	const nodeEnv = options.nodeEnv ?? process.env.NODE_ENV;
+	const href = assertAllowedChatBackendUrl(raw, nodeEnv);
+	const host = new URL(href).hostname.replace(/^\[|\]$/g, '').toLowerCase();
+	// A literal was judged as itself above; localhost only got here outside
+	// production, where it is deliberately allowed and has nothing to look up.
+	if (isAddressLiteral(host) || isLoopbackHost(host)) return href;
+
+	assertPublicAddresses(host, await lookUpHost(host, options.resolve));
+	return href;
+}
+
+async function lookUpHost(host: string, resolve?: ResolveHostAddresses): Promise<string[]> {
+	try {
+		return await (resolve ?? resolveHostAddresses)(host);
+	} catch (error) {
+		// A resolver that will not answer is a refusal, not a pass. Everything
+		// the resolver module throws is a lookup failure by construction.
+		throw new ChatBackendAddressError(
+			error instanceof Error ? error.message : `Could not look up ${host}.`
+		);
+	}
+}
+
+function assertPublicAddresses(host: string, addresses: string[]): void {
+	if (addresses.length === 0) {
+		throw new ChatBackendAddressError(`The backend host ${host} does not resolve to any address.`);
+	}
+	for (const address of addresses) {
+		if (isBlockedAddress(address)) {
+			throw new ChatBackendAddressError(
+				`The backend host ${host} resolves to ${address}, a private, link-local, or loopback address.`
+			);
+		}
 	}
 }
 
@@ -123,10 +232,18 @@ function isPrivateIPv4(int: number): boolean {
 	return PRIVATE_V4.some(([first, min, max]) => b1 === first && b2 >= min && b2 <= max);
 }
 
+/**
+ * An IPv4 address inside an IPv6 one. A resolver answers in the hex form
+ * (`::ffff:7f00:1`) as readily as the dotted one, so both are read here —
+ * reading only the dotted form would let `127.0.0.1` back in through an
+ * AAAA record.
+ */
 function mappedIPv4(host: string): number | null {
-	const match = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
-	if (!match) return null;
-	return parseIPv4(match[1]);
+	const dotted = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+	if (dotted) return parseIPv4(dotted[1]);
+	const hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+	if (!hex) return null;
+	return (((Number.parseInt(hex[1], 16) << 16) >>> 0) + Number.parseInt(hex[2], 16)) >>> 0;
 }
 
 function isPrivateIPv6(host: string): boolean {

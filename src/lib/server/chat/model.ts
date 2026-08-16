@@ -13,6 +13,7 @@ import type { LanguageModel } from 'ai';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { chooseChatBackend } from './choose-backend';
+import { createGuardedChatBackendFetch } from './org-ai-fetch';
 import { loadOrganizationChatBackend } from './org-ai-settings';
 
 export class ChatModelNotConfiguredError extends Error {
@@ -317,7 +318,11 @@ export async function createChatModel(
 	}
 	const openai = createOpenAI({
 		apiKey: choice.apiKey,
-		baseURL: choice.baseUrl
+		baseURL: choice.baseUrl,
+		// Only an org-supplied backend gets the guard: it re-checks the resolved
+		// address on every request and every redirect hop (#725). The hosted
+		// Gateway is our own URL and needs no lookup.
+		...(choice.source === 'organization' ? { fetch: createGuardedChatBackendFetch() } : {})
 	});
 	return openai.chat(choice.modelId);
 }
