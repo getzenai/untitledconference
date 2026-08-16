@@ -13,7 +13,14 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { enhance } from '$lib/forms/enhance';
 	import { EDITORIAL_STAND_LABELS, nextEditorialStand } from '$lib/conference/editorial-stand';
+	import {
+		applyStandWrites,
+		standWriteFromForm,
+		type StandWrite
+	} from '$lib/conference/editorial-stand-optimistic';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
+	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import StatusBadge from '$lib/components/status-badge.svelte';
@@ -47,7 +54,42 @@
 	const base = $derived(`/manage/${data.conference.slug}`);
 	const t = $derived(data.totals);
 	const conditions = $derived(data.conditions ?? []);
-	const hanging = $derived(data.hanging ?? []);
+	/**
+	 * In-flight advances sit on top of the last server pile. Dropping one is
+	 * the rollback — the row is back where the server left it.
+	 */
+	type QueuedStand = StandWrite & { token: number };
+	let standWrites = $state<QueuedStand[]>([]);
+	let standWriteToken = 0;
+	let standWriteError = $state<string | null>(null);
+	const hanging = $derived(applyStandWrites(data.hanging ?? [], standWrites));
+
+	const standFailureMessage = (result: ActionResult): string => {
+		if (result.type === 'failure') {
+			const message = (result.data as { standMessage?: unknown } | undefined)?.standMessage;
+			if (typeof message === 'string' && message.length > 0) return message;
+			return 'That change could not be saved.';
+		}
+		if (result.type === 'error') return actionErrorCopy(result);
+		return 'That change could not be saved.';
+	};
+
+	const submittingStand: SubmitFunction = ({ formData }) => {
+		const write = standWriteFromForm(formData);
+		const queued = write ? { ...write, token: ++standWriteToken } : null;
+		if (queued) standWrites = [...standWrites, queued];
+		standWriteError = null;
+		return async ({ result, update }) => {
+			if (result.type === 'success') {
+				await update(formUpdateOptions('edit'));
+				if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
+				return;
+			}
+			if (queued) standWrites = standWrites.filter((item) => item.token !== queued.token);
+			standWriteError = standFailureMessage(result);
+			if (result.type === 'failure') await update(formUpdateOptions('edit'));
+		};
+	};
 
 	const ordered = $derived(
 		[...data.speakers].sort(
@@ -162,7 +204,7 @@
 							</a>
 						</div>
 						{#if next}
-							<form method="POST" action="?/advanceStand">
+							<form method="POST" action="?/advanceStand" use:enhance={submittingStand}>
 								<input type="hidden" name="id" value={item.submissionId} />
 								<Button
 									type="submit"
@@ -222,7 +264,11 @@
 		<p class="text-status-good text-sm" role="status">{form.conditionMessage}</p>
 	{/if}
 
-	{#if form?.standMessage}
+	{#if standWriteError}
+		<p class="text-status-bad text-sm" role="alert" data-testid="stand-write-error">
+			{standWriteError}
+		</p>
+	{:else if form?.standMessage}
 		<p class="text-status-good text-sm" role="status">{form.standMessage}</p>
 	{/if}
 
