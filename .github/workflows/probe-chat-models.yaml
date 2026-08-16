@@ -18,6 +18,9 @@ on:
       models:
         description: 'Comma- or space-separated model ids, e.g. workers-ai/@cf/meta/llama-4-scout-17b-16e-instruct'
         required: true
+      tools:
+        description: 'How many tools to offer. Empty means all of them, the way the chat does. A small number answers "does it still find the right one among 49?" (#696).'
+        required: false
 
 permissions:
   contents: read
@@ -57,10 +60,15 @@ jobs:
       - name: Probe
         env:
           MODELS: ${{ inputs.models }}
+          TOOLS: ${{ inputs.tools }}
         run: |
           set -euo pipefail
           # A comma-separated input is what a person types; the script takes
           # separate arguments. `xargs` also drops the stray whitespace around
           # each entry, which would otherwise reach the gateway inside a model id.
           read -r -a models <<< "$(printf '%s' "$MODELS" | tr ',' ' ' | xargs)"
-          node scripts/ai/probe-chat-tools.mjs "${models[@]}"
+          # An empty input means "as the chat sends it"; the script rejects a
+          # non-number, so a typo stops here instead of silently probing all 49.
+          limit=()
+          if [ -n "$TOOLS" ]; then limit=("--tools=$TOOLS"); fi
+          node scripts/ai/probe-chat-tools.mjs "${models[@]}" "${limit[@]}"
