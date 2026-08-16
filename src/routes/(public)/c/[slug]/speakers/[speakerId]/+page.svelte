@@ -5,7 +5,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import EmptyState from '$lib/components/empty-state.svelte';
-	import { buildView, formatFullStamp, watchableRecordingUrl } from '$lib/conference/public-view';
+	import { buildView, formatFullStamp } from '$lib/conference/public-view';
 
 	let { data } = $props();
 
@@ -21,8 +21,7 @@
      rather than a plain URL because the visitor came here from a speaker's name,
      not from a URL bar; absent entirely before the talk has been given, so a
      speaker with no recordings reads as quiet rather than broken. -->
-{#snippet recording(session: { recordingUrl: string | null; endsAt: string })}
-	{@const url = watchableRecordingUrl(session)}
+{#snippet recording(url: string | null)}
 	{#if url}
 		<p class="mt-3">
 			<Button href={url} rel="noopener" target="_blank" size="sm" variant="secondary">
@@ -100,7 +99,7 @@
 						{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span
 							>{session.room}{/if}
 					</p>
-					{@render recording(session)}
+					{@render recording(session.recordingUrl)}
 				</li>
 			{/each}
 		</ul>
@@ -128,7 +127,7 @@
 									{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span
 										>{session.room}{/if}
 								</p>
-								{@render recording(session)}
+								{@render recording(session.recordingUrl)}
 							</li>
 						{/each}
 					</ul>

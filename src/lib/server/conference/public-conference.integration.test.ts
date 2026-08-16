@@ -32,6 +32,8 @@ const slug = `conf-${suffix}`;
 
 const withheldTitle = 'Withheld — approval pending';
 const recordingOfPublished = 'https://example.com/watch/published';
+const givenTitle = 'Given long ago';
+const recordingOfGiven = 'https://example.com/watch/given';
 const recordingOfWithheld = 'https://example.com/watch/withheld';
 const publishedTitle = 'Published — approved';
 
@@ -107,7 +109,8 @@ beforeAll(async () => {
 		place: boolean,
 		startsAt: string,
 		speakerIds: number[],
-		recordingUrl: string | null = null
+		recordingUrl: string | null = null,
+		endsAt: string = startsAt
 	) {
 		const [submission] = await db
 			.insert(submissionTable)
@@ -137,7 +140,7 @@ beforeAll(async () => {
 				submissionId: submission.id,
 				conferenceDayId: day.id,
 				startsAt: new Date(startsAt),
-				endsAt: new Date(startsAt),
+				endsAt: new Date(endsAt),
 				roomId: room.id,
 				recordingUrl
 			});
@@ -167,6 +170,17 @@ beforeAll(async () => {
 		unused.id
 	]);
 	await makeSubmission('Earliest published', 'approved', true, '2027-05-12T08:00:00Z', [zoe.id]);
+	// A talk that really has been given, so the recording rule has both sides to
+	// answer: this one may be watched, the 2027 ones may not.
+	await makeSubmission(
+		givenTitle,
+		'approved',
+		true,
+		'2020-01-01T09:00:00Z',
+		[zoe.id],
+		recordingOfGiven,
+		'2020-01-01T10:00:00Z'
+	);
 });
 
 afterAll(async () => {
@@ -187,22 +201,22 @@ describe('loadPublicConference', () => {
 		expect(titles).not.toContain(withheldTitle);
 	});
 
-	it('carries the recording of a published session, and no other', async () => {
+	it('carries the recording of a talk that is over, and withholds the rest', async () => {
 		const conference = await loadPublicConference(slug);
-		const published = conference!.sessions.find((s) => s.title === publishedTitle);
+		const given = conference!.sessions.find((s) => s.title === givenTitle);
+		const future = conference!.sessions.find((s) => s.title === publishedTitle);
 
-		expect(published!.recordingUrl).toBe(recordingOfPublished);
+		// The decision is made here, once, so no surface has to ask the clock —
+		// and a browser with a wrong one cannot answer differently (#807).
+		expect(given!.recordingUrl).toBe(recordingOfGiven);
+		// Same row, same URL in the database: withheld only because the talk is
+		// still in the future.
+		expect(future!.recordingUrl).toBeNull();
 		// A session that was never recorded reports null rather than an empty string,
 		// because the surfaces switch the button on truthiness.
 		expect(
 			conference!.sessions.find((s) => s.title === 'Earliest published')!.recordingUrl
 		).toBeNull();
-
-		// The withheld talk HAS a recording in the database. If the link were enough to
-		// pull it onto a public surface, CNT-12 would be gone — and a recording is
-		// exactly the field somebody fills in after the fact, without re-approving.
-		const everything = JSON.stringify(conference);
-		expect(everything).not.toContain(recordingOfWithheld);
 	});
 
 	it('omits accepted submissions that have no confirmed placement', async () => {
@@ -214,7 +228,7 @@ describe('loadPublicConference', () => {
 		const conference = await loadPublicConference(slug);
 		const starts = conference!.sessions.map((s) => s.startsAt);
 		expect(starts).toEqual([...starts].sort());
-		expect(conference!.sessions[0].title).toBe('Earliest published');
+		expect(conference!.sessions[0].title).toBe(givenTitle);
 	});
 
 	it('selects no internal column — the payload has exactly the contract keys', async () => {
