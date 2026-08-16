@@ -604,6 +604,7 @@ describe('the organizer talk editor', () => {
 			editorialStand: 'received'
 		});
 		expect(named).toContain('data-testid="submission-editorial-stand"');
+		expect(named).toContain('data-stand="received"');
 		expect(named).toContain('Advance to reviewed');
 
 		const done = renderPage('accepted', null, null, null, 'one', null, {
