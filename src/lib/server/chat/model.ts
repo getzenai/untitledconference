@@ -12,6 +12,8 @@ import { createOpenAI } from '@ai-sdk/openai';
 import type { LanguageModel } from 'ai';
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
+import { chooseChatBackend } from './choose-backend';
+import { loadOrganizationChatBackend } from './org-ai-settings';
 
 export class ChatModelNotConfiguredError extends Error {
 	constructor() {
@@ -19,6 +21,13 @@ export class ChatModelNotConfiguredError extends Error {
 			'AI Gateway is not configured. Set AI_GATEWAY_API_KEY (Worker secret) and AI_GATEWAY_BASE_URL.'
 		);
 		this.name = 'ChatModelNotConfiguredError';
+	}
+}
+
+export class ChatBackendMisconfiguredError extends Error {
+	constructor() {
+		super('The organization chat backend is misconfigured.');
+		this.name = 'ChatBackendMisconfiguredError';
 	}
 }
 
@@ -233,30 +242,49 @@ export function createMockSubmitReviewModel(
 }
 
 /**
+ * @param organizationId Active organization (`locals.organizationId`). A
+ * configured org backend wins over the hosted pair; a broken row does not
+ * fall through. `AI_CHAT_MODEL=mock` still wins so Cypress needs no org row.
  * @param mockCall Override the read tool the `mock` model calls when the
  * prompt does not name an agenda board or a rename. The default mock reads
  * those from the prompt itself so `/chat` does not have to pass them in.
  */
-export function createChatModel(mockCall?: {
-	toolName: string;
-	input: Record<string, unknown>;
-}): LanguageModel {
+export async function createChatModel(
+	organizationId?: string | null,
+	mockCall?: {
+		toolName: string;
+		input: Record<string, unknown>;
+	}
+): Promise<LanguageModel> {
 	const { AI_CHAT_MODEL, AI_GATEWAY_API_KEY, AI_GATEWAY_BASE_URL } = serverEnv();
 	// Process export first: wrangler.jsonc pins a production model id, and
 	// `AI_CHAT_MODEL=mock` from `scripts/run-e2e.sh` has to win for the
 	// flag-on Cypress path.
 	const modelId = process.env.AI_CHAT_MODEL || AI_CHAT_MODEL;
-	if (modelId === 'mock') {
+	const org =
+		modelId === 'mock' || !organizationId
+			? undefined
+			: await loadOrganizationChatBackend(organizationId);
+	const choice = chooseChatBackend({
+		modelId,
+		platformKey: AI_GATEWAY_API_KEY,
+		platformUrl: AI_GATEWAY_BASE_URL,
+		org
+	});
+	if (choice.source === 'mock') {
 		return mockCall
 			? createMockChatModel(mockCall.toolName, mockCall.input)
 			: createMockChatModel();
 	}
-	if (!AI_GATEWAY_API_KEY || !AI_GATEWAY_BASE_URL) {
+	if (choice.source === 'broken-organization') {
+		throw new ChatBackendMisconfiguredError();
+	}
+	if (choice.source === 'missing-platform') {
 		throw new ChatModelNotConfiguredError();
 	}
 	const openai = createOpenAI({
-		apiKey: AI_GATEWAY_API_KEY,
-		baseURL: AI_GATEWAY_BASE_URL
+		apiKey: choice.apiKey,
+		baseURL: choice.baseUrl
 	});
-	return openai.chat(modelId);
+	return openai.chat(choice.modelId);
 }
