@@ -29,6 +29,10 @@
 
 	let hold = $state<AssistantHold<Chat>>(emptyAssistantHold());
 
+	// Deliberately not `$state`: nothing renders from it, and it is read once,
+	// in the setter that closes the sheet — while the element is still there.
+	let viewport: HTMLElement | null = null;
+
 	// A write has just landed. Gated writes enter `approved` when the card
 	// appears; auto-run writes never do, and still change the page (#726).
 	// This runs whether the sheet is open or not (#728 / #802).
@@ -66,7 +70,15 @@
 		bind:open={
 			() => hold.open,
 			(open) => {
-				if (!open) hold = closeAssistantHold(hold);
+				if (open) return;
+				// One assignment: close and keep the offset together. Reading it
+				// here rather than on the way out is what keeps the write out of
+				// the unmount, and the viewport is still mounted at this point.
+				hold = rememberAssistantScroll(
+					closeAssistantHold(hold),
+					viewport ? viewport.scrollTop : hold.scrollTop
+				);
+				viewport = null;
 			}
 		}
 		bind:input={
@@ -79,6 +91,6 @@
 		ledger={hold.ledger}
 		onclear={clearChat}
 		initialScroll={hold.scrollTop}
-		onscrollkept={(scrollTop) => (hold = rememberAssistantScroll(hold, scrollTop))}
+		onviewport={(element) => (viewport = element)}
 	/>
 {/if}

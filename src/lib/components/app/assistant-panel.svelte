@@ -50,7 +50,7 @@
 		ledger,
 		onclear,
 		initialScroll = null,
-		onscrollkept
+		onviewport
 	}: {
 		open?: boolean;
 		input?: string;
@@ -59,8 +59,8 @@
 		onclear: () => void;
 		/** Where this conversation was left, from the launcher (#729). */
 		initialScroll?: number | null;
-		/** Reports where the reader is as the sheet goes away (#729). */
-		onscrollkept?: (scrollTop: number | null) => void;
+		/** Hands the scrolling viewport to the launcher, which reads it on close (#729). */
+		onviewport?: (element: HTMLElement | null) => void;
 	} = $props();
 	// Last message that already belonged to the stopped turn — never search
 	// earlier finished answers. Lives on the ledger so a close mid-stop
@@ -74,10 +74,13 @@
 	let inputEl = $state<HTMLTextAreaElement | null>(null);
 	let viewport = $state<HTMLElement | null>(null);
 
-	// Read on the way out rather than on every scroll: the sheet unmounts on
-	// close, so this cleanup is the last moment the viewport still exists, and
-	// one read beats a listener firing through a fifty-message scroll (#729).
-	$effect(() => () => onscrollkept?.(viewport ? viewport.scrollTop : null));
+	// The launcher reads the offset when it closes the sheet, so all this does
+	// is hand over the element. Reporting the number from a teardown cleanup
+	// instead would write state while Svelte is unmounting — which reopened the
+	// sheet, because the write carried a `hold` that still said `open: true`.
+	$effect(() => {
+		onviewport?.(viewport);
+	});
 
 	$effect(() => {
 		if (stopFromIndex === null || pending) return;
