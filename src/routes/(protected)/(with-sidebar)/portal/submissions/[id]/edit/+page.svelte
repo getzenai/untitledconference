@@ -59,8 +59,14 @@
 	const initial = $derived(restored ?? data.draft);
 
 	const persistDraft = (draft: ProposalDraft) => {
-		if (!listening || !browser || conflict) return;
+		if (!listening || !browser) return;
+		// The form first-paints the server draft while the banner is open. Treating
+		// that paint as "same as saved" would delete the parked copy — the reason
+		// this used to return on `conflict` at all. Keep that copy until the field
+		// actually changes. Newer typing then wins: it is parked against the
+		// current baseline, and the pre-banner copy is replaced (#791).
 		if (sameProposalDraft(draft, data.draft)) {
+			if (conflict) return;
 			clearBrowserDraft(localStorage, scope, data.ownerId);
 			dirty = false;
 			return;
@@ -71,6 +77,7 @@
 			baseline,
 			value: draft
 		});
+		conflict = null;
 		dirty = true;
 	};
 
