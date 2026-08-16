@@ -73,6 +73,10 @@ describe('parsePendingProposal', () => {
 			draft,
 			intent: 'draft'
 		});
+		expect(parsePendingProposal(JSON.stringify({ draft, intent: 'continue' }))).toEqual({
+			draft,
+			intent: 'continue'
+		});
 	});
 
 	it('rejects junk so it cannot become an auto-submit', () => {
@@ -102,10 +106,10 @@ describe('pending proposal storage', () => {
 	it('can be read for sign-up without losing the same-tab fallback', () => {
 		const storage = fakeStorage();
 		const draft = { ...emptyProposal(), title: 'Keep this' };
-		writePendingProposal(storage, 'devflow', draft, 'submit');
+		writePendingProposal(storage, 'devflow', draft, 'continue');
 
-		expect(readPendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'submit' });
-		expect(consumePendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'submit' });
+		expect(readPendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'continue' });
+		expect(consumePendingProposal(storage, 'devflow')).toEqual({ draft, intent: 'continue' });
 	});
 });
 
