@@ -96,7 +96,14 @@ describe('Leaving a portal proposal edit', () => {
 		cy.wrap(asked).should('have.length', 1);
 		cy.wrap(asked)
 			.its(0)
-			.should('match', /saved in this browser/);
+			.should('match', /your proposal edit will stay/i);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /this browser on this device/i);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /clearing your browser data/i);
+		cy.wrap(asked).its(0).should('not.match', /saved/i);
 		cy.wrap(asked).its(0).should('not.match', /lose/);
 	});
 

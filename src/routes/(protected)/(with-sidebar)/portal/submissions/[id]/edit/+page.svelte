@@ -15,6 +15,7 @@
 	import { onMount, tick } from 'svelte';
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
 	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
+	import { browserDraftLeavePrompt } from '$lib/conference/browser-draft-copy';
 	import { formatInstant } from '$lib/conference/deadline';
 	import {
 		parsePortalProposalDraft,
@@ -122,10 +123,7 @@
 	<title>{isDraft ? 'Finish' : 'Edit'} your proposal — {call.conference.name}</title>
 </svelte:head>
 
-<UnsavedGuard
-	dirty={dirty && !conflict}
-	message="Your proposal edit is saved in this browser but not on the server yet. Leave this page?"
-/>
+<UnsavedGuard dirty={dirty && !conflict} message={browserDraftLeavePrompt('your proposal edit')} />
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<a

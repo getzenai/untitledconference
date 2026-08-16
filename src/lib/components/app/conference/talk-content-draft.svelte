@@ -9,6 +9,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import { browserDraftLeavePrompt } from '$lib/conference/browser-draft-copy';
 	import { TALK_TITLE_MAX } from '$lib/conference/proposal-limits';
 	import {
 		parkableTalkContent,
@@ -118,10 +119,7 @@
 	});
 </script>
 
-<UnsavedGuard
-	{dirty}
-	message="Your talk edit is saved in this browser but not on the server yet. Leave this page?"
-/>
+<UnsavedGuard {dirty} message={browserDraftLeavePrompt('your talk edit')} />
 
 {#if restored}
 	<p class="text-status-good text-sm" role="status" data-testid="talk-content-restored">

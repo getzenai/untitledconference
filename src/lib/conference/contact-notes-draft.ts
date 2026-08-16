@@ -1,10 +1,12 @@
+import { browserDraftLeavePrompt } from './browser-draft-copy';
+
 /** Scope for the contact-page internal notes safety copy (#765). */
 export function contactNotesDraftScope(contactId: number): string {
 	return `contact-notes:${contactId}`;
 }
 
 /**
- * Leave prompt for the one parked field on a page of seven that are not (#788).
- * Names what `dirty` tracks. Does not say the page is saved.
+ * Same sentence as the other parked drafts (#787). "your notes" is what
+ * `dirty` tracks on a page of seven fields that are not parked.
  */
-export const CONTACT_NOTES_LEAVE_PROMPT = 'Only these notes stay in this browser. Leave this page?';
+export const CONTACT_NOTES_LEAVE_PROMPT = browserDraftLeavePrompt('your notes');
