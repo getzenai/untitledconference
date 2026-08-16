@@ -36,7 +36,7 @@ const AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
  * reader opens the same call.
  */
 export type DraftOwner = string | null;
-export type PendingProposalIntent = 'draft' | 'submit';
+export type PendingProposalIntent = 'continue' | 'draft' | 'submit';
 export type PendingProposal = { draft: ProposalDraft; intent: PendingProposalIntent };
 export type RegistrationProposal = PendingProposal & { slug: string };
 
@@ -187,7 +187,7 @@ export function parsePendingProposal(raw: string): PendingProposal | null {
 		const parked = asRecord(row.draft);
 		const draft = draftFromUnknown(parked ?? row);
 		if (!isTypedProposal(draft)) return null;
-		const intent = row.intent === 'draft' ? 'draft' : 'submit';
+		const intent = row.intent === 'continue' || row.intent === 'draft' ? row.intent : 'submit';
 		return { draft, intent };
 	} catch {
 		return null;

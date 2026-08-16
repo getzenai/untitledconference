@@ -14,7 +14,8 @@
 		isTypedProposal,
 		readAutosavedProposal,
 		writeAutosavedProposal,
-		writePendingProposal
+		writePendingProposal,
+		type PendingProposalIntent
 	} from '$lib/conference/pending-proposal';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import CallProse from '$lib/components/app/conference/call-prose.svelte';
@@ -43,7 +44,7 @@
 	let restored = $state<ProposalDraft | null>(null);
 	let restoredAt = $state<number | null>(null);
 	let fromPending = $state(false);
-	let pendingIntent = $state<'draft' | 'submit' | null>(null);
+	let pendingIntent = $state<PendingProposalIntent | null>(null);
 	let listening = $state(false);
 	let startingAnother = $state(false);
 
@@ -94,6 +95,7 @@
 	});
 
 	const resume = $derived(Boolean(signedIn && fromPending && restored && !data.existing));
+	const autoAction = $derived(resume && pendingIntent !== 'continue' ? pendingIntent : null);
 	/** A restored local draft is worth saying out loud — see the banner below. */
 	const resumedLocal = $derived(Boolean(restored && !fromPending && restoredAt !== null));
 
@@ -131,6 +133,17 @@
 	function stashAndSignIn(draft: ProposalDraft, intent: 'draft' | 'submit') {
 		writePendingProposal(sessionStorage, data.call.conference.slug, draft, intent);
 		void goto(signInHref);
+	}
+
+	/**
+	 * The banner is a sign-in door, not a save button. Park the anonymous
+	 * autosave in the existing one-time handoff, but do not choose an action for
+	 * the visitor: after authentication the same filled form is waiting for them.
+	 */
+	function parkDraftForBannerSignIn() {
+		const slug = data.call.conference.slug;
+		const saved = readAutosavedProposal(localStorage, slug, null);
+		if (saved) writePendingProposal(sessionStorage, slug, saved.draft, 'continue');
 	}
 
 	/**
@@ -257,7 +270,7 @@
 						rest. You can still read the form first.
 					</p>
 				</div>
-				<Button href={signInHref} variant="act">Sign in</Button>
+				<Button href={signInHref} variant="act" onclick={parkDraftForBannerSignIn}>Sign in</Button>
 			</div>
 		{/if}
 
@@ -318,6 +331,8 @@
 					You are signed in — press {pendingIntent === 'draft' ? 'Save as draft' : 'Submit'} to finish.
 				{:else if pendingIntent === 'draft'}
 					You are signed in — saving the draft you wrote.
+				{:else if pendingIntent === 'continue'}
+					You are signed in — your proposal is still here.
 				{:else}
 					You are signed in — submitting the proposal you wrote.
 				{/if}
@@ -335,7 +350,7 @@
 					{form}
 					{signedIn}
 					onSignIn={stashAndSignIn}
-					autoAction={resume ? pendingIntent : null}
+					{autoAction}
 					onDraftChange={listening ? persistDraft : undefined}
 					onCommitted={clearDraft}
 				/>
