@@ -108,6 +108,8 @@ describe('the call-for-papers builder', () => {
 		const html = body([field]);
 
 		expect(html).toContain('Workshop capacity');
+		expect(html).toContain('data-testid="cfp-field"');
+		expect(html).toContain(`data-field-id="${field.id}"`);
 		for (const label of labels) expect(html).toContain(label);
 	});
 

@@ -19,6 +19,13 @@
 	import { callHint } from '$lib/conference/deadline';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
+	import {
+		applyReorderWrites,
+		reorderWriteFromForm,
+		type ReorderWrite
+	} from '$lib/conference/list-reorder-optimistic';
+	import { actionErrorCopy } from '$lib/forms/keep-page-on-action-error';
+	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { fixedQuestionVisibility } from '$lib/conference/fixed-questions';
 	import { parseSpeakerSupport } from '$lib/conference/speaker-support';
 	import { proseBlocks } from '$lib/conference/prose';
@@ -101,6 +108,84 @@ We want talks that show the work — **the migration that failed first**, the nu
 		};
 	};
 
+	/**
+	 * In-flight field moves sit on top of the last server list. Dropping one
+	 * is the rollback — the row is back where the server left it. Move does
+	 * not take the page-wide `busy` lock: that lock is what made the list sit.
+	 *
+	 * One request flies for this list. A second click paints immediately and
+	 * waits; when the answer lands, that write is sent against the server
+	 * list we now have. Locking the button is not enough — the other row's
+	 * arrow is the collision.
+	 */
+	type QueuedReorder = ReorderWrite & { token: number };
+	let fieldWrites = $state<QueuedReorder[]>([]);
+	let fieldWriteToken = 0;
+	let fieldWriteError = $state<string | null>(null);
+	let fieldWireBusy = false;
+	let fieldWireForm = $state<HTMLFormElement | undefined>(undefined);
+
+	const reorderFailureMessage = (result: ActionResult): string => {
+		if (result.type === 'failure') {
+			const message = (result.data as { message?: unknown } | undefined)?.message;
+			if (typeof message === 'string' && message.length > 0) return message;
+			return 'That change could not be saved.';
+		}
+		if (result.type === 'error') return actionErrorCopy(result);
+		return 'That change could not be saved.';
+	};
+
+	const settleFieldMove =
+		(queued: QueuedReorder | null) =>
+		async ({
+			result,
+			update
+		}: {
+			result: ActionResult;
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			if (result.type === 'success') {
+				await update(formUpdateOptions('edit'));
+				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
+			} else {
+				if (queued) fieldWrites = fieldWrites.filter((item) => item.token !== queued.token);
+				fieldWriteError = reorderFailureMessage(result);
+				if (result.type === 'failure') await update(formUpdateOptions('edit'));
+			}
+			fieldWireBusy = false;
+			sendNextFieldMove();
+		};
+
+	function sendNextFieldMove(): void {
+		const next = fieldWrites[0];
+		if (!next || !fieldWireForm || fieldWireBusy) return;
+		fieldWireBusy = true;
+		const id = fieldWireForm.elements.namedItem('id');
+		const direction = fieldWireForm.elements.namedItem('direction');
+		if (!(id instanceof HTMLInputElement) || !(direction instanceof HTMLInputElement)) {
+			fieldWireBusy = false;
+			return;
+		}
+		id.value = String(next.id);
+		direction.value = next.direction;
+		fieldWireForm.requestSubmit();
+	}
+
+	const submittingMove: SubmitFunction = ({ formData, cancel }) => {
+		const write = reorderWriteFromForm(formData);
+		const queued = write ? { ...write, token: ++fieldWriteToken } : null;
+		if (queued) fieldWrites = [...fieldWrites, queued];
+		fieldWriteError = null;
+		if (fieldWireBusy) {
+			cancel();
+			return;
+		}
+		fieldWireBusy = true;
+		return settleFieldMove(queued);
+	};
+
+	const submittingFieldWire: SubmitFunction = () => settleFieldMove(fieldWrites[0] ?? null);
+
 	function syncIntroDraft(): void {
 		if (!data.form || introConflict) return;
 		introDirty = description !== savedDescription;
@@ -174,7 +259,9 @@ We want talks that show the work — **the migration that failed first**, the nu
 		return submitting('edit', clearIntroDraft)();
 	};
 
-	const fields = $derived(data.fields as unknown as FieldDefinition[]);
+	const fields = $derived(
+		applyReorderWrites(data.fields as unknown as FieldDefinition[], fieldWrites)
+	);
 
 	/**
 	 * Which built-in questions this call still asks (#159), read from the stored
@@ -546,6 +633,23 @@ We want talks that show the work — **the migration that failed first**, the nu
 					<p class="text-muted-foreground mt-0.5 text-xs">
 						Extra questions, asked after the ones above.
 					</p>
+					{#if fieldWriteError}
+						<p class="text-status-bad mt-2 text-sm" role="alert" data-testid="cfp-reorder-error">
+							{fieldWriteError}
+						</p>
+					{/if}
+
+					<form
+						method="POST"
+						action="?/moveField"
+						use:enhance={submittingFieldWire}
+						bind:this={fieldWireForm}
+						hidden
+						aria-hidden="true"
+					>
+						<input type="hidden" name="id" value="" />
+						<input type="hidden" name="direction" value="up" />
+					</form>
 
 					{#if fields.length === 0}
 						<p class="text-muted-foreground mt-2 text-sm">
@@ -555,7 +659,11 @@ We want talks that show the work — **the migration that failed first**, the nu
 
 					<ul class="mt-3 space-y-2">
 						{#each fields as field, index (field.id)}
-							<li class="border-border rounded-md border">
+							<li
+								class="border-border rounded-md border"
+								data-testid="cfp-field"
+								data-field-id={field.id}
+							>
 								<details>
 									<summary
 										class="hover:bg-muted/50 flex cursor-pointer flex-wrap items-center gap-2 px-3 py-2 text-sm"
@@ -603,28 +711,30 @@ We want talks that show the work — **the migration that failed first**, the nu
 										</form>
 
 										<div class="flex flex-wrap gap-2">
-											<form method="POST" action="?/moveField" use:enhance={submitting('edit')}>
+											<form method="POST" action="?/moveField" use:enhance={submittingMove}>
 												<input type="hidden" name="id" value={field.id} />
 												<input type="hidden" name="direction" value="up" />
 												<Button
 													type="submit"
 													variant="outline"
 													size="sm"
-													disabled={busy || index === 0}
+													disabled={index === 0}
 													aria-label={`Move “${field.label}” up`}
+													data-testid="cfp-field-move-up"
 												>
 													Move up
 												</Button>
 											</form>
-											<form method="POST" action="?/moveField" use:enhance={submitting('edit')}>
+											<form method="POST" action="?/moveField" use:enhance={submittingMove}>
 												<input type="hidden" name="id" value={field.id} />
 												<input type="hidden" name="direction" value="down" />
 												<Button
 													type="submit"
 													variant="outline"
 													size="sm"
-													disabled={busy || index === fields.length - 1}
+													disabled={index === fields.length - 1}
 													aria-label={`Move “${field.label}” down`}
+													data-testid="cfp-field-move-down"
 												>
 													Move down
 												</Button>
