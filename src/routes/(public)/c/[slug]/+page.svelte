@@ -43,11 +43,14 @@
 	/**
 	 * `replaceState` from `$app/navigation`, not `goto(…, { replaceState: true })`.
 	 *
-	 * Two reasons, and the second is the load-bearing one. Back should step out
-	 * of the page rather than through every keystroke. And `+layout.server.ts`
-	 * reads `url` (line 57, for `embed`), so a `goto` would re-run that server
-	 * load on every character typed; shallow routing changes the address without
-	 * running load at all.
+	 * Because Back should step *out* of the page rather than walk backwards
+	 * through every keystroke. Shallow routing changes the address without
+	 * starting a navigation at all, which is what a filter wants.
+	 *
+	 * Not for the reason it is tempting to give: `goto` would *not* re-run the
+	 * server load. SvelteKit tracks the individual search params a load reads,
+	 * and `+layout.server.ts` reads only `embed` — changing `q` does not
+	 * invalidate it.
 	 */
 	function applyFilters(next: SessionFilters) {
 		replaceState(sessionFiltersHref(page.url, next), page.state);
