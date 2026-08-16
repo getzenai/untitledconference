@@ -32,8 +32,10 @@ export function cardHeightPx(rows: number): number {
  *   4px padding; the meta line does not, so it is dropped rather than clipped.
  * - `full` — three rows or more: title, meta, normal padding.
  *
- * The tooltip and the detail page carry everything a card leaves out, which is
- * why shortening is safe and clipping is not.
+ * The tooltip and the session page carry everything a card leaves out, which is
+ * why shortening is safe and clipping is not. On `full` the second line is the
+ * speaker, not track · format — a visitor planning on a phone cannot hover a
+ * tooltip (#706).
  */
 export type CardDensity = 'tiny' | 'compact' | 'full';
 
@@ -41,6 +43,20 @@ export function cardDensity(rows: number): CardDensity {
 	if (rows <= 1) return 'tiny';
 	if (rows <= 2) return 'compact';
 	return 'full';
+}
+
+/**
+ * The second line of a public agenda card.
+ *
+ * Height belongs to duration, not to text (#588). Only `full` (45 minutes and
+ * up) has room for a second line. On that line the speaker is worth more to a
+ * visitor than track · format — those stay in the tooltip and the session page.
+ * Compact and tiny have no second line; the name is on the session page the
+ * tap already opens, because a tooltip has no hover target on a phone (#706).
+ */
+export function cardSubtitle(density: CardDensity, speakers: string, meta: string): string {
+	if (density !== 'full') return '';
+	return speakers || meta;
 }
 
 /**
