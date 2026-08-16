@@ -3,8 +3,13 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from 'svelte/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
+
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	beforeNavigate: vi.fn()
+}));
 
 const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '+page.svelte'), 'utf8');
 
@@ -31,7 +36,15 @@ const task = (over: Partial<Record<string, unknown>> = {}) => ({
 
 const draw = (taskData: ReturnType<typeof task>, files: unknown[] = [], acceptedTalks = 1) =>
 	render(Page, {
-		props: { data: { task: taskData, files, acceptedTalks }, form: null } as never
+		props: {
+			data: {
+				task: taskData,
+				files,
+				acceptedTalks,
+				user: { id: 'ada', name: 'Priya Raman', email: 'priya@example.test' }
+			},
+			form: null
+		} as never
 	}).body;
 
 describe('speaker task detail', () => {
@@ -340,5 +353,55 @@ describe('speaker task detail', () => {
 
 		expect(body).toContain('DevFlow Conf 2027');
 		expect(body).not.toContain('href="/c/devflow-conf-2027"');
+	});
+
+	it('parks the question from portalTaskCommentScope, not the file picker', () => {
+		expect(source).toContain('BrowserDraftInput');
+		expect(source).toContain('portalTaskCommentScope(task.id, file.id)');
+		expect(source).toContain('commitByFile[file.id]');
+		expect(source).toContain('commenting(file.id)');
+		// One writer, one file. A loop over `files` here would clear every box.
+		expect(source).toContain(
+			'commitByFile[deliverableId] = (commitByFile[deliverableId] ?? 0) + 1'
+		);
+		expect(source).toContain('rows={2}');
+		expect(source).toContain('PORTAL_TASK_COMMENT_LEAVE_PROMPT');
+		expect(source).toContain('UnsavedGuard');
+		expect(source).not.toContain('speakerFieldScope');
+		expect(source).not.toContain('contactFieldScope');
+		// The file picker is a byte upload, not a typed draft.
+		expect(source).toContain('type="file"');
+		expect(source).toContain('name="file"');
+		expect(source).not.toContain('import { Textarea }');
+	});
+
+	it('gives each file on the task its own question box', () => {
+		const body = draw(task({ title: 'Upload slides', kind: 'file_request', status: 'submitted' }), [
+			{
+				id: 4,
+				filename: 'second.pdf',
+				contentType: 'application/pdf',
+				sizeBytes: 2048,
+				version: 2,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-02T12:00:00Z'),
+				comments: []
+			},
+			{
+				id: 8,
+				filename: 'slides.pdf',
+				contentType: 'application/pdf',
+				sizeBytes: 1024,
+				version: 1,
+				approvalStatus: 'pending',
+				uploadedAt: new Date('2027-04-01T12:00:00Z'),
+				comments: []
+			}
+		]);
+
+		expect(body).toContain('data-testid="task-comment-4"');
+		expect(body).toContain('data-testid="task-comment-8"');
+		expect(body).toContain('data-testid="speaker-question-form-4"');
+		expect(body).toContain('data-testid="speaker-question-form-8"');
 	});
 });

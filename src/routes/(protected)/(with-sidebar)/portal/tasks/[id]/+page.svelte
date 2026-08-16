@@ -5,6 +5,10 @@
 	 * Versions are listed newest first with the top one marked — a speaker who
 	 * re-uploads needs to see that the new file is the one that counts, and that
 	 * the old one did not vanish (CNT-04).
+	 *
+	 * A question to the programme team parks under
+	 * `portal-task-comment:{taskId}:{deliverableId}` (#789). The file picker is
+	 * a file and is not parked.
 	 */
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
@@ -21,7 +25,12 @@
 		AlertDialogHeader,
 		AlertDialogTitle
 	} from '$lib/components/ui/alert-dialog';
-	import { Textarea } from '$lib/components/ui/textarea';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
+	import {
+		PORTAL_TASK_COMMENT_LEAVE_PROMPT,
+		portalTaskCommentScope
+	} from '$lib/conference/portal-task-draft';
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
@@ -30,6 +39,7 @@
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
 	import { withdrawWarning } from '$lib/conference/withdraw-warning';
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 	const zone = readerZone();
@@ -47,6 +57,14 @@
 	const participationDecision = $derived(task.status === 'done' ? task.participationStatus : null);
 	let busy = $state(false);
 	let confirmWithdraw = $state(false);
+	let commitByFile = $state<Record<number, number>>({});
+	const dirtyFields = new SvelteSet<number>();
+
+	function setCommentDirty(deliverableId: number, dirty: boolean) {
+		if (dirty) dirtyFields.add(deliverableId);
+		else dirtyFields.delete(deliverableId);
+	}
+
 	// The Upload button is only for a form that never hydrated. Once JS is
 	// running, picking a file hands it in — a second click after that is
 	// ceremony (#626).
@@ -84,6 +102,27 @@
 				// not, and the error it wants to show sits under the overlay — so the
 				// question closes when the round trip ends, not only when it succeeds.
 				confirmWithdraw = false;
+			}
+		};
+	};
+
+	/** Comment only: a refused send must not raise the token or the typed lines are gone. */
+	const commenting = (deliverableId: number) => () => {
+		busy = true;
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			try {
+				await update(formUpdateOptions('add'));
+				if (result.type === 'success') {
+					commitByFile[deliverableId] = (commitByFile[deliverableId] ?? 0) + 1;
+				}
+			} finally {
+				busy = false;
 			}
 		};
 	};
@@ -149,6 +188,8 @@
 <svelte:head>
 	<title>{task.title} — Speaker portal</title>
 </svelte:head>
+
+<UnsavedGuard dirty={dirtyFields.size > 0} message={PORTAL_TASK_COMMENT_LEAVE_PROMPT} />
 
 <div class="mx-auto max-w-3xl px-6 py-8">
 	<a class="text-muted-foreground text-sm hover:underline" href="/portal">← Speaker portal</a>
@@ -425,7 +466,7 @@
 						<form
 							method="POST"
 							action="?/comment"
-							use:enhance={submitting('add')}
+							use:enhance={commenting(file.id)}
 							class="mt-3"
 							data-testid={`speaker-question-form-${file.id}`}
 						>
@@ -433,12 +474,18 @@
 							<p class="text-muted-foreground mb-2 text-sm">
 								Goes to the programme team of {task.conferenceName}. Their reply appears here.
 							</p>
-							<Textarea
+							<BrowserDraftInput
 								name="body"
+								class="text-sm"
+								scope={portalTaskCommentScope(task.id, file.id)}
+								owner={data.user.id}
+								baseline=""
 								rows={2}
 								aria-label="Question for the programme team of {task.conferenceName}"
 								placeholder="Ask the programme team of {task.conferenceName}"
-								class="text-sm"
+								testId="task-comment-{file.id}"
+								commitToken={commitByFile[file.id] ?? 0}
+								ondirtychange={(dirty) => setCommentDirty(file.id, dirty)}
 							/>
 							<Button type="submit" variant="outline" size="sm" class="mt-2" disabled={busy}>
 								Send to the programme team
