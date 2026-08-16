@@ -169,4 +169,10 @@ describe('watchableRecordingUrl', () => {
 			)
 		).toBeNull();
 	});
+
+	it('stays hidden when the talk has no end time, which the loader hands over as an empty string', () => {
+		const now = new Date('2026-08-16T12:00:00.000Z');
+		expect(watchableRecordingUrl({ ...talk, endsAt: '' }, now)).toBeNull();
+		expect(watchableRecordingUrl({ ...talk, endsAt: 'soon' }, now)).toBeNull();
+	});
 });
