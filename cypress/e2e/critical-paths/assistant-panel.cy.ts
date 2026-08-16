@@ -50,6 +50,72 @@ function sendAssistant(text: string) {
 }
 
 describe('Assistant panel', () => {
+	/**
+	 * Reopening lands where the reader was, not at the oldest message (#729).
+	 *
+	 * The offset is read off the real viewport rather than from a screenshot:
+	 * "looks right" cannot tell a panel that opened at the end from one that
+	 * opened at the top of a conversation short enough to fit.
+	 */
+	it('reopens where it was left, and at the end when it was never moved (#729)', function () {
+		if (!chatEnabled) this.skip();
+
+		const filler = (n: number) =>
+			`Question ${n}. ${'The panel needs enough height to scroll. '.repeat(12)}`;
+
+		seedConference('Scroll Summit').then(({ slug }) => {
+			cy.visit(`/manage/${slug}/agenda`);
+			cy.waitForHydration();
+			openAssistant();
+
+			sendAssistant(filler(1));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+			sendAssistant(filler(2));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+
+			// The precondition every assertion below rests on: there is
+			// something to scroll. Without it "at the bottom" and "at the top"
+			// are the same number and the case proves nothing.
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollHeight, 'the conversation is taller than the panel').to.be.greaterThan(
+					$el[0].clientHeight + 50
+				);
+			});
+
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollTop, 'opens at the end').to.be.greaterThan(
+					$el[0].scrollHeight - $el[0].clientHeight - 40
+				);
+			});
+
+			cy.get('[data-testid="assistant-scroll"]').scrollTo('top');
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollTop).to.eq(0);
+			});
+
+			cy.get('[data-testid="assistant-input"]').type('{esc}');
+			cy.get('[data-testid="assistant-panel"]').should('not.exist');
+			openAssistant();
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollTop, 'reopens where it was left').to.be.lessThan(40);
+			});
+
+			// New chat is a new conversation: nothing to remember, and nothing
+			// to scroll either — the check is that the old offset is gone.
+			cy.get('[data-testid="assistant-new-chat"]').click();
+			cy.get('[data-testid="assistant-messages"] li').should('not.exist');
+			sendAssistant(filler(3));
+			cy.get('[data-testid="assistant-pending"]').should('not.exist');
+			cy.get('[data-testid="assistant-input"]').type('{esc}');
+			openAssistant();
+			cy.get('[data-testid="assistant-scroll"]').should(($el) => {
+				expect($el[0].scrollTop, 'a fresh conversation opens at the end').to.be.greaterThan(
+					$el[0].scrollHeight - $el[0].clientHeight - 40
+				);
+			});
+		});
+	});
+
 	it('stays off the app while FEATURE_INAPP_CHAT is off', function () {
 		if (chatEnabled) this.skip();
 

@@ -20,6 +20,7 @@
 		closeAssistantHold,
 		emptyAssistantHold,
 		openAssistantHold,
+		rememberAssistantScroll,
 		type AssistantHold
 	} from '$lib/chat/assistant-hold';
 	import { pageRefreshIds } from '$lib/chat/page-refresh-ids';
@@ -77,5 +78,7 @@
 		chat={hold.chat}
 		ledger={hold.ledger}
 		onclear={clearChat}
+		initialScroll={hold.scrollTop}
+		onscrollkept={(scrollTop) => (hold = rememberAssistantScroll(hold, scrollTop))}
 	/>
 {/if}

@@ -5,6 +5,8 @@
 
 	export interface ConversationContentProps extends WithElementRef<HTMLAttributes<HTMLDivElement>> {
 		children?: Snippet;
+		/** Where to open on a conversation that already has messages; `null` is the end (#729). */
+		initialOffset?: number | null;
 	}
 </script>
 
@@ -16,6 +18,7 @@
 		class: className,
 		children,
 		ref = $bindable(null),
+		initialOffset = null,
 		...restProps
 	}: ConversationContentProps = $props();
 
@@ -26,7 +29,10 @@
 		ref = element ?? null;
 	});
 
+	// Told before the element, so the first placement already knows where it
+	// is going; the context does the scrolling, this only carries the number.
 	$effect(() => {
+		context.placeAt(initialOffset);
 		if (element) context.setElement(element);
 	});
 </script>

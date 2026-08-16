@@ -48,13 +48,19 @@
 		input = $bindable(''),
 		chat,
 		ledger,
-		onclear
+		onclear,
+		initialScroll = null,
+		onscrollkept
 	}: {
 		open?: boolean;
 		input?: string;
 		chat: Chat;
 		ledger: AssistantLedger;
 		onclear: () => void;
+		/** Where this conversation was left, from the launcher (#729). */
+		initialScroll?: number | null;
+		/** Reports where the reader is as the sheet goes away (#729). */
+		onscrollkept?: (scrollTop: number | null) => void;
 	} = $props();
 	// Last message that already belonged to the stopped turn — never search
 	// earlier finished answers. Lives on the ledger so a close mid-stop
@@ -66,6 +72,12 @@
 	const description = $derived(assistantDescription(page.route.id));
 	const showSuggestions = $derived(chat.messages.length === 0 && !pending);
 	let inputEl = $state<HTMLTextAreaElement | null>(null);
+	let viewport = $state<HTMLElement | null>(null);
+
+	// Read on the way out rather than on every scroll: the sheet unmounts on
+	// close, so this cleanup is the last moment the viewport still exists, and
+	// one read beats a listener firing through a fifty-message scroll (#729).
+	$effect(() => () => onscrollkept?.(viewport ? viewport.scrollTop : null));
 
 	$effect(() => {
 		if (stopFromIndex === null || pending) return;
@@ -150,7 +162,12 @@
 		</Sheet.Header>
 
 		<Conversation class="flex-1">
-			<ConversationContent class="px-4">
+			<ConversationContent
+				class="px-4"
+				bind:ref={viewport}
+				initialOffset={initialScroll}
+				data-testid="assistant-scroll"
+			>
 				<ul class="flex flex-col gap-5" data-testid="assistant-messages">
 					{#each chat.messages as message (message.id)}
 						<li class="text-sm" data-role={message.role}>
