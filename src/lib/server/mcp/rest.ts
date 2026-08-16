@@ -135,6 +135,11 @@ export const REST_ROUTES: RestRoute[] = [
 	},
 	{
 		method: 'POST',
+		pattern: '/conferences/:conferenceSlug/agenda/fill',
+		tool: 'fill_schedule'
+	},
+	{
+		method: 'POST',
 		pattern: '/conferences/:conferenceSlug/agenda/placements',
 		tool: 'place_talk'
 	},

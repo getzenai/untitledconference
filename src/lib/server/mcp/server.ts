@@ -40,7 +40,8 @@ export const SERVER_INSTRUCTIONS =
 	'list_review_rounds, list_reviewers, list_session_formats, list_tracks, ' +
 	'and get_agenda or list_sessions for the scheduled programme. ' +
 	'Then list_rooms and create_room, get_agenda_tray for accepted talks still unplaced, ' +
-	'place_talk or move_talk onto a room and start, swap_talks to exchange two slots, ' +
+	'place_talk or move_talk onto a room and start, fill_schedule to pack the tray into free slots, ' +
+	'swap_talks to exchange two slots, ' +
 	'unplace_talk back to the tray. A collision is refused with the other talk named. ' +
 	'create_break puts lunch, coffee or a reserved block on the grid — across every room ' +
 	'unless you name one — and remove_break takes it off; a talk placed through a break is refused. ' +

@@ -68,6 +68,9 @@ describe('the REST route table', () => {
 		expect(matchRestRoute('POST', '/conferences/harness/agenda/placements')?.route.tool).toBe(
 			'place_talk'
 		);
+		expect(matchRestRoute('POST', '/conferences/harness/agenda/fill')?.route.tool).toBe(
+			'fill_schedule'
+		);
 		expect(matchRestRoute('GET', '/conferences/harness/cfp')?.route.tool).toBe('get_cfp_form');
 		expect(matchRestRoute('PATCH', '/conferences/harness/cfp')?.route.tool).toBe('update_cfp_form');
 		expect(matchRestRoute('POST', '/conferences/harness/cfp/fields')?.route.tool).toBe(
