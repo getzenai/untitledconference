@@ -51,6 +51,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { classify } from './probe-outcome.mjs';
 
 const STRICT_FLAG = '--strict';
 const TOOLS_FLAG = '--tools=';
@@ -92,7 +93,12 @@ function offeredTools(scenario) {
 function payload(model, scenario) {
 	return {
 		model,
-		max_tokens: 200,
+		// No `max_tokens`. The chat sets none either: `streamText` in
+		// `assistant.ts:212` passes no `maxOutputTokens`, so the request that
+		// reaches the gateway carries no budget. A cap that only the probe sends
+		// is a difference between the gate and the app, and this one bites: at 49
+		// tools `glm-4.7-flash` spent a 200-token budget before emitting anything
+		// and came back `finish_reason: length` with empty text (#700).
 		stream: true,
 		tool_choice: 'auto',
 		tools: offeredTools(scenario).map((tool) => ({
@@ -109,11 +115,13 @@ function payload(model, scenario) {
 /**
  * One probe.
  *
- * `outcome` is deliberately five-valued rather than a boolean: `tool_call`,
- * `wrong_tool`, `no_tool_call`, `rejected` and `unreachable`. The first three
- * are the model's answer to the question we asked. `unreachable` means we never
- * got an answer, and a caller that folds it into a failure verdict is reporting
- * a network hiccup as a fact about a model.
+ * `outcome` is deliberately six-valued rather than a boolean: `tool_call`,
+ * `wrong_tool`, `no_tool_call`, `truncated`, `rejected` and `unreachable`. The
+ * first three are the model's answer to the question we asked. `truncated` is
+ * the turn ending at the output-token ceiling before an answer existed — a real
+ * failure, but one about the budget, not about the model's judgment.
+ * `unreachable` means we never got an answer, and a caller that folds it into a
+ * failure verdict is reporting a network hiccup as a fact about a model.
  *
  * `rejected` is separate because a 401, 403 or 404 is neither: the gateway
  * answered, and what it said is that this key and this model do not fit. That
@@ -209,8 +217,7 @@ async function probe(model, scenario) {
 		};
 	}
 
-	const called =
-		calls === 0 ? 'no_tool_call' : names.includes(scenario.expect) ? 'tool_call' : 'wrong_tool';
+	const called = classify({ calls, names, expect: scenario.expect, finish });
 	return {
 		model,
 		scenario: scenario.id,
@@ -251,6 +258,10 @@ for (const model of models) {
 			console.log(
 				'Answered the chat-shaped request without a tool call — this is the live fault in #660, and the text above is what a user is shown.'
 			);
+		if (result.outcome === 'truncated')
+			console.log(
+				'Cut off before it decided anything — the turn ran out of output tokens. The user sees nothing at all, so this fails, but it says nothing about whether the model would have called a tool.'
+			);
 	}
 }
 
@@ -259,6 +270,7 @@ const of = (outcome) =>
 const passed = of('tool_call');
 const wrong = of('wrong_tool');
 const failed = of('no_tool_call');
+const truncated = of('truncated');
 const rejected = of('rejected');
 const unreachable = of('unreachable');
 
@@ -266,6 +278,7 @@ console.log('\n=== summary');
 console.log(`expected tool: ${passed.join(', ') || '(none)'}`);
 console.log(`wrong tool:    ${wrong.join(', ') || '(none)'}`);
 console.log(`no tool call:  ${failed.join(', ') || '(none)'}`);
+console.log(`truncated:     ${truncated.join(', ') || '(none)'}`);
 console.log(`rejected:      ${rejected.join(', ') || '(none)'}`);
 console.log(`unreachable:   ${unreachable.join(', ') || '(none)'}`);
 
@@ -277,6 +290,11 @@ if (wrong.length > 0) {
 if (failed.length > 0) {
 	const message = `${failed.join(', ')} answered the chat-shaped request without a tool call.`;
 	console.log(strict ? `::error::${message}` : `::warning::${message}`);
+}
+if (truncated.length > 0) {
+	console.log(
+		`::error::${truncated.join(', ')} ran out of output tokens before deciding anything — the user would see an empty turn.`
+	);
 }
 if (rejected.length > 0) {
 	console.log(
@@ -290,5 +308,7 @@ if (unreachable.length > 0) {
 // Unreachable never fails the run: it says nothing about the model, and a deploy
 // that stops because a probe timed out is a false alarm with a real cost. A
 // refusal does fail it even without `--strict`: the gateway answered, and the
-// answer was that the configuration is wrong.
-process.exit(rejected.length > 0 || (strict && failed.length > 0) ? 1 : 0);
+// answer was that the configuration is wrong. Truncation is in the second group
+// for the same reason — `--strict` governs how strictly an *answer* is judged,
+// and an empty turn is not an answer to judge.
+process.exit(rejected.length > 0 || truncated.length > 0 || (strict && failed.length > 0) ? 1 : 0);
