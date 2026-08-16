@@ -5,10 +5,11 @@
  * `scripts/run-e2e.sh` (`CYPRESS_FEATURE_INAPP_CHAT`), never from whether the
  * star is in the DOM — a dead import or a 500 would read as "flag off".
  *
- * CI leaves the flag off. `FEATURE_INAPP_CHAT=true AI_CHAT_MODEL=mock` is the
- * local path that asserts the sheet, send-time page context, and a reversible
- * write with no card (#726). The mock treats `Rename the conference <slug> to
- * <name>` as `update_conference` so this spec never calls a real provider.
+ * CI sets the flag on the E2E job (`lint_and_test.yaml`, since #693). The
+ * same default lives in `run-e2e.sh`. `FEATURE_INAPP_CHAT=false` is the
+ * path that asserts the star stays off the app. The mock treats `Rename the
+ * conference <slug> to <name>` as `update_conference` so this spec never
+ * calls a real provider.
  */
 const uniqueSlug = () => `assistant-panel-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 

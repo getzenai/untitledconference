@@ -16,9 +16,10 @@
 	 * of the list (#718) — see `ai-elements/conversation/` for why those are not
 	 * the same thing.
 	 *
-	 * The Chat instance lives in the launcher. Closing this sheet unmounts it
-	 * and must not drop the transcript; New chat is the only way to empty it
-	 * (#728).
+	 * The Chat instance and its ledger live in the launcher. Closing this
+	 * sheet unmounts it and must not drop the transcript or re-refresh the
+	 * page for writes that already landed; New chat is the only way to empty
+	 * it (#728).
 	 */
 	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
@@ -31,7 +32,8 @@
 		MessageAnchor
 	} from '$lib/components/ai-elements/conversation';
 	import { groupMessageParts, ToolGroup, type GenericPart } from '$lib/components/ai-elements/tool';
-	import { assistantWriteRefreshesPage } from '$lib/chat/auto-run-writes';
+	import { pageRefreshIds } from '$lib/chat/page-refresh-ids';
+	import type { AssistantLedger } from '$lib/chat/assistant-ledger';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
 	import { chatErrorMessage } from '$lib/chat/chat-error';
 	import AssistantReply from './assistant-reply.svelte';
@@ -39,40 +41,30 @@
 	import SendIcon from '@lucide/svelte/icons/send';
 	import SquareIcon from '@lucide/svelte/icons/square';
 	import { getToolName, isToolUIPart } from 'ai';
-	import { SvelteSet } from 'svelte/reactivity';
 
 	let {
 		open = $bindable(false),
 		chat,
+		ledger,
 		onclear
-	}: { open?: boolean; chat: Chat; onclear: () => void } = $props();
+	}: { open?: boolean; chat: Chat; ledger: AssistantLedger; onclear: () => void } = $props();
 
 	let input = $state('');
-	// Tool calls we stopped for, so we know which results changed the page.
-	const approved = new SvelteSet<string>();
-	const invalidated = new SvelteSet<string>();
-	const stopped = new SvelteSet<string>();
 	// Last message that already belonged to the stopped turn — never search
-	// earlier finished answers.
-	let stopFromIndex = $state<number | null>(null);
+	// earlier finished answers. Lives on the ledger so a close mid-stop
+	// still marks the turn when the sheet remounts.
+	let stopFromIndex = $state<number | null>(ledger.stopFromIndex);
 
 	const pending = $derived(chat.status === 'submitted' || chat.status === 'streaming');
 
 	// A write has just landed. Gated writes enter `approved` when the card
 	// appears; auto-run writes never do, and still change the page (#726).
+	// `ledger` outlives this sheet — reopen must not refresh for writes
+	// that already landed (#728 / #802).
 	$effect(() => {
-		for (const message of chat.messages) {
-			for (const part of message.parts) {
-				if (!isToolUIPart(part)) continue;
-				if (part.state === 'approval-requested') approved.add(part.toolCallId);
-				if (part.state !== 'output-available') continue;
-				if (invalidated.has(part.toolCallId)) continue;
-				if (!assistantWriteRefreshesPage(getToolName(part), approved.has(part.toolCallId))) {
-					continue;
-				}
-				invalidated.add(part.toolCallId);
-				void invalidateAll();
-			}
+		for (const id of pageRefreshIds(chat.messages, ledger)) {
+			ledger.invalidated.add(id);
+			void invalidateAll();
 		}
 	});
 
@@ -83,8 +75,9 @@
 			.reverse()
 			.find((message) => message.role === 'assistant');
 		const marked = lastAssistant ?? turnMessages.at(-1);
-		if (marked) stopped.add(marked.id);
+		if (marked) ledger.stopped.add(marked.id);
 		stopFromIndex = null;
+		ledger.stopFromIndex = null;
 	});
 
 	function handleSubmit(event: SubmitEvent) {
@@ -98,9 +91,6 @@
 	function handleClear() {
 		if (pending || chat.messages.length === 0) return;
 		input = '';
-		approved.clear();
-		invalidated.clear();
-		stopped.clear();
 		stopFromIndex = null;
 		onclear();
 	}
@@ -108,6 +98,7 @@
 	function handleStop() {
 		if (!pending) return;
 		stopFromIndex = Math.max(0, chat.messages.length - 1);
+		ledger.stopFromIndex = stopFromIndex;
 		void chat.stop();
 	}
 
@@ -205,7 +196,7 @@
 											{/if}
 										{/if}
 									{/each}
-									{#if stopped.has(message.id)}
+									{#if ledger.stopped.has(message.id)}
 										<p class="text-muted-foreground text-xs" data-testid="assistant-stopped">
 											Stopped
 										</p>

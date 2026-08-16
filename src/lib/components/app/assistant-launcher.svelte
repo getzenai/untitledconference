@@ -11,13 +11,15 @@
 	import { createAssistantChat } from '$lib/chat/create-assistant-chat';
 	import {
 		clearAssistantHold,
+		closeAssistantHold,
+		emptyAssistantHold,
 		openAssistantHold,
 		type AssistantHold
 	} from '$lib/chat/assistant-hold';
 	import SparklesIcon from '@lucide/svelte/icons/sparkles';
 	import type { Chat } from '@ai-sdk/svelte';
 
-	let hold = $state<AssistantHold<Chat>>({ chat: null, open: false });
+	let hold = $state<AssistantHold<Chat>>(emptyAssistantHold());
 
 	function openPanel() {
 		hold = openAssistantHold(hold, createAssistantChat);
@@ -40,5 +42,15 @@
 </Button>
 
 {#if hold.open && hold.chat}
-	<AssistantPanel bind:open={hold.open} chat={hold.chat} onclear={clearChat} />
+	<AssistantPanel
+		bind:open={
+			() => hold.open,
+			(open) => {
+				if (!open) hold = closeAssistantHold(hold);
+			}
+		}
+		chat={hold.chat}
+		ledger={hold.ledger}
+		onclear={clearChat}
+	/>
 {/if}

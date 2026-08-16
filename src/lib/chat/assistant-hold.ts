@@ -1,13 +1,24 @@
 /**
  * How the launcher keeps a Chat while the sheet is closed (#728).
  *
- * `open` is the sheet. `chat` outlives it. Closing must not create a new
- * instance; New chat is the only replace.
+ * `open` is the sheet. `chat` and `ledger` outlive it. Closing must not
+ * create a new instance; New chat is the only replace.
  */
-export type AssistantHold<T> = { chat: T | null; open: boolean };
+import { emptyAssistantLedger, type AssistantLedger } from './assistant-ledger';
+
+export type AssistantHold<T> = {
+	chat: T | null;
+	open: boolean;
+	ledger: AssistantLedger;
+};
+
+export function emptyAssistantHold<T>(): AssistantHold<T> {
+	return { chat: null, open: false, ledger: emptyAssistantLedger() };
+}
 
 export function openAssistantHold<T>(hold: AssistantHold<T>, create: () => T): AssistantHold<T> {
-	return { chat: hold.chat ?? create(), open: true };
+	if (hold.chat) return { ...hold, open: true };
+	return { chat: create(), open: true, ledger: emptyAssistantLedger() };
 }
 
 export function closeAssistantHold<T>(hold: AssistantHold<T>): AssistantHold<T> {
@@ -15,5 +26,5 @@ export function closeAssistantHold<T>(hold: AssistantHold<T>): AssistantHold<T> 
 }
 
 export function clearAssistantHold<T>(create: () => T): AssistantHold<T> {
-	return { chat: create(), open: true };
+	return { chat: create(), open: true, ledger: emptyAssistantLedger() };
 }

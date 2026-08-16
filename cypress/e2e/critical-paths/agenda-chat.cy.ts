@@ -8,7 +8,8 @@
  *
  * Same rule as before: the flag value comes from `scripts/run-e2e.sh`
  * (`CYPRESS_FEATURE_INAPP_CHAT`), never from whether the panel is in the DOM —
- * a dead import or a 500 would read as "flag off". CI leaves the flag off.
+ * a dead import or a 500 would read as "flag off". CI sets the flag on the
+ * E2E job (`lint_and_test.yaml`, since #693).
  */
 const uniqueSlug = () => `agenda-chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
