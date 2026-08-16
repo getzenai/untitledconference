@@ -4,7 +4,7 @@
  */
 import type { PublicConference } from '$lib/conference/public-types';
 import { render } from 'svelte/server';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const currentUrl = vi.hoisted(() => ({
 	value: new URL('https://example.test/c/short-cards/agenda')
@@ -51,17 +51,35 @@ const conference = {
 	speakers: []
 } satisfies PublicConference;
 
-async function draw(search = '') {
+/**
+ * Compiled once, in a hook, on purpose (#770).
+ *
+ * The first `import()` of this page costs ~5.2s — Vite compiling the component
+ * and everything it pulls in — while the render it is timing takes ~7ms. Inside
+ * a test that one-off cost is charged to whichever case runs first, and the
+ * 5000ms default sits *inside* its range, so the file passed or failed on luck.
+ * Measured at 5112–5471ms across two commits a day apart, so this is a
+ * threshold that was always marginal rather than something that got slower.
+ *
+ * A hook has its own (10s) budget, which is the honest place for compile time:
+ * each case then pays only for what it actually asserts.
+ */
+let Page: (typeof import('./+page.svelte'))['default'];
+
+beforeAll(async () => {
+	({ default: Page } = await import('./+page.svelte'));
+});
+
+function draw(search = '') {
 	currentUrl.value = new URL(`https://example.test/c/short-cards/agenda${search}`);
-	const { default: Page } = await import('./+page.svelte');
 	return render(Page, {
 		props: { data: { conference, embed: false } as never }
 	}).body;
 }
 
 describe('public agenda session URL', () => {
-	it('opens the session from ?session= instead of the grid', async () => {
-		const html = await draw('?session=session-1');
+	it('opens the session from ?session= instead of the grid', () => {
+		const html = draw('?session=session-1');
 
 		expect(html).toContain('Back to agenda');
 		expect(html).toContain('Four hundred engineers, one repository');
@@ -69,8 +87,8 @@ describe('public agenda session URL', () => {
 		expect(html).not.toContain('aria-label="Conference days"');
 	});
 
-	it('stays on the grid when the URL names no session', async () => {
-		const html = await draw();
+	it('stays on the grid when the URL names no session', () => {
+		const html = draw();
 
 		expect(html).not.toContain('Back to agenda');
 		expect(html).toContain('aria-label="Conference days"');
