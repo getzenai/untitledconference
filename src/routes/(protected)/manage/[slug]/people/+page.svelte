@@ -8,17 +8,28 @@
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { REVIEW_VISIBILITY_MODES } from '$lib/conference/review-visibility';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { Button } from '$lib/components/ui/button';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+	let inviteDirty = $state(false);
+	let inviteCommit = $state(0);
 
 	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			try {
 				await update(formUpdateOptions(kind));
+				if (kind === 'add' && result.type === 'success') inviteCommit += 1;
 			} finally {
 				busy = false;
 			}
@@ -29,6 +40,11 @@
 <svelte:head>
 	<title>Reviewer pool — {data.conference.name}</title>
 </svelte:head>
+
+<UnsavedGuard
+	dirty={inviteDirty}
+	message="Your invite is saved in this browser but not on the server yet. Leave this page?"
+/>
 
 <!--
 	The bar keeps its rule across the whole width; the words inside it sit on the
@@ -121,12 +137,18 @@
 			use:enhance={submitting('add')}
 			class="mt-3 flex gap-2"
 		>
-			<input
+			<BrowserDraftInput
 				name="email"
 				type="email"
+				scope={`reviewer-invite:${data.conference.slug}`}
+				owner={data.user.id}
+				baseline=""
 				required
 				placeholder="reviewer@example.com"
-				class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+				class="min-w-0 flex-1"
+				testId="people-invite-email"
+				commitToken={inviteCommit}
+				ondirtychange={(dirty) => (inviteDirty = dirty)}
 			/>
 			<Button type="submit" size="sm" disabled={busy}>Add or invite</Button>
 		</form>

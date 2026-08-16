@@ -5,6 +5,7 @@
 	import { enhance } from '$lib/forms/enhance';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import ContactNotesDraft from '$lib/components/app/conference/contact-notes-draft.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 
@@ -148,17 +149,12 @@
 				>
 			</div>
 			<div class="sm:col-span-2">
-				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="notes">
-					Internal notes
-				</label>
-				<textarea
-					id="notes"
-					name="notes"
-					rows="3"
-					class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-					placeholder="Only organizers see this."
-					data-testid="contact-notes">{data.contact.notes ?? ''}</textarea
-				>
+				<ContactNotesDraft
+					contactId={data.contact.id}
+					owner={data.user.id}
+					baseline={data.contact.notes ?? ''}
+					fieldId="notes"
+				/>
 			</div>
 			<div class="sm:col-span-2">
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="tags">
