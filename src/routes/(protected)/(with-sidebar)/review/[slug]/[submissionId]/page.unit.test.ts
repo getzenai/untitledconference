@@ -94,7 +94,7 @@ function page(
 					speakerHistory: opts.speakerHistory ?? [],
 					anonymized: false,
 					window,
-					own: { reviewId: 42, status, comment: null },
+					own: { reviewId: 42, status, comment: null, baseline: 'test-baseline' },
 					criteria: opts.criteria ?? [],
 					peers,
 					peersPending: 0,
@@ -376,6 +376,26 @@ describe('form messages', () => {
 		expect(body).toContain('border-status-good');
 		expect(body).toContain('role="status"');
 		expect(body).not.toContain('border-status-bad');
+	});
+
+	it('names both sides of a stale save and hides Save progress (#748)', () => {
+		const body = page('assigned', {
+			form: {
+				message:
+					'This review was saved again in another tab. Choose which version to keep — nothing has been overwritten.',
+				conflict: true,
+				currentBaseline: 'newer',
+				currentComment: 'tab-a'
+			} as ActionData
+		});
+
+		expect(body).toContain('data-testid="review-write-conflict"');
+		expect(body).toContain('Keep the saved version');
+		expect(body).toContain('Overwrite with what I typed');
+		expect(body).toContain('name="expectedBaseline"');
+		expect(body).toContain('value="newer"');
+		expect(body).not.toContain('Save progress');
+		expect(body).not.toContain('Submit review');
 	});
 });
 

@@ -53,6 +53,14 @@ function saveFailure(saved: Extract<SaveReviewResult, { ok: false }>) {
 				message:
 					'Answer at least one criterion, or write a comment, before submitting — submitting is what reveals the other reviews.'
 			});
+		case 'conflict':
+			return fail(409, {
+				message:
+					'This review was saved again in another tab. Choose which version to keep — nothing has been overwritten.',
+				conflict: true,
+				currentBaseline: saved.current.baseline,
+				currentComment: saved.current.comment
+			});
 	}
 }
 
@@ -141,6 +149,7 @@ export const actions: Actions = {
 		// one, and the answers would land in the other round without a word.
 		const round = Number(form.get('roundId'));
 
+		const expected = form.get('expectedBaseline');
 		const saved = await saveReview(
 			conference,
 			locals.user!.id,
@@ -148,7 +157,8 @@ export const actions: Actions = {
 			{
 				answers: criterionAnswers(form),
 				comment: String(form.get('comment') ?? ''),
-				submit: form.get('intent') === 'submit'
+				submit: form.get('intent') === 'submit',
+				expectedBaseline: typeof expected === 'string' ? expected : undefined
 			},
 			Number.isInteger(round) && round > 0 ? round : undefined
 		);
