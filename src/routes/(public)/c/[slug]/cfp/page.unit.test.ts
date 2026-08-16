@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { ALL_FIXED_QUESTIONS_SHOWN } from '$lib/conference/fixed-questions';
+import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
