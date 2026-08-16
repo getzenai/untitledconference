@@ -63,16 +63,25 @@
 	 * bio sitting in a browser that is plainly shared.
 	 */
 	const owner = $derived(data.user?.id ?? null);
-	/** The server draft's id, only while this page is the second form (#815). */
-	const anotherId = $derived(startingAnother && existingDraft ? existingDraft.id : undefined);
+	/**
+	 * The server row's id while this page is the second form.
+	 *
+	 * A draft needs Start another first (#815). Submitted and in_review already
+	 * show the form — the stay-hint is on the page — so the key has to be on
+	 * too, or persist returns and the sentence lies (#819).
+	 */
+	const anotherId = $derived(
+		existingDraft ? (startingAnother ? existingDraft.id : undefined) : data.existing?.id
+	);
 	const selectDraft = $derived(autosavedProposalIdentity(call.conference.slug, owner, anotherId));
 
-	/** Reopen Start another when the second slot still holds typing (#815). */
+	/** Reopen the second slot when it still holds typing (#815, #819). */
 	function restoreAnotherProposal(slug: string, mine: string | null) {
-		if (data.existing?.status !== 'draft') return;
+		if (!data.existing) return;
 		const next = readAutosavedProposal(localStorage, slug, mine, Date.now(), data.existing.id);
 		if (!next) return;
-		startingAnother = true;
+		// A draft still hides the form behind Continue your draft.
+		if (data.existing.status === 'draft') startingAnother = true;
 		restored = next.draft;
 		restoredAt = next.savedAt;
 	}
@@ -133,8 +142,8 @@
 	function persistDraft(draft: ProposalDraft) {
 		const slug = data.call.conference.slug;
 		// A server copy used to mean "do not park" — true for the first
-		// proposal, a lie for Start another, where the stay-hint is on the
-		// page and persist returned before writing (#815).
+		// proposal, a lie for the second form, where the stay-hint is on
+		// the page and persist returned before writing (#815, #819).
 		if (data.existing && anotherId == null) return;
 		if (!isTypedProposal(draft)) {
 			clearAutosavedProposal(localStorage, slug, owner, anotherId);

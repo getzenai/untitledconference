@@ -226,6 +226,23 @@ describe('pointing a returning submitter at what they already sent', () => {
 		expect(body).toContain('would send a second');
 	});
 
+	it('keeps the stay-hint on the form after the first proposal is submitted (#819)', () => {
+		const body = renderCfp(
+			'open',
+			null,
+			{ id: 42, title: 'Taming CI', status: 'submitted' },
+			null,
+			{ user: { id: 'speaker-1' } }
+		);
+
+		// Path A: the form stays, so the sentence stays. Cypress holds that
+		// persist actually writes. Removing the hint here would be the other
+		// honest option — this test locks the one we took.
+		expect(body).toContain('You already sent a proposal to this call');
+		expect(body).toContain('data-testid="cfp-draft-hint"');
+		expect(body).toContain('<form');
+	});
+
 	it('words an unfinished draft differently', () => {
 		const body = renderCfp(
 			'open',
