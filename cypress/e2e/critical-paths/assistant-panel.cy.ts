@@ -126,4 +126,79 @@ describe('Assistant panel', () => {
 			cy.get('[data-testid="home-dashboard"]').should('not.contain.text', original);
 		});
 	});
+
+	it('grows with the text, caps a long paste, and sends on Enter', function () {
+		if (!chatEnabled) this.skip();
+
+		cy.viewport(390, 844);
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+
+		cy.get('[data-testid="assistant-input"]').then(($input) => {
+			const oneRow = $input[0].clientHeight;
+			cy.wrap($input).type(
+				'one{shift+enter}two{shift+enter}three{shift+enter}four{shift+enter}five'
+			);
+			cy.get('[data-testid="assistant-input"]').should(($grown) => {
+				expect($grown[0].clientHeight, 'five lines are visible').to.be.greaterThan(oneRow);
+				expect($grown[0].scrollHeight, 'five lines do not scroll yet').to.be.at.most(
+					$grown[0].clientHeight + 2
+				);
+			});
+		});
+
+		const twenty = Array.from({ length: 20 }, (_, index) => `line ${index + 1}`).join('\n');
+		cy.get('[data-testid="assistant-input"]').clear().invoke('val', twenty).trigger('input');
+		cy.get('[data-testid="assistant-input"]').should(($capped) => {
+			expect($capped[0].scrollHeight, 'a twenty-line paste scrolls').to.be.greaterThan(
+				$capped[0].clientHeight
+			);
+		});
+		cy.get('[data-testid="assistant-panel"] [aria-label="Send"]').should('be.visible');
+
+		cy.intercept('POST', '/chat').as('assistantChat');
+		cy.get('[data-testid="assistant-input"]').clear().type('keep{shift+enter}going');
+		cy.get('@assistantChat.all').should('have.length', 0);
+		cy.get('[data-testid="assistant-input"]').should('have.value', 'keep\ngoing');
+
+		cy.get('[data-testid="assistant-input"]').type('{enter}');
+		cy.wait('@assistantChat');
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
+		cy.get('[data-testid="assistant-input"]').should(($reset) => {
+			expect($reset[0].scrollHeight, 'height resets after send').to.be.at.most(
+				$reset[0].clientHeight + 2
+			);
+		});
+	});
+
+	it('swaps send for stop and keeps the stopped turn', function () {
+		if (!chatEnabled) this.skip();
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+
+		cy.intercept('POST', '/chat', (req) => {
+			req.reply({ delay: 30_000, statusCode: 200, body: '' });
+		}).as('hungChat');
+
+		sendAssistant('Please go on for a while');
+		cy.get('[data-testid="assistant-stop"]').should('be.visible');
+		cy.get('[data-testid="assistant-input"]').should('be.disabled');
+		cy.get('[data-testid="assistant-panel"] [aria-label="Send"]').should('not.exist');
+
+		cy.get('[data-testid="assistant-stop"]').click();
+		cy.get('[data-testid="assistant-stop"]').should('not.exist');
+		cy.get('[data-testid="assistant-panel"] [aria-label="Send"]').should('be.visible');
+		cy.get('[data-testid="assistant-input"]').should('not.be.disabled');
+		cy.get('[data-testid="assistant-stopped"]').should('be.visible');
+
+		cy.intercept('POST', '/chat').as('nextTurn');
+		sendAssistant('Try again');
+		cy.wait('@nextTurn');
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
+	});
 });

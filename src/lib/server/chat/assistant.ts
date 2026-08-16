@@ -17,6 +17,7 @@ import {
 	type LanguageModel,
 	type UIMessage
 } from 'ai';
+import { refuseNewToolsAfterAbort } from './abort-tools';
 import {
 	ChatBackendMisconfiguredError,
 	ChatModelNotConfiguredError,
@@ -222,13 +223,16 @@ export async function streamAssistantChat(opts: {
 	messages: UIMessage[];
 	model: LanguageModel;
 	page?: AssistantPageContext;
+	abortSignal?: AbortSignal;
 }): Promise<Response> {
 	const tools = assistantChatTools(opts.ctx, reviewerFocusFromPage(opts.page));
+	const gated = opts.abortSignal ? refuseNewToolsAfterAbort(tools, opts.abortSignal) : tools;
 	const result = streamText({
 		model: opts.model,
 		system: assistantSystemPrompt(opts.page),
-		messages: await convertToModelMessages(opts.messages, { tools }),
-		tools,
+		messages: await convertToModelMessages(opts.messages, { tools: gated }),
+		tools: gated,
+		abortSignal: opts.abortSignal,
 		toolApproval: assistantToolApproval(opts.ctx),
 		// A global request may need identity, conference, submission and agenda
 		// reads before it can safely propose a write. Twelve steps preserve that
@@ -269,7 +273,8 @@ export async function handleAssistantChatRequest(
 			ctx: mcpContextFromLocals(event.locals),
 			messages: body.messages,
 			model: model ?? (await createChatModel(event.locals.organizationId)),
-			page: readAssistantPage(body)
+			page: readAssistantPage(body),
+			abortSignal: event.request.signal
 		});
 	} catch (error) {
 		if (
