@@ -1,9 +1,12 @@
 /**
  * Roster surface: list, search, add, status controls (SPK-01/02/04).
  */
+import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { describe, expect, it, vi } from 'vitest';
 import Page from './+page.svelte';
+
+const source = readFileSync(new URL('./+page.svelte', import.meta.url), 'utf8');
 
 vi.mock('$app/state', () => ({
 	page: { url: new URL('https://example.test/manage/devflow-conf-2027/speakers') }
@@ -11,6 +14,11 @@ vi.mock('$app/state', () => ({
 
 vi.mock('$app/forms', () => ({
 	enhance: () => ({})
+}));
+
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	beforeNavigate: vi.fn()
 }));
 
 const conference = {
@@ -265,5 +273,15 @@ describe('speaker roster page', () => {
 			expect(failed.body).not.toContain('A add error.');
 			expect(failed.body).not.toContain('A compose error.');
 		}
+	});
+
+	it('parks the open row through the extracted form and a leave prompt, the dialog without one', () => {
+		expect(source).toContain('SpeakerRowEditForm');
+		expect(source).toContain('clearSpeakerRowDrafts');
+		expect(source).toContain('SPEAKER_ROW_LEAVE_PROMPT');
+		expect(source).toContain('UnsavedGuard');
+		expect(source).toContain('addCommit');
+		expect(source).toContain("result.type === 'success'");
+		expect(source).not.toContain('BrowserDraftInput');
 	});
 });
