@@ -4,7 +4,8 @@ import {
 	assertResolvedChatBackendUrl,
 	ChatBackendAddressError,
 	ChatBackendUrlError,
-	isBlockedAddress
+	isBlockedAddress,
+	resolveCheckedChatBackendUrl
 } from './org-ai-url';
 
 /**
@@ -182,5 +183,27 @@ describe('assertResolvedChatBackendUrl', () => {
 		).resolves.toContain('1.1.1.1');
 
 		expect(resolve).not.toHaveBeenCalled();
+	});
+
+	it('hands back the judged addresses', async () => {
+		const resolve = resolvingTo('93.184.216.34', '2606:4700::1111');
+		await expect(
+			resolveCheckedChatBackendUrl('https://chat.example.com/v1', {
+				nodeEnv: 'production',
+				resolve
+			})
+		).resolves.toEqual({
+			href: 'https://chat.example.com/v1',
+			host: 'chat.example.com',
+			addresses: ['93.184.216.34', '2606:4700::1111']
+		});
+		await expect(
+			resolveCheckedChatBackendUrl('https://1.1.1.1/v1', { nodeEnv: 'production', resolve })
+		).resolves.toEqual({
+			href: 'https://1.1.1.1/v1',
+			host: '1.1.1.1',
+			addresses: ['1.1.1.1']
+		});
+		expect(resolve).toHaveBeenCalledTimes(1);
 	});
 });

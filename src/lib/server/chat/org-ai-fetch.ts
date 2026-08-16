@@ -10,16 +10,23 @@
  * Redirects are followed, never blindly: `redirect: 'manual'` hands the 3xx
  * back, and the target goes through the same check as the original before it
  * is called. A backend that redirects public → private is refused at the hop,
- * not after it. What this does not close is DNS rebinding — the module
- * comment in `org-ai-url.ts` says why, and it is worth reading before treating
- * this file as a boundary.
+ * not after it.
+ *
+ * A second lookup runs at connect time. A private answer (`127.0.0.1`,
+ * `169.254.169.254`, the rest of the blocked set) refuses the request
+ * before `fetch` is called. That narrows the window: both lookups must
+ * come back public. It does not close it. `fetch` then resolves the name
+ * again, and this runtime cannot pin that hop to an address we already
+ * judged — `cf.resolveOverride` is ignored unless both hosts sit on this
+ * zone (`RequestInitCfProperties.resolveOverride` in the vendored
+ * workers-types). An org backend never does. #741 stays open.
  */
 import type { ResolveHostAddresses } from './org-ai-dns';
-import { assertResolvedChatBackendUrl, ChatBackendAddressError } from './org-ai-url';
+import { ChatBackendAddressError, resolveCheckedChatBackendUrl } from './org-ai-url';
 
 /**
  * Enough for a provider that normalises a path or moves a host, far short of
- * a loop. Each hop costs a DNS lookup.
+ * a loop. Each hop looks the name up twice (judge, then connect).
  */
 const MAX_REDIRECTS = 3;
 
@@ -49,7 +56,7 @@ export function createGuardedChatBackendFetch(
 			: await original.arrayBuffer();
 
 		for (let hop = 0; ; hop++) {
-			await assertResolvedChatBackendUrl(url, {
+			await assertChatBackendAtConnect(url, {
 				nodeEnv: options.nodeEnv,
 				resolve: options.resolve
 			});
@@ -79,6 +86,19 @@ export function createGuardedChatBackendFetch(
 			}
 		}
 	};
+}
+
+/**
+ * Judge the host, then look it up again at connect time. A second
+ * answer that lands inside is a refusal, not a connection. Neither
+ * answer is pinned to `fetch` — this runtime cannot do that.
+ */
+async function assertChatBackendAtConnect(
+	url: string,
+	options: { nodeEnv?: string; resolve?: ResolveHostAddresses }
+): Promise<void> {
+	await resolveCheckedChatBackendUrl(url, options);
+	await resolveCheckedChatBackendUrl(url, options);
 }
 
 function bodylessMethod(method: string): boolean {

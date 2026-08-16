@@ -6,12 +6,11 @@
  * JSON profile (RFC 8484's cousin) that needs nothing but `fetch`, which is
  * the only network primitive a Worker has.
  *
- * Every call is a real subrequest. `assertResolvedChatBackendUrl` is the only
- * caller, and it is on the save path and on every org-backend request, so the
- * cost is two lookups per chat turn. They are not cached: a cache would widen
- * exactly the window (record changes between check and connect) that the
- * check exists to narrow, and it would not close it either — see the module
- * comment in `org-ai-url.ts`.
+ * Every call is a real subrequest. The save path looks the name up once;
+ * the fetch path looks it up twice per hop (judge, then connect) so a
+ * record that flips to a private address between the two is refused
+ * before `fetch`. `fetch` still resolves a third time. They are not
+ * cached: a cache would widen exactly that window.
  */
 export type ResolveHostAddresses = (hostname: string) => Promise<string[]>;
 
