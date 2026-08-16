@@ -6,6 +6,15 @@
  */
 const uniqueSlug = () => `spk-drafts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+/** Type the rows. Setting `.val` would hide an `<input>` that cannot hold them. */
+function typeImportCsv(lines: string[]) {
+	cy.get('[data-testid="import-csv"]')
+		.should('have.prop', 'tagName', 'TEXTAREA')
+		.click()
+		.type(lines.join('{enter}'));
+	cy.get('[data-testid="import-csv"]').should('have.value', lines.join('\n'));
+}
+
 describe('Speaker roster drafts', () => {
 	let slug: string;
 
@@ -103,14 +112,16 @@ describe('Speaker roster drafts', () => {
 		cy.get('[data-testid="add-bio"]').should('have.value', '');
 	});
 
-	it('keeps a pasted roster after Escape, reopen, and reload (#789)', () => {
+	it('keeps typed import rows after Escape, reopen, and reload (#789)', () => {
 		const stamp = Date.now();
-		const rows = `name,email\nWalk ${stamp},walk-${stamp}@example.test`;
+		const header = 'name,email';
+		const person = `Walk ${stamp},walk-${stamp}@example.test`;
+		const rows = `${header}\n${person}`;
 
 		cy.visit(`/manage/${slug}/speakers`);
 		cy.waitForHydration();
 		cy.get('[data-testid="speakers-import-open"]').click();
-		cy.get('[data-testid="import-csv"]').click().invoke('val', rows).trigger('input');
+		typeImportCsv([header, person]);
 
 		const asked: string[] = [];
 		cy.on('window:confirm', (text) => {
@@ -122,6 +133,49 @@ describe('Speaker roster drafts', () => {
 		cy.wrap(asked).should('have.length', 0);
 
 		cy.get('[data-testid="speakers-import-open"]').click();
+		cy.get('[data-testid="import-csv"]').should('have.value', rows);
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="speakers-import-open"]').click();
+		cy.get('[data-testid="import-csv"]').should('have.value', rows);
+		cy.get('[data-testid="import-csv-restored"]').should('be.visible');
+	});
+
+	it('clears the paste box after a successful import (#829)', () => {
+		const stamp = Date.now();
+		const header = 'name,email';
+		const person = `Ok ${stamp},ok-${stamp}@example.test`;
+
+		cy.visit(`/manage/${slug}/speakers`);
+		cy.waitForHydration();
+		cy.get('[data-testid="speakers-import-open"]').click();
+		typeImportCsv([header, person]);
+		cy.get('[data-testid="import-submit"]').click();
+		cy.get('[data-testid="import-message"]').should('contain', 'Imported 1 speaker.');
+		cy.get('[data-testid="import-csv"]').should('have.value', '');
+
+		cy.reload();
+		cy.waitForHydration();
+		cy.get('[data-testid="speakers-import-open"]').click();
+		cy.get('[data-testid="import-csv"]').should('have.value', '');
+	});
+
+	it('keeps the paste after a refused import (#829)', () => {
+		const stamp = Date.now();
+		const header = 'name,email';
+		const orphan = `,orphan-${stamp}@example.test`;
+		const rows = `${header}\n${orphan}`;
+
+		cy.visit(`/manage/${slug}/speakers`);
+		cy.waitForHydration();
+		cy.get('[data-testid="speakers-import-open"]').click();
+		typeImportCsv([header, orphan]);
+		cy.get('[data-testid="import-submit"]').click();
+		cy.get('[data-testid="import-error"]').should(
+			'contain',
+			'Row 2 has no name. Every speaker needs one.'
+		);
 		cy.get('[data-testid="import-csv"]').should('have.value', rows);
 
 		cy.reload();

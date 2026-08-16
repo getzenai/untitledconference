@@ -56,13 +56,19 @@ describe('speaker import form', () => {
 		expect(body).toContain('Imported 12 speakers.');
 	});
 
-	it('parks the paste box and leaves the file picker alone (#789)', () => {
+	it('parks the paste box as a textarea and leaves the file picker alone (#789)', () => {
+		const { body } = render(ImportForm, { props: { ...props, form: null } });
+
 		expect(source).toContain('BrowserDraftInput');
 		expect(source).toContain('testId="import-csv"');
 		expect(source).toContain('baseline=""');
-		expect(source).not.toContain('<textarea');
-		expect(source).toContain('type="file"');
 		expect(source).not.toContain("from '$lib/components/app/unsaved-guard.svelte'");
+		expect(body).toMatch(/<textarea[^>]*name="csv"/);
+		expect(body).toMatch(/<textarea[^>]*data-testid="import-csv"/);
+		expect(body).toMatch(/<textarea[^>]*rows="4"/);
+		expect(body).not.toMatch(/<input[^>]*name="csv"/);
+		expect(body).toContain('type="file"');
+		expect(body).toContain('data-testid="import-file"');
 	});
 
 	it('renders a refused import as an alert in the same place', () => {

@@ -37,8 +37,8 @@ describe('browser draft input', () => {
 			}
 		}).body;
 
-		expect(body).toContain('<textarea');
-		expect(body).toContain('name="bio"');
+		expect(body).toMatch(/<textarea[^>]*name="bio"/);
+		expect(body).toMatch(/<textarea[^>]*rows="3"/);
 		expect(body).toContain('data-testid="edit-bio"');
 		expect(body).toContain('Builds things.');
 		expect(body).not.toContain('<input');
