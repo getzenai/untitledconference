@@ -13,6 +13,7 @@ import {
 	updateAcceptCondition
 } from '$lib/server/conference/accept-condition';
 import { requireOrganizer } from '$lib/server/conference/access';
+import { deleteConferenceDraft } from '$lib/server/conference/cfp-submission';
 import { sentenceForDecision } from '$lib/server/conference/decision-note';
 import {
 	decisionNotificationStatuses,
@@ -31,7 +32,7 @@ import { ownReviewAccess } from '$lib/server/conference/reviewer';
 import { speakerHistoryForSubmission } from '$lib/server/conference/speaker-history';
 import { setSubmissionSponsorTier, sponsorTiers } from '$lib/server/conference/sponsor-tiers';
 import { editSubmissionContent, lastContentEdit } from '$lib/server/conference/submission-content';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 const DECISIONS: Decision[] = ['accepted', 'rejected', 'waitlisted', 'resubmit_with_guidance'];
@@ -323,5 +324,19 @@ export const actions: Actions = {
 			return fail(400, { conditionMessage: 'There is no condition to rewrite.' });
 		}
 		return { conditionMessage: 'Condition saved.' };
+	},
+
+	/**
+	 * Throw away an unsubmitted draft. Same write as `deleteConferenceDraft`.
+	 * A handed-in talk cannot be deleted this way — withdraw is the speaker's.
+	 */
+	deleteDraft: async ({ locals, params }) => {
+		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
+		const result = await deleteConferenceDraft(conference.id, submissionId(params.id));
+		if (!result.ok) {
+			if (result.reason === 'not_found') throw error(404, 'Talk not found');
+			return fail(409, { message: 'Only an unsubmitted draft can be deleted.' });
+		}
+		redirect(303, `/manage/${conference.slug}/submissions?status=draft`);
 	}
 };

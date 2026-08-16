@@ -1095,3 +1095,58 @@ export async function withdrawSubmission(
 
 	return updated.length > 0 ? { ok: true } : { ok: false, reason: 'decided' };
 }
+
+export type DeleteDraftResult = { ok: true } | { ok: false; reason: 'not_found' | 'not_draft' };
+
+/**
+ * Remove an unsubmitted draft. The row goes away; this is not a withdrawal.
+ *
+ * Two doors, same write. The author may only delete a draft they submitted
+ * (primary speaker). The organizer may delete any draft on their conference.
+ * Anything that has left `draft` is refused — a submit between the check and
+ * the write cannot be deleted, because the `where` restates the status.
+ */
+export async function deleteOwnDraft(
+	userId: string,
+	submissionId: number
+): Promise<DeleteDraftResult> {
+	const owned = await ownedSubmission(userId, submissionId, 'primary');
+	if (!owned) return { ok: false, reason: 'not_found' };
+	if (owned.status !== 'draft') return { ok: false, reason: 'not_draft' };
+
+	const gone = await db
+		.delete(submissionTable)
+		.where(and(eq(submissionTable.id, owned.id), eq(submissionTable.status, 'draft')))
+		.returning({ id: submissionTable.id });
+
+	return gone.length > 0 ? { ok: true } : { ok: false, reason: 'not_draft' };
+}
+
+export async function deleteConferenceDraft(
+	conferenceId: number,
+	submissionId: number
+): Promise<DeleteDraftResult> {
+	const [row] = await db
+		.select({ id: submissionTable.id, status: submissionTable.status })
+		.from(submissionTable)
+		.where(
+			and(eq(submissionTable.id, submissionId), eq(submissionTable.conferenceId, conferenceId))
+		)
+		.limit(1);
+
+	if (!row) return { ok: false, reason: 'not_found' };
+	if (row.status !== 'draft') return { ok: false, reason: 'not_draft' };
+
+	const gone = await db
+		.delete(submissionTable)
+		.where(
+			and(
+				eq(submissionTable.id, row.id),
+				eq(submissionTable.conferenceId, conferenceId),
+				eq(submissionTable.status, 'draft')
+			)
+		)
+		.returning({ id: submissionTable.id });
+
+	return gone.length > 0 ? { ok: true } : { ok: false, reason: 'not_draft' };
+}

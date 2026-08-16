@@ -29,6 +29,7 @@
 	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
+	import { draftDeleteWarning } from '$lib/conference/draft-delete-warning';
 	import { proposalWithdrawWarning } from '$lib/conference/proposal-withdraw-warning';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 
@@ -99,8 +100,10 @@
 	};
 
 	const warning = $derived(proposalWithdrawWarning(s.conferenceName));
+	const deleteWarning = $derived(draftDeleteWarning('author'));
 	let busy = $state(false);
 	let confirmWithdraw = $state(false);
+	let confirmDelete = $state(false);
 
 	const submitting = () => {
 		busy = true;
@@ -110,6 +113,7 @@
 			} finally {
 				busy = false;
 				confirmWithdraw = false;
+				confirmDelete = false;
 			}
 		};
 	};
@@ -216,12 +220,62 @@
 		<div class="border-border bg-muted/40 mt-6 rounded-lg border p-4 text-sm">
 			<p class="font-medium">This is still a draft.</p>
 			<p class="text-muted-foreground mt-1">{draftCloseLine}</p>
-			{#if callOpen}
-				<Button href="/portal/submissions/{s.id}/edit" size="sm" class="mt-3">
-					Finish this proposal
-				</Button>
-			{:else}
-				<Button size="sm" class="mt-3" disabled data-testid="edit-closed">Editing closed</Button>
+			<div class="mt-3 flex flex-wrap gap-2">
+				{#if callOpen}
+					<Button href="/portal/submissions/{s.id}/edit" size="sm">Finish this proposal</Button>
+				{:else}
+					<Button size="sm" disabled data-testid="edit-closed">Editing closed</Button>
+				{/if}
+				{#if data.canDelete}
+					<form
+						id="delete-draft-form"
+						method="POST"
+						action="?/deleteDraft"
+						use:enhance={submitting}
+					>
+						<Button
+							type="submit"
+							size="sm"
+							variant="outline"
+							disabled={busy}
+							data-testid="delete-draft"
+							onclick={(event: MouseEvent) => {
+								event.preventDefault();
+								confirmDelete = true;
+							}}
+						>
+							Delete this draft
+						</Button>
+					</form>
+					<AlertDialog bind:open={confirmDelete}>
+						<AlertDialogContent data-testid="delete-draft-dialog">
+							<AlertDialogHeader>
+								<AlertDialogTitle>{deleteWarning.title}</AlertDialogTitle>
+								<AlertDialogDescription>
+									{deleteWarning.consequence}
+									<span class="mt-2 block">{deleteWarning.reversal}</span>
+								</AlertDialogDescription>
+							</AlertDialogHeader>
+							<AlertDialogFooter>
+								<AlertDialogCancel data-testid="delete-draft-cancel"
+									>Keep this draft</AlertDialogCancel
+								>
+								<Button
+									type="submit"
+									form="delete-draft-form"
+									variant="destructive"
+									disabled={busy}
+									data-testid="delete-draft-confirm"
+								>
+									Delete it
+								</Button>
+							</AlertDialogFooter>
+						</AlertDialogContent>
+					</AlertDialog>
+				{/if}
+			</div>
+			{#if form?.deleteError}
+				<p class="text-status-bad mt-3 text-sm">{form.deleteError}</p>
 			{/if}
 		</div>
 	{:else if s.status === 'accepted'}
