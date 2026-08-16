@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import type { CalendarEvent } from './ical';
 import type { ResolvedSession } from './public-view';
 
 /**
@@ -64,38 +65,28 @@ export class PersonalSchedule {
 	}
 }
 
-const stampUtc = (d: Date) =>
-	d
-		.toISOString()
-		.replace(/[-:]/g, '')
-		.replace(/\.\d{3}/, '');
-
-/** Escape per RFC 5545: commas, semicolons, backslashes and newlines are structural. */
-const escapeIcs = (value: string) => value.replace(/([\\;,])/g, '\\$1').replace(/\r?\n/g, '\\n');
-
-export function buildIcs(conferenceName: string, sessions: ResolvedSession[]): string {
-	const lines = [
-		'BEGIN:VCALENDAR',
-		'VERSION:2.0',
-		'PRODID:-//Untitled Conference//Schedule//EN',
-		'CALSCALE:GREGORIAN',
-		`X-WR-CALNAME:${escapeIcs(conferenceName)}`
-	];
-
-	for (const session of sessions) {
-		lines.push(
-			'BEGIN:VEVENT',
-			`UID:${session.id}@untitledconference`,
-			`DTSTAMP:${stampUtc(session.start)}`,
-			`DTSTART:${stampUtc(session.start)}`,
-			`DTEND:${stampUtc(session.end)}`,
-			`SUMMARY:${escapeIcs(session.title)}`,
-			`DESCRIPTION:${escapeIcs(session.description)}`,
-			...(session.room ? [`LOCATION:${escapeIcs(session.room)}`] : []),
-			'END:VEVENT'
-		);
-	}
-
-	lines.push('END:VCALENDAR');
-	return lines.join('\r\n');
+/**
+ * The starred sessions as calendar events, for `icalFile` to write (#822).
+ *
+ * This module used to build the bytes itself, next to a module written for
+ * exactly that — and the second copy had none of what the first one is: no
+ * folding at 75 octets, no control-character stripping, no trailing CRLF, and a
+ * DTSTAMP that was the session's own start rather than the moment of writing.
+ * The mapping is the part that belongs here, because which sessions and which
+ * fields is this surface's knowledge; the format is not.
+ *
+ * `uid` matches the subscription feed's on purpose: a reader who both subscribes
+ * and exports should end up with one entry per talk, not two.
+ */
+export function scheduleEvents(sessions: ResolvedSession[]): CalendarEvent[] {
+	return sessions.map((session) => ({
+		uid: `${session.id}@untitledconference`,
+		start: session.start,
+		end: session.end,
+		// The same wall clock the itinerary prints, not a world-clock moment (#821).
+		timing: 'floating',
+		summary: session.title,
+		description: session.description,
+		location: session.room
+	}));
 }

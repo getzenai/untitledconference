@@ -44,6 +44,9 @@ export const GET: RequestHandler = async ({ params, setHeaders, url }) => {
 		uid: `${session.id}@untitledconference`,
 		start: session.start,
 		end: session.end,
+		// A talk is at 09:30 in the room, which is what the agenda page prints in
+		// every reader's zone. The feed says the same clock (#821).
+		timing: 'floating',
 		summary: session.title,
 		description: describe(
 			session.speakers.map((speaker) => speaker.name),

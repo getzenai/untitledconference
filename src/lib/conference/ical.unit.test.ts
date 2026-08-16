@@ -14,6 +14,7 @@ const session: CalendarEvent = {
 	uid: 'sess-1@untitledconference',
 	start: new Date('2027-04-15T09:30:00.000Z'),
 	end: new Date('2027-04-15T10:15:00.000Z'),
+	timing: 'floating',
 	summary: 'Four hundred engineers, one repository',
 	description: 'Ada Lovelace',
 	location: 'Main hall'
@@ -106,10 +107,50 @@ describe('a calendar file', () => {
 		expect(lines).toContain('END:VCALENDAR');
 	});
 
-	it('writes UTC timestamps in the one shape the format has', () => {
-		expect(lines).toContain('DTSTART:20270415T093000Z');
-		expect(lines).toContain('DTEND:20270415T101500Z');
+	/**
+	 * The session floats, the bookkeeping does not (#821).
+	 *
+	 * A `Z` on DTSTART names a moment on the world clock, which every calendar
+	 * re-renders in the reader's own zone — so an attendee at a venue in
+	 * `America/Los_Angeles` saw 02:30 for the 09:30 talk the page had just shown
+	 * them. Without the `Z` it is RFC 5545 §3.3.5 floating time: the same wall
+	 * clock everywhere, which is what the pages already display.
+	 */
+	it('writes the session as a floating wall clock, with no zone at all', () => {
+		expect(lines).toContain('DTSTART:20270415T093000');
+		expect(lines).toContain('DTEND:20270415T101500');
+		expect(lines).not.toContain('DTSTART:20270415T093000Z');
+		expect(lines).not.toContain('DTEND:20270415T101500Z');
+	});
+
+	it('keeps DTSTAMP an instant, because it is when we wrote the line', () => {
 		expect(lines).toContain('DTSTAMP:20260812T200000Z');
+	});
+
+	/**
+	 * The control the floating form needs: floating means "no zone", not "the
+	 * zone the writer happened to be in".
+	 *
+	 * Written with the local getters instead of `toISOString`, this file would
+	 * say 02:30 on a machine in Los Angeles and 11:30 on one in Berlin — and CI,
+	 * which runs on UTC, would agree with the assertion above either way. So the
+	 * process moves for the length of this case, and the bytes must not.
+	 */
+	it('reads the same on a server in any zone', () => {
+		const runtimeZone = process.env.TZ;
+		try {
+			for (const zone of ['America/Los_Angeles', 'Pacific/Auckland']) {
+				process.env.TZ = zone;
+				// The precondition the case rests on: the process really moved.
+				expect(new Date('2027-04-15T09:30:00.000Z').getHours(), zone).not.toBe(9);
+				expect(icalFile('Agenda', [session], NOW), zone).toContain('DTSTART:20270415T093000');
+			}
+		} finally {
+			// Assigning `undefined` would leave the string "undefined" behind and
+			// take every later case in this process with it.
+			if (runtimeZone === undefined) delete process.env.TZ;
+			else process.env.TZ = runtimeZone;
+		}
 	});
 
 	it('publishes rather than invites', () => {
