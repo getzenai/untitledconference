@@ -5,6 +5,14 @@ export function contactFieldScope(contactId: number, field: string): string {
 	return `contact-${field}:${contactId}`;
 }
 
+/** Fields on the add-contact dialog. One thought, five keys (#763). */
+export const NEW_CONTACT_FIELDS = ['name', 'email', 'company', 'jobTitle', 'tags'] as const;
+
+/** Scope for one parked field on the add-contact dialog. No contact id yet. */
+export function newContactFieldScope(field: string): string {
+	return `contact-new:${field}`;
+}
+
 /** Scope for the contact-page internal notes safety copy (#765). */
 export function contactNotesDraftScope(contactId: number): string {
 	return contactFieldScope(contactId, 'notes');

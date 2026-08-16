@@ -2,15 +2,23 @@
 	/**
 	 * Contacts directory — org-wide contacts across events (CRM-01 / CRM-02 / CRM-05)
 	 * plus overview KPIs and top-companies analytics (CRM-12).
+	 *
+	 * The add-contact dialog parks with BrowserDraftInput, same envelope as the
+	 * profile (#789). Escape is not a navigation, so there is no UnsavedGuard —
+	 * the draft is the fix, not a second line of defence (#763).
 	 */
+	import { browser } from '$app/environment';
 	import { enhance } from '$lib/forms/enhance';
+	import { clearBrowserDraft } from '$lib/forms/browser-draft';
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import BrowserDraftInput from '$lib/components/app/browser-draft-input.svelte';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { contactFiltersHref } from '$lib/conference/contact-filters';
+	import { NEW_CONTACT_FIELDS, newContactFieldScope } from '$lib/conference/contact-notes-draft';
 
 	let { data, form } = $props();
 
@@ -21,12 +29,37 @@
 	let busy = $state(false);
 	let addOpen = $state(false);
 	let importOpen = $state(false);
+	let addCommit = $state(0);
 
 	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
 				await update(formUpdateOptions(kind));
+			} finally {
+				busy = false;
+			}
+		};
+	};
+
+	/** `add` redirects on success, so the result is `redirect`, not `success`. */
+	const submittingAdd = () => {
+		busy = true;
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
+			try {
+				if (result.type === 'redirect' && browser) {
+					addCommit += 1;
+					for (const field of NEW_CONTACT_FIELDS) {
+						clearBrowserDraft(localStorage, newContactFieldScope(field), data.user.id);
+					}
+				}
+				await update(formUpdateOptions('add'));
 			} finally {
 				busy = false;
 			}
@@ -106,7 +139,7 @@
 						<form
 							method="POST"
 							action="?/add"
-							use:enhance={submitting('add')}
+							use:enhance={submittingAdd}
 							class="grid gap-3 sm:grid-cols-2"
 						>
 							<input type="hidden" name="organizationId" value={data.organizationId ?? ''} />
@@ -114,13 +147,31 @@
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-name">
 									Name
 								</label>
-								<Input id="add-name" name="name" required data-testid="contacts-add-name" />
+								<BrowserDraftInput
+									id="add-name"
+									name="name"
+									scope={newContactFieldScope('name')}
+									owner={data.user.id}
+									baseline=""
+									required
+									testId="contacts-add-name"
+									commitToken={addCommit}
+								/>
 							</div>
 							<div>
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-email">
 									Email
 								</label>
-								<Input id="add-email" name="email" type="email" data-testid="contacts-add-email" />
+								<BrowserDraftInput
+									id="add-email"
+									name="email"
+									type="email"
+									scope={newContactFieldScope('email')}
+									owner={data.user.id}
+									baseline=""
+									testId="contacts-add-email"
+									commitToken={addCommit}
+								/>
 							</div>
 							<div>
 								<label
@@ -129,7 +180,15 @@
 								>
 									Company
 								</label>
-								<Input id="add-company" name="company" data-testid="contacts-add-company" />
+								<BrowserDraftInput
+									id="add-company"
+									name="company"
+									scope={newContactFieldScope('company')}
+									owner={data.user.id}
+									baseline=""
+									testId="contacts-add-company"
+									commitToken={addCommit}
+								/>
 							</div>
 							<div>
 								<label
@@ -138,17 +197,29 @@
 								>
 									Job title
 								</label>
-								<Input id="add-jobTitle" name="jobTitle" data-testid="contacts-add-jobtitle" />
+								<BrowserDraftInput
+									id="add-jobTitle"
+									name="jobTitle"
+									scope={newContactFieldScope('jobTitle')}
+									owner={data.user.id}
+									baseline=""
+									testId="contacts-add-jobtitle"
+									commitToken={addCommit}
+								/>
 							</div>
 							<div class="sm:col-span-2">
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-tags">
 									Tags (comma-separated)
 								</label>
-								<Input
+								<BrowserDraftInput
 									id="add-tags"
 									name="tags"
+									scope={newContactFieldScope('tags')}
+									owner={data.user.id}
+									baseline=""
 									placeholder="keynote, vip"
-									data-testid="contacts-add-tags"
+									testId="contacts-add-tags"
+									commitToken={addCommit}
 								/>
 							</div>
 							{#if form?.scope === 'add' && form?.error}

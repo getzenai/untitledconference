@@ -182,6 +182,14 @@ describe('contacts directory page', () => {
 		expect(body).not.toContain('data-testid="speakers-import"');
 	});
 
+	it('parks the add-contact dialog with BrowserDraftInput and no leave prompt (#763)', () => {
+		expect(source).toContain('BrowserDraftInput');
+		expect(source).toContain('newContactFieldScope(');
+		expect(source).toContain("newContactFieldScope('name')");
+		expect(source).toContain("result.type === 'redirect'");
+		expect(source).not.toContain("from '$lib/components/app/unsaved-guard.svelte'");
+	});
+
 	it('calls the records contacts, not speakers or a CRM (#455)', () => {
 		const { body } = render(Page, {
 			props: { data: baseData as never, form: null }
