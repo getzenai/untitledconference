@@ -46,6 +46,35 @@ describe('browser form drafts', () => {
 		).toEqual({ status: 'current', draft: { value: 'typed', baseline: 'v1', savedAt: 100 } });
 	});
 
+	it('restores a draft from a form that creates rather than edits', () => {
+		// The empty baseline is the normal one for an add dialog or an invite
+		// field: there is no server version it was typed from. Every other test
+		// here names a baseline, which is how a falsy check survived unseen.
+		const storage = fakeStorage();
+		writeBrowserDraft(storage, {
+			scope: '/contacts',
+			owner: 'user-1',
+			baseline: '',
+			value: 'half-typed name',
+			now: 100
+		});
+
+		expect(
+			readBrowserDraft(storage, {
+				scope: '/contacts',
+				owner: 'user-1',
+				baseline: '',
+				parse: parseText,
+				now: 101
+			})
+		).toEqual({
+			status: 'current',
+			draft: { value: 'half-typed name', baseline: '', savedAt: 100 }
+		});
+		// And the read must not have eaten it on the way out.
+		expect(storage.values.has(browserDraftKey('/contacts', 'user-1'))).toBe(true);
+	});
+
 	it('surfaces a conflict instead of replacing a newer server baseline', () => {
 		const storage = fakeStorage();
 		writeBrowserDraft(storage, {
