@@ -32,8 +32,6 @@
 	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import ReviewFileAnswer from '$lib/components/review-file-answer.svelte';
-	import { providePageFocus } from '$lib/chat/page-focus.svelte';
-	import { page } from '$app/state';
 	import { filenameFrom, type FilePreviewKind } from '$lib/conference/file-preview';
 
 	let { data, form } = $props();
@@ -46,20 +44,6 @@
 
 	const s = $derived(data.submission);
 
-	/**
-	 * The scorecard is for one submission in one round, and the URL only carries
-	 * the submission. The round is the half #659 bound `submit_review` to: with
-	 * it missing, "write this up as a 4" can land in a different round than the
-	 * one on screen (#683).
-	 */
-	$effect(() =>
-		providePageFocus(page.route.id, {
-			submissionId: s.id,
-			talk: s.title,
-			roundId: s.round.id,
-			round: s.round.name
-		})
-	);
 	const withdrawn = $derived(s.status === 'withdrawn');
 	// Two different reasons the form takes nothing, and they read differently: a
 	// withdrawn talk is gone, a shut round comes back (ABS-01). Both disable the same
