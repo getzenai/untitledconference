@@ -9,16 +9,29 @@
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { REVIEW_VISIBILITY_MODES } from '$lib/conference/review-visibility';
 	import { Button } from '$lib/components/ui/button';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
+	import { textDraft } from '$lib/forms/text-draft.svelte';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+
+	/**
+	 * A half-typed invite is the door a reviewer journey starts at (#764). The
+	 * guard covers leaving the page; the draft covers a reload, which the guard
+	 * can only ask about, not survive.
+	 */
+	const invite = textDraft(() => ({
+		scope: `people-invite:${data.conference.slug}`,
+		owner: data.user.id
+	}));
 
 	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
 				await update(formUpdateOptions(kind));
+				invite.clear();
 			} finally {
 				busy = false;
 			}
@@ -108,6 +121,8 @@
 		</form>
 	</section>
 
+	<UnsavedGuard dirty={invite.dirty} />
+
 	<section class="border-border bg-card mt-6 rounded-lg border p-4" data-testid="people-committee">
 		<h2 class="text-sm font-semibold">Who reviews</h2>
 		<p class="text-muted-foreground mt-0.5 text-xs">
@@ -126,6 +141,8 @@
 				type="email"
 				required
 				placeholder="reviewer@example.com"
+				bind:value={invite.value}
+				data-testid="reviewer-invite-email"
 				class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
 			/>
 			<Button type="submit" size="sm" disabled={busy}>Add or invite</Button>

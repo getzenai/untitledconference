@@ -7,16 +7,31 @@
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
+	import { textDraft } from '$lib/forms/text-draft.svelte';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+
+	/**
+	 * Notes are the one field here that is prose rather than a fact, so they are
+	 * the one worth losing sleep over (#765). The baseline is the stored note:
+	 * if someone else edited it while a copy sat in this browser, the copy is
+	 * offered rather than applied.
+	 */
+	const notes = textDraft(() => ({
+		scope: `contact-notes:${data.contact.id}`,
+		owner: data.user.id,
+		baseline: data.contact.notes ?? ''
+	}));
 
 	const submitting = () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
 				await update(formUpdateOptions('edit'));
+				notes.clear();
 			} finally {
 				busy = false;
 			}
@@ -77,6 +92,7 @@
 		data-testid="contact-profile"
 	>
 		<h2 class="text-sm font-semibold">Profile</h2>
+		<UnsavedGuard dirty={notes.dirty} />
 		<form
 			method="POST"
 			action="?/save"
@@ -155,10 +171,39 @@
 					id="notes"
 					name="notes"
 					rows="3"
+					bind:value={notes.value}
 					class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
 					placeholder="Only organizers see this."
-					data-testid="contact-notes">{data.contact.notes ?? ''}</textarea
-				>
+					data-testid="contact-notes"
+				></textarea>
+				{#if notes.conflict}
+					<!--
+						The note changed on the server after this copy was typed. Showing
+						both and asking is the only honest move: restoring would erase
+						someone else's edit, dropping it would erase this one.
+					-->
+					<div
+						class="border-border bg-muted/40 mt-2 rounded-md border p-3 text-xs"
+						data-testid="contact-notes-conflict"
+					>
+						<p class="font-medium">These notes changed elsewhere since you typed.</p>
+						<p class="text-muted-foreground mt-1 whitespace-pre-wrap">{notes.conflict.value}</p>
+						<div class="mt-2 flex gap-2">
+							<Button
+								type="button"
+								size="sm"
+								variant="outline"
+								onclick={() => notes.acceptConflict()}>Use what I typed</Button
+							>
+							<Button
+								type="button"
+								size="sm"
+								variant="ghost"
+								onclick={() => notes.discardConflict()}>Keep the saved notes</Button
+							>
+						</div>
+					</div>
+				{/if}
 			</div>
 			<div class="sm:col-span-2">
 				<label class="text-muted-foreground mb-1 block text-xs font-medium" for="tags">

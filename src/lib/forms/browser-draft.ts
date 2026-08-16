@@ -76,10 +76,15 @@ function parseEnvelope<T>(
 	const value = parse(envelope.value);
 	const savedAt = typeof envelope.savedAt === 'number' ? envelope.savedAt : NaN;
 	const baseline = typeof envelope.baseline === 'string' ? envelope.baseline : null;
+	// `baseline === null`, not `!baseline`: the empty string is the *normal*
+	// baseline for a form that creates something rather than edits it, and
+	// falsiness threw those away — silently, and by deleting the key on the way
+	// out. Every add-dialog and invite field in the backlog has no server
+	// version to compare against.
 	if (
 		value === null ||
 		!Number.isFinite(savedAt) ||
-		!baseline ||
+		baseline === null ||
 		now - savedAt > BROWSER_DRAFT_MAX_AGE_MS
 	) {
 		return null;

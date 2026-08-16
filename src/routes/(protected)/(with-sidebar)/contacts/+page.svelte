@@ -11,6 +11,8 @@
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Input } from '$lib/components/ui/input';
 	import { contactFiltersHref } from '$lib/conference/contact-filters';
+	import { browser } from '$app/environment';
+	import { clearBrowserDraft, readBrowserDraft, writeBrowserDraft } from '$lib/forms/browser-draft';
 
 	let { data, form } = $props();
 
@@ -22,11 +24,97 @@
 	let addOpen = $state(false);
 	let importOpen = $state(false);
 
+	/**
+	 * Escape closes this dialog, and closing it used to be the end of whatever
+	 * was typed into it (#763). `beforeNavigate` cannot help — dismissing an
+	 * overlay is not a navigation — so the draft *is* the fix rather than a
+	 * second line of defence.
+	 *
+	 * One key for the whole dialog rather than one per field: the five inputs
+	 * are one thought, and restoring four of them would be worse than none.
+	 * `browser-draft` is generic, so this is its own API, not a variant of it.
+	 */
+	const ADD_CONTACT_FIELDS = ['name', 'email', 'company', 'jobTitle', 'tags'] as const;
+	type AddContactDraft = Record<(typeof ADD_CONTACT_FIELDS)[number], string>;
+	const emptyAddContact = (): AddContactDraft => ({
+		name: '',
+		email: '',
+		company: '',
+		jobTitle: '',
+		tags: ''
+	});
+
+	const addScope = 'contact-new';
+	let addDraft = $state(emptyAddContact());
+	let addRestored = $state(false);
+
+	function parseAddContact(value: unknown): AddContactDraft | null {
+		if (typeof value !== 'object' || value === null) return null;
+		const record = value as Record<string, unknown>;
+		const draft = emptyAddContact();
+		for (const field of ADD_CONTACT_FIELDS) {
+			if (typeof record[field] === 'string') draft[field] = record[field];
+		}
+		return draft;
+	}
+
+	// No `UnsavedGuard` here on purpose: the draft already survives leaving the
+	// page and coming back, so a confirm would ask about something that is not
+	// actually at risk.
+	$effect(() => {
+		if (!browser || addRestored) return;
+		const read = readBrowserDraft<AddContactDraft>(localStorage, {
+			scope: addScope,
+			owner: data.user.id,
+			baseline: '',
+			parse: parseAddContact
+		});
+		if (read.status !== 'empty') addDraft = read.draft.value;
+		addRestored = true;
+	});
+
+	$effect(() => {
+		if (!browser || !addRestored) return;
+		const value = { ...addDraft };
+		if (!ADD_CONTACT_FIELDS.some((field) => value[field].trim().length > 0)) {
+			clearBrowserDraft(localStorage, addScope, data.user.id);
+			return;
+		}
+		writeBrowserDraft(localStorage, {
+			scope: addScope,
+			owner: data.user.id,
+			baseline: '',
+			value
+		});
+	});
+
 	const submitting = (kind: FormResetKind) => () => {
 		busy = true;
 		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
 			try {
 				await update(formUpdateOptions(kind));
+			} finally {
+				busy = false;
+			}
+		};
+	};
+
+	/** The contact reached the server, so the safety copy has done its job. */
+	const submittingAdd = () => {
+		busy = true;
+		return async ({
+			update,
+			result
+		}: {
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+			result: { type: string };
+		}) => {
+			try {
+				await update(formUpdateOptions('add'));
+				if (result.type === 'success') {
+					addDraft = emptyAddContact();
+					if (browser) clearBrowserDraft(localStorage, addScope, data.user.id);
+				}
 			} finally {
 				busy = false;
 			}
@@ -106,7 +194,7 @@
 						<form
 							method="POST"
 							action="?/add"
-							use:enhance={submitting('add')}
+							use:enhance={submittingAdd}
 							class="grid gap-3 sm:grid-cols-2"
 						>
 							<input type="hidden" name="organizationId" value={data.organizationId ?? ''} />
@@ -114,13 +202,25 @@
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-name">
 									Name
 								</label>
-								<Input id="add-name" name="name" required data-testid="contacts-add-name" />
+								<Input
+									id="add-name"
+									name="name"
+									required
+									bind:value={addDraft.name}
+									data-testid="contacts-add-name"
+								/>
 							</div>
 							<div>
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-email">
 									Email
 								</label>
-								<Input id="add-email" name="email" type="email" data-testid="contacts-add-email" />
+								<Input
+									id="add-email"
+									name="email"
+									type="email"
+									bind:value={addDraft.email}
+									data-testid="contacts-add-email"
+								/>
 							</div>
 							<div>
 								<label
@@ -129,7 +229,12 @@
 								>
 									Company
 								</label>
-								<Input id="add-company" name="company" data-testid="contacts-add-company" />
+								<Input
+									id="add-company"
+									name="company"
+									bind:value={addDraft.company}
+									data-testid="contacts-add-company"
+								/>
 							</div>
 							<div>
 								<label
@@ -138,7 +243,12 @@
 								>
 									Job title
 								</label>
-								<Input id="add-jobTitle" name="jobTitle" data-testid="contacts-add-jobtitle" />
+								<Input
+									id="add-jobTitle"
+									name="jobTitle"
+									bind:value={addDraft.jobTitle}
+									data-testid="contacts-add-jobtitle"
+								/>
 							</div>
 							<div class="sm:col-span-2">
 								<label class="text-muted-foreground mb-1 block text-xs font-medium" for="add-tags">
@@ -148,6 +258,7 @@
 									id="add-tags"
 									name="tags"
 									placeholder="keynote, vip"
+									bind:value={addDraft.tags}
 									data-testid="contacts-add-tags"
 								/>
 							</div>
