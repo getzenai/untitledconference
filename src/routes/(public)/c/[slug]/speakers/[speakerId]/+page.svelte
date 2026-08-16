@@ -94,7 +94,10 @@
 						{#if session.track}<Badge variant="secondary">{session.track}</Badge>{/if}
 						{#if session.format}<Badge variant="outline">{session.format}</Badge>{/if}
 					</div>
-					<p class="mt-2 font-medium">{session.title}</p>
+					<a
+						href={withEmbed(`/c/${view.conference.slug}/agenda`, data.embed)}
+						class="mt-2 block font-medium hover:underline">{session.title}</a
+					>
 					<p class="text-muted-foreground mt-1 text-sm">
 						{formatFullStamp(session)}{#if session.room}<span class="px-1.5">·</span
 							>{session.room}{/if}
