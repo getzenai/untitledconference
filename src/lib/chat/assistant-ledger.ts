@@ -1,9 +1,9 @@
 /**
  * Bookkeeping that must live as long as the Chat, not the sheet (#728).
  *
- * The panel unmounts on close. If these sets die with it, the refresh effect
- * walks the retained transcript on the next open and calls `invalidateAll`
- * once per past auto-run write.
+ * The launcher walks these sets while the Chat lives, including while the
+ * sheet is closed. If they die with the panel, a write that already
+ * refreshed the page is asked again on the next open.
  */
 import { SvelteSet } from 'svelte/reactivity';
 

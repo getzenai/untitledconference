@@ -9,19 +9,18 @@
 	 *    mount. Otherwise the first page the user opened the panel on would
 	 *    stick to the whole conversation while they navigate away.
 	 * 2. Approval is rendered generically, over *any* tool part that asks for
-	 *    it. The server decides the card. Auto-run writes skip it; the panel
-	 *    still refreshes the page behind the sheet when those land.
+	 *    it. The server decides the card. Auto-run writes skip it; the
+	 *    launcher refreshes the page behind the sheet when those land.
 	 *
 	 * The message list follows the answer being streamed rather than the bottom
 	 * of the list (#718) — see `ai-elements/conversation/` for why those are not
 	 * the same thing.
 	 *
 	 * The Chat instance and its ledger live in the launcher. Closing this
-	 * sheet unmounts it and must not drop the transcript or re-refresh the
-	 * page for writes that already landed; New chat is the only way to empty
-	 * it (#728).
+	 * sheet unmounts it and must not drop the transcript. The refresh
+	 * effect lives next to them, not here. New chat is the only way to
+	 * empty it (#728).
 	 */
-	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import * as Sheet from '$lib/components/ui/sheet/index.js';
@@ -32,7 +31,6 @@
 		MessageAnchor
 	} from '$lib/components/ai-elements/conversation';
 	import { groupMessageParts, ToolGroup, type GenericPart } from '$lib/components/ai-elements/tool';
-	import { pageRefreshIds } from '$lib/chat/page-refresh-ids';
 	import type { AssistantLedger } from '$lib/chat/assistant-ledger';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
 	import { chatErrorMessage } from '$lib/chat/chat-error';
@@ -56,17 +54,6 @@
 	let stopFromIndex = $state<number | null>(ledger.stopFromIndex);
 
 	const pending = $derived(chat.status === 'submitted' || chat.status === 'streaming');
-
-	// A write has just landed. Gated writes enter `approved` when the card
-	// appears; auto-run writes never do, and still change the page (#726).
-	// `ledger` outlives this sheet — reopen must not refresh for writes
-	// that already landed (#728 / #802).
-	$effect(() => {
-		for (const id of pageRefreshIds(chat.messages, ledger)) {
-			ledger.invalidated.add(id);
-			void invalidateAll();
-		}
-	});
 
 	$effect(() => {
 		if (stopFromIndex === null || pending) return;

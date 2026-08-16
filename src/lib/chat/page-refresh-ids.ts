@@ -1,8 +1,10 @@
 /**
  * Which finished tool calls still need a page refresh (#728).
  *
- * The panel walks this on every mount. Already-invalidated ids must not
- * fire again — that is the reopen storm from #802.
+ * The launcher walks this for as long as the Chat lives — including while
+ * the sheet is closed. Already-invalidated ids must not fire again; that
+ * is the reopen storm from #802. A write that lands while the sheet is
+ * gone must still return, once.
  */
 import { getToolName, isToolUIPart, type UIMessage } from 'ai';
 import type { AssistantLedger } from './assistant-ledger';
