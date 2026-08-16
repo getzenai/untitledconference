@@ -5,11 +5,15 @@
  * CI runs this spec a second time with REQUIRE_EMAIL_VERIFICATION=true so the
  * email link, its new-tab storage boundary and the verified session are real.
  */
-import {
-	autosavedProposalKey,
-	pendingProposalKey
-} from '../../../src/lib/conference/pending-proposal';
 import { DEFAULT_TEST_PASSWORD, generateTestUserEmail } from '../../support/globals';
+
+// Cypress webpack does not resolve `$lib`. Build the same keys the page
+// writes, the way `cfp-autosave` and `cfp-draft-privacy` already do.
+const pendingProposalKey = (slug: string) =>
+	`unsaved-form-draft:${encodeURIComponent(`cfp-pending:${slug}`)}:${encodeURIComponent('handoff')}`;
+
+const autosavedProposalKey = (slug: string, owner: string | null) =>
+	`unsaved-form-draft:${encodeURIComponent(`cfp-autosave:${slug}`)}:${encodeURIComponent(owner ?? 'anonymous')}`;
 
 const verificationDescribe =
 	Cypress.env('REQUIRE_EMAIL_VERIFICATION') === 'true' ? describe : describe.skip;

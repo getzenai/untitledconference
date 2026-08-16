@@ -15,6 +15,9 @@
  */
 const uniqueSlug = () => `cfp-privacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const autosaveKey = (slug: string, owner: string | null) =>
+	`unsaved-form-draft:${encodeURIComponent(`cfp-autosave:${slug}`)}:${encodeURIComponent(owner ?? 'anonymous')}`;
+
 describe('A proposal parked by a signed-out stranger', () => {
 	it('does not open in the form of the next person to sign in', () => {
 		const slug = uniqueSlug();
@@ -52,7 +55,7 @@ describe('A proposal parked by a signed-out stranger', () => {
 		cy.window()
 			.its('localStorage')
 			.should((storage: Storage) => {
-				expect(storage.getItem(`cfp-autosaved-proposal:${slug}`)).to.contain(abstract);
+				expect(storage.getItem(autosaveKey(slug, null))).to.contain(abstract);
 			});
 
 		// The next person on the same browser, signed in as themselves.
@@ -69,7 +72,7 @@ describe('A proposal parked by a signed-out stranger', () => {
 		cy.window()
 			.its('localStorage')
 			.should((storage: Storage) => {
-				expect(storage.getItem(`cfp-autosaved-proposal:${slug}`)).to.equal(null);
+				expect(storage.getItem(autosaveKey(slug, null))).to.equal(null);
 			});
 	});
 
@@ -111,9 +114,7 @@ describe('A proposal parked by a signed-out stranger', () => {
 		cy.window()
 			.its('localStorage')
 			.should((storage: Storage) => {
-				expect(storage.getItem(`cfp-autosaved-proposal:${slug}:u${speakerId}`)).to.contain(
-					abstract
-				);
+				expect(storage.getItem(autosaveKey(slug, speakerId))).to.contain(abstract);
 			});
 
 		// Coming back is where the page owes an explanation: the form fills

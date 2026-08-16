@@ -1,31 +1,44 @@
 /**
- * Two parked copies of a filled-in proposal, different lifetimes.
+ * Two parked copies of a filled-in proposal, different lifetimes (#750).
+ *
+ * Storage is `$lib/forms/browser-draft`. This file knows what a proposal
+ * draft looks like, when it counts as typed, and how to name the two scopes
+ * so the sign-in handoff and the autosave cannot become each other.
  *
  * The pending draft is the signed-out visitor's sign-in round trip (#236, #624):
  * written on submit or draft, consumed once on the way back so it cannot
- * become a second automatic save. sessionStorage, because that trip is same-tab.
+ * become a second automatic save. Callers pass sessionStorage, because that
+ * trip is same-tab.
  *
  * The autosaved draft is the sentence on the call (#494): "Drafts are saved."
  * Written as they type, read (not consumed) when they come back, cleared when
- * a save actually lands. localStorage, not sessionStorage — closing the tab
- * is exactly the thing the sentence said they could do.
+ * a save actually lands. Callers pass localStorage — closing the tab is
+ * exactly the thing the sentence said they could do.
  *
- * Which is why the autosaved copy carries an owner and an age (#505). A draft
- * holds a name, an email address and a bio, and localStorage is per browser,
- * not per tab and not per account: on a shared machine the next person opened
- * the same call and found the last one's proposal in the form, ready to send
- * under their own account. So a signed-in reader only ever sees their own key,
- * an anonymous copy crosses over exactly once through the same-tab sign-in
- * handoff above, and anything older than `DRAFT_MAX_AGE_MS` is deleted on the
- * way out rather than offered.
+ * Owner, age, and "empty form is not a draft" live in the helper. A shared
+ * browser dropping the previous identity's copy is the helper too (#505).
  *
  * Storage is passed in, not read from the global, so the parse/consume rules
  * can be tested without a browser.
  */
+import {
+	ANONYMOUS_BROWSER_DRAFT_OWNER,
+	BROWSER_DRAFT_MAX_AGE_MS,
+	browserDraftKey,
+	clearBrowserDraft,
+	clearBrowserDrafts,
+	readBrowserDraft,
+	writeBrowserDraft
+} from '$lib/forms/browser-draft';
 import { emptyProposal, type ProposalDraft } from './proposal-draft';
 
-const PENDING_PREFIX = 'cfp-pending-proposal:';
-const AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
+/** Pre-#750 keys. Read once, then rewritten into the shared helper. */
+const LEGACY_PENDING_PREFIX = 'cfp-pending-proposal:';
+const LEGACY_AUTOSAVE_PREFIX = 'cfp-autosaved-proposal:';
+
+const PENDING_OWNER = 'handoff';
+
+type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 /**
  * Who typed it: the user id when signed in, `null` while nobody is.
@@ -43,16 +56,36 @@ export type RegistrationProposal = PendingProposal & { slug: string };
 /**
  * Long enough that a call's own deadline runs out first in every normal case,
  * short enough that an abandoned draft does not sit in a public browser for
- * a year.
+ * a year. Same bound the shared helper uses.
  */
-export const DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+export const DRAFT_MAX_AGE_MS = BROWSER_DRAFT_MAX_AGE_MS;
+
+function cfpPendingScope(slug: string): string {
+	return `cfp-pending:${slug}`;
+}
+
+function cfpAutosaveScope(slug: string): string {
+	return `cfp-autosave:${slug}`;
+}
+
+function cfpAutosaveOwner(owner: DraftOwner): string {
+	return owner ?? ANONYMOUS_BROWSER_DRAFT_OWNER;
+}
 
 export function pendingProposalKey(slug: string): string {
-	return `${PENDING_PREFIX}${slug}`;
+	return browserDraftKey(cfpPendingScope(slug), PENDING_OWNER);
 }
 
 export function autosavedProposalKey(slug: string, owner: DraftOwner): string {
-	return owner ? `${AUTOSAVE_PREFIX}${slug}:u${owner}` : `${AUTOSAVE_PREFIX}${slug}`;
+	return browserDraftKey(cfpAutosaveScope(slug), cfpAutosaveOwner(owner));
+}
+
+function legacyPendingKey(slug: string): string {
+	return `${LEGACY_PENDING_PREFIX}${slug}`;
+}
+
+function legacyAutosavedKey(slug: string, owner: DraftOwner): string {
+	return owner ? `${LEGACY_AUTOSAVE_PREFIX}${slug}:u${owner}` : `${LEGACY_AUTOSAVE_PREFIX}${slug}`;
 }
 
 function text(value: FormDataEntryValue | null): string {
@@ -211,83 +244,39 @@ export function parseRegistrationProposal(value: unknown): RegistrationProposal 
 	return pending ? { slug: row.slug, ...pending } : null;
 }
 
-/** Read without consuming, so a failed sign-up still leaves the same-tab fallback intact. */
-export function readPendingProposal(
-	storage: Pick<Storage, 'getItem'>,
-	slug: string
-): PendingProposal | null {
-	const raw = storage.getItem(pendingProposalKey(slug));
-	return raw == null ? null : parsePendingProposal(raw);
+function parseProposalValue(value: unknown): ProposalDraft | null {
+	const row = asRecord(value);
+	if (!row) return null;
+	const draft = draftFromUnknown(row);
+	return isTypedProposal(draft) ? draft : null;
 }
 
-export function writePendingProposal(
-	storage: Pick<Storage, 'setItem'>,
-	slug: string,
-	draft: ProposalDraft,
-	intent: PendingProposalIntent
-): void {
-	storage.setItem(
-		pendingProposalKey(slug),
-		JSON.stringify({ draft, intent } satisfies PendingProposal)
-	);
+function parsePendingValue(value: unknown): PendingProposal | null {
+	const row = asRecord(value);
+	if (!row) return null;
+	return parsePendingProposal(JSON.stringify(row));
 }
 
-export function consumePendingProposal(
-	storage: Pick<Storage, 'getItem' | 'removeItem'>,
-	slug: string
-): PendingProposal | null {
-	const key = pendingProposalKey(slug);
-	const raw = storage.getItem(key);
-	storage.removeItem(key);
-	if (raw == null) return null;
-	return parsePendingProposal(raw);
+function adoptLegacyPending(storage: DraftStorage, slug: string): void {
+	const raw = storage.getItem(legacyPendingKey(slug));
+	if (raw == null) return;
+	const pending = parsePendingProposal(raw);
+	if (pending) writePendingProposal(storage, slug, pending.draft, pending.intent);
+	storage.removeItem(legacyPendingKey(slug));
 }
 
-/** A draft plus when it was written, so the page can say where it came from. */
-export type AutosavedProposal = { draft: ProposalDraft; savedAt: number };
-
-export function writeAutosavedProposal(
-	storage: Pick<Storage, 'setItem'>,
-	slug: string,
-	owner: DraftOwner,
-	draft: ProposalDraft,
-	now: number = Date.now()
-): void {
-	storage.setItem(
-		autosavedProposalKey(slug, owner),
-		JSON.stringify({ savedAt: now, draft } satisfies { savedAt: number; draft: ProposalDraft })
-	);
-}
-
-/**
- * Read without removing — coming back a second time must still find it.
- *
- * Except when it is too old, or when it predates the envelope: a bare draft
- * with no `savedAt` is one of the copies this issue is about, written before
- * anything bounded them, so it is deleted rather than restored. The cost is a
- * draft typed in the last minutes of the old build; the alternative is keeping
- * exactly the copies whose age nobody can vouch for.
- */
-export function readAutosavedProposal(
-	storage: Pick<Storage, 'getItem' | 'removeItem'>,
-	slug: string,
-	owner: DraftOwner,
-	now: number = Date.now()
-): AutosavedProposal | null {
-	const key = autosavedProposalKey(slug, owner);
-	const raw = storage.getItem(key);
-	if (raw == null) return null;
-
-	const saved = parseAutosavedProposal(raw);
-	if (!saved || now - saved.savedAt > DRAFT_MAX_AGE_MS) {
-		storage.removeItem(key);
-		return null;
+function adoptLegacyAutosave(storage: DraftStorage, slug: string, owner: DraftOwner): void {
+	const raw = storage.getItem(legacyAutosavedKey(slug, owner));
+	if (raw == null) return;
+	const saved = parseLegacyAutosaved(raw);
+	if (saved) {
+		writeAutosavedProposal(storage, slug, owner, saved.draft, saved.savedAt);
 	}
-	return saved;
+	storage.removeItem(legacyAutosavedKey(slug, owner));
 }
 
-/** The envelope, or nothing: no timestamp is as good as no draft here. */
-function parseAutosavedProposal(raw: string): AutosavedProposal | null {
+/** The pre-#750 envelope, or nothing: no timestamp is as good as no draft here. */
+function parseLegacyAutosaved(raw: string): AutosavedProposal | null {
 	try {
 		const row = asRecord(JSON.parse(raw));
 		const parked = row && asRecord(row.draft);
@@ -300,26 +289,112 @@ function parseAutosavedProposal(raw: string): AutosavedProposal | null {
 	}
 }
 
+/** Read without consuming, so a failed sign-up still leaves the same-tab fallback intact. */
+export function readPendingProposal(storage: DraftStorage, slug: string): PendingProposal | null {
+	adoptLegacyPending(storage, slug);
+	const saved = readBrowserDraft(storage, {
+		scope: cfpPendingScope(slug),
+		owner: PENDING_OWNER,
+		baseline: '',
+		parse: parsePendingValue
+	});
+	return saved.status === 'empty' ? null : saved.draft.value;
+}
+
+export function writePendingProposal(
+	storage: DraftStorage,
+	slug: string,
+	draft: ProposalDraft,
+	intent: PendingProposalIntent
+): void {
+	writeBrowserDraft(storage, {
+		scope: cfpPendingScope(slug),
+		owner: PENDING_OWNER,
+		baseline: '',
+		value: { draft, intent } satisfies PendingProposal
+	});
+}
+
+export function consumePendingProposal(
+	storage: DraftStorage,
+	slug: string
+): PendingProposal | null {
+	const pending = readPendingProposal(storage, slug);
+	clearBrowserDraft(storage, cfpPendingScope(slug), PENDING_OWNER);
+	storage.removeItem(legacyPendingKey(slug));
+	return pending;
+}
+
+/** A draft plus when it was written, so the page can say where it came from. */
+export type AutosavedProposal = { draft: ProposalDraft; savedAt: number };
+
+export function writeAutosavedProposal(
+	storage: DraftStorage,
+	slug: string,
+	owner: DraftOwner,
+	draft: ProposalDraft,
+	now: number = Date.now()
+): void {
+	writeBrowserDraft(storage, {
+		scope: cfpAutosaveScope(slug),
+		owner: cfpAutosaveOwner(owner),
+		baseline: '',
+		value: draft,
+		now
+	});
+	storage.removeItem(legacyAutosavedKey(slug, owner));
+}
+
+/**
+ * Read without removing — coming back a second time must still find it.
+ *
+ * A pre-#750 copy is adopted once into the shared helper. A pre-#505 bare
+ * draft (no `savedAt`) is still deleted rather than restored.
+ */
+export function readAutosavedProposal(
+	storage: DraftStorage,
+	slug: string,
+	owner: DraftOwner,
+	now: number = Date.now()
+): AutosavedProposal | null {
+	adoptLegacyAutosave(storage, slug, owner);
+	const saved = readBrowserDraft(storage, {
+		scope: cfpAutosaveScope(slug),
+		owner: cfpAutosaveOwner(owner),
+		baseline: '',
+		parse: parseProposalValue,
+		now
+	});
+	if (saved.status === 'empty') return null;
+	return { draft: saved.draft.value, savedAt: saved.draft.savedAt };
+}
+
 export function clearAutosavedProposal(
 	storage: Pick<Storage, 'removeItem'>,
 	slug: string,
 	owner: DraftOwner
 ): void {
-	storage.removeItem(autosavedProposalKey(slug, owner));
+	clearBrowserDraft(storage, cfpAutosaveScope(slug), cfpAutosaveOwner(owner));
+	storage.removeItem(legacyAutosavedKey(slug, owner));
 }
 
 /**
- * Everything this module ever parked, for every call and every owner.
+ * Everything this module ever parked, and every other account-owned form
+ * draft in the same store.
  *
  * Signing out is the moment a browser stops being one person's, so it is the
  * moment the typed name, email and bio stop being fair game for whoever sits
- * down next.
+ * down next. The shared helper is the logout boundary now; the prefix scan
+ * only remains so a leftover pre-#750 key cannot outlive the session.
  */
 export function clearProposalDrafts(storage: Pick<Storage, 'length' | 'key' | 'removeItem'>): void {
 	const keys: string[] = [];
 	for (let i = 0; i < storage.length; i++) {
 		const key = storage.key(i);
-		if (key && (key.startsWith(AUTOSAVE_PREFIX) || key.startsWith(PENDING_PREFIX))) keys.push(key);
+		if (key && (key.startsWith(LEGACY_AUTOSAVE_PREFIX) || key.startsWith(LEGACY_PENDING_PREFIX))) {
+			keys.push(key);
+		}
 	}
 	for (const key of keys) storage.removeItem(key);
+	clearBrowserDrafts(storage);
 }

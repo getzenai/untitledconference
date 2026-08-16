@@ -11,6 +11,9 @@ const OWNER_PREFIX = 'unsaved-form-draft-owner:';
 
 export const BROWSER_DRAFT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/** Not an identity. A visit under this owner does not evict anyone else's copy. */
+export const ANONYMOUS_BROWSER_DRAFT_OWNER = 'anonymous';
+
 export type BrowserDraft<T> = {
 	value: T;
 	savedAt: number;
@@ -48,6 +51,8 @@ function claimIdentity(
 	scope: string,
 	owner: string
 ): void {
+	// Session expiry looks like this owner. It is not a new person taking the form.
+	if (owner === ANONYMOUS_BROWSER_DRAFT_OWNER) return;
 	const key = ownerKey(scope);
 	const previous = storage.getItem(key);
 	if (previous && previous !== owner) storage.removeItem(browserDraftKey(scope, previous));

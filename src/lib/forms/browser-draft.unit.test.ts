@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	ANONYMOUS_BROWSER_DRAFT_OWNER,
 	BROWSER_DRAFT_MAX_AGE_MS,
 	browserDraftKey,
 	clearBrowserDraft,
@@ -112,6 +113,43 @@ describe('browser form drafts', () => {
 		});
 
 		expect(storage.values.has(browserDraftKey('/review/1', 'reviewer-1'))).toBe(false);
+	});
+
+	it('does not let an anonymous visit evict a signed-in copy', () => {
+		const storage = fakeStorage();
+		writeBrowserDraft(storage, {
+			scope: '/cfp/devflow',
+			owner: 'user-1',
+			baseline: '',
+			value: 'still mine after the session died'
+		});
+
+		expect(
+			readBrowserDraft(storage, {
+				scope: '/cfp/devflow',
+				owner: ANONYMOUS_BROWSER_DRAFT_OWNER,
+				baseline: '',
+				parse: parseText
+			})
+		).toEqual({ status: 'empty' });
+		writeBrowserDraft(storage, {
+			scope: '/cfp/devflow',
+			owner: ANONYMOUS_BROWSER_DRAFT_OWNER,
+			baseline: '',
+			value: 'a later visitor typed this'
+		});
+
+		expect(
+			readBrowserDraft(storage, {
+				scope: '/cfp/devflow',
+				owner: 'user-1',
+				baseline: '',
+				parse: parseText
+			})
+		).toMatchObject({
+			status: 'current',
+			draft: { value: 'still mine after the session died' }
+		});
 	});
 
 	it('drops malformed and expired copies and clears committed work', () => {
