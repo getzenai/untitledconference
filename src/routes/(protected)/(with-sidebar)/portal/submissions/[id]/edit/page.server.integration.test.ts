@@ -35,7 +35,12 @@ let inReviewId = 0;
 let someoneElsesId = 0;
 
 /** What the form needs from the loader when it does open. */
-type OpenForm = { submissionId: number; status: string; draft: { title: string } };
+type OpenForm = {
+	submissionId: number;
+	status: string;
+	draft: { title: string };
+	ownerId: string;
+};
 
 /** A redirect or an error, as SvelteKit hands it over: by throwing it. */
 type Refusal = { status: number; location?: string; body?: { message: string } };
@@ -157,6 +162,7 @@ describe('the edit URL for a proposal that cannot be edited', () => {
 		expect(data.submissionId).toBe(inReviewId);
 		expect(data.status).toBe('in_review');
 		expect(data.draft.title).toBe('Queues are product decisions');
+		expect(data.ownerId).toBe(speakerUserId);
 	});
 
 	it('tells a stranger nothing except that there is no such proposal', async () => {
