@@ -11,26 +11,46 @@
 	import { formUpdateOptions, type FormResetKind } from '$lib/conference/form-reset';
 	import { slotCount, slotSentence } from '$lib/conference/decision-room';
 	import { formatScore } from '$lib/conference/scoring';
-	import AppSelect from '$lib/components/app/app-select.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { SvelteSet } from 'svelte/reactivity';
+	import DecisionDraftFields from './decision-draft-fields.svelte';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
 	/** Open while the organizer types the numbers; shut for the rest of the call. */
 	let editingSlots = $state(false);
+	const dirtyRows = new SvelteSet<number>();
+	let committedSubmissionId = $state<number | null>(null);
+	let commitToken = $state(0);
 
-	const submitting = (kind: FormResetKind) => () => {
+	const submitting = (kind: FormResetKind, submissionId?: number) => () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			try {
+				if (submissionId !== undefined && result.type === 'success') {
+					committedSubmissionId = submissionId;
+					commitToken += 1;
+				}
 				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
 		};
+	};
+
+	const setRowDirty = (submissionId: number, dirty: boolean) => {
+		if (dirty) dirtyRows.add(submissionId);
+		else dirtyRows.delete(submissionId);
 	};
 
 	const total = $derived(slotCount(data.board.total));
@@ -42,11 +62,9 @@
 		{ value: '', label: 'Who follows up' },
 		...organizers.map((owner) => ({ value: owner.userId, label: owner.name }))
 	]);
-
-	/** Guidance and a decline note both reach the speaker. The accept condition does not. */
-	const speakerSees =
-		'The speaker will see this in their portal, and in the email when you notify them.';
 </script>
+
+<UnsavedGuard dirty={dirtyRows.size > 0} />
 
 <svelte:head>
 	<title>Decision meeting — {data.conference.name}</title>
@@ -289,71 +307,25 @@
 								<form
 									method="POST"
 									action="?/decide"
-									use:enhance={submitting('edit')}
+									use:enhance={submitting('edit', row.submissionId)}
 									class="flex flex-col items-end gap-1"
 								>
 									<input type="hidden" name="id" value={row.submissionId} />
-									{#if row.status !== 'accepted'}
-										<div class="flex w-64 flex-col gap-1" data-testid="accept-condition">
-											<label class="block">
-												<span class="text-xs font-medium">Condition on this accept</span>
-												<input
-													name="condition"
-													type="text"
-													maxlength="280"
-													placeholder="If they bring a co-presenter…"
-													class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1 text-xs"
-													data-testid="accept-condition-text"
-												/>
-											</label>
-											<p class="text-muted-foreground text-[0.65rem] leading-snug">
-												The committee sees this. The speaker does not.
-											</p>
-											<AppSelect
-												name="conditionOwnerId"
-												value=""
-												options={ownerOptions}
-												size="sm"
-												aria-label="Who follows up"
-												testId="accept-condition-owner"
-											/>
-											<p class="text-muted-foreground text-[0.65rem] leading-snug">
-												The organizer who will chase it. Speakers never see this name.
-											</p>
-										</div>
-									{/if}
-									{#if row.status !== 'resubmit_with_guidance'}
-										<label class="block w-64">
-											<span class="text-xs font-medium">What they should change</span>
-											<input
-												name="guidance"
-												type="text"
-												maxlength="280"
-												placeholder="Resubmit with your client…"
-												class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1 text-xs"
-												data-testid="resubmit-guidance-text"
-											/>
-											<span class="text-muted-foreground mt-0.5 block text-[0.65rem] leading-snug">
-												{speakerSees}
-											</span>
-										</label>
-									{/if}
-									{#if row.status !== 'rejected'}
-										<label class="block w-64">
-											<span class="text-xs font-medium">Note with the rejection (optional)</span>
-											<input
-												name="declineNote"
-												type="text"
-												maxlength="280"
-												placeholder="One sentence from the champion"
-												class="border-input bg-background mt-0.5 w-full rounded-md border px-2 py-1 text-xs"
-												data-testid="decline-note-text"
-											/>
-											<span class="text-muted-foreground mt-0.5 block text-[0.65rem] leading-snug">
-												{speakerSees}
-											</span>
-										</label>
-									{/if}
+									<DecisionDraftFields
+										submissionId={row.submissionId}
+										status={row.status}
+										owner={data.user.id}
+										baseline={JSON.stringify({
+											status: row.status,
+											condition: row.acceptCondition,
+											owner: row.acceptConditionOwner,
+											guidance: row.resubmitGuidance,
+											declineNote: row.declineNote
+										})}
+										{ownerOptions}
+										commitToken={committedSubmissionId === row.submissionId ? commitToken : 0}
+										ondirtychange={setRowDirty}
+									/>
 									<div class="flex flex-wrap justify-end gap-1">
 										{#if row.status !== 'accepted'}
 											<Button

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	/**
 	 * The CFP form builder (Ü1, CFP-01/02).
 	 *
@@ -28,6 +30,7 @@
 		type FieldDefinition
 	} from '$lib/conference/form-definition';
 	import AppSelect from '$lib/components/app/app-select.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import DateTimePicker from '$lib/components/app/datetime-picker.svelte';
 	import CallProse from '$lib/components/app/conference/call-prose.svelte';
 	import CfpFieldEditor from '$lib/components/app/conference/cfp-field-editor.svelte';
@@ -40,10 +43,28 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Textarea } from '$lib/components/ui/textarea';
+	import {
+		clearBrowserDraft,
+		readBrowserDraft,
+		writeBrowserDraft,
+		type BrowserDraft
+	} from '$lib/forms/browser-draft';
 
 	let { data, form } = $props();
 
 	let busy = $state(false);
+	function getSavedDescription() {
+		return data.form?.description ?? '';
+	}
+
+	let description = $state(getSavedDescription());
+	let introDirty = $state(false);
+	let introConflict = $state<BrowserDraft<string> | null>(null);
+	let introRestored = $state(false);
+	const introScope = $derived(`cfp-intro:${page.url.pathname}`);
+	const introOwner = $derived(data.user.id);
+	const savedDescription = $derived(data.form?.description ?? '');
+	const introBaseline = $derived(JSON.stringify(savedDescription));
 
 	// A placeholder rather than a default value: the real text is the one thing on
 	// this screen only the organizer knows, and a prefilled box invites shipping
@@ -56,16 +77,77 @@ We want talks that show the work — **the migration that failed first**, the nu
 - Travel is covered for accepted speakers.
 - You can edit until the call closes. See [last year's programme](https://example.com/2026).`;
 
-	const submitting = (kind: FormResetKind) => () => {
+	const submitting = (kind: FormResetKind, onSuccess?: () => void) => () => {
 		busy = true;
-		return async ({ update }: { update: (opts?: { reset?: boolean }) => Promise<void> }) => {
+		return async ({
+			result,
+			update
+		}: {
+			result: { type: string };
+			update: (opts?: { reset?: boolean }) => Promise<void>;
+		}) => {
 			try {
+				if (result.type === 'success') onSuccess?.();
 				await update(formUpdateOptions(kind));
 			} finally {
 				busy = false;
 			}
 		};
 	};
+
+	function syncIntroDraft(): void {
+		if (!data.form || introConflict) return;
+		introDirty = description !== savedDescription;
+		if (introDirty) {
+			writeBrowserDraft(localStorage, {
+				scope: introScope,
+				owner: introOwner,
+				baseline: introBaseline,
+				value: description
+			});
+		} else {
+			clearBrowserDraft(localStorage, introScope, introOwner);
+		}
+	}
+
+	function clearIntroDraft(): void {
+		introDirty = false;
+		introConflict = null;
+		introRestored = false;
+		clearBrowserDraft(localStorage, introScope, introOwner);
+	}
+
+	function useSavedIntro(): void {
+		if (!introConflict) return;
+		description = introConflict.value;
+		introConflict = null;
+		introRestored = true;
+		syncIntroDraft();
+	}
+
+	function discardSavedIntro(): void {
+		introConflict = null;
+		clearBrowserDraft(localStorage, introScope, introOwner);
+		introDirty = false;
+	}
+
+	onMount(() => {
+		if (!data.form) return;
+		const result = readBrowserDraft(localStorage, {
+			scope: introScope,
+			owner: introOwner,
+			baseline: introBaseline,
+			parse: (value) => (typeof value === 'string' ? value : null)
+		});
+		if (result.status === 'current') {
+			description = result.draft.value;
+			introRestored = true;
+			syncIntroDraft();
+		} else if (result.status === 'conflict') {
+			introConflict = result.draft;
+			introDirty = true;
+		}
+	});
 
 	/**
 	 * The picker posts wall time with no zone — the same string `datetime-local` posted
@@ -83,7 +165,7 @@ We want talks that show the work — **the migration that failed first**, the nu
 			const raw = formData.get(name);
 			if (typeof raw === 'string' && raw) formData.set(name, new Date(raw).toISOString());
 		}
-		return submitting('edit')();
+		return submitting('edit', clearIntroDraft)();
 	};
 
 	const fields = $derived(data.fields as unknown as FieldDefinition[]);
@@ -180,6 +262,8 @@ We want talks that show the work — **the migration that failed first**, the nu
 		...parseOptions(field.options).map((option) => ({ value: option, label: option }))
 	];
 </script>
+
+<UnsavedGuard dirty={introDirty} />
 
 <svelte:head>
 	<title>Call for papers — {data.conference.name}</title>
@@ -357,6 +441,31 @@ We want talks that show the work — **the migration that failed first**, the nu
 						use:enhance={saveSettings}
 						class="mt-3 grid gap-2 sm:grid-cols-2"
 					>
+						{#if introRestored}
+							<p
+								class="text-status-good text-xs sm:col-span-2"
+								role="status"
+								data-testid="cfp-intro-restored"
+							>
+								Recovered your unsaved CFP intro.
+							</p>
+						{/if}
+						{#if introConflict}
+							<div
+								class="border-status-warn bg-status-warn/10 rounded-md border p-2 text-xs sm:col-span-2"
+								data-testid="cfp-intro-conflict"
+							>
+								<p>The saved CFP intro changed after this draft was written.</p>
+								<div class="mt-2 flex gap-2">
+									<button type="button" class="underline" onclick={useSavedIntro}
+										>Use my draft</button
+									>
+									<button type="button" class="underline" onclick={discardSavedIntro}
+										>Keep the saved intro</button
+									>
+								</div>
+							</div>
+						{/if}
 						<label class="text-muted-foreground text-xs">
 							Title
 							<Input name="title" value={data.form.title} class="mt-1" />
@@ -400,10 +509,12 @@ We want talks that show the work — **the migration that failed first**, the nu
 							What submitters should know before they start
 							<Textarea
 								name="description"
+								data-testid="cfp-intro-text"
 								rows={8}
-								value={data.form.description ?? ''}
+								bind:value={description}
 								class="mt-1"
 								placeholder={DESCRIPTION_HINT}
+								oninput={syncIntroDraft}
 							/>
 							<span class="mt-1 block">
 								Shown above the form. Markdown: <code>#</code> headings, <code>-</code> or

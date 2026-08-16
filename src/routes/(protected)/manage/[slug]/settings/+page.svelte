@@ -8,6 +8,8 @@
 	 * so form posts can keep their own save feedback without a tab-state machine.
 	 */
 	import { enhance } from '$lib/forms/enhance';
+	import BrowserDraftTextarea from '$lib/components/app/browser-draft-textarea.svelte';
+	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
 	import { MAX_MINUTES } from '$lib/conference/structure-lines';
 	import { unpublishWarning } from '$lib/conference/unpublish-warning';
@@ -24,7 +26,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import DatePicker from '$lib/components/app/date-picker.svelte';
 	import { Input } from '$lib/components/ui/input';
-	import { Textarea } from '$lib/components/ui/textarea';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let { data, form } = $props();
 
@@ -78,6 +80,21 @@
 	let formatsExpanded = $state(false);
 	let sponsorsExpanded = $state(false);
 	let tasksExpanded = $state(false);
+	const dirtyStructureDrafts = new SvelteSet<string>();
+	let structureCommitTokens = $state({ rooms: 0, tracks: 0, formats: 0 });
+
+	type StructureDraft = keyof typeof structureCommitTokens;
+
+	const setStructureDirty = (draftId: string, dirty: boolean) => {
+		if (dirty) dirtyStructureDrafts.add(draftId);
+		else dirtyStructureDrafts.delete(draftId);
+	};
+
+	const structureScope = (draftId: StructureDraft) =>
+		`settings:/manage/${data.conference.slug}/settings:${draftId}`;
+
+	const structureBaseline = (draftId: StructureDraft) =>
+		JSON.stringify(config[draftId].map((entry) => ({ ...entry })));
 
 	/**
 	 * Which entry the nav marks as current.
@@ -183,7 +200,7 @@
 	 * Expanding only on success keeps the quiet entry for everyone else.
 	 */
 	const addingLines =
-		(expand: () => void) =>
+		(expand: () => void, draftId?: StructureDraft) =>
 		({ formElement }: { formElement: HTMLFormElement }) => {
 			busy = true;
 			return async ({
@@ -194,9 +211,15 @@
 				update: (opts?: { reset?: boolean }) => Promise<void>;
 			}) => {
 				try {
-					await update(formUpdateOptions('add'));
 					if (result.type === 'success') {
 						expand();
+						if (draftId) {
+							structureCommitTokens[draftId] += 1;
+							dirtyStructureDrafts.delete(draftId);
+						}
+					}
+					await update(formUpdateOptions('add'));
+					if (result.type === 'success') {
 						formElement.querySelector('textarea')?.focus();
 					}
 				} finally {
@@ -227,6 +250,8 @@
 		(event.currentTarget as HTMLTextAreaElement).form?.requestSubmit();
 	};
 </script>
+
+<UnsavedGuard dirty={dirtyStructureDrafts.size > 0} />
 
 <!--
 	Where the answer to "did that work?" appears.
@@ -679,20 +704,24 @@
 				action="?/addRoom"
 				use:enhance={addingLines(() => {
 					roomsExpanded = true;
-				})}
+				}, 'rooms')}
 				class="mt-3 space-y-2"
 			>
-				<label class="block text-xs">
-					<span class="text-muted-foreground">New rooms — one per line</span>
-					<Textarea
-						name="names"
-						rows={2}
-						class="mt-1 min-h-0 py-1.5 text-sm"
-						placeholder={ROOM_LINES}
-						onkeydown={submitOnEnter}
-						required
-					/>
-				</label>
+				<BrowserDraftTextarea
+					draftId="rooms"
+					scope={structureScope('rooms')}
+					owner={data.user.id}
+					baseline={structureBaseline('rooms')}
+					name="names"
+					label="New rooms — one per line"
+					class="mt-1 min-h-0 py-1.5 text-sm"
+					placeholder={ROOM_LINES}
+					required
+					testId="settings-new-rooms"
+					commitToken={structureCommitTokens.rooms}
+					onkeydown={submitOnEnter}
+					ondirtychange={setStructureDirty}
+				/>
 				<div class="flex flex-wrap items-center gap-2">
 					<Button type="submit" size="sm" disabled={busy}>Add rooms</Button>
 					<span class="text-muted-foreground text-xs">
@@ -732,20 +761,24 @@
 				action="?/addTrack"
 				use:enhance={addingLines(() => {
 					tracksExpanded = true;
-				})}
+				}, 'tracks')}
 				class="mt-3 space-y-2"
 			>
-				<label class="block text-xs">
-					<span class="text-muted-foreground">New tracks — one per line</span>
-					<Textarea
-						name="names"
-						rows={2}
-						class="mt-1 min-h-0 py-1.5 text-sm"
-						placeholder={TRACK_LINES}
-						onkeydown={submitOnEnter}
-						required
-					/>
-				</label>
+				<BrowserDraftTextarea
+					draftId="tracks"
+					scope={structureScope('tracks')}
+					owner={data.user.id}
+					baseline={structureBaseline('tracks')}
+					name="names"
+					label="New tracks — one per line"
+					class="mt-1 min-h-0 py-1.5 text-sm"
+					placeholder={TRACK_LINES}
+					required
+					testId="settings-new-tracks"
+					commitToken={structureCommitTokens.tracks}
+					onkeydown={submitOnEnter}
+					ondirtychange={setStructureDirty}
+				/>
 				<div class="flex flex-wrap items-center gap-2">
 					<Button type="submit" size="sm" disabled={busy}>Add tracks</Button>
 					<span class="text-muted-foreground text-xs">
@@ -822,20 +855,24 @@
 				action="?/addFormat"
 				use:enhance={addingLines(() => {
 					formatsExpanded = true;
-				})}
+				}, 'formats')}
 				class="mt-3 space-y-2"
 			>
-				<label class="block text-xs">
-					<span class="text-muted-foreground">New formats — one per line, length optional</span>
-					<Textarea
-						name="formats"
-						rows={2}
-						class="mt-1 min-h-0 py-1.5 text-sm"
-						placeholder={FORMAT_LINES}
-						onkeydown={submitOnEnter}
-						required
-					/>
-				</label>
+				<BrowserDraftTextarea
+					draftId="formats"
+					scope={structureScope('formats')}
+					owner={data.user.id}
+					baseline={structureBaseline('formats')}
+					name="formats"
+					label="New formats — one per line, length optional"
+					class="mt-1 min-h-0 py-1.5 text-sm"
+					placeholder={FORMAT_LINES}
+					required
+					testId="settings-new-formats"
+					commitToken={structureCommitTokens.formats}
+					onkeydown={submitOnEnter}
+					ondirtychange={setStructureDirty}
+				/>
 				<div class="flex flex-wrap items-center gap-2">
 					<Button type="submit" size="sm" disabled={busy}>Add formats</Button>
 					<span class="text-muted-foreground text-xs">
