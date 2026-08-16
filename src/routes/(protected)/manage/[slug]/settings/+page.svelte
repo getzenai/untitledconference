@@ -726,6 +726,7 @@
 					scope={structureScope('rooms')}
 					owner={data.user.id}
 					baseline={structureBaseline('rooms')}
+					initial=""
 					name="names"
 					label="New rooms — one per line"
 					class="mt-1 min-h-0 py-1.5 text-sm"
@@ -784,6 +785,7 @@
 					scope={structureScope('tracks')}
 					owner={data.user.id}
 					baseline={structureBaseline('tracks')}
+					initial=""
 					name="names"
 					label="New tracks — one per line"
 					class="mt-1 min-h-0 py-1.5 text-sm"
@@ -879,6 +881,7 @@
 					scope={structureScope('formats')}
 					owner={data.user.id}
 					baseline={structureBaseline('formats')}
+					initial=""
 					name="formats"
 					label="New formats — one per line, length optional"
 					class="mt-1 min-h-0 py-1.5 text-sm"

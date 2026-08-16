@@ -1,4 +1,10 @@
 <script lang="ts">
+	/**
+	 * Parks newly typed lines. `baseline` is the last saved server value —
+	 * the conflict marker, same meaning as on `BrowserDraftInput`. `initial`
+	 * is what the field shows (empty here: this field collects *new* names,
+	 * not the saved rooms / tracks / formats list).
+	 */
 	import { onMount } from 'svelte';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import {
@@ -13,6 +19,7 @@
 		scope,
 		owner,
 		baseline,
+		initial = '',
 		name,
 		label,
 		rows = 2,
@@ -29,6 +36,7 @@
 		scope: string;
 		owner: string;
 		baseline: string;
+		initial?: string;
 		name: string;
 		label: string;
 		rows?: number;
@@ -42,7 +50,8 @@
 		ondirtychange: (draftId: string, dirty: boolean) => void;
 	} = $props();
 
-	let value = $state('');
+	// svelte-ignore state_referenced_locally
+	let value = $state(initial);
 	let mounted = false;
 	let restored = $state(false);
 	let touched = $state(false);

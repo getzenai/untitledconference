@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { ALL_FIXED_QUESTIONS_SHOWN } from '$lib/conference/fixed-questions';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
@@ -202,6 +203,12 @@ describe('the public call for papers', () => {
 		);
 		expect(body).not.toMatch(/Drafts are saved/i);
 		expect(body.indexOf('data-testid="cfp-draft-hint"')).toBeLessThan(body.indexOf('<form'));
+	});
+
+	it('DevFlow seed intro does not promise that drafts are saved (#817)', () => {
+		const seed = readFileSync('scripts/db/seed-devflow.mjs', 'utf8');
+		expect(seed).toContain('You can edit anything until the deadline.');
+		expect(seed).not.toMatch(/Drafts are saved/i);
 	});
 
 	it('offers to send the filled form after sign-in, not a blank one (#236)', () => {
