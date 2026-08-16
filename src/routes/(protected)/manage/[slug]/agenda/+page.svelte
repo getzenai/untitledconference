@@ -60,8 +60,8 @@
 	import type { ActionResult, SubmitFunction } from '@sveltejs/kit';
 	import { DragController, type PlaceIntent } from './drag-controller.svelte';
 	import SlotEditor from './SlotEditor.svelte';
-	import AgendaChat from '$lib/components/app/conference/agenda-chat.svelte';
-	import type { BoardNames } from '$lib/components/app/conference/agenda-chat-write';
+	import { providePageFocus } from '$lib/chat/page-focus.svelte';
+	import { page } from '$app/state';
 
 	let { data, form } = $props();
 
@@ -95,16 +95,15 @@
 	const day = $derived(board.days[activeDay] ?? board.days[0]);
 
 	/**
-	 * The chat talks in ids; the organizer reads names. The board on screen is
-	 * the only place both exist, so the panel confirms a write with what this
-	 * page would call the same talk (#302).
+	 * The board shows one day at a time, and the assistant in the layout above
+	 * cannot see which. Without this, "move it to 14:00" is a complete sentence
+	 * on screen and an ambiguous one in a tool call (#683).
+	 *
+	 * Only the day travels. The names the organizer reads come from `get_agenda`
+	 * and `list_rooms`, which the model has to call before it may write anyway —
+	 * a second copy of them in the prompt would be one more thing to go stale.
 	 */
-	const chatNames: BoardNames = {
-		talk: (placementId) =>
-			[...board.placed, ...board.tray].find((s) => s.placementId === placementId)?.title,
-		room: (roomId) => board.rooms.find((r) => r.id === roomId)?.name,
-		day: (dayId) => board.days.find((d) => d.id === dayId)?.date
-	};
+	$effect(() => providePageFocus(page.route.id, { day: day?.date?.slice(0, 10) }));
 
 	/**
 	 * The clashes a given session is part of, so a block can show its own.
@@ -1560,10 +1559,6 @@
 			>
 		{/if}
 	</div>
-{/if}
-
-{#if data.chatEnabled}
-	<AgendaChat slug={data.conference.slug} day={day?.date?.slice(0, 10)} names={chatNames} />
 {/if}
 
 {#if editing}

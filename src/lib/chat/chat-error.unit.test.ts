@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatErrorMessage } from './reviewer-chat-error';
+import { chatErrorMessage } from './chat-error';
 
 describe('chatErrorMessage', () => {
 	it('passes a plain 503 body through', () => {

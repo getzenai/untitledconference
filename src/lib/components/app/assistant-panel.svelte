@@ -20,7 +20,7 @@
 	import { pageContext, visiblePageTitle } from '$lib/chat/page-context';
 	import { pageFocus } from '$lib/chat/page-focus.svelte';
 	import { toolInputLines, toolLabel } from '$lib/chat/tool-summary';
-	import { chatErrorMessage } from '$lib/components/app/conference/reviewer-chat-error';
+	import { chatErrorMessage } from '$lib/chat/chat-error';
 	import { Chat } from '@ai-sdk/svelte';
 	import SendIcon from '@lucide/svelte/icons/send';
 	import {

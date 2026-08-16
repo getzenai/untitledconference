@@ -5,7 +5,6 @@ import {
 	saveReview,
 	type SaveReviewResult
 } from '$lib/server/conference/reviewer';
-import { isFeatureEnabled } from '$lib/server/feature-flags';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -102,7 +101,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	// the same question about who may read what.
 	if (!submission) throw error(404, 'Talk not found');
 
-	return { submission, chatEnabled: isFeatureEnabled('inAppChat') };
+	return { submission };
 };
 
 export const actions: Actions = {

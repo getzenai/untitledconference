@@ -2,6 +2,10 @@
  * A reviewer of conference A must not receive conference B's data through the
  * chat-wired tools. The definitions are the MCP ones; the adapter only
  * changes the wrapper.
+ *
+ * Since #683 there is no reviewer allow-list to lean on: the assistant hands
+ * out the whole registry and every refusal has to come from the tool itself.
+ * That makes this the more important test, not the less.
  */
 import { createConference } from '$lib/server/conference/create-conference';
 import { addReviewer } from '$lib/server/conference/reviewer-roster';
@@ -11,9 +15,9 @@ import type { McpContext } from '$lib/server/mcp/context';
 import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '$lib/server/mcp/harness';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runMcpTool } from './adapter';
+import { streamAssistantChat } from './assistant';
 import { createMockChatModel } from './model';
-import { streamReviewerChat } from './request';
-import { reviewerReadToolDefinitions } from './tools';
+import { assistantChatToolDefinitions } from './tools';
 
 const suffix = `chat302-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const SECRET = 'SECRET_FROM_CONFERENCE_B';
@@ -58,9 +62,9 @@ afterAll(async () => {
 	await wipeMcpHarness(seeded);
 });
 
-describe('reviewer chat tools', () => {
+describe('assistant reviewer tools (#302, #683)', () => {
 	it('refuses conference B data to a reviewer who only sits on A', async () => {
-		const defs = reviewerReadToolDefinitions(ellis);
+		const defs = assistantChatToolDefinitions(ellis);
 		const get = defs.find((tool) => tool.name === 'get_review_assignment');
 		expect(get).toBeDefined();
 
@@ -75,7 +79,7 @@ describe('reviewer chat tools', () => {
 	});
 
 	it('lists A when asked, and does not mention B', async () => {
-		const defs = reviewerReadToolDefinitions(ellis);
+		const defs = assistantChatToolDefinitions(ellis);
 		const list = defs.find((tool) => tool.name === 'list_my_review_assignments');
 		expect(list).toBeDefined();
 
@@ -86,9 +90,8 @@ describe('reviewer chat tools', () => {
 	});
 
 	it('streams a stubbed reply that names the tool and still hides B', async () => {
-		const res = await streamReviewerChat({
+		const res = await streamAssistantChat({
 			ctx: ellis,
-			conference: { name: 'MCP Harness', slug: seeded.conferenceSlug },
 			messages: [
 				{
 					id: 'u1',
@@ -96,7 +99,13 @@ describe('reviewer chat tools', () => {
 					parts: [{ type: 'text', text: 'What reviews do I still have open?' }]
 				}
 			],
-			model: createMockChatModel()
+			model: createMockChatModel(),
+			page: {
+				routeId: '/(protected)/(with-sidebar)/review/[slug]',
+				url: `/review/${seeded.conferenceSlug}`,
+				title: 'Review queue',
+				params: { slug: seeded.conferenceSlug }
+			}
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();

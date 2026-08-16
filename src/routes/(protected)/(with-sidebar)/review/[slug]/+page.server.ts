@@ -1,6 +1,5 @@
 import type { QueueSort } from '$lib/conference/review-visibility';
 import { requireReviewer, reviewQueue } from '$lib/server/conference/reviewer';
-import { isFeatureEnabled } from '$lib/server/feature-flags';
 import type { PageServerLoad } from './$types';
 
 const SORTS: QueueSort[] = ['mine', 'coverage', 'score', 'title', 'track'];
@@ -24,7 +23,6 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	return {
 		queue: await reviewQueue(conference, locals.user!.id, sort),
 		sort,
-		recused,
-		chatEnabled: isFeatureEnabled('inAppChat')
+		recused
 	};
 };

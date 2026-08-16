@@ -2,6 +2,10 @@
  * Filing a review through the chat uses the same `submit_review` the MCP
  * server exposes. The first turn asks; the write only happens after the
  * reviewer confirms (#302).
+ *
+ * The reviewer chat that used to carry this is gone (#683): the one assistant
+ * does the same work, and the round it writes into now comes from the page's
+ * published focus rather than from a per-surface handler's own body field.
  */
 import { assignReviewerToSubmissions } from '$lib/server/conference/review-management';
 import { addReviewRound } from '$lib/server/conference/review-rounds';
@@ -15,8 +19,8 @@ import { seedMcpHarness, wipeMcpHarness, type SeededHarness } from '$lib/server/
 import type { UIMessage } from 'ai';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { streamAssistantChat, type AssistantPageContext } from './assistant';
 import { createMockSubmitReviewModel } from './model';
-import { streamReviewerChat } from './request';
 
 const suffix = `chat302w-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -95,29 +99,37 @@ afterAll(async () => {
 	await wipeMcpHarness(seeded);
 });
 
+/** The scorecard page as the panel reports it: route, heading and what is selected. */
+const scorecard = (): AssistantPageContext => ({
+	routeId: '/(protected)/(with-sidebar)/review/[slug]/[submissionId]',
+	url: `/review/${conference.slug}/${submissionId}`,
+	title: 'Observability for agents that call tools',
+	params: { slug: conference.slug, submissionId: String(submissionId) },
+	focus: {
+		submissionId: String(submissionId),
+		talk: 'Observability for agents that call tools',
+		roundId: String(roundId),
+		round: 'Screening'
+	}
+});
+
 const userTurn = (): UIMessage => ({
 	id: 'u1',
 	role: 'user',
 	parts: [{ type: 'text', text: 'File my review of this talk: 4 on Fit.' }]
 });
 
-describe('reviewer chat submit_review (#302)', () => {
+describe('assistant submit_review (#302, #683)', () => {
 	it('does not write until the reviewer confirms', async () => {
-		const res = await streamReviewerChat({
+		const res = await streamAssistantChat({
 			ctx: ellis,
-			conference: { name: conference.name, slug: conference.slug },
 			messages: [userTurn()],
 			model: createMockSubmitReviewModel({
 				conferenceSlug: conference.slug,
 				submissionId,
 				answers
 			}),
-			focus: {
-				submissionId,
-				title: 'Observability for agents that call tools',
-				roundId: roundId,
-				roundName: 'Screening'
-			}
+			page: scorecard()
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();
@@ -151,20 +163,14 @@ describe('reviewer chat submit_review (#302)', () => {
 			}
 		];
 
-		const res = await streamReviewerChat({
+		const res = await streamAssistantChat({
 			ctx: ellis,
-			conference: { name: conference.name, slug: conference.slug },
 			messages: approved,
 			model: createMockSubmitReviewModel(
 				{ conferenceSlug: conference.slug, submissionId, answers },
 				true
 			),
-			focus: {
-				submissionId,
-				title: 'Observability for agents that call tools',
-				roundId: roundId,
-				roundName: 'Screening'
-			}
+			page: scorecard()
 		});
 		expect(res.status).toBe(200);
 		const body = await res.text();
@@ -211,9 +217,8 @@ describe('reviewer chat submit_review (#302)', () => {
 			}
 		];
 
-		const res = await streamReviewerChat({
+		const res = await streamAssistantChat({
 			ctx: ellis,
-			conference: { name: conference.name, slug: conference.slug },
 			messages: approved,
 			model: createMockSubmitReviewModel(
 				{ conferenceSlug: conference.slug, submissionId: strangerId, answers },
