@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BROWSER_DRAFT_LEAVE_PROMPT } from './browser-draft-copy';
 import { CONTACT_NOTES_LEAVE_PROMPT, contactNotesDraftScope } from './contact-notes-draft';
 
 describe('contactNotesDraftScope', () => {
@@ -9,8 +10,8 @@ describe('contactNotesDraftScope', () => {
 });
 
 describe('CONTACT_NOTES_LEAVE_PROMPT', () => {
-	it('names the parked notes, not a saved page', () => {
-		expect(CONTACT_NOTES_LEAVE_PROMPT).toMatch(/only these notes stay in this browser/i);
+	it('is the shared draft sentence, not a saved page', () => {
+		expect(CONTACT_NOTES_LEAVE_PROMPT).toBe(BROWSER_DRAFT_LEAVE_PROMPT);
 		expect(CONTACT_NOTES_LEAVE_PROMPT).not.toMatch(/saved/i);
 	});
 });

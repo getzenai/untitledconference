@@ -72,7 +72,10 @@ describe('Contact notes draft (#765)', () => {
 			cy.wrap(asked).should('have.length', 1);
 			cy.wrap(asked)
 				.its(0)
-				.should('match', /only these notes stay in this browser/i);
+				.should('match', /this browser on this device/i);
+			cy.wrap(asked)
+				.its(0)
+				.should('match', /cleared store/i);
 			cy.wrap(asked).its(0).should('not.match', /saved/i);
 
 			cy.visit(path);
@@ -114,7 +117,10 @@ describe('Contact notes draft (#765)', () => {
 		cy.wrap(asked).should('have.length', 1);
 		cy.wrap(asked)
 			.its(0)
-			.should('match', /only these notes stay in this browser/i);
+			.should('match', /this browser on this device/i);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /cleared store/i);
 		cy.wrap(asked).its(0).should('not.match', /saved/i);
 	});
 });

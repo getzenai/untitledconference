@@ -68,8 +68,21 @@ describe('Speaker notes and organizer talk-edit drafts', () => {
 		cy.contains('button', 'Edit talk').click();
 		cy.get('[data-testid="talk-abstract"]').clear().type(abstract);
 
+		const asked: string[] = [];
+		cy.on('window:confirm', (text: string) => {
+			asked.push(text);
+			return true;
+		});
 		cy.get('[data-testid="conference-nav-decisions"]').filter(':visible').first().click();
 		cy.location('pathname').should('eq', `/manage/${slug}/decisions`);
+		cy.wrap(asked).should('have.length', 1);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /this browser on this device/i);
+		cy.wrap(asked)
+			.its(0)
+			.should('match', /cleared store/i);
+		cy.wrap(asked).its(0).should('not.match', /saved/i);
 
 		cy.visit(`/manage/${slug}/submissions`);
 		cy.contains('a', TALK).click();
