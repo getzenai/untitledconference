@@ -193,6 +193,17 @@ describe('the public call for papers', () => {
 		expect(body).toContain('<form');
 	});
 
+	it('says what stays on this call, and where, without calling it saved (#801)', () => {
+		const body = renderCfp('open', null);
+
+		expect(body).toContain('data-testid="cfp-draft-hint"');
+		expect(body).toContain(
+			'Only what you filled in on this call will stay in this browser on this device.'
+		);
+		expect(body).not.toMatch(/Drafts are saved/i);
+		expect(body.indexOf('data-testid="cfp-draft-hint"')).toBeLessThan(body.indexOf('<form'));
+	});
+
 	it('offers to send the filled form after sign-in, not a blank one (#236)', () => {
 		const body = renderCfp('open', null);
 

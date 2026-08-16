@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+	autosavedProposalIdentity,
 	autosavedProposalKey,
+	autosavedSelectKey,
 	clearAutosavedProposal,
 	clearProposalDrafts,
 	consumePendingProposal,
@@ -151,6 +153,33 @@ describe('autosaved proposal storage', () => {
 		expect(readAutosavedProposal(storage, 'devflow', null)).toBeNull();
 		expect(isTypedProposal(emptyProposal())).toBe(false);
 		expect(isTypedProposal(draft)).toBe(true);
+	});
+
+	it('names the dropdown identity from the same scope the blob uses (#801)', () => {
+		expect(autosavedProposalIdentity('devflow', 'ada')).toEqual({
+			scope: 'cfp-autosave:devflow',
+			owner: 'ada'
+		});
+		expect(autosavedProposalIdentity('devflow', null)).toEqual({
+			scope: 'cfp-autosave:devflow',
+			owner: 'anonymous'
+		});
+		expect(autosavedSelectKey('devflow', 'ada', 'sessionFormatId')).toBe(
+			`unsaved-form-draft:${encodeURIComponent('cfp-autosave:devflow:sessionFormatId')}:${encodeURIComponent('ada')}`
+		);
+	});
+
+	it('clears the parked format and track with the proposal blob (#801)', () => {
+		const storage = fakeStorage();
+		writeAutosavedProposal(storage, 'devflow', null, draft);
+		storage.setItem(autosavedSelectKey('devflow', null, 'sessionFormatId'), '{"value":"1"}');
+		storage.setItem(autosavedSelectKey('devflow', null, 'trackId'), '{"value":"2"}');
+
+		clearAutosavedProposal(storage, 'devflow', null);
+
+		expect(storage.getItem(autosavedProposalKey('devflow', null))).toBeNull();
+		expect(storage.getItem(autosavedSelectKey('devflow', null, 'sessionFormatId'))).toBeNull();
+		expect(storage.getItem(autosavedSelectKey('devflow', null, 'trackId'))).toBeNull();
 	});
 
 	it('does not hand one person the next one their name and email (#505)', () => {

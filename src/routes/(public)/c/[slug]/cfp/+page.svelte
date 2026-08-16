@@ -9,6 +9,7 @@
 	import ProposalForm from '$lib/components/app/conference/proposal-form.svelte';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
+		autosavedProposalIdentity,
 		clearAutosavedProposal,
 		consumePendingProposal,
 		isTypedProposal,
@@ -17,6 +18,7 @@
 		writePendingProposal,
 		type PendingProposalIntent
 	} from '$lib/conference/pending-proposal';
+	import { browserDraftStayHint } from '$lib/conference/browser-draft-copy';
 	import { emptyProposal, type ProposalDraft } from '$lib/conference/proposal-draft';
 	import CallProse from '$lib/components/app/conference/call-prose.svelte';
 	import SpeakerSupportBlock from '$lib/components/app/conference/speaker-support-block.svelte';
@@ -61,6 +63,7 @@
 	 * bio sitting in a browser that is plainly shared.
 	 */
 	const owner = $derived(data.user?.id ?? null);
+	const selectDraft = $derived(autosavedProposalIdentity(call.conference.slug, owner));
 
 	onMount(() => {
 		const slug = data.call.conference.slug;
@@ -340,6 +343,9 @@
 		{/if}
 
 		{#if showNewProposal}
+			<p class="text-muted-foreground mt-4 text-sm" data-testid="cfp-draft-hint">
+				{browserDraftStayHint('what you filled in on this call')}
+			</p>
 			{#key restored}
 				<ProposalForm
 					fields={call.fields}
@@ -353,6 +359,7 @@
 					{autoAction}
 					onDraftChange={listening ? persistDraft : undefined}
 					onCommitted={clearDraft}
+					draft={selectDraft}
 				/>
 			{/key}
 		{/if}
