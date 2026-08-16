@@ -115,7 +115,9 @@ function asCoSpeakers(value: unknown): ProposalDraft['coSpeakers'] | null {
 	return out;
 }
 
-function parseTalkFields(row: Record<string, unknown>): Pick<
+function parseTalkFields(
+	row: Record<string, unknown>
+): Pick<
 	ProposalDraft,
 	'title' | 'abstract' | 'keyTakeaway' | 'audienceLevel' | 'sessionFormatId' | 'trackId'
 > | null {
