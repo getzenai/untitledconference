@@ -48,6 +48,9 @@ export function cfpDeadlineEvent(deadline: CfpDeadline): CalendarEvent {
 		uid: `cfp-${deadline.formId}@untitledconference`,
 		start,
 		end: deadline.closesAt,
+		// A deadline is a moment, not a wall clock: a call closing at 23:59 EDT
+		// closed at 05:59 for the reader in Berlin, and their calendar must say so.
+		timing: 'instant',
 		summary: `${namedCall(deadline.conferenceName, deadline.formTitle)} closes`,
 		description: 'The call for papers closes at this moment.',
 		url: deadline.url

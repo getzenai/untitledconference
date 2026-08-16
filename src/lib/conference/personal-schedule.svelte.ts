@@ -83,6 +83,8 @@ export function scheduleEvents(sessions: ResolvedSession[]): CalendarEvent[] {
 		uid: `${session.id}@untitledconference`,
 		start: session.start,
 		end: session.end,
+		// The same wall clock the itinerary prints, not a world-clock moment (#821).
+		timing: 'floating',
 		summary: session.title,
 		description: session.description,
 		location: session.room

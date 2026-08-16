@@ -24,6 +24,23 @@ export type CalendarEvent = {
 	uid: string;
 	start: Date;
 	end: Date;
+	/**
+	 * What `start` and `end` mean, and there is no safe default (#821).
+	 *
+	 * `'floating'` is a wall clock with no zone: 09:30 for every reader, wherever
+	 * they are. That is what a programme is — a talk is at 09:30 in the room, and
+	 * the public pages print exactly that, the same digits in every zone.
+	 *
+	 * `'instant'` is a moment on the world clock, written in UTC and re-rendered
+	 * by the reader's calendar in their own zone. That is what a deadline is: a
+	 * call closing at 23:59 EDT closed for the reader in Berlin at 05:59 their
+	 * time, and saying 23:59 to them would be a lie.
+	 *
+	 * Required rather than defaulted because the two are indistinguishable in the
+	 * bytes until somebody is in the wrong zone, and a default is how the wrong
+	 * one gets picked by a caller who never read this.
+	 */
+	timing: 'floating' | 'instant';
 	summary: string;
 	description?: string | null;
 	location?: string | null;
@@ -31,23 +48,23 @@ export type CalendarEvent = {
 };
 
 /**
- * When a session happens, as a *floating* time: `20270415T093000`, no `Z` (#821).
+ * A wall clock with no zone: `20270415T093000`, no `Z` (#821).
  *
- * RFC 5545 §3.3.5 has three forms, and only the third one says what this product
- * means. A UTC instant (`…Z`) and a zoned time (`TZID=` plus a VTIMEZONE block)
+ * RFC 5545 §3.3.5 has three forms, and for a programme only this one says what
+ * we mean. A UTC instant (`…Z`) and a zoned time (`TZID=` plus a VTIMEZONE block)
  * both name a moment on the world clock, so a calendar re-renders them in the
- * reader's own zone. A floating time names a wall clock and no zone: every
- * reader sees 09:30.
+ * reader's own zone. A floating time names the clock on the wall: 09:30 for
+ * everyone.
  *
  * That is exactly what the public pages do — `public-view.ts` formats every time
  * in UTC on purpose, so the grid reads 09:30 in New York and in Auckland alike.
- * The `…Z` this used to write meant the opposite, and the file disagreed with the
- * page it came from: an attendee at a venue in `America/Los_Angeles` starred the
- * 09:30 talk and their calendar showed 02:30.
+ * The `…Z` a session used to get meant the opposite, and the file disagreed with
+ * the page it came from: an attendee at a venue in `America/Los_Angeles` starred
+ * the 09:30 talk and their calendar showed 02:30.
  *
  * The trade is the one the pages already take: a floating time cannot survive the
- * conference moving zones, and it is the wrong answer for a reader who wants
- * "when is that for me" from an online event. Both need a real zone stored on the
+ * conference moving zones, and it is the wrong answer for a reader asking "when
+ * is that for me" about an online event. Both need a real zone stored on the
  * conference — and on the day that exists, this becomes `TZID` in the file *and*
  * on the page, together, or the two part company again.
  *
@@ -64,14 +81,20 @@ function wallClock(at: Date): string {
 }
 
 /**
- * When we wrote the file: a real instant, so it keeps its `Z`.
+ * A moment on the world clock, in UTC: `20270415T093000Z`.
  *
- * DTSTAMP is not the session. It is the moment this line was produced, and it is
- * what a calendar compares between two versions of the same UID — a floating
- * DTSTAMP would make "which of these is newer" depend on who is asking.
+ * Used for every DTSTAMP — that is when this line was written, and it is what a
+ * calendar compares between two versions of the same UID, so a floating DTSTAMP
+ * would make "which of these is newer" depend on who is asking — and for the
+ * start and end of an event whose `timing` says it is an instant.
  */
 function instant(at: Date): string {
 	return `${wallClock(at)}Z`;
+}
+
+/** The one place the event's own answer decides which form its times take. */
+function eventTime(at: Date, timing: CalendarEvent['timing']): string {
+	return timing === 'instant' ? instant(at) : wallClock(at);
 }
 
 /**
@@ -182,8 +205,8 @@ export function icalFile(calendarName: string, events: CalendarEvent[], now: Dat
 			'BEGIN:VEVENT',
 			property('UID', icalText(event.uid)),
 			property('DTSTAMP', instant(now)),
-			property('DTSTART', wallClock(event.start)),
-			property('DTEND', wallClock(event.end)),
+			property('DTSTART', eventTime(event.start, event.timing)),
+			property('DTEND', eventTime(event.end, event.timing)),
 			property('SUMMARY', icalText(event.summary))
 		);
 		if (event.description) lines.push(property('DESCRIPTION', icalText(event.description)));

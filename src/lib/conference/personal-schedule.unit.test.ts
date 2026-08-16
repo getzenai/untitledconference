@@ -34,6 +34,8 @@ describe('the starred sessions as calendar events', () => {
 				uid: '2@untitledconference',
 				start: session.start,
 				end: session.end,
+				// The mapping says what the times mean; the writer only obeys (#821).
+				timing: 'floating',
 				summary: session.title,
 				description: session.description,
 				location: session.room

@@ -14,6 +14,7 @@ const session: CalendarEvent = {
 	uid: 'sess-1@untitledconference',
 	start: new Date('2027-04-15T09:30:00.000Z'),
 	end: new Date('2027-04-15T10:15:00.000Z'),
+	timing: 'floating',
 	summary: 'Four hundred engineers, one repository',
 	description: 'Ada Lovelace',
 	location: 'Main hall'
