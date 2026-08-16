@@ -1,4 +1,4 @@
-import { auth, firstOrganizationFor } from '$lib/auth';
+import { auth, firstOrganizationFor, sessionCacheCookieName } from '$lib/auth';
 import { paraglideMiddleware } from '$lib/paraglide/server';
 import { detectAiCrawler } from '$lib/server/bot-detection';
 import { db, needsRequestScopedDb, withRequestScopedDb } from '$lib/server/db';
@@ -9,7 +9,7 @@ import { captureException } from '$lib/server/posthog';
 import { publicPageCacheHandler } from '$lib/server/public-page-cache';
 import { applySecurityHeaders } from '$lib/server/security-headers';
 import '$lib/server/startup';
-import { type Handle, type HandleServerError } from '@sveltejs/kit';
+import { type Handle, type HandleServerError, type RequestEvent } from '@sveltejs/kit';
 import { sequence } from '@sveltejs/kit/hooks';
 import { svelteKitHandler } from 'better-auth/svelte-kit';
 import { and, eq } from 'drizzle-orm';
@@ -226,6 +226,51 @@ async function adoptOrganizationForSession(
 	}
 }
 
+/** The caller's row in one organization, or `undefined` when they have none. */
+async function seatIn(
+	organizationId: string,
+	userId: string
+): Promise<{ role: string } | undefined> {
+	const [seat] = await db
+		.select({ role: member.role })
+		.from(member)
+		.where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)))
+		.limit(1);
+	return seat;
+}
+
+/**
+ * The organization this request acts in, and the caller's role in it.
+ *
+ * No seat is not a role of `null` — it is proof that the session names an
+ * organization this user cannot be in: deleted, or the membership removed
+ * (#803). The pointer can outlive both, because the session cookie cache
+ * answers `getSession` for up to five minutes without asking Postgres, and
+ * nothing in that window can correct it from another device.
+ *
+ * So drop the cache where it has just been shown wrong, and pick up an
+ * organization the user really has. Without this the settings page redirects
+ * to the list, the list redirects back, and the user is in a loop nobody on
+ * this device can end.
+ *
+ * The healthy path is untouched: the seat row is read either way, and
+ * everything after the first line only runs when it came back empty.
+ */
+async function activeOrganizationFor(
+	event: RequestEvent,
+	userId: string,
+	activeOrganizationId: string,
+	headers: Headers
+): Promise<{ organizationId: string | null; role: string | null }> {
+	const seat = await seatIn(activeOrganizationId, userId);
+	if (seat) return { organizationId: activeOrganizationId, role: seat.role };
+
+	event.cookies.delete(sessionCacheCookieName(), { path: '/' });
+	const adopted = await adoptOrganizationForSession(headers, userId);
+	const adoptedSeat = adopted ? await seatIn(adopted, userId) : undefined;
+	return { organizationId: adopted, role: adoptedSeat?.role ?? null };
+}
+
 // This new handler will attempt to populate event.locals.user and organization on every request.
 const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 	logger.debug('Processing request for:', event.url.pathname);
@@ -288,18 +333,14 @@ const populateLocalsUserHandler: Handle = async ({ event, resolve }) => {
 				// no caching and nothing left valid for longer: strictly fewer
 				// questions, identical answer.
 				try {
-					const [seat] = await db
-						.select({ role: member.role })
-						.from(member)
-						.where(
-							and(
-								eq(member.organizationId, activeOrganizationId),
-								eq(member.userId, session.user.id)
-							)
-						)
-						.limit(1);
-
-					event.locals.organizationRole = seat?.role ?? null;
+					const active = await activeOrganizationFor(
+						event,
+						session.user.id,
+						activeOrganizationId,
+						requestHeaders
+					);
+					event.locals.organizationId = active.organizationId;
+					event.locals.organizationRole = active.role;
 				} catch (_e) {
 					event.locals.organizationRole = null;
 				}

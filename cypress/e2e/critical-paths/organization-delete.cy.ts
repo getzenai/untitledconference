@@ -167,4 +167,49 @@ describe('Deleting an organization', () => {
 		cy.contains(survivor, { timeout: 20000 }).should('exist');
 		cy.contains(doomed).should('not.exist');
 	});
+	/**
+	 * The device that did not do the deleting (#803).
+	 *
+	 * Better Auth keeps the resolved session in a signed cookie for five
+	 * minutes, so `getSession` stops asking Postgres. The deleting browser drops
+	 * that cookie itself (#790); a second device cannot — its cache still names
+	 * an organization that no longer exists, and every request built on it asks
+	 * who the active member of a deleted organization is.
+	 *
+	 * The stale cookie *is* the second device: captured before the delete, put
+	 * back afterwards. That is the same state a phone in a pocket is in, and it
+	 * is reachable in one browser.
+	 */
+	it('recovers a device whose cached session still names the deleted organization', () => {
+		const doomed = `Cached Org ${Date.now()}`;
+		const survivor = `Cached Survivor ${Date.now()}`;
+
+		cy.createAndLogin({ organizationName: doomed }).then(() => {
+			cy.request({
+				method: 'POST',
+				url: '/api/auth/organization/create',
+				body: { name: survivor, slug: `cached-survivor-${Date.now()}` }
+			})
+				.its('status')
+				.should('eq', 200);
+			cy.setActiveOrganization(doomed);
+		});
+
+		// Visiting writes the cache; this is the copy the second device holds.
+		cy.visit('/settings/organization');
+		cy.waitForHydration();
+		cy.getCookie('better-auth.session_data').should('exist');
+		cy.getCookie('better-auth.session_data').then((cached) => {
+			cy.get('[data-testid="delete-confirm-name"]').type(doomed);
+			cy.get('[data-testid="delete-organization"]').click();
+			cy.location('pathname', { timeout: 20000 }).should('match', /^\/settings\/organization/);
+
+			// Now be the device that never saw the delete.
+			cy.setCookie('better-auth.session_data', cached!.value, { path: '/' });
+			cy.visit('/settings/organization');
+			cy.waitForHydration();
+			cy.contains(survivor, { timeout: 20000 }).should('exist');
+			cy.contains(doomed).should('not.exist');
+		});
+	});
 });
