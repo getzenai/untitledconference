@@ -22,6 +22,7 @@
 	import { enhance } from '$lib/forms/enhance';
 	import AppSelect from '$lib/components/app/app-select.svelte';
 	import { Button } from '$lib/components/ui/button';
+	import { formatDayLong } from '$lib/conference/public-view';
 
 	/**
 	 * Structural props rather than the server module's `BoardSession`/`AgendaBoard`.
@@ -139,7 +140,11 @@
 
 	const placeable = $derived(sessionOptions.length > 0);
 
-	const dayOptions = $derived(days.map((d) => ({ value: String(d.id), label: d.date.slice(5) })));
+	// Same source as *Block this slot* on this page (`formatDayLong`). `date.slice(5)`
+	// is `05-12`, which is 12 May in the US and 5 December in Europe.
+	const dayOptions = $derived(
+		days.map((d) => ({ value: String(d.id), label: formatDayLong(d.date) }))
+	);
 
 	/** What the browser picked when no `<option>` carried `selected`. */
 	const selectedDayId = $derived(

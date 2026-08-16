@@ -14,6 +14,7 @@
  * that value, in the markup, before anybody clicks — so every assertion below
  * is the guard against a dropdown that looks right and submits empty.
  */
+import { formatDayLong } from '$lib/conference/public-view';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import SlotEditor from './SlotEditor.svelte';
@@ -142,6 +143,33 @@ describe('the slot editor', () => {
 
 		expect(html).toContain('data-testid="agenda-slot-room"');
 		expect(html).toContain('Room 1');
+	});
+
+	it('names the day the same way Block this slot does, not as a sliced ISO tail', () => {
+		// `2027-05-12`.slice(5) is `05-12` — 12 May in the US, 5 December in Europe.
+		// *Block this slot* on the same page already calls `formatDayLong`.
+		const html = render(SlotEditor, {
+			props: {
+				target: { roomId: 1, roomName: 'Room 1', startMinutes: 540 },
+				occupant: null,
+				swapWith: [],
+				tray: [waiting(1)],
+				alsoOnGrid: [],
+				days: [{ id: 1, date: '2027-05-12' }],
+				rooms,
+				slots: [{ minutes: 540, label: '09:00' }],
+				activeDayId: 1,
+				busy: false,
+				timeLabel,
+				close: () => {},
+				submit: () => async () => {}
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			} as any
+		}).body;
+
+		expect(formatDayLong('2027-05-12')).toBe('Wednesday, 12 May 2027');
+		expect(html).toContain('Wednesday, 12 May 2027');
+		expect(html).not.toContain('05-12');
 	});
 
 	it('offers no way to overwrite a published slot', () => {
