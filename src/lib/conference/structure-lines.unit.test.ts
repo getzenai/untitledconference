@@ -5,7 +5,13 @@
  * line, what a repeat does, and what happens to a length that is not a length.
  */
 import { describe, expect, it } from 'vitest';
-import { addedMessage, MAX_NAME, parseFormatLines, parseNames } from './structure-lines';
+import {
+	addedMessage,
+	MAX_NAME,
+	MISSING_STRUCTURE_NAME,
+	parseFormatLines,
+	parseNames
+} from './structure-lines';
 
 describe('names, one per line', () => {
 	it('reads a pasted block as one name per line', () => {
@@ -38,6 +44,16 @@ describe('names, one per line', () => {
 	it('has nothing to do with an empty field', () => {
 		expect(parseNames('')).toEqual([]);
 		expect(parseNames('\n  \n')).toEqual([]);
+	});
+});
+
+describe('MISSING_STRUCTURE_NAME', () => {
+	it('is the sentence the settings form and the MCP tools both show', () => {
+		expect(MISSING_STRUCTURE_NAME).toEqual({
+			room: 'Give the room a name.',
+			track: 'Give the track a name.',
+			format: 'Give the format a name.'
+		});
 	});
 });
 

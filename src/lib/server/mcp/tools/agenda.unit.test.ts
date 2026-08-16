@@ -21,8 +21,15 @@ vi.mock('$lib/server/conference/agenda', () => ({
 	unplaceSession: vi.fn()
 }));
 
+import { MISSING_STRUCTURE_NAME } from '$lib/conference/structure-lines';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { McpContext } from '../context';
+import { McpToolError } from '../tool-helpers';
 import { agendaTools } from './agenda';
+
+const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'agenda.ts'), 'utf8');
 
 const ctx: McpContext = { userId: 'user-1', organizationId: 'org-1' };
 const conference = { id: 7, slug: 'devflow', name: 'DevFlow' };
@@ -62,5 +69,21 @@ describe('fill_schedule', () => {
 		await expect(
 			tool('fill_schedule').handler({ conferenceSlug: 'devflow' })
 		).resolves.toMatchObject({ autoPlaced: 0 });
+	});
+});
+
+describe('create_room', () => {
+	it('throws the settings missing-name sentence, not a copy of it', async () => {
+		expect(source).toContain('MISSING_STRUCTURE_NAME.room');
+		expect(source).not.toContain("'Give the room a name.'");
+
+		try {
+			await tool('create_room').handler({ conferenceSlug: 'devflow', name: '   ' });
+		} catch (error) {
+			expect(error).toBeInstanceOf(McpToolError);
+			expect((error as McpToolError).message).toBe(MISSING_STRUCTURE_NAME.room);
+			return;
+		}
+		throw new Error('create_room resolved, expected it to throw');
 	});
 });
