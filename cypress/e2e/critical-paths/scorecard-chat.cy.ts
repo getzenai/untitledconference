@@ -12,7 +12,8 @@
  *
  * Same flag rule as `agenda-chat.cy.ts`: the value comes from
  * `scripts/run-e2e.sh` (`CYPRESS_FEATURE_INAPP_CHAT`), never from whether the
- * panel is in the DOM. CI leaves the flag off.
+ * panel is in the DOM. CI sets the flag on the E2E job (`lint_and_test.yaml`,
+ * since #693).
  */
 const uniqueSlug = () => `scorecard-chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 

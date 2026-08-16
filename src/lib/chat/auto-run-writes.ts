@@ -1,8 +1,8 @@
 /**
  * Writes that run without a card (#726).
  *
- * The server uses this to build `toolApproval`. The panel uses it to refresh
- * the page after one of these lands — auto-run writes never enter
+ * The server uses this to build `toolApproval`. The launcher uses it to
+ * refresh the page after one of these lands — auto-run writes never enter
  * `approval-requested`, so the card-gated invalidate would miss them.
  *
  * A name that is not here needs a card, including a tool added later.

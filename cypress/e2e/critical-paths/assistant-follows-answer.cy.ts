@@ -2,8 +2,8 @@
  * The panel follows the answer being written, not the bottom of the list (#718).
  *
  * Same gate as the other assistant specs: the flag comes from
- * `scripts/run-e2e.sh` (`CYPRESS_FEATURE_INAPP_CHAT`), and CI leaves it off.
- * `FEATURE_INAPP_CHAT=true AI_CHAT_MODEL=mock` is the local path.
+ * `scripts/run-e2e.sh` (`CYPRESS_FEATURE_INAPP_CHAT`). CI sets the flag on
+ * the E2E job (`lint_and_test.yaml`, since #693).
  *
  * "Tell me something long" is the mock's sentence for an answer that outgrows
  * the panel (see `src/lib/server/chat/model.ts`) — the only shape in which the
