@@ -11,24 +11,10 @@
 	 * do not exist, because "there are three opinions you may not read yet" is honest
 	 * and "no reviews" would be a lie.
 	 */
-	import { enhance } from '$lib/forms/enhance';
-	import type { SubmitFunction } from '@sveltejs/kit';
-	import { formUpdateOptions } from '$lib/conference/form-reset';
-	import { ratingAnswerError } from '$lib/conference/rating-answer';
 	import { formatScore } from '$lib/conference/scoring';
-	import AppSelect from '$lib/components/app/app-select.svelte';
 	import SpeakerHistoryPanel from '$lib/components/app/conference/speaker-history.svelte';
+	import ReviewScorecardForm from '$lib/components/app/conference/review-scorecard-form.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
-	import {
-		AlertDialog,
-		AlertDialogCancel,
-		AlertDialogContent,
-		AlertDialogDescription,
-		AlertDialogFooter,
-		AlertDialogHeader,
-		AlertDialogTitle
-	} from '$lib/components/ui/alert-dialog';
-	import { Button } from '$lib/components/ui/button';
 	import FilePreviewSheet from '$lib/components/file-preview-sheet.svelte';
 	import AnswerText from '$lib/components/app/conference/answer-text.svelte';
 	import ReviewFileAnswer from '$lib/components/review-file-answer.svelte';
@@ -60,127 +46,10 @@
 			round: s.round.name
 		})
 	);
-	const withdrawn = $derived(s.status === 'withdrawn');
-	// Two different reasons the form takes nothing, and they read differently: a
-	// withdrawn talk is gone, a shut round comes back (ABS-01). Both disable the same
-	// buttons, and `saveReview` refuses both regardless of what this page drew.
-	const shut = $derived(s.window.state !== 'open');
-	const locked = $derived(withdrawn || shut);
-	let busy = $state(false);
-
-	/**
-	 * Recusing asks first (#463).
-	 *
-	 * Every other button in that row is reversible — a draft can be saved again, a
-	 * submitted review can be edited. This one hands the talk back to the organizers
-	 * and nothing in the reviewer's own screens can undo it; only an organizer can
-	 * re-assign. It sits one careless click from "Save progress", so it gets the
-	 * question the bulk-decide table already asks before it acts.
-	 *
-	 * The interception lives in `enhance`, not on the button, for the same reason the
-	 * button stays live outside the round window: the server takes this POST whatever
-	 * the page drew. A dialog is a courtesy to the reviewer, not a guard on the action
-	 * — cancelling the submit is the whole mechanism, and the confirm click re-submits
-	 * the same button so a browser without JS keeps the old one-click behaviour rather
-	 * than losing the control.
-	 */
-	let reviewForm = $state<HTMLFormElement | null>(null);
-	let confirmRecuseOpen = $state(false);
-	let allowRecuse = false;
-
-	/** The recuse button is the only submitter on this form named `reviewId`. */
-	const isRecuse = (submitter: HTMLElement | null) =>
-		submitter instanceof HTMLButtonElement && submitter.name === 'reviewId';
-
-	const confirmRecuse = () => {
-		const button = reviewForm?.querySelector<HTMLButtonElement>('button[name="reviewId"]');
-		if (!button) return;
-		allowRecuse = true;
-		confirmRecuseOpen = false;
-		reviewForm?.requestSubmit(button);
-	};
-
-	/**
-	 * A thrown action must not replace this page (#482). Same wrapper as the
-	 * proposal form: a 500 that lands on `+error.svelte` takes the written
-	 * review with it. Recuse still cancels first — the wrapper only holds the
-	 * page when a POST actually ran and threw.
-	 */
-	/**
-	 * The scores as they currently read in the boxes (#477).
-	 *
-	 * Kept here rather than left to the browser because the browser's answer to a
-	 * 7 on a 1–5 scale was a native bubble — its own font, its own wording, on a
-	 * page that has both of its own — and because that bubble was doing more than
-	 * it looked: a number past the scale is DROPPED on the way to the database,
-	 * not clamped, so anybody who got past the bubble saved a blank criterion and
-	 * was told their progress was saved. The form is `novalidate`; the rule is
-	 * ours, and `saveReview` asks it again on the POST.
-	 */
-	let typed = $state<Record<number, string>>({});
-
-	/** What the box reads now: what they typed, or what was stored before they did. */
-	const scoreOf = (criterion: { id: number; value: number | null }) =>
-		typed[criterion.id] ?? (criterion.value === null ? '' : String(criterion.value));
-
-	const scoreErrors = $derived(
-		new Map(
-			s.criteria
-				.filter((criterion) => criterion.kind === 'rating')
-				.map((criterion) => [criterion.id, ratingAnswerError(scoreOf(criterion), criterion)])
-				.filter((entry): entry is [number, string] => entry[1] !== null)
-		)
-	);
-
-	const submitting: SubmitFunction = ({ submitter, cancel }) => {
-		if (isRecuse(submitter) && !allowRecuse) {
-			cancel();
-			confirmRecuseOpen = true;
-			return;
-		}
-		// Handing work back is not scoring, so a bad number does not stand in its
-		// way; anything that writes the scorecard does wait for the number to make
-		// sense. The message is already under the field — there is nothing a round
-		// trip would add.
-		if (!isRecuse(submitter) && scoreErrors.size > 0) {
-			cancel();
-			return;
-		}
-		// The confirm click re-submits the same button; that one goes through.
-		allowRecuse = false;
-		busy = true;
-		return async ({ update }) => {
-			try {
-				await update(formUpdateOptions('edit'));
-			} finally {
-				busy = false;
-			}
-		};
-	};
-
-	const inputClass =
-		'border-input bg-background focus-visible:ring-ring rounded-md border px-2 py-1.5 text-sm focus-visible:ring-[3px] focus-visible:outline-none';
-
-	const parseOptions = (raw: string | null): string[] => {
-		if (!raw) return [];
-		try {
-			const parsed: unknown = JSON.parse(raw);
-			return Array.isArray(parsed) ? parsed.filter((o): o is string => typeof o === 'string') : [];
-		} catch {
-			return [];
-		}
-	};
 
 	const stamp = (value: Date | string | null) =>
 		value ? new Date(value).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' }) : '';
-
-	const formOk = $derived(Boolean(form && 'ok' in form && form.ok));
 	const writeConflict = $derived(Boolean(form && 'conflict' in form && form.conflict));
-	const expectedBaseline = $derived(
-		writeConflict && form && 'currentBaseline' in form
-			? (form.currentBaseline ?? '')
-			: s.own.baseline
-	);
 </script>
 
 <FilePreviewSheet bind:preview />
@@ -356,238 +225,29 @@
 		</section>
 	</article>
 
-	<!-- The round rides in the action as well as the body: after the POST the page
-	     reloads on THIS url, and a bare `?/save` would drop the query and redraw the
-	     other round's scorecard under the answers just filed. -->
-	<form
-		bind:this={reviewForm}
-		method="POST"
-		action="?/save&round={s.round.id}"
-		novalidate
-		use:enhance={submitting}
-		class="border-border bg-card h-fit space-y-3 rounded-lg border p-4"
-	>
-		<!-- The round this form was drawn for (#294). Without it a reviewer who holds
-		     the talk in two open rounds would post the second round's answers into
-		     the first, which is the tie the permalink used to lose. -->
-		<input type="hidden" name="roundId" value={s.round.id} />
-		<input type="hidden" name="expectedBaseline" value={expectedBaseline} />
-		<div class="flex items-center justify-between">
-			<h2 class="text-sm font-semibold">My review — {s.round.name}</h2>
-			<StatusBadge
-				status={withdrawn ? 'withdrawn' : s.own.status}
-				label={withdrawn ? 'Withdrawn' : s.own.status === 'submitted' ? 'Reviewed' : 'To review'}
-			/>
-		</div>
-
-		{#if shut}
-			<!-- The answers stay readable for the same reason a withdrawn talk's do — a
-			     review already filed is a record — but nothing here asks for more work. -->
-			<p
-				class="border-status-warn/40 bg-status-warn-bg text-status-warn rounded-md border px-3 py-2 text-sm"
-				role="status"
-				data-testid="round-window-notice"
-			>
-				{s.window.notice}
-			</p>
-		{/if}
-
-		{#if withdrawn}
-			<!-- The answers stay readable — a review already filed is still a record of
-			     what this reviewer thought — but nothing here asks for more work, and
-			     `saveReview` refuses a withdrawn talk regardless of what this page draws. -->
-			<p
-				class="border-status-bad text-status-bad rounded-md border px-3 py-2 text-sm"
-				role="status"
-			>
-				The speaker withdrew this talk, so it no longer needs a review.
-			</p>
-		{/if}
-
-		{#if form?.message}
-			<p
-				class="rounded-md border px-3 py-2 text-sm {formOk
-					? 'border-status-good text-status-good'
-					: 'border-status-bad text-status-bad'}"
-				role={formOk ? 'status' : 'alert'}
-				data-testid={writeConflict ? 'review-write-conflict' : undefined}
-			>
-				{form.message}
-			</p>
-		{/if}
-
+	<div>
 		{#if writeConflict}
-			<div class="flex flex-wrap gap-2">
+			<div class="mb-3 flex flex-wrap gap-2">
 				<a
 					href="?round={s.round.id}"
 					class="border-border hover:bg-muted inline-flex items-center rounded-md border px-3 py-1.5 text-sm"
-					data-testid="review-keep-saved"
+					data-testid="review-keep-saved">Keep the saved version</a
 				>
-					Keep the saved version
-				</a>
-				<Button type="submit" name="intent" value="draft" size="sm" data-testid="review-overwrite">
-					Overwrite with what I typed
-				</Button>
+				<button
+					type="submit"
+					form="review-scorecard"
+					name="intent"
+					value="draft"
+					class="bg-primary text-primary-foreground inline-flex items-center rounded-md px-3 py-1.5 text-sm"
+					data-testid="review-overwrite">Overwrite with what I typed</button
+				>
 			</div>
 		{/if}
-
-		{#if s.criteria.length === 0}
-			<p class="text-muted-foreground text-sm">
-				This round has no scorecard yet — leave your verdict as an overall comment.
-			</p>
-		{/if}
-
-		{#each s.criteria as criterion (criterion.id)}
-			<label class="block text-sm">
-				<span class="text-muted-foreground text-xs">
-					<!-- One expression rather than an {#if} block: Svelte trims the whitespace that
-					     starts a block, and the label read "Relevance(1–5)" without it. -->
-					{criterion.label}{criterion.kind === 'rating' && criterion.scaleMax
-						? ` (1–${criterion.scaleMax})`
-						: ''}
-				</span>
-
-				{#if criterion.kind === 'rating'}
-					{@const scoreError = scoreErrors.get(criterion.id)}
-					<input
-						type="number"
-						name="criterion-{criterion.id}"
-						min="0"
-						max={criterion.scaleMax ?? undefined}
-						step="1"
-						value={criterion.value ?? ''}
-						oninput={(event) => (typed[criterion.id] = event.currentTarget.value)}
-						disabled={locked}
-						aria-invalid={scoreError ? 'true' : undefined}
-						aria-describedby={scoreError ? `criterion-${criterion.id}-error` : undefined}
-						class="{inputClass} mt-1 w-full {scoreError ? 'border-status-bad' : ''}"
-						data-testid="criterion-{criterion.id}"
-					/>
-					{#if scoreError}
-						<span
-							id="criterion-{criterion.id}-error"
-							class="text-status-bad mt-1 block text-xs"
-							data-testid="criterion-error"
-						>
-							{scoreError}
-						</span>
-					{/if}
-				{:else if criterion.kind === 'select'}
-					<AppSelect
-						name="criterion-{criterion.id}"
-						class="mt-1"
-						aria-label={criterion.label}
-						placeholder="—"
-						value={criterion.valueText ?? ''}
-						disabled={locked}
-						options={parseOptions(criterion.options).map((option) => ({
-							value: option,
-							label: option
-						}))}
-					/>
-				{:else}
-					<textarea
-						name="criterion-{criterion.id}"
-						rows="2"
-						disabled={locked}
-						class="{inputClass} mt-1 w-full">{criterion.valueText ?? ''}</textarea
-					>
-					<span class="text-muted-foreground mt-1 block text-xs">
-						Part of this round's scorecard — not the overall comment below.
-					</span>
-				{/if}
-			</label>
-		{/each}
-
-		<label class="block text-sm">
-			<span class="text-muted-foreground text-xs">Overall comment</span>
-			<textarea name="comment" rows="4" disabled={locked} class="{inputClass} mt-1 w-full"
-				>{s.own.comment ?? ''}</textarea
-			>
-			<span class="text-muted-foreground mt-1 block text-xs">
-				Your verdict on this talk. Visible to organizers and — unless the round is anonymised — to
-				other reviewers.
-			</span>
-		</label>
-
-		<div class="flex flex-wrap gap-2">
-			{#if !writeConflict && s.own.status === 'submitted'}
-				<!-- Already filed: keep edit open, but do not look like a first submit. -->
-				<Button
-					type="submit"
-					name="intent"
-					value="submit"
-					variant="outline"
-					size="sm"
-					disabled={busy || locked}
-				>
-					Update review
-				</Button>
-				<Button
-					type="submit"
-					name="intent"
-					value="draft"
-					variant="ghost"
-					size="sm"
-					disabled={busy || locked}
-				>
-					Save progress
-				</Button>
-			{:else if !writeConflict}
-				<Button type="submit" name="intent" value="submit" size="sm" disabled={busy || locked}>
-					Submit review
-				</Button>
-				<Button
-					type="submit"
-					name="intent"
-					value="draft"
-					variant="outline"
-					size="sm"
-					disabled={busy || locked}
-				>
-					Save progress
-				</Button>
-			{/if}
-			{#if s.own.status === 'assigned'}
-				<!-- Still live outside the window, and deliberately: recusing files no
-				     score, it hands work back, and `recuseReview` accepts it whatever the
-				     round's dates say. A button disabled against a server that would take
-				     the POST is the decoration ABS-01 is about. -->
-				<Button
-					type="submit"
-					name="reviewId"
-					value={s.own.reviewId}
-					formaction="?/recuse"
-					variant="ghost"
-					size="sm"
-					disabled={busy || withdrawn}
-				>
-					Recuse myself
-				</Button>
-			{/if}
-		</div>
-
-		<!-- The promise the veterans asked for, written where it is made: a status
-		     change is not a notification. -->
-		<p class="text-muted-foreground text-xs">
-			Submitting counts your review towards coverage. It emails nobody — the organizer decides when
-			speakers are told.
-		</p>
-	</form>
+		<ReviewScorecardForm
+			submission={s}
+			conferenceSlug={data.conference.slug}
+			ownerId={data.user?.id ?? ''}
+			{form}
+		/>
+	</div>
 </div>
-
-<AlertDialog bind:open={confirmRecuseOpen}>
-	<AlertDialogContent data-testid="recuse-dialog">
-		<AlertDialogHeader>
-			<AlertDialogTitle>Hand this talk back to the organizers?</AlertDialogTitle>
-			<AlertDialogDescription>
-				Your assignment for {s.round.name} is removed and the talk returns to the organizers. You will
-				not be able to review it again unless they assign it to you.
-			</AlertDialogDescription>
-		</AlertDialogHeader>
-		<AlertDialogFooter>
-			<AlertDialogCancel data-testid="recuse-cancel">Keep the assignment</AlertDialogCancel>
-			<Button data-testid="recuse-confirm" onclick={confirmRecuse}>Recuse myself</Button>
-		</AlertDialogFooter>
-	</AlertDialogContent>
-</AlertDialog>
