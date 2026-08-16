@@ -96,6 +96,52 @@ describe('Assistant panel', () => {
 		cy.get('[data-testid="assistant-input"]').should('have.value', '');
 	});
 
+	it('keeps a typed unsent question when the sheet closes, and New chat empties it', function () {
+		if (!chatEnabled) this.skip();
+
+		const typed = `Half typed ${Date.now()}`;
+		const sent = `Sent turn ${Date.now()}`;
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+		cy.get('[data-testid="assistant-input"]').type(typed);
+		cy.get('[data-testid="assistant-panel"]').contains('Close').click();
+		cy.get('[data-testid="assistant-panel"]').should('not.exist');
+
+		openAssistant();
+		cy.get('[data-testid="assistant-input"]').should('have.value', typed);
+
+		cy.get('[data-testid="assistant-input"]').clear();
+		sendAssistant(sent);
+		cy.get('[data-testid="assistant-messages"]').should('contain.text', sent);
+		cy.get('[data-testid="assistant-input"]').type(typed);
+		cy.get('[data-testid="assistant-new-chat"]').should('be.visible').click();
+		cy.get('[data-testid="assistant-messages"]').should('not.contain.text', sent);
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
+	});
+
+	it('leaves the input empty after send, close, and reopen', function () {
+		if (!chatEnabled) this.skip();
+
+		const asked = `Sent then closed ${Date.now()}`;
+
+		cy.createAndLogin();
+		cy.visit('/home');
+		cy.waitForHydration();
+		openAssistant();
+		sendAssistant(asked);
+		cy.get('[data-testid="assistant-messages"]').should('contain.text', asked);
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
+		cy.get('[data-testid="assistant-panel"]').contains('Close').click();
+		cy.get('[data-testid="assistant-panel"]').should('not.exist');
+
+		openAssistant();
+		cy.get('[data-testid="assistant-messages"]').should('contain.text', asked);
+		cy.get('[data-testid="assistant-input"]').should('have.value', '');
+	});
+
 	it('sends the page context of the page the user is on, not the one the panel opened on', function () {
 		if (!chatEnabled) this.skip();
 

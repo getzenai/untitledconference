@@ -3,8 +3,9 @@
 	 * The way in: a star pinned to the right edge of every app page (#676).
 	 *
 	 * Chat is created on first open and lives here, not in the sheet. Closing
-	 * the panel unmounts the sheet and must not throw the transcript away
-	 * (#728). A user who never asks pays nothing for the chat runtime.
+	 * the panel unmounts the sheet and must not throw the transcript or a
+	 * half-typed question away (#728, #804). A user who never asks pays
+	 * nothing for the chat runtime.
 	 *
 	 * The refresh effect lives here too. The launcher stays mounted, so a
 	 * write that finishes while the sheet is closed still invalidates the
@@ -65,6 +66,12 @@
 			() => hold.open,
 			(open) => {
 				if (!open) hold = closeAssistantHold(hold);
+			}
+		}
+		bind:input={
+			() => hold.input,
+			(value) => {
+				hold.input = value;
 			}
 		}
 		chat={hold.chat}
