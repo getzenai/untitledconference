@@ -12,12 +12,25 @@
  */
 import { auth } from '$lib/auth';
 import { safeReturnTo } from '$lib/safe-return-to';
+import { getPublicInvitation } from '$lib/server/public-invitation';
 import { applySetCookies } from '$lib/server/set-cookie';
 import { registrationEmailSchema } from '$lib/validators/email';
 import { passwordSchema } from '$lib/validators/password';
 import { fail, redirect } from '@sveltejs/kit';
 import { z } from 'zod/v4';
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
+
+export const load: PageServerLoad = async ({ url }) => {
+	const invitationCode = url.searchParams.get('invitation');
+	if (!invitationCode) return { invitation: null };
+
+	try {
+		return { invitation: await getPublicInvitation(invitationCode) };
+	} catch (error) {
+		console.error('Error checking registration invitation:', error);
+		return { invitation: { isValid: false as const, error: 'Failed to validate invitation' } };
+	}
+};
 
 /**
  * Sync subset of `registerSchema`. The client schema's strength check is async
@@ -54,6 +67,24 @@ export const actions: Actions = {
 			return fail(400, {
 				message: 'Enter an email address and a password of at least 8 characters.'
 			});
+		}
+
+		let invitedEmail: string | undefined;
+		if (parsed.data.invitationCode) {
+			let invitation;
+			try {
+				invitation = await getPublicInvitation(parsed.data.invitationCode);
+			} catch (error) {
+				console.error('Error checking submitted registration invitation:', error);
+				return fail(400, { message: 'Failed to validate invitation. Please try again.' });
+			}
+			if (!invitation.isValid) return fail(400, { message: invitation.error });
+			invitedEmail = invitation.email;
+			if (parsed.data.email.toLowerCase() !== invitation.email.toLowerCase()) {
+				return fail(400, {
+					message: `This invitation is for ${invitation.email}. Register with that email address.`
+				});
+			}
 		}
 
 		const headers = new Headers(request.headers);
@@ -95,7 +126,8 @@ export const actions: Actions = {
 
 		applySetCookies(cookies, response.headers);
 
-		// Invitation is extra: the account exists either way, same as the hydrated path.
+		// The email match was checked before account creation. If acceptance still
+		// fails, keep the user on the named invitation instead of losing context.
 		if (parsed.data.invitationCode && body.token) {
 			try {
 				const cookieHeader = response.headers
@@ -108,8 +140,11 @@ export const actions: Actions = {
 					headers: inviteHeaders,
 					body: { invitationId: parsed.data.invitationCode }
 				});
-			} catch {
-				// They can accept from /onboarding/invitations.
+			} catch (error) {
+				console.error('Failed to accept invitation after registration:', error);
+				return fail(400, {
+					message: `Your account was created, but the invitation for ${invitedEmail} could not be accepted. Return to the invitation and try again.`
+				});
 			}
 		}
 

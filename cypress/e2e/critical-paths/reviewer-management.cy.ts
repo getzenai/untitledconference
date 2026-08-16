@@ -6,7 +6,7 @@
  * part only a browser can prove: the shareable link survives registration and
  * creates a reviewer who actually appears in the assignment UI.
  */
-import { DEFAULT_TEST_PASSWORD, generateTestUserEmail } from '../../support/globals';
+import { generateTestUserEmail } from '../../support/globals';
 
 const uniqueSlug = () => `review-team-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -14,6 +14,7 @@ describe('Reviewer management', () => {
 	it('invites, accepts, assigns, and reports the reviewer work', () => {
 		const slug = uniqueSlug();
 		const reviewerEmail = generateTestUserEmail('reviewer-invite');
+		const reviewerPassword = 'Invite-reviewer-orbit-lantern-738!';
 
 		cy.createAndLogin().then((organizer) => {
 			cy.request({
@@ -44,10 +45,22 @@ describe('Reviewer management', () => {
 					expect(invitePath).to.match(/^\/invite\//);
 					cy.clearCookies();
 					cy.visit(invitePath!);
+					cy.contains('Invitation For').next().should('have.text', reviewerEmail);
 					cy.contains('button', 'Continue to Sign Up').click();
 					cy.url().should('include', '/register?invitation=');
-					cy.get('input[name="email"]').type(reviewerEmail);
-					cy.get('input[name="password"]').type(DEFAULT_TEST_PASSWORD, { log: false });
+					cy.get('input[name="email"]')
+						.should('have.value', reviewerEmail)
+						.clear()
+						.type(generateTestUserEmail('wrong-reviewer'));
+					cy.get('[role="alert"]')
+						.should('contain.text', `This invitation is for ${reviewerEmail}`)
+						.and('contain.text', 'Register with that email address');
+					cy.contains('button[type="submit"]', 'Register').should('be.disabled');
+					cy.url().should('include', '/register?invitation=');
+
+					cy.get('input[name="email"]').clear().type(reviewerEmail);
+					cy.get('[role="alert"]').should('not.exist');
+					cy.get('input[name="password"]').type(reviewerPassword, { log: false });
 					cy.contains('button[type="submit"]', 'Register').click();
 					cy.url({ timeout: 20000 }).should('include', '/home');
 

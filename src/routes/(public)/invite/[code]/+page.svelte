@@ -59,7 +59,7 @@
 
 	async function loadInvitationDetails() {
 		// Check if invitation is valid from server data
-		if (!data.isValid) {
+		if (!data.isValid || !data.email || !data.role || !data.expiresAt) {
 			// Error is already set from server
 			return;
 		}
@@ -67,13 +67,12 @@
 		// For unauthenticated users, we can't get full invitation details from Better Auth
 		// But we can still show them the invitation and let them register
 		if (!isLoggedIn) {
-			// Just set basic info to show the invitation acceptance UI
 			invitationInfo = {
 				id: invitationCode,
-				email: '',
+				email: data.email,
 				organizationName: data.organizationName || 'the organization',
-				role: 'member',
-				expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // Assume 7 days
+				role: data.role,
+				expiresAt: new Date(data.expiresAt)
 			};
 			// Clear any error for unauthenticated users since we have valid invitation from server
 			error = null;
@@ -191,28 +190,25 @@
 				</CardDescription>
 			</CardHeader>
 			<CardContent class="space-y-4">
-				{#if isLoggedIn}
-					<div class="space-y-2">
-						<p class="text-muted-foreground text-sm">Organization</p>
-						<p class="text-lg font-semibold">{invitationInfo.organizationName || 'Loading...'}</p>
-					</div>
+				<div class="space-y-2">
+					<p class="text-muted-foreground text-sm">Organization</p>
+					<p class="text-lg font-semibold">{invitationInfo.organizationName}</p>
+				</div>
 
+				{#if isLoggedIn}
 					<div class="space-y-2">
 						<p class="text-muted-foreground text-sm">Your Role</p>
 						<p class="font-medium capitalize">{invitationInfo.role}</p>
 					</div>
+				{/if}
 
-					<div class="space-y-2">
-						<p class="text-muted-foreground text-sm">Invitation For</p>
-						<p class="font-medium">{invitationInfo.email}</p>
-					</div>
-				{:else}
-					<div class="space-y-3">
-						<p class="text-sm">You've been invited to join an organization.</p>
-						<p class="text-sm">
-							Please create an account to accept this invitation and join the organization.
-						</p>
-					</div>
+				<div class="space-y-2">
+					<p class="text-muted-foreground text-sm">Invitation For</p>
+					<p class="font-medium">{invitationInfo.email}</p>
+				</div>
+
+				{#if !isLoggedIn}
+					<p class="text-sm">Create an account with this email address to accept the invitation.</p>
 				{/if}
 
 				<div class="flex gap-2 pt-4">
