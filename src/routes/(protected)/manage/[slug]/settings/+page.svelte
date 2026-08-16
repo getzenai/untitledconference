@@ -11,7 +11,12 @@
 	import BrowserDraftTextarea from '$lib/components/app/browser-draft-textarea.svelte';
 	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import { formUpdateOptions } from '$lib/conference/form-reset';
-	import { MAX_MINUTES } from '$lib/conference/structure-lines';
+	import {
+		MAX_MINUTES,
+		MISSING_STRUCTURE_NAME,
+		parseFormatLines,
+		parseNames
+	} from '$lib/conference/structure-lines';
 	import { unpublishWarning } from '$lib/conference/unpublish-warning';
 	import {
 		AlertDialog,
@@ -235,6 +240,15 @@
 	const ROOM_LINES = 'Room 3C\nMain Stage';
 	const TRACK_LINES = 'Security\nPlatform';
 	const FORMAT_LINES = 'Talk, 30\nWorkshop, 90\nPanel';
+
+	const validateNames = (kind: 'room' | 'track') => (value: string) =>
+		value.length > 0 && parseNames(value).length === 0 ? MISSING_STRUCTURE_NAME[kind] : null;
+	const validateFormats = (value: string) => {
+		if (value.length === 0) return null;
+		const result = parseFormatLines(value);
+		if (!result.ok) return result.problem;
+		return result.formats.length === 0 ? MISSING_STRUCTURE_NAME.format : null;
+	};
 
 	/**
 	 * Enter adds, shift+enter starts another line.
@@ -719,6 +733,7 @@
 					required
 					testId="settings-new-rooms"
 					commitToken={structureCommitTokens.rooms}
+					validate={validateNames('room')}
 					onkeydown={submitOnEnter}
 					ondirtychange={setStructureDirty}
 				/>
@@ -776,6 +791,7 @@
 					required
 					testId="settings-new-tracks"
 					commitToken={structureCommitTokens.tracks}
+					validate={validateNames('track')}
 					onkeydown={submitOnEnter}
 					ondirtychange={setStructureDirty}
 				/>
@@ -870,6 +886,7 @@
 					required
 					testId="settings-new-formats"
 					commitToken={structureCommitTokens.formats}
+					validate={validateFormats}
 					onkeydown={submitOnEnter}
 					ondirtychange={setStructureDirty}
 				/>

@@ -7,7 +7,7 @@
  * it has.
  */
 import { MAX_CONFERENCE_DAYS } from '$lib/conference/conference-dates';
-import { addedMessage } from '$lib/conference/structure-lines';
+import { addedMessage, MISSING_STRUCTURE_NAME } from '$lib/conference/structure-lines';
 import { requireOrganizer } from '$lib/server/conference/access';
 import { archiveConference, restoreConference } from '$lib/server/conference/archive-conference';
 import { callSummary } from '$lib/server/conference/cfp-submission';
@@ -319,7 +319,7 @@ export const actions: Actions = {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const result = await addRooms(conference.id, text(await request.formData(), 'names'));
 		if (result.added.length === 0 && result.skipped.length === 0) {
-			return fail(400, { error: 'Give the room a name.', section: 'rooms' });
+			return fail(400, { error: MISSING_STRUCTURE_NAME.room, section: 'rooms' });
 		}
 		return { message: addedMessage('room', result.added, result.skipped), section: 'rooms' };
 	},
@@ -328,7 +328,7 @@ export const actions: Actions = {
 		const { conference } = await requireOrganizer(locals.user!.id, params.slug);
 		const result = await addTracks(conference.id, text(await request.formData(), 'names'));
 		if (result.added.length === 0 && result.skipped.length === 0) {
-			return fail(400, { error: 'Give the track a name.', section: 'tracks' });
+			return fail(400, { error: MISSING_STRUCTURE_NAME.track, section: 'tracks' });
 		}
 		return { message: addedMessage('track', result.added, result.skipped), section: 'tracks' };
 	},
@@ -339,7 +339,7 @@ export const actions: Actions = {
 
 		if ('problem' in result) return fail(400, { error: result.problem, section: 'formats' });
 		if (result.added.length === 0 && result.skipped.length === 0) {
-			return fail(400, { error: 'Give the format a name.', section: 'formats' });
+			return fail(400, { error: MISSING_STRUCTURE_NAME.format, section: 'formats' });
 		}
 
 		return {

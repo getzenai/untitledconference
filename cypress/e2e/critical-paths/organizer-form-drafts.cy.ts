@@ -71,4 +71,21 @@ describe('Organizer form drafts', () => {
 			cy.get(`[data-testid="${testId}"]`).should('have.value', text);
 		}
 	});
+
+	it('restores an invalid format together with its validation error', () => {
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+		cy.get('[data-testid="settings-new-formats"]').type('Workshop, 5000');
+
+		cy.get('[data-testid="sidebar-home-link"]').click();
+		cy.visit(`/manage/${slug}/settings`);
+		cy.waitForHydration();
+
+		cy.get('[data-testid="settings-new-formats"]')
+			.should('have.value', 'Workshop, 5000')
+			.and('have.attr', 'aria-invalid', 'true');
+		cy.get('[data-testid="settings-new-formats-error"]')
+			.should('be.visible')
+			.and('contain', 'Minutes must be between 1 and 1440');
+	});
 });
