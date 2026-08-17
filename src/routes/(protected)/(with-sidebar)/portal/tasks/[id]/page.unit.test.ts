@@ -341,6 +341,20 @@ describe('speaker task detail', () => {
 		expect(body).not.toContain('— overdue');
 	});
 
+	it('calls an open past deadline overdue, the same words home uses (#865)', () => {
+		const body = draw(task({ dueOn: new Date('2020-01-01T12:00:00Z') }));
+
+		expect(body).toContain('Due 1 Jan 2020, 12:00 UTC — overdue');
+		expect(body).toContain('text-status-bad');
+	});
+
+	it('does not call a future deadline overdue (#865)', () => {
+		const body = draw(task({ dueOn: new Date('2099-06-01T12:00:00Z') }));
+
+		expect(body).toContain('Due 1 Jun 2099, 12:00 UTC');
+		expect(body).not.toContain('— overdue');
+	});
+
 	it('names the deadline as an instant and links the conference (#498)', () => {
 		const body = draw(task({ dueOn: new Date('2027-05-02T12:00:00Z') }));
 

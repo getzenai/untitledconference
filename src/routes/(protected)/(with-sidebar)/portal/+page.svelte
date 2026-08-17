@@ -12,6 +12,7 @@
 	import EmptyState from '$lib/components/empty-state.svelte';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
+	import { isTaskOverdue } from '$lib/conference/task-due';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import { isParticipationTaskTitle } from '$lib/conference/task-purpose';
 
@@ -122,7 +123,7 @@
 		return formatInstant(dueOn, zone.current) || 'No deadline';
 	};
 
-	const overdue = (dueOn: Date | string | null) => Boolean(dueOn && new Date(dueOn) < new Date());
+	const overdue = (dueOn: Date | string | null) => isTaskOverdue(dueOn);
 </script>
 
 <svelte:head>

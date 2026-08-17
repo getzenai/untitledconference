@@ -10,6 +10,7 @@
 	 * below — it used to be the loudest button on the page and it duplicated it.
 	 */
 	import { formatInstant } from '$lib/conference/deadline';
+	import { isTaskOverdue } from '$lib/conference/task-due';
 	import { reviewQueueHref } from '$lib/conference/nav-access';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
@@ -313,9 +314,13 @@
 										deadline is an instant, so it carries its year and its zone (#498) —
 										"2 May" alone was neither a year nor a clock anyone could act on.
 									-->
-									<div class="text-muted-foreground text-xs">
+									<div
+										class="text-xs {isTaskOverdue(task.dueOn)
+											? 'text-status-bad font-medium'
+											: 'text-muted-foreground'}"
+									>
 										{taskWhere(task)}{task.dueOn
-											? ` · due ${formatInstant(task.dueOn, zone.current)}`
+											? ` · due ${formatInstant(task.dueOn, zone.current)}${isTaskOverdue(task.dueOn) ? ' — overdue' : ''}`
 											: ''}
 									</div>
 								</a>

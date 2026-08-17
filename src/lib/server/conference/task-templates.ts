@@ -12,6 +12,7 @@
  * conference too, and a row that does not belong answers "not found" rather than
  * being edited.
  */
+import { taskDueDate } from '$lib/conference/task-due';
 import { db } from '$lib/server/db';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-schema';
@@ -176,26 +177,6 @@ export async function deleteTaskTemplate(
 		.returning({ id: taskTemplateTable.id });
 
 	return removed.length > 0 ? null : 'That template is gone.';
-}
-
-/**
- * Absolute date wins over the offset; the offset counts from the acceptance.
- *
- * Lives here rather than beside its first caller in `decisions.ts` because it is
- * now asked the same question from two places — the acceptance that hands a task
- * out, and the backfill below that hands out one the speaker missed. Two copies
- * of this rule would eventually disagree about when a task is due.
- */
-export function taskDueDate(
-	dueOn: Date | null,
-	offsetDays: number | null,
-	from: Date
-): Date | null {
-	if (dueOn) return dueOn;
-	if (offsetDays === null) return null;
-	const due = new Date(from);
-	due.setDate(due.getDate() + offsetDays);
-	return due;
 }
 
 /** One accepted talk and one of its speakers — the pair a task hangs on. */

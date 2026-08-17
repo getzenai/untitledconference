@@ -10,6 +10,7 @@
  * that half of it is missing.
  */
 import { decisionBlockReason } from '$lib/conference/decision-summary';
+import { taskDueDate } from '$lib/conference/task-due';
 import { db } from '$lib/server/db';
 import { submissionSpeakerTable, submissionTable } from '$lib/server/db/conference/cfp-schema';
 import {
@@ -21,7 +22,6 @@ import { taskTable, taskTemplateTable } from '$lib/server/db/conference/content-
 import { placementTable } from '$lib/server/db/conference/program-schema';
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { isConferenceOrganizer, type AcceptCondition } from './accept-condition';
-import { taskDueDate } from './task-templates';
 
 export type Decision = 'accepted' | 'rejected' | 'waitlisted' | 'resubmit_with_guidance';
 

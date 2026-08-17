@@ -34,6 +34,7 @@
 	import { MAX_UPLOAD_BYTES, UPLOAD_ACCEPT } from '$lib/conference/upload-limits';
 	import { publicSiteLink } from '$lib/conference/conference-status';
 	import { formatInstant } from '$lib/conference/deadline';
+	import { isTaskOverdue } from '$lib/conference/task-due';
 	import { readerZone } from '$lib/conference/reader-zone.svelte';
 	import type { FilePreviewKind } from '$lib/conference/file-preview';
 	import { isParticipationTaskTitle, isProfileTaskTitle } from '$lib/conference/task-purpose';
@@ -140,9 +141,7 @@
 	// stamp dropped the time and the zone, which is how "Due Sunday 2 May" could
 	// already be over in Lisbon while it still looked open in Auckland.
 	const dueLabel = $derived(task.dueOn ? formatInstant(task.dueOn, zone.current) : null);
-	const overdue = $derived(
-		task.status !== 'done' && Boolean(task.dueOn && new Date(task.dueOn) < new Date())
-	);
+	const overdue = $derived(task.status !== 'done' && isTaskOverdue(task.dueOn));
 	const sessionWhen = $derived.by(() => {
 		if (!task.sessionStartsAt) return null;
 		const starts = new Date(task.sessionStartsAt);
