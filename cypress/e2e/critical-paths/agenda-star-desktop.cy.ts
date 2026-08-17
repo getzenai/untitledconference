@@ -72,19 +72,25 @@ describe('The assistant and an agenda slot at 1280', () => {
 			el.scrollLeft = el.scrollWidth;
 		});
 
+		// First row sits under the room head, at or just below the star.
+		// A cell that starts below it can be scrolled into the band —
+		// same shape as talk-assign-assistant-phone.
 		cy.get('[data-testid="assistant-open"]').then(($star) => {
 			const star0 = $star[0].getBoundingClientRect();
-			const lastRoom = `[data-testid="agenda-room-card"][data-room-id]`;
-			cy.get(lastRoom)
+			cy.get('[data-testid="agenda-room-card"]')
 				.last()
 				.find('[data-testid="agenda-slot-cell"]')
 				.then(($cells) => {
 					const win = $cells[0].ownerDocument.defaultView;
 					expect(win, 'the page has a window to scroll').to.not.equal(null);
-					const mid = $cells[Math.floor($cells.length / 2)][0] ?? $cells[0];
-					const cell0 = mid.getBoundingClientRect();
-					const delta = star0.top + star0.height / 2 - (cell0.top + cell0.height / 2);
-					win!.scrollBy(0, delta);
+					const below = [...$cells].find((cell) => cell.getBoundingClientRect().top > star0.bottom);
+					expect(
+						below,
+						'a last-room slot starts below the star so a scroll can bring it there'
+					).to.not.equal(undefined);
+					const box = below!.getBoundingClientRect();
+					const delta = box.top + box.height / 2 - (star0.top + star0.height / 2);
+					cy.scrollTo(0, Math.max(0, win!.scrollY + delta));
 				});
 		});
 
