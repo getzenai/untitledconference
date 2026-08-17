@@ -220,6 +220,38 @@ describe('a window shrink under a standing panel (#849, live trace)', () => {
 	});
 });
 
+describe('a reader who scrolls while the window is being dragged (#849)', () => {
+	/**
+	 * The cost of the switch, and the line that keeps it from being paid by the
+	 * wrong person. A drag delivers many sizes, so a reader who wheels in the
+	 * middle of one arrives with a `clientHeight` that differs from the last
+	 * measurement — which is exactly the signature the switch uses for "this is
+	 * the layout, not the reader". Their wheel is what tells the two apart: it
+	 * is the same signal #718 already uses to disengage the follow, and once it
+	 * has been given, a scroll belongs to them whatever the viewport is doing.
+	 */
+	it('leaves them where they put themselves, mid-drag', () => {
+		const { viewport, panel } = openPanel({
+			scrollTop: 1419,
+			scrollHeight: 2137,
+			clientHeight: 718
+		});
+		expect(viewport.fromEnd, 'starts on the newest line').toBe(0);
+
+		// The drag is under way — the panel is already shorter — and they wheel
+		// up to re-read something while it is happening.
+		viewport.clientHeight = 600;
+		viewport.fire('wheel');
+		viewport.glideTo(900);
+
+		deliverResize();
+		drainFrames();
+
+		expect(viewport.scrollTop, 'their own scroll survives the resize').toBe(900);
+		panel.detach();
+	});
+});
+
 describe('a window shrink while the panel is still scrolling (#849, local trace)', () => {
 	/**
 	 * The half the live trace does not show, and the only one Cypress could

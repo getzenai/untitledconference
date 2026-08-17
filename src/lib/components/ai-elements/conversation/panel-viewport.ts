@@ -377,6 +377,7 @@ export class PanelViewport {
 		if (!this.#element) return;
 		if (
 			this.#ready &&
+			this.#followAllowed &&
 			isResizeDrivenScroll({
 				lastClientHeight: this.#lastClientHeight,
 				clientHeight: this.#element.clientHeight
