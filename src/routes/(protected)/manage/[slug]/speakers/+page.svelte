@@ -18,6 +18,7 @@
 	} from '$lib/conference/speaker-notes-draft';
 	import AddSpeakerForm from '$lib/components/app/conference/add-speaker-form.svelte';
 	import ComposeForm from '$lib/components/app/conference/compose-form.svelte';
+	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import SpeakerImport from '$lib/components/app/conference/speaker-import.svelte';
 	import SpeakerRowEditForm from '$lib/components/app/conference/speaker-row-edit-form.svelte';
 	import AppSelect from '$lib/components/app/app-select.svelte';
@@ -402,7 +403,16 @@
 			{/if}
 		</p>
 	{:else}
-		<div class="border-border rounded-lg border" data-testid="speakers-table">
+		<!--
+			Four columns do not fit a phone, and this box did not own that scroll:
+			the table is `min-w-[40rem]` (640px) inside a wrapper whose
+			`overflow-x` was `visible`, so the *document* scrolled sideways
+			instead (#897). `ScrollTable` is the same wrapper /submissions and
+			/decisions already use — the rounding stays on the outer box, the
+			scroll lives on an inner one, and `relative` on that viewport keeps
+			the Actions `sr-only` span from resolving against the page.
+		-->
+		<ScrollTable label="Scroll sideways for role, status and actions" data-testid="speakers-table">
 			<table class="w-full min-w-[40rem] text-left text-sm">
 				<thead class="border-border bg-muted border-b text-xs" data-testid="speakers-table-head">
 					<tr>
@@ -498,6 +508,6 @@
 					{/each}
 				</tbody>
 			</table>
-		</div>
+		</ScrollTable>
 	{/if}
 </div>

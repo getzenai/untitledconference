@@ -98,7 +98,9 @@ describe('speaker roster page', () => {
 		expect(body).not.toContain('data-testid="speaker-mail-body"');
 		expect(body).not.toContain('data-testid="import-csv"');
 		expect(body).not.toContain('Send to 1 speaker');
-		// #263: the page scrolls the roster; the table is not a nested scroll box.
+		// #263: the page still scrolls the roster vertically; the table is not
+		// a nested height box. Sideways scroll is ScrollTable's job (#897).
+		expect(source).toContain('ScrollTable');
 		expect(body).toContain('data-testid="speakers-table-head"');
 		const tableWrapper = body.match(/<div\b[^>]*data-testid="speakers-table"[^>]*>/);
 		expect(tableWrapper?.[0]).toBeDefined();
