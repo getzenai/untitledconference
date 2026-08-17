@@ -7,6 +7,7 @@
  * a proposal that nobody can come back and edit is not a proposal (CFP-07); the
  * coming-back half lives at `/portal/submissions/<id>/edit`.
  */
+import { cfpHasOpenProposal } from '$lib/conference/pending-proposal';
 import type { ProposalDraft } from '$lib/conference/proposal-draft';
 import { openCall, saveSubmission } from '$lib/server/conference/cfp-submission';
 import { readProposal } from '$lib/server/conference/proposal-input';
@@ -45,7 +46,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		? await submissionForConference(locals.user.id, call.conference.id)
 		: null;
 	const pendingProposal =
-		locals.user && !existing
+		locals.user && !cfpHasOpenProposal(existing)
 			? await registrationProposalForUser(locals.user.id, call.conference.slug)
 			: null;
 

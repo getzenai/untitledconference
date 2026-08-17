@@ -395,6 +395,145 @@ export function cfpAnotherProposalId(
 }
 
 /**
+ * The first proposal still occupies the form.
+ *
+ * Persist already refuses to write then (`existing && anotherId == null`).
+ * Resume and the loader used `existing` instead, so a decided talk swallowed
+ * the unsigned second draft (#881). Same gate, one floor up.
+ */
+export function cfpHasOpenProposal(
+	existing: { id: number; status: string } | null | undefined,
+	startingAnother = false
+): boolean {
+	return existing != null && cfpAnotherProposalId(existing, startingAnother) == null;
+}
+
+export type CfpResumeResult = {
+	restored: ProposalDraft | null;
+	restoredAt: number | null;
+	fromPending: boolean;
+	pendingIntent: PendingProposalIntent | null;
+	startingAnother: boolean;
+};
+
+type CfpExisting = { id: number; status: string };
+
+function emptyCfpResume(startingAnother: boolean): CfpResumeResult {
+	return {
+		restored: null,
+		restoredAt: null,
+		fromPending: false,
+		pendingIntent: null,
+		startingAnother
+	};
+}
+
+function clearFirstAutosaveSlots(local: DraftStorage, slug: string, owner: DraftOwner): void {
+	clearAutosavedProposal(local, slug, owner);
+	if (owner) clearAutosavedProposal(local, slug, null);
+}
+
+function resumeFromAnotherSlot(
+	local: DraftStorage,
+	slug: string,
+	owner: DraftOwner,
+	existing: CfpExisting | null | undefined,
+	startingAnother: boolean,
+	now: number
+): CfpResumeResult {
+	if (!existing) return emptyCfpResume(startingAnother);
+	const next = readAutosavedProposal(local, slug, owner, now, existing.id);
+	if (!next) return emptyCfpResume(startingAnother);
+	return {
+		restored: next.draft,
+		restoredAt: next.savedAt,
+		fromPending: false,
+		pendingIntent: null,
+		startingAnother: existing.status === 'draft' ? true : startingAnother
+	};
+}
+
+function resumeWithoutOpenProposal(
+	local: DraftStorage,
+	session: DraftStorage,
+	slug: string,
+	owner: DraftOwner,
+	existing: CfpExisting | null | undefined,
+	pendingProposal: PendingProposal | null,
+	startingAnother: boolean,
+	now: number
+): CfpResumeResult {
+	// Consume even when the server already handed the blob over, so the
+	// same-tab copy cannot become a second later save (#643).
+	const browserPending = consumePendingProposal(session, slug);
+	const pending = pendingProposal ?? browserPending;
+	if (pending) {
+		clearAutosavedProposal(local, slug, null);
+		return {
+			restored: pending.draft,
+			restoredAt: null,
+			fromPending: true,
+			pendingIntent: pending.intent,
+			startingAnother
+		};
+	}
+	if (existing) {
+		clearFirstAutosaveSlots(local, slug, owner);
+		return resumeFromAnotherSlot(local, slug, owner, existing, startingAnother, now);
+	}
+	if (owner) clearAutosavedProposal(local, slug, null);
+	const saved = readAutosavedProposal(local, slug, owner, now);
+	return {
+		restored: saved?.draft ?? null,
+		restoredAt: saved?.savedAt ?? null,
+		fromPending: false,
+		pendingIntent: null,
+		startingAnother
+	};
+}
+
+/**
+ * What the public call opens after hydrate (#881).
+ *
+ * An open proposal keeps the existing branch: clear the first slot, then
+ * reopen a typed second one. Everything else consumes the sign-in handoff
+ * first. A decided talk still restores the second-slot autosave when there
+ * is no handoff — that slot is the form, the first slot is the decided talk.
+ */
+export function resumeCfpOnMount(
+	local: DraftStorage,
+	session: DraftStorage,
+	input: {
+		slug: string;
+		owner: DraftOwner;
+		existing: { id: number; status: string } | null | undefined;
+		pendingProposal: PendingProposal | null;
+		startingAnother?: boolean;
+		now?: number;
+	}
+): CfpResumeResult {
+	const startingAnother = input.startingAnother ?? false;
+	const now = input.now ?? Date.now();
+	const { slug, owner, existing, pendingProposal } = input;
+
+	if (cfpHasOpenProposal(existing, startingAnother)) {
+		clearFirstAutosaveSlots(local, slug, owner);
+		return resumeFromAnotherSlot(local, slug, owner, existing, startingAnother, now);
+	}
+
+	return resumeWithoutOpenProposal(
+		local,
+		session,
+		slug,
+		owner,
+		existing,
+		pendingProposal,
+		startingAnother,
+		now
+	);
+}
+
+/**
  * Park what they typed, or refuse to, using the same gate the public call uses.
  *
  * A server copy used to mean "do not park". That is true while the first
