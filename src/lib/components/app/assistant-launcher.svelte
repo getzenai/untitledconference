@@ -10,11 +10,17 @@
 	 * The refresh effect lives here too. The launcher stays mounted, so a
 	 * write that finishes while the sheet is closed still invalidates the
 	 * page — once. The panel must not own that effect: it dies on close.
+	 *
+	 * On a talk at phone width the star sits at the bottom so it does not
+	 * cover Accept (#857). Above md, and on every other page, it stays
+	 * vertically centred.
 	 */
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button';
 	import AssistantPanel from '$lib/components/app/assistant-panel.svelte';
 	import { createAssistantChat } from '$lib/chat/create-assistant-chat';
+	import { cn } from '$lib/utils';
 	import {
 		clearAssistantHold,
 		closeAssistantHold,
@@ -52,12 +58,19 @@
 	function clearChat() {
 		hold = clearAssistantHold(createAssistantChat);
 	}
+
+	const onTalkPage = $derived(/\/manage\/[^/]+\/submissions\/\d+$/.test(page.url.pathname));
 </script>
 
 <Button
 	type="button"
 	size="icon"
-	class="fixed top-1/2 right-0 z-40 size-11 -translate-y-1/2 rounded-l-full rounded-r-none shadow-lg"
+	class={cn(
+		'fixed right-0 z-40 size-11 rounded-l-full rounded-r-none shadow-lg',
+		onTalkPage
+			? 'bottom-6 md:top-1/2 md:bottom-auto md:-translate-y-1/2'
+			: 'top-1/2 -translate-y-1/2'
+	)}
 	aria-label="Ask Guus"
 	data-testid="assistant-open"
 	onclick={openPanel}
