@@ -157,7 +157,11 @@ describe('The assistant and an agenda slot at 1280', () => {
 				const atCentre = sample.ownerDocument.elementFromPoint(x, y);
 				expect(
 					atCentre && atCentre.closest('[data-testid="assistant-open"]'),
-					`390 slot centre (${x.toFixed(1)}, ${y.toFixed(1)}) is not the star`
+					`390 slot centre (${x.toFixed(1)}, ${y.toFixed(1)}) ` +
+						`box ${box.left.toFixed(0)}..${box.right.toFixed(0)}×` +
+						`${box.top.toFixed(0)}..${box.bottom.toFixed(0)} ` +
+						`star ${star.left.toFixed(0)}..${star.right.toFixed(0)}×` +
+						`${star.top.toFixed(0)}..${star.bottom.toFixed(0)} is not the star`
 				).to.equal(null);
 			});
 		});
