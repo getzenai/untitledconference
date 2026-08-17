@@ -63,6 +63,11 @@ describe('home hub', () => {
 		expect(html).not.toContain('>Reviewing<');
 	});
 
+	it('starts the list after the star column below md (#869)', () => {
+		const html = body(null);
+		expect(html).toContain('home-after-star');
+	});
+
 	it('falls back to email when the account has no name (#621)', () => {
 		const html = body(null, emptyHub, { ...layoutData.user, name: '' });
 

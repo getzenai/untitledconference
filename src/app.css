@@ -155,6 +155,22 @@
 }
 /* tokens:end */
 
+/*
+	The floating star's reserved column (#869). Size and inset are the
+	numbers the launcher uses, so a page can start after the star
+	without copying a measured gap.
+*/
+:root {
+	--assistant-star-size: --spacing(11);
+	--assistant-star-inset: 0px;
+}
+
+@media (width < 48rem) {
+	.home-after-star {
+		padding-left: calc(var(--assistant-star-inset) + var(--assistant-star-size));
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring;

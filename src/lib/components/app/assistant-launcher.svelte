@@ -19,6 +19,9 @@
 	 * actions — Assign/Unassign, and anything else that scrolls through
 	 * that column — stay tappable. That is the relationship with
 	 * scrolling content, not another per-page exception.
+	 *
+	 * Size and inset are --assistant-star-* so a page that has to start
+	 * after this column (#869) names the same numbers.
 	 */
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
@@ -71,8 +74,8 @@
 	type="button"
 	size="icon"
 	class={cn(
-		'fixed z-40 size-11 shadow-lg',
-		'left-0 rounded-l-none rounded-r-full md:right-0 md:left-auto md:rounded-l-full md:rounded-r-none',
+		'fixed z-40 size-(--assistant-star-size) shadow-lg',
+		'left-(--assistant-star-inset) rounded-l-none rounded-r-full md:right-0 md:left-auto md:rounded-l-full md:rounded-r-none',
 		onTalkPage
 			? 'bottom-6 md:top-1/2 md:bottom-auto md:-translate-y-1/2'
 			: 'top-1/2 -translate-y-1/2'
