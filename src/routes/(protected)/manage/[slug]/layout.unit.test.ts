@@ -62,6 +62,10 @@ describe('shared sidebar architecture', () => {
 		expect(layoutSource).not.toContain('AccountMenu');
 		expect(layoutSource).not.toContain('manage-home-link');
 	});
+
+	it('reserves the star column on this shell too (#884)', () => {
+		expect(layoutSource).toContain('data-after-star');
+	});
 });
 
 describe('organizer shell exit', () => {

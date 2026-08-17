@@ -16,6 +16,10 @@ const shell = readFileSync(
 	join(here, '../../../routes/(protected)/(with-sidebar)/+layout.svelte'),
 	'utf8'
 );
+const conferenceShell = readFileSync(
+	join(here, '../../../routes/(protected)/manage/[slug]/+layout.svelte'),
+	'utf8'
+);
 
 describe('assistant star column', () => {
 	it('defines size and inset once, and the launcher uses both', () => {
@@ -33,5 +37,6 @@ describe('assistant star column', () => {
 		expect(launcher).not.toContain('size-11');
 		expect(launcher).not.toMatch(/['"]left-0 /);
 		expect(shell).toContain('data-after-star');
+		expect(conferenceShell).toContain('data-after-star');
 	});
 });

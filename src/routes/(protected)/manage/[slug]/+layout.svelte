@@ -24,8 +24,14 @@
 	instead of the table. The fixed sidebar then slid out of view and never came
 	back: "Dashboard" read "ashboard". The scroll belongs to the table's own box,
 	which `ScrollTable` already owns.
+
+	`data-after-star` is the same reserved column the other shell already
+	carries (#884). The star is still rendered here; without the attribute
+	a new page under this wrapper inherits nothing.
 -->
 <Sidebar.Inset class="min-w-0">
 	<AppShellHeader />
-	{@render children()}
+	<div class="min-w-0 flex-1" data-after-star>
+		{@render children()}
+	</div>
 </Sidebar.Inset>
