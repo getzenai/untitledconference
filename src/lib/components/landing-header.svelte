@@ -37,10 +37,11 @@
 	<div class="mx-auto flex h-16 max-w-7xl items-center justify-between gap-5 px-5 sm:px-8">
 		<a
 			href={selfHref}
+			data-testid="landing-home"
 			class="focus-visible:ring-ring flex items-center gap-2 rounded-md font-semibold tracking-tight focus-visible:ring-[3px] focus-visible:outline-none"
 		>
 			<Goose silent class="h-9 w-8" />
-			<span>untitledconference</span>
+			<span class={actions ? 'sr-only sm:not-sr-only' : undefined}>untitledconference</span>
 		</a>
 
 		{#if nav}
