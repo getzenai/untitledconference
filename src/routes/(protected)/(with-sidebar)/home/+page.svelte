@@ -85,7 +85,15 @@
 	<title>Home</title>
 </svelte:head>
 
-<div class="mx-auto w-full max-w-3xl space-y-8 px-6 py-10" data-testid="home-dashboard">
+<!--
+	Below md the star occupies inset + width on the left (#861).
+	`.home-after-star` starts the list after that column (#869).
+	md+ keeps px-6: the star is on the other edge there.
+-->
+<div
+	class="home-after-star mx-auto w-full max-w-3xl space-y-8 px-6 py-10"
+	data-testid="home-dashboard"
+>
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h1 class="text-lg font-semibold tracking-tight">Home</h1>
@@ -305,6 +313,7 @@
 							<li>
 								<a
 									href="/portal/tasks/{task.id}"
+									data-testid="home-task"
 									class="border-border hover:bg-muted/50 focus-visible:ring-ring block rounded-lg border p-4 transition-colors focus-visible:ring-[3px] focus-visible:outline-none"
 								>
 									<div class="font-medium">{task.title}</div>
