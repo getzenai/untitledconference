@@ -75,7 +75,7 @@ describe('organizer agenda layout', () => {
 		const body = renderWith(2);
 
 		expect(body).toMatch(/<div class="[^"]*border-b[^"]*px-4 py-5 sm:px-6[^"]*"/);
-		expect(body).toMatch(/<div class="space-y-6 px-4 py-5 sm:px-6"/);
+		expect(body).toMatch(/<div class="space-y-6 px-4 py-5 sm:px-6" data-before-star/);
 	});
 
 	it('does not bury room/track creation on the agenda (#63)', () => {

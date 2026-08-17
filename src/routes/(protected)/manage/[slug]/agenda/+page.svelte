@@ -886,8 +886,10 @@
 
 <!-- Wide on purpose — this is the grid — but never flush against the rail.
      320 px (#477): the page pad drops to 1rem so a room column can be a
-     whole card instead of a clipped half. -->
-<div class="space-y-6 px-4 py-5 sm:px-6">
+     whole card instead of a clipped half.
+     `data-before-star` reserves the right edge above md (#889) so the last
+     room's slot buttons do not sit under the star. -->
+<div class="space-y-6 px-4 py-5 sm:px-6" data-before-star>
 	{#if writeError || form?.error}
 		<p class="text-status-bad text-sm" role="alert" data-testid="agenda-write-error">
 			{writeError ?? form?.error}

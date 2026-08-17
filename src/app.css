@@ -159,6 +159,12 @@
 	The floating star's reserved column. Size and inset are the numbers
 	the launcher uses. The rule fires where the star is rendered, so a
 	new page inherits the column instead of naming it again (#875).
+
+	Below md the star docks left and [data-after-star] pads that side.
+	Above md it docks right. The agenda grid is the one surface whose
+	controls run to the viewport edge there (#889), so [data-before-star]
+	pads the right — only on pages that opt in. A column on every
+	organizer page was #886 and the wrong shape.
 */
 :root {
 	--assistant-star-size: --spacing(11);
@@ -168,6 +174,12 @@
 @media (width < 48rem) {
 	:root:has([data-assistant-star]) [data-after-star] {
 		padding-left: calc(var(--assistant-star-inset) + var(--assistant-star-size));
+	}
+}
+
+@media (width >= 48rem) {
+	:root:has([data-assistant-star]) [data-before-star] {
+		padding-right: calc(var(--assistant-star-inset) + var(--assistant-star-size));
 	}
 }
 
