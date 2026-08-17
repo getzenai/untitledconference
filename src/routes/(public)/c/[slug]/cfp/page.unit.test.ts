@@ -1,8 +1,27 @@
 import { ALL_FIXED_QUESTIONS_SHOWN } from '$lib/conference/fixed-questions';
+import { autosavedProposalKey, persistCfpDraft } from '$lib/conference/pending-proposal';
+import { emptyProposal } from '$lib/conference/proposal-draft';
 import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 import Page from './+page.svelte';
+
+function fakeStorage(initial: Record<string, string> = {}) {
+	const store = new Map(Object.entries(initial));
+	return {
+		getItem: (key: string) => store.get(key) ?? null,
+		setItem: (key: string, value: string) => {
+			store.set(key, value);
+		},
+		removeItem: (key: string) => {
+			store.delete(key);
+		},
+		get length() {
+			return store.size;
+		},
+		key: (index: number) => [...store.keys()][index] ?? null
+	};
+}
 
 /**
  * The box a submitter reads before deciding whether to fill the form in (CFP-01).
@@ -308,6 +327,22 @@ describe('pointing a returning submitter at what they already sent', () => {
 		expect(body).toContain('You already sent a proposal to this call');
 		expect(body).toContain('Not this year');
 		expect(body).toContain('/portal/submissions/89/edit');
+	});
+
+	it('parks a typed second title when the first talk was declined (#868)', () => {
+		const storage = fakeStorage();
+		const existing = { id: 89, title: 'Not this year', status: 'rejected' as const };
+
+		persistCfpDraft(
+			storage,
+			{ slug: 'devflow-conf-2027', owner: 'speaker-1', existing },
+			{ ...emptyProposal(), title: 'Second try' }
+		);
+
+		const parked = storage.getItem(autosavedProposalKey('devflow-conf-2027', 'speaker-1', 89));
+		const firstSlot = storage.getItem(autosavedProposalKey('devflow-conf-2027', 'speaker-1'));
+		expect(parked).toContain('Second try');
+		expect(firstSlot).toBeNull();
 	});
 });
 

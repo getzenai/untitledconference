@@ -67,10 +67,10 @@ function cfpPendingScope(slug: string): string {
 
 /**
  * The first proposal on a call uses `cfp-autosave:${slug}`. A second one,
- * started while a server copy already exists (draft, submitted, or in review),
- * cannot share that key — a reload would either wipe the new typing or
- * overwrite the first copy (#815, #819). `existingId` is that server row, so
- * the two slots cannot meet.
+ * started while a server copy already exists, cannot share that key — a
+ * reload would either wipe the new typing or overwrite the first copy
+ * (#815, #819, #868). `existingId` is that server row, so the two slots
+ * cannot meet.
  */
 function cfpAutosaveScope(slug: string, existingId?: number): string {
 	return existingId == null ? `cfp-autosave:${slug}` : `cfp-autosave:${slug}:another:${existingId}`;
@@ -377,6 +377,55 @@ export function writeAutosavedProposal(
 		now
 	});
 	if (existingId == null) storage.removeItem(legacyAutosavedKey(slug, owner));
+}
+
+/**
+ * The first proposal's id while the call is showing the second form.
+ *
+ * A draft still hides that form behind Continue your draft (#815). Submitted,
+ * in review, and decided already show it (#819, #868), so the second slot is
+ * open without a click.
+ */
+export function cfpAnotherProposalId(
+	existing: { id: number; status: string } | null | undefined,
+	startingAnother = false
+): number | undefined {
+	if (!existing) return undefined;
+	return existing.status !== 'draft' || startingAnother ? existing.id : undefined;
+}
+
+/**
+ * Park what they typed, or refuse to, using the same gate the public call uses.
+ *
+ * A server copy used to mean "do not park". That is true while the first
+ * proposal still hides the form. It is a lie once the form is the second one
+ * (#815, #819, #868).
+ */
+export function persistCfpDraft(
+	storage: DraftStorage,
+	input: {
+		slug: string;
+		owner: DraftOwner;
+		existing: { id: number; status: string } | null | undefined;
+		startingAnother?: boolean;
+		now?: number;
+	},
+	draft: ProposalDraft
+): void {
+	const anotherId = cfpAnotherProposalId(input.existing, input.startingAnother ?? false);
+	if (input.existing && anotherId == null) return;
+	if (!isTypedProposal(draft)) {
+		clearAutosavedProposal(storage, input.slug, input.owner, anotherId);
+		return;
+	}
+	writeAutosavedProposal(
+		storage,
+		input.slug,
+		input.owner,
+		draft,
+		input.now ?? Date.now(),
+		anotherId
+	);
 }
 
 /**

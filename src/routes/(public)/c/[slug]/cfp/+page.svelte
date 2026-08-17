@@ -10,11 +10,11 @@
 	import { Button } from '$lib/components/ui/button/index.js';
 	import {
 		autosavedProposalIdentity,
+		cfpAnotherProposalId,
 		clearAutosavedProposal,
 		consumePendingProposal,
-		isTypedProposal,
+		persistCfpDraft,
 		readAutosavedProposal,
-		writeAutosavedProposal,
 		writePendingProposal,
 		type PendingProposalIntent
 	} from '$lib/conference/pending-proposal';
@@ -71,7 +71,7 @@
 	 * and in_review already show the form, so persist used to return and the
 	 * sentence lied (#819).
 	 */
-	const anotherId = $derived(showNewProposal && data.existing ? data.existing.id : undefined);
+	const anotherId = $derived(cfpAnotherProposalId(data.existing, startingAnother));
 	const selectDraft = $derived(autosavedProposalIdentity(call.conference.slug, owner, anotherId));
 
 	/** Reopen the second slot when it still holds typing (#815, #819). */
@@ -139,16 +139,16 @@
 	);
 
 	function persistDraft(draft: ProposalDraft) {
-		const slug = data.call.conference.slug;
-		// A server copy used to mean "do not park" — true for the first
-		// proposal, a lie for the second form, where the stay-hint is on
-		// the page and persist returned before writing (#815, #819).
-		if (data.existing && anotherId == null) return;
-		if (!isTypedProposal(draft)) {
-			clearAutosavedProposal(localStorage, slug, owner, anotherId);
-			return;
-		}
-		writeAutosavedProposal(localStorage, slug, owner, draft, Date.now(), anotherId);
+		persistCfpDraft(
+			localStorage,
+			{
+				slug: data.call.conference.slug,
+				owner,
+				existing: data.existing,
+				startingAnother
+			},
+			draft
+		);
 	}
 
 	function clearDraft() {
