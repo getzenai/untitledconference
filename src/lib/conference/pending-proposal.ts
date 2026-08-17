@@ -416,6 +416,82 @@ export type CfpResumeResult = {
 	startingAnother: boolean;
 };
 
+type CfpExisting = { id: number; status: string };
+
+function emptyCfpResume(startingAnother: boolean): CfpResumeResult {
+	return {
+		restored: null,
+		restoredAt: null,
+		fromPending: false,
+		pendingIntent: null,
+		startingAnother
+	};
+}
+
+function clearFirstAutosaveSlots(local: DraftStorage, slug: string, owner: DraftOwner): void {
+	clearAutosavedProposal(local, slug, owner);
+	if (owner) clearAutosavedProposal(local, slug, null);
+}
+
+function resumeFromAnotherSlot(
+	local: DraftStorage,
+	slug: string,
+	owner: DraftOwner,
+	existing: CfpExisting | null | undefined,
+	startingAnother: boolean,
+	now: number
+): CfpResumeResult {
+	if (!existing) return emptyCfpResume(startingAnother);
+	const next = readAutosavedProposal(local, slug, owner, now, existing.id);
+	if (!next) return emptyCfpResume(startingAnother);
+	return {
+		restored: next.draft,
+		restoredAt: next.savedAt,
+		fromPending: false,
+		pendingIntent: null,
+		startingAnother: existing.status === 'draft' ? true : startingAnother
+	};
+}
+
+function resumeWithoutOpenProposal(
+	local: DraftStorage,
+	session: DraftStorage,
+	slug: string,
+	owner: DraftOwner,
+	existing: CfpExisting | null | undefined,
+	pendingProposal: PendingProposal | null,
+	startingAnother: boolean,
+	now: number
+): CfpResumeResult {
+	// Consume even when the server already handed the blob over, so the
+	// same-tab copy cannot become a second later save (#643).
+	const browserPending = consumePendingProposal(session, slug);
+	const pending = pendingProposal ?? browserPending;
+	if (pending) {
+		clearAutosavedProposal(local, slug, null);
+		return {
+			restored: pending.draft,
+			restoredAt: null,
+			fromPending: true,
+			pendingIntent: pending.intent,
+			startingAnother
+		};
+	}
+	if (existing) {
+		clearFirstAutosaveSlots(local, slug, owner);
+		return resumeFromAnotherSlot(local, slug, owner, existing, startingAnother, now);
+	}
+	if (owner) clearAutosavedProposal(local, slug, null);
+	const saved = readAutosavedProposal(local, slug, owner, now);
+	return {
+		restored: saved?.draft ?? null,
+		restoredAt: saved?.savedAt ?? null,
+		fromPending: false,
+		pendingIntent: null,
+		startingAnother
+	};
+}
+
 /**
  * What the public call opens after hydrate (#881).
  *
@@ -440,64 +516,21 @@ export function resumeCfpOnMount(
 	const now = input.now ?? Date.now();
 	const { slug, owner, existing, pendingProposal } = input;
 
-	const empty = (): CfpResumeResult => ({
-		restored: null,
-		restoredAt: null,
-		fromPending: false,
-		pendingIntent: null,
-		startingAnother
-	});
-
-	const anotherSlot = (): CfpResumeResult => {
-		if (!existing) return empty();
-		const next = readAutosavedProposal(local, slug, owner, now, existing.id);
-		if (!next) return empty();
-		return {
-			restored: next.draft,
-			restoredAt: next.savedAt,
-			fromPending: false,
-			pendingIntent: null,
-			startingAnother: existing.status === 'draft' ? true : startingAnother
-		};
-	};
-
-	const clearFirstSlots = () => {
-		clearAutosavedProposal(local, slug, owner);
-		if (owner) clearAutosavedProposal(local, slug, null);
-	};
-
 	if (cfpHasOpenProposal(existing, startingAnother)) {
-		clearFirstSlots();
-		return anotherSlot();
+		clearFirstAutosaveSlots(local, slug, owner);
+		return resumeFromAnotherSlot(local, slug, owner, existing, startingAnother, now);
 	}
 
-	const browserPending = consumePendingProposal(session, slug);
-	const pending = pendingProposal ?? browserPending;
-	if (pending) {
-		clearAutosavedProposal(local, slug, null);
-		return {
-			restored: pending.draft,
-			restoredAt: null,
-			fromPending: true,
-			pendingIntent: pending.intent,
-			startingAnother
-		};
-	}
-
-	if (existing) {
-		clearFirstSlots();
-		return anotherSlot();
-	}
-
-	if (owner) clearAutosavedProposal(local, slug, null);
-	const saved = readAutosavedProposal(local, slug, owner, now);
-	return {
-		restored: saved?.draft ?? null,
-		restoredAt: saved?.savedAt ?? null,
-		fromPending: false,
-		pendingIntent: null,
-		startingAnother
-	};
+	return resumeWithoutOpenProposal(
+		local,
+		session,
+		slug,
+		owner,
+		existing,
+		pendingProposal,
+		startingAnother,
+		now
+	);
 }
 
 /**
