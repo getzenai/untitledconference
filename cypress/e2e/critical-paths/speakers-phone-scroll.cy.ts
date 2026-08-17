@@ -4,17 +4,22 @@
  *
  * The table is `min-w-[40rem]` (640px) inside a wrapper whose `overflow-x`
  * was `visible`, so nothing owned that width and the page itself scrolled.
- * Measured live on `e990fb63`: `scrollLeft` 275 at 390, 0 at 1280.
+ * Measured live on `04a02afb` at 390: the table sits at `left=25` and is
+ * 640 wide, so its right edge is at 665. 25 + 640 − 390 = 275 — that is
+ * the measured document `scrollLeft`. 640 − 342 = 298 would be how far
+ * the wrapper would scroll if it clipped; it did not, and the page moved
+ * instead. The 275 is pinned by `min-w-[40rem]`, not by the cells: two
+ * short rows would give the same number.
  *
  * The assertion is `scrollLeft` after asking the page to scroll right, not
  * `scrollWidth`. `scrollWidth` cannot tell the two cases apart: content
  * parked in its own scroll box inflates it without the page moving
- * anywhere. 1280 is the control — a page that stopped rendering the table
- * would satisfy the phone line just as well.
+ * anywhere. 1280 is the control — a fix that started scrolling the
+ * widescreen would fail it.
  *
- * Two short rows would not prove the table is wide. Live is 42, so the
- * fixture is 42 speakers with long names and addresses — the columns have
- * to grow, the same way they do on the real roster.
+ * Live `/speakers` has 18 rows. The fixture is 42 speakers with long
+ * names, a superset of that roster — not because two short rows would
+ * fail to overflow a phone (they would not).
  */
 const uniqueSlug = () => `spk897-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
