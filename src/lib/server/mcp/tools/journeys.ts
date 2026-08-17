@@ -32,6 +32,7 @@ import { z } from 'zod';
 import type { McpContext } from '../context';
 import { reviewerConference } from '../reviewer';
 import { McpToolError, type AnyMcpToolDefinition } from '../tool-helpers';
+import { summarizeReviewAssignments } from './review-assignment-summary';
 
 const slugField = z.string().min(1).describe('Conference slug.');
 
@@ -505,7 +506,11 @@ function listMyReviewAssignments(ctx: McpContext): AnyMcpToolDefinition {
 		description:
 			'List the reviews assigned to you. Pass a conference slug to stay on one conference, ' +
 			'or omit it to see every conference you review for. Same queue as the reviewer screen ' +
-			'(`reviewQueue`) — built from your review rows, so an unassigned submission cannot appear.',
+			'(`reviewQueue`) — built from your review rows, so an unassigned submission cannot appear. ' +
+			'`open` is how many you can review now; `total` is assigned and still in the queue ' +
+			'(withdrawn talks are out of that denominator, same as the screen). A row with ' +
+			'`open: false` is not waiting — already filed, not yet open, or withdrawn. ' +
+			'Answer "how many are still mine" from `open`. Do not recount the list.',
 		inputSchema: {
 			conferenceSlug: slugField.optional()
 		},
@@ -529,7 +534,7 @@ function listMyReviewAssignments(ctx: McpContext): AnyMcpToolDefinition {
 					});
 				}
 			}
-			return { count: assignments.length, assignments };
+			return summarizeReviewAssignments(assignments);
 		}
 	};
 }

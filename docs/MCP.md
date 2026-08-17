@@ -107,7 +107,7 @@ before you have submitted anything.
 
 | Tool                         | What it does                   |
 | ---------------------------- | ------------------------------ |
-| `list_my_review_assignments` | Your queue                     |
+| `list_my_review_assignments` | Your queue — `open` vs `total` |
 | `get_review_assignment`      | One assignment with its rubric |
 | `submit_review`              | Scores and comments            |
 
