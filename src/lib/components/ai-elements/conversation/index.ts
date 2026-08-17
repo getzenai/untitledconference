@@ -7,10 +7,11 @@ export { Conversation, ConversationContent, ConversationScrollButton, MessageAnc
 
 export {
 	StickToBottomContext,
-	followScrollTop,
 	getStickToBottomContext,
 	setStickToBottomContext
 } from './stick-to-bottom-context.svelte.js';
+
+export { followScrollTop } from './panel-viewport.js';
 
 export type { ConversationContentProps } from './conversation-content.svelte';
 export type { ConversationScrollButtonProps } from './conversation-scroll-button.svelte';
