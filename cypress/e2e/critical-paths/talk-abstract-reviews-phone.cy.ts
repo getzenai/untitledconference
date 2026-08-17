@@ -9,6 +9,11 @@
  * an organizer feels, and the two boxes that produced the 473. 768
  * and 1280 are the guard: stacked below lg, two columns above it,
  * and neither width grows a scroller.
+ *
+ * #864: the recording URL is an inline `<a>`. Its clientWidth and
+ * scrollWidth are both 0, so `0 <= 1` held on any code. The clip
+ * check reads the wrapping `<dd>` — that is the block `break-words`
+ * actually sizes. Flip every `break-words` off and this case falls.
  */
 const uniqueSlug = () => `ovf858-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -82,10 +87,16 @@ describe('Abstract and Reviews on a phone', () => {
 		});
 		cy.get('[data-testid="answer-link"]').should(($link) => {
 			expect($link.text().trim(), 'the recording URL is still the whole URL').to.eq(RECORDING);
-			const box = $link[0].getBoundingClientRect();
-			expect(box.right, 'the recording URL ends on screen').to.be.at.most(PHONE.width + 1);
-			expect($link[0].scrollWidth, 'the recording URL is not clipped').to.be.at.most(
-				$link[0].clientWidth + 1
+			const link = $link[0];
+			const box = link.getBoundingClientRect();
+			const page = link.ownerDocument.documentElement;
+			expect(box.right, 'the recording URL ends on screen').to.be.at.most(page.clientWidth + 1);
+			// The <a> is display:inline — clientWidth and scrollWidth are 0 (#864).
+			const cell = link.closest('dd');
+			expect(cell, 'the recording sits in a definition cell').to.not.equal(null);
+			expect(cell!.clientWidth, 'the cell has a width').to.be.greaterThan(1);
+			expect(cell!.scrollWidth, 'the recording URL is not clipped').to.be.at.most(
+				cell!.clientWidth + 1
 			);
 		});
 
