@@ -371,7 +371,7 @@ export class PanelViewport {
 	/**
 	 * A scroll that arrives with a viewport of a different height is the window
 	 * being resized, not the reader moving, and it goes to the resize path
-	 * instead of overwriting the flag that path reads (#849).
+	 * instead of overwriting the flag that path reads (#849, #876).
 	 */
 	#onScroll = () => {
 		if (!this.#element) return;
@@ -387,6 +387,12 @@ export class PanelViewport {
 			return;
 		}
 		this.#syncAtBottom();
+		// Arriving at the newest line under their own steam is the other end of
+		// #718's rule: a wheel disengages the follow, and coming back down asks
+		// for it again. Without this the panel stays disengaged for the rest of
+		// the conversation, and the next resize leaves them behind because the
+		// switch above is no longer theirs to use (#880).
+		if (this.#isAtBottom) this.#followAllowed = true;
 	};
 
 	/**

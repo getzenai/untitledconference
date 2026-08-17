@@ -252,6 +252,42 @@ describe('a reader who scrolls while the window is being dragged (#849)', () => 
 	});
 });
 
+describe('a reader who puts themselves back on the newest line (#880)', () => {
+	/**
+	 * #718 disengages the follow on a wheel and re-engages it when the next
+	 * message registers. That leaves a gap: a reader who scrolls back down to
+	 * the newest line by hand — with the scrollbar, no wheel — is watching the
+	 * newest line again, but the panel is still disengaged, so the switch from
+	 * #876 is not theirs to use and the next shrink leaves them behind. The 460
+	 * below is the same number the switch was built to prevent.
+	 */
+	it('follows again, so the next shrink keeps them there', () => {
+		const { viewport, panel } = openPanel({
+			scrollTop: 1419,
+			scrollHeight: 2137,
+			clientHeight: 718
+		});
+
+		// Up to re-read something...
+		viewport.fire('wheel');
+		viewport.glideTo(400);
+		expect(panel.atBottom, 'away from the end').toBe(false);
+
+		// ...and back down to the newest line by hand. No wheel: a scrollbar
+		// drag fires only `scroll`, which is exactly why the disengaged follow
+		// used to stay disengaged.
+		viewport.glideTo(viewport.end);
+		expect(panel.atBottom, 'on the newest line again').toBe(true);
+
+		shrinkWindow(viewport, { clientHeight: 218, nudgedTo: 1459 });
+
+		expect(viewport.fromEnd, 'still on the newest line after the shrink').toBeLessThanOrEqual(
+			BOTTOM_THRESHOLD_PX
+		);
+		panel.detach();
+	});
+});
+
 describe('a window shrink while the panel is still scrolling (#849, local trace)', () => {
 	/**
 	 * The half the live trace does not show, and the only one Cypress could
