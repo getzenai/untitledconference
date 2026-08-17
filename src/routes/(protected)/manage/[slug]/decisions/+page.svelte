@@ -13,6 +13,7 @@
 	import { formatScore } from '$lib/conference/scoring';
 	import UnsavedGuard from '$lib/components/app/unsaved-guard.svelte';
 	import EmptyState from '$lib/components/empty-state.svelte';
+	import ScrollTable from '$lib/components/app/conference/scroll-table.svelte';
 	import StatusBadge from '$lib/components/status-badge.svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -227,8 +228,20 @@
 			{/each}
 		</nav>
 
-		<section class="border-border bg-card rounded-lg border" data-testid="lobbying-queue">
-			<table class="w-full text-sm">
+		<!--
+			Six columns do not fit a phone, and this box did not own that scroll:
+			the table rendered 829px wide inside a 342px `section` with
+			`overflow-x: visible`, so the *document* scrolled sideways instead
+			(#890). `ScrollTable` is the same wrapper the submissions table
+			already uses — the rounding stays on the outer box, the scroll lives
+			on an inner one, and the hint only appears while it is really wider.
+		-->
+		<ScrollTable
+			label="Scroll sideways for scores and status"
+			class="bg-card"
+			data-testid="lobbying-queue"
+		>
+			<table class="w-full min-w-2xl text-sm">
 				<caption class="sr-only">Ranked by this member's own score, best first</caption>
 				<thead class="text-muted-foreground border-border border-b text-left text-xs">
 					<tr>
@@ -375,7 +388,7 @@
 					{/each}
 				</tbody>
 			</table>
-		</section>
+		</ScrollTable>
 		<p class="text-muted-foreground text-xs">
 			Accepted talks stay in the list. A queue that empties as the call runs hides the fact that
 			somebody's number two already got in — and they will argue for it a second time.

@@ -66,7 +66,18 @@
 {/if}
 
 <div class={cn('border-border overflow-hidden rounded-lg border', className)} {...rest}>
-	<div bind:this={viewport} class="overflow-x-auto">
+	<!--
+		`relative` is load-bearing (#890). `overflow-x: auto` clips what flows out
+		of the box, but not a descendant with `position: absolute` — that one is
+		laid out against the nearest *positioned* ancestor, and without this class
+		there is none, so it resolves against the page. The header cells here carry
+		`<span class="sr-only">`, which Tailwind positions absolutely: 1px wide,
+		invisible, and sitting at the far end of a table far wider than a phone. It
+		escaped the scroll box and made the *document* scroll sideways instead —
+		464px on the decision queue at 390. Making this the containing block puts it
+		back inside the box that owns the scroll.
+	-->
+	<div bind:this={viewport} class="relative overflow-x-auto">
 		{@render children()}
 	</div>
 </div>
