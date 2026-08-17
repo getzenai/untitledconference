@@ -8,7 +8,9 @@
  * the finger-sized anchor — width and height measured, not believed
  * as `> 0`. A 1×1 ghost would be #870 the other way around.
  *
- * Flip `data-after-star` off this shell and the padding line falls.
+ * Leave the attribute. Set the reserved `padding-left` to 0. Then
+ * the 44 px line falls and `left ≥ 44` falls with it. Removing the
+ * attribute only proves the hook exists.
  *
  * The flag comes from `scripts/run-e2e.sh` (`CYPRESS_FEATURE_INAPP_CHAT`),
  * the same source the other assistant specs trust.
