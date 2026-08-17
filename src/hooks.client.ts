@@ -37,9 +37,26 @@ export const init: ClientInit = () => {
  * A missing hashed chunk on first load is the deploy cutover (#887), not a
  * defect to show. Reload once. The second pass falls through to the error page.
  */
+/**
+ * `sessionStore()` guards *reading* the global. The write inside can throw on
+ * its own: a full or locked store rejects `setItem` (#896). Letting that out
+ * would be an exception raised inside the error handler — worse than the error
+ * it was called to handle.
+ *
+ * Falling back to `false` and not to a reload is the deliberate half. A store
+ * that cannot remember the first try cannot stop the second, and a reload
+ * nobody counts is an unbounded one.
+ */
+function wantsFailedChunkReload(error: unknown): boolean {
+	try {
+		return shouldReloadFailedChunkOnce(error, sessionStore());
+	} catch {
+		return false;
+	}
+}
+
 export const handleError: HandleClientError = ({ error, status, message, event }) => {
-	const storage = sessionStore();
-	if (shouldReloadFailedChunkOnce(error, storage)) {
+	if (wantsFailedChunkReload(error)) {
 		location.reload();
 		return { message };
 	}
