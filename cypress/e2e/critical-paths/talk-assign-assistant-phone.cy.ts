@@ -99,14 +99,16 @@ describe('The assistant and Assign on a talk', () => {
 			});
 		});
 
+		// `fixed top-1/2` is clientHeight, not the Cypress window — same
+		// classic-scrollbar gap #857 already documented for clientWidth.
 		cy.viewport(TABLET.width, TABLET.height);
 		cy.get('[data-testid="assistant-open"]').should(($star) => {
 			const box = $star[0].getBoundingClientRect();
-			const contentWidth = $star[0].ownerDocument.documentElement.clientWidth;
+			const viewport = $star[0].ownerDocument.documentElement;
 			expect(box.width, 'star size at 768').to.be.closeTo(44, 1);
-			expect(box.right, 'star on the right edge at 768').to.be.closeTo(contentWidth, 1);
+			expect(box.right, 'star on the right edge at 768').to.be.closeTo(viewport.clientWidth, 1);
 			expect(box.top + box.height / 2, 'star stays vertically centred at 768').to.be.closeTo(
-				TABLET.height / 2,
+				viewport.clientHeight / 2,
 				1
 			);
 		});
@@ -114,11 +116,11 @@ describe('The assistant and Assign on a talk', () => {
 		cy.viewport(DESKTOP.width, DESKTOP.height);
 		cy.get('[data-testid="assistant-open"]').should(($star) => {
 			const box = $star[0].getBoundingClientRect();
-			const contentWidth = $star[0].ownerDocument.documentElement.clientWidth;
+			const viewport = $star[0].ownerDocument.documentElement;
 			expect(box.width, 'star size at 1280').to.be.closeTo(44, 1);
-			expect(box.right, 'star on the right edge at 1280').to.be.closeTo(contentWidth, 1);
+			expect(box.right, 'star on the right edge at 1280').to.be.closeTo(viewport.clientWidth, 1);
 			expect(box.top + box.height / 2, 'star stays vertically centred at 1280').to.be.closeTo(
-				DESKTOP.height / 2,
+				viewport.clientHeight / 2,
 				1
 			);
 		});
