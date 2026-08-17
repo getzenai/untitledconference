@@ -61,7 +61,7 @@ const renderCfp = (
 	existing: {
 		id: number;
 		title: string;
-		status: 'draft' | 'submitted' | 'in_review';
+		status: 'draft' | 'submitted' | 'in_review' | 'accepted' | 'rejected';
 	} | null = null,
 	closesAt: Date | null = null,
 	extras: {
@@ -292,6 +292,22 @@ describe('pointing a returning submitter at what they already sent', () => {
 		const body = renderCfp('open', null);
 
 		expect(body).not.toContain('You already');
+	});
+
+	it('still names an accepted talk (#868)', () => {
+		const body = renderCfp('open', null, { id: 88, title: 'Taken', status: 'accepted' });
+
+		expect(body).toContain('You already sent a proposal to this call');
+		expect(body).toContain('Taken');
+		expect(body).toContain('/portal/submissions/88/edit');
+	});
+
+	it('still names a declined talk (#868)', () => {
+		const body = renderCfp('open', null, { id: 89, title: 'Not this year', status: 'rejected' });
+
+		expect(body).toContain('You already sent a proposal to this call');
+		expect(body).toContain('Not this year');
+		expect(body).toContain('/portal/submissions/89/edit');
 	});
 });
 

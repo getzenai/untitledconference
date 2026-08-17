@@ -473,6 +473,10 @@ export async function editableDraft(
  * Deliberately only the id, title and status: this is a signpost, not a load. The
  * status is what lets the call word it correctly — "finish it" and "you already
  * sent this" are different sentences.
+ *
+ * Accepted and declined talks belong here too (#868). The CFP is the page a
+ * submitter bookmarks; dropping them after the meeting is how a decided
+ * proposal goes missing. Withdrawn is the speaker leaving — that one stays out.
  */
 export async function submissionForConference(userId: string, conferenceId: number) {
 	const [row] = await db
@@ -491,11 +495,20 @@ export async function submissionForConference(userId: string, conferenceId: numb
 			and(
 				eq(submissionTable.conferenceId, conferenceId),
 				eq(speakerProfileTable.userId, userId),
-				inArray(submissionTable.status, ['draft', 'submitted', 'in_review'])
+				inArray(submissionTable.status, [
+					'draft',
+					'submitted',
+					'in_review',
+					'accepted',
+					'rejected',
+					'waitlisted',
+					'resubmit_with_guidance'
+				])
 			)
 		)
 		// A draft first when there is both: the unfinished one is the one still
-		// asking for something.
+		// asking for something. Postgres enums sort by declaration order, and
+		// `draft` is first in `submission_status`.
 		.orderBy(asc(submissionTable.status), desc(submissionTable.updatedAt))
 		.limit(1);
 

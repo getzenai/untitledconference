@@ -961,6 +961,121 @@ describe('the public form points at what you already sent', () => {
 		expect(found?.id).toBe(draft.submissionId);
 		expect(found?.status).toBe('draft');
 	});
+
+	it('still points at a proposal the committee accepted (#868)', async () => {
+		const speakerId = `accepted-${suffix}`;
+		await db.insert(user).values({
+			id: speakerId,
+			email: `${speakerId}@example.test`,
+			emailVerified: true,
+			name: 'Accepted'
+		});
+		try {
+			const saved = await saveSubmission(
+				speakerId,
+				slug,
+				input({ title: 'Taken', speaker: ownDetails(speakerId, 'Accepted Ada') }),
+				{ submit: true }
+			);
+			if (!saved.ok) throw new Error('expected a submitted proposal');
+
+			await db
+				.update(submissionTable)
+				.set({ status: 'accepted', decidedAt: new Date() })
+				.where(eq(submissionTable.id, saved.submissionId));
+
+			const [conference] = await db
+				.select({ id: conferenceTable.id })
+				.from(conferenceTable)
+				.where(eq(conferenceTable.slug, slug));
+
+			const found = await submissionForConference(speakerId, conference.id);
+			expect(found?.id).toBe(saved.submissionId);
+			expect(found?.title).toBe('Taken');
+			expect(found?.status).toBe('accepted');
+		} finally {
+			await db.delete(user).where(eq(user.id, speakerId));
+		}
+	});
+
+	it('still points at a proposal the committee declined (#868)', async () => {
+		const speakerId = `declined-${suffix}`;
+		await db.insert(user).values({
+			id: speakerId,
+			email: `${speakerId}@example.test`,
+			emailVerified: true,
+			name: 'Declined'
+		});
+		try {
+			const saved = await saveSubmission(
+				speakerId,
+				slug,
+				input({ title: 'Not this year', speaker: ownDetails(speakerId, 'Declined Drew') }),
+				{ submit: true }
+			);
+			if (!saved.ok) throw new Error('expected a submitted proposal');
+
+			await db
+				.update(submissionTable)
+				.set({ status: 'rejected', decidedAt: new Date() })
+				.where(eq(submissionTable.id, saved.submissionId));
+
+			const [conference] = await db
+				.select({ id: conferenceTable.id })
+				.from(conferenceTable)
+				.where(eq(conferenceTable.slug, slug));
+
+			const found = await submissionForConference(speakerId, conference.id);
+			expect(found?.id).toBe(saved.submissionId);
+			expect(found?.title).toBe('Not this year');
+			expect(found?.status).toBe('rejected');
+		} finally {
+			await db.delete(user).where(eq(user.id, speakerId));
+		}
+	});
+
+	it('still prefers an unfinished draft over an accepted talk (#868)', async () => {
+		const speakerId = `both-${suffix}`;
+		await db.insert(user).values({
+			id: speakerId,
+			email: `${speakerId}@example.test`,
+			emailVerified: true,
+			name: 'Both'
+		});
+		try {
+			const accepted = await saveSubmission(
+				speakerId,
+				slug,
+				input({ title: 'Already in', speaker: ownDetails(speakerId, 'Both Blair') }),
+				{ submit: true }
+			);
+			if (!accepted.ok) throw new Error('expected a submitted proposal');
+			await db
+				.update(submissionTable)
+				.set({ status: 'accepted', decidedAt: new Date() })
+				.where(eq(submissionTable.id, accepted.submissionId));
+
+			const draft = await saveSubmission(
+				speakerId,
+				slug,
+				input({ title: 'Next one', speaker: ownDetails(speakerId, 'Both Blair') }),
+				{ submit: false }
+			);
+			if (!draft.ok) throw new Error('expected a draft');
+
+			const [conference] = await db
+				.select({ id: conferenceTable.id })
+				.from(conferenceTable)
+				.where(eq(conferenceTable.slug, slug));
+
+			// The unfinished one is still the one asking for something.
+			const found = await submissionForConference(speakerId, conference.id);
+			expect(found?.id).toBe(draft.submissionId);
+			expect(found?.status).toBe('draft');
+		} finally {
+			await db.delete(user).where(eq(user.id, speakerId));
+		}
+	});
 });
 
 describe('listOpenCalls', () => {
