@@ -11,10 +11,11 @@
 	import {
 		autosavedProposalIdentity,
 		cfpAnotherProposalId,
+		cfpHasOpenProposal,
 		clearAutosavedProposal,
-		consumePendingProposal,
 		persistCfpDraft,
 		readAutosavedProposal,
+		resumeCfpOnMount,
 		writePendingProposal,
 		type PendingProposalIntent
 	} from '$lib/conference/pending-proposal';
@@ -74,56 +75,25 @@
 	const anotherId = $derived(cfpAnotherProposalId(data.existing, startingAnother));
 	const selectDraft = $derived(autosavedProposalIdentity(call.conference.slug, owner, anotherId));
 
-	/** Reopen the second slot when it still holds typing (#815, #819). */
-	function restoreAnotherProposal(slug: string, mine: string | null) {
-		if (!data.existing) return;
-		const next = readAutosavedProposal(localStorage, slug, mine, Date.now(), data.existing.id);
-		if (!next) return;
-		// A draft still hides the form behind Continue your draft.
-		if (data.existing.status === 'draft') startingAnother = true;
-		restored = next.draft;
-		restoredAt = next.savedAt;
-	}
-
-	function restoreParkedProposal(slug: string, mine: string | null) {
-		// The server copy is written by the sign-up hook and survives the
-		// verification link opening in a new tab (#643). Consume the same-tab copy
-		// regardless, so the two handoff paths cannot become two future saves.
-		const browserPending = consumePendingProposal(sessionStorage, slug);
-		const pending = data.pendingProposal ?? browserPending;
-		if (pending) {
-			restored = pending.draft;
-			pendingIntent = pending.intent;
-			fromPending = true;
-			// It has made its trip; the anonymous slot is not a second copy.
-			clearAutosavedProposal(localStorage, slug, null);
-			return;
-		}
-		if (mine) clearAutosavedProposal(localStorage, slug, null);
-		const saved = readAutosavedProposal(localStorage, slug, mine);
-		restored = saved?.draft ?? null;
-		restoredAt = saved?.savedAt ?? null;
-	}
-
 	onMount(() => {
-		const slug = data.call.conference.slug;
-		const mine = data.user?.id ?? null;
-		if (data.existing) {
-			// A server copy is the truth for the first proposal. A leftover
-			// local one would come back if this proposal were later withdrawn
-			// — and a leftover anonymous one is somebody else's, on a browser
-			// two people share. The second-proposal slot is a different key;
-			// clearing the first must not throw that typing away (#815).
-			clearAutosavedProposal(localStorage, slug, mine);
-			if (mine) clearAutosavedProposal(localStorage, slug, null);
-			restoreAnotherProposal(slug, mine);
-		} else {
-			restoreParkedProposal(slug, mine);
-		}
+		const next = resumeCfpOnMount(localStorage, sessionStorage, {
+			slug: data.call.conference.slug,
+			owner: data.user?.id ?? null,
+			existing: data.existing,
+			pendingProposal: data.pendingProposal,
+			startingAnother
+		});
+		restored = next.restored;
+		restoredAt = next.restoredAt;
+		fromPending = next.fromPending;
+		pendingIntent = next.pendingIntent;
+		startingAnother = next.startingAnother;
 		listening = true;
 	});
 
-	const resume = $derived(Boolean(signedIn && fromPending && restored && !data.existing));
+	const resume = $derived(
+		Boolean(signedIn && fromPending && restored && !cfpHasOpenProposal(data.existing))
+	);
 	const autoAction = $derived(resume && pendingIntent !== 'continue' ? pendingIntent : null);
 	/** A restored local draft is worth saying out loud — see the banner below. */
 	const resumedLocal = $derived(Boolean(restored && !fromPending && restoredAt !== null));

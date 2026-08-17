@@ -3,6 +3,7 @@ import {
 	autosavedProposalIdentity,
 	autosavedProposalKey,
 	autosavedSelectKey,
+	cfpHasOpenProposal,
 	clearAutosavedProposal,
 	clearProposalDrafts,
 	consumePendingProposal,
@@ -14,6 +15,7 @@ import {
 	pendingProposalKey,
 	readAutosavedProposal,
 	readPendingProposal,
+	resumeCfpOnMount,
 	writeAutosavedProposal,
 	writePendingProposal
 } from './pending-proposal';
@@ -315,5 +317,138 @@ describe('autosaved proposal storage', () => {
 		});
 		expect(readAutosavedProposal(bare, 'devflow', null)).toBeNull();
 		expect(bare.getItem('cfp-autosaved-proposal:devflow')).toBeNull();
+	});
+});
+
+describe('cfpHasOpenProposal (#881)', () => {
+	it('is the persist gate: a draft occupies the form, a decided talk does not', () => {
+		expect(cfpHasOpenProposal(null)).toBe(false);
+		expect(cfpHasOpenProposal({ id: 43, status: 'draft' })).toBe(true);
+		expect(cfpHasOpenProposal({ id: 43, status: 'draft' }, true)).toBe(false);
+		expect(cfpHasOpenProposal({ id: 89, status: 'rejected' })).toBe(false);
+		expect(cfpHasOpenProposal({ id: 88, status: 'accepted' })).toBe(false);
+		expect(cfpHasOpenProposal({ id: 42, status: 'submitted' })).toBe(false);
+		expect(cfpHasOpenProposal({ id: 77, status: 'in_review' })).toBe(false);
+	});
+});
+
+describe('resumeCfpOnMount (#881)', () => {
+	const unsigned = {
+		...emptyProposal(),
+		title: 'Unsigned second try'
+	};
+	const pending = { draft: unsigned, intent: 'submit' as const };
+	const rejected = { id: 89, status: 'rejected' };
+	const draftRow = { id: 43, status: 'draft' };
+
+	it('puts a pending title on the form when the first talk was declined', () => {
+		const local = fakeStorage();
+		const session = fakeStorage();
+		writePendingProposal(session, 'devflow', unsigned, 'submit');
+
+		const next = resumeCfpOnMount(local, session, {
+			slug: 'devflow',
+			owner: 'speaker-1',
+			existing: rejected,
+			pendingProposal: pending
+		});
+
+		expect(next.restored?.title).toBe('Unsigned second try');
+		expect(next.fromPending).toBe(true);
+		expect(session.getItem(pendingProposalKey('devflow'))).toBeNull();
+	});
+
+	it('still restores when there is no server copy (the control)', () => {
+		const local = fakeStorage();
+		const session = fakeStorage();
+		writePendingProposal(session, 'devflow', unsigned, 'submit');
+
+		const next = resumeCfpOnMount(local, session, {
+			slug: 'devflow',
+			owner: 'speaker-1',
+			existing: null,
+			pendingProposal: pending
+		});
+
+		expect(next.restored?.title).toBe('Unsigned second try');
+		expect(next.fromPending).toBe(true);
+		expect(session.getItem(pendingProposalKey('devflow'))).toBeNull();
+	});
+
+	it('consumes the same-tab handoff when the server did not pass the blob', () => {
+		const local = fakeStorage();
+		const session = fakeStorage();
+		writePendingProposal(session, 'devflow', unsigned, 'submit');
+
+		const next = resumeCfpOnMount(local, session, {
+			slug: 'devflow',
+			owner: 'speaker-1',
+			existing: rejected,
+			pendingProposal: null
+		});
+
+		expect(next.restored?.title).toBe('Unsigned second try');
+		expect(next.fromPending).toBe(true);
+		expect(session.getItem(pendingProposalKey('devflow'))).toBeNull();
+	});
+
+	it('leaves a draft on the existing branch and does not consume the handoff (#815)', () => {
+		const local = fakeStorage();
+		const session = fakeStorage();
+		writePendingProposal(session, 'devflow', unsigned, 'submit');
+
+		const next = resumeCfpOnMount(local, session, {
+			slug: 'devflow',
+			owner: 'speaker-1',
+			existing: draftRow,
+			pendingProposal: pending
+		});
+
+		expect(next.restored).toBeNull();
+		expect(next.startingAnother).toBe(false);
+		expect(next.fromPending).toBe(false);
+		expect(session.getItem(pendingProposalKey('devflow'))).not.toBeNull();
+	});
+
+	it('reopens a typed second slot on a draft without touching the handoff (#815)', () => {
+		const local = fakeStorage();
+		const session = fakeStorage();
+		writeAutosavedProposal(local, 'devflow', 'speaker-1', unsigned, Date.now(), 43);
+		writePendingProposal(session, 'devflow', unsigned, 'submit');
+
+		const next = resumeCfpOnMount(local, session, {
+			slug: 'devflow',
+			owner: 'speaker-1',
+			existing: draftRow,
+			pendingProposal: pending
+		});
+
+		expect(next.restored?.title).toBe('Unsigned second try');
+		expect(next.startingAnother).toBe(true);
+		expect(next.fromPending).toBe(false);
+		expect(session.getItem(pendingProposalKey('devflow'))).not.toBeNull();
+	});
+
+	it('reopens the second slot of a declined talk when there is no handoff', () => {
+		const local = fakeStorage();
+		const session = fakeStorage();
+		writeAutosavedProposal(
+			local,
+			'devflow',
+			'speaker-1',
+			{ ...emptyProposal(), title: 'Second try' },
+			Date.now(),
+			89
+		);
+
+		const next = resumeCfpOnMount(local, session, {
+			slug: 'devflow',
+			owner: 'speaker-1',
+			existing: rejected,
+			pendingProposal: null
+		});
+
+		expect(next.restored?.title).toBe('Second try');
+		expect(next.fromPending).toBe(false);
 	});
 });

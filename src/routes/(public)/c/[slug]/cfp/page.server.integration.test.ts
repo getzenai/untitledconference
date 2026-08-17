@@ -6,13 +6,23 @@
  * Parts 2 and 3 pin the write: a change here updates that same profile, and a
  * second proposal from the same account links to it instead of forking one.
  */
+import { emptyProposal } from '$lib/conference/proposal-draft';
 import { saveSubmission, type SubmissionInput } from '$lib/server/conference/cfp-submission';
+import {
+	clearRegistrationProposal,
+	parkRegistrationProposal
+} from '$lib/server/conference/registration-proposal';
 import { db } from '$lib/server/db';
-import { organization, user } from '$lib/server/db/auth-schema';
-import { cfpFormTable, submissionSpeakerTable } from '$lib/server/db/conference/cfp-schema';
+import { organization, user, verification } from '$lib/server/db/auth-schema';
+import {
+	cfpFormTable,
+	submissionSpeakerTable,
+	submissionTable
+} from '$lib/server/db/conference/cfp-schema';
 import { conferenceTable, speakerProfileTable } from '$lib/server/db/conference/conference-schema';
 import { and, eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { nanoid } from 'nanoid';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { load, type CfpSpeakerProfile } from './+page.server';
 
 const suffix = `cfp-prefill-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -223,5 +233,147 @@ describe('the public call writes the existing profile, not a fork', () => {
 			.where(eq(submissionSpeakerTable.submissionId, second.submissionId));
 		expect(linked.map((row) => row.profileId)).toEqual([before.id]);
 		expect(linkedB.map((row) => row.profileId)).toEqual([before.id]);
+	});
+});
+
+/**
+ * After #878 a decided talk is `existing`. The loader used to skip the
+ * registration handoff whenever `existing` was set, so the unsigned second
+ * title never reached the page (#881). Same gate persist already uses:
+ * an *open* proposal, not a server copy.
+ */
+describe('the public call still hands a parked second draft after a decision (#881)', () => {
+	const handoffSpeakerId = `handoff-${suffix}`;
+	const parked = {
+		...emptyProposal(),
+		title: 'Unsigned second try',
+		abstract: 'Typed before they signed back in.'
+	};
+	const adapter = {
+		deleteVerificationByIdentifier: async (identifier: string) => {
+			await db.delete(verification).where(eq(verification.identifier, identifier));
+		},
+		createVerificationValue: async (value: {
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}) => {
+			const now = new Date();
+			return db
+				.insert(verification)
+				.values({ id: nanoid(), ...value, createdAt: now, updatedAt: now })
+				.returning();
+		}
+	};
+
+	const visitAs = async (userId: string) =>
+		load({
+			params: { slug },
+			locals: { user: { id: userId } }
+		} as unknown as Parameters<typeof load>[0]) as Promise<{
+			existing: { id: number; status: string } | null;
+			pendingProposal: { draft: { title: string } } | null;
+		}>;
+
+	beforeAll(async () => {
+		await db.insert(user).values({
+			id: handoffSpeakerId,
+			email: `${handoffSpeakerId}@example.test`,
+			emailVerified: true,
+			name: 'Second Try'
+		});
+	});
+
+	afterAll(async () => {
+		await clearRegistrationProposal(handoffSpeakerId, slug);
+		await db.delete(user).where(eq(user.id, handoffSpeakerId));
+	});
+
+	const asSpeaker = (userId: string, name: string, title: string): SubmissionInput => ({
+		...proposal(title, 'Works on build systems.'),
+		speaker: {
+			...proposal(title, 'Works on build systems.').speaker,
+			name,
+			email: `${userId}@example.test`
+		}
+	});
+
+	it('returns the parked title when the first talk was declined', async () => {
+		const saved = await saveSubmission(
+			handoffSpeakerId,
+			slug,
+			asSpeaker(handoffSpeakerId, 'Second Try', 'Not this year'),
+			{ submit: true }
+		);
+		if (!saved.ok) throw new Error('expected a submitted proposal');
+		await db
+			.update(submissionTable)
+			.set({ status: 'rejected', decidedAt: new Date() })
+			.where(eq(submissionTable.id, saved.submissionId));
+
+		await parkRegistrationProposal(adapter, handoffSpeakerId, {
+			slug,
+			draft: parked,
+			intent: 'submit'
+		});
+
+		const data = await visitAs(handoffSpeakerId);
+		expect(data.existing?.status).toBe('rejected');
+		expect(data.pendingProposal?.draft.title).toBe('Unsigned second try');
+	});
+
+	it('still returns the parked title when there is no server copy', async () => {
+		const freshId = `fresh-${suffix}`;
+		await db.insert(user).values({
+			id: freshId,
+			email: `${freshId}@example.test`,
+			emailVerified: true,
+			name: 'Fresh'
+		});
+		try {
+			await parkRegistrationProposal(adapter, freshId, {
+				slug,
+				draft: parked,
+				intent: 'submit'
+			});
+			const data = await visitAs(freshId);
+			expect(data.existing).toBeNull();
+			expect(data.pendingProposal?.draft.title).toBe('Unsigned second try');
+		} finally {
+			await clearRegistrationProposal(freshId, slug);
+			await db.delete(user).where(eq(user.id, freshId));
+		}
+	});
+
+	it('keeps a draft on the existing branch and does not fetch the handoff (#815)', async () => {
+		const draftSpeakerId = `draft-handoff-${suffix}`;
+		await db.insert(user).values({
+			id: draftSpeakerId,
+			email: `${draftSpeakerId}@example.test`,
+			emailVerified: true,
+			name: 'Draft'
+		});
+		try {
+			const saved = await saveSubmission(
+				draftSpeakerId,
+				slug,
+				asSpeaker(draftSpeakerId, 'Draft', 'Half a thought'),
+				{ submit: false }
+			);
+			if (!saved.ok) throw new Error('expected a draft');
+
+			await parkRegistrationProposal(adapter, draftSpeakerId, {
+				slug,
+				draft: parked,
+				intent: 'submit'
+			});
+
+			const data = await visitAs(draftSpeakerId);
+			expect(data.existing?.status).toBe('draft');
+			expect(data.pendingProposal).toBeNull();
+		} finally {
+			await clearRegistrationProposal(draftSpeakerId, slug);
+			await db.delete(user).where(eq(user.id, draftSpeakerId));
+		}
 	});
 });
