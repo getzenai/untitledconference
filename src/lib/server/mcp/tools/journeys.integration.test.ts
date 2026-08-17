@@ -526,11 +526,19 @@ describe('speaker and reviewer tools', () => {
 		const listed = await call(ellis, 'list_my_review_assignments', {
 			conferenceSlug: seeded.conferenceSlug
 		});
-		expect(
-			(listed.data!.assignments as { submissionId: number }[]).some(
-				(row) => row.submissionId === filed.submissionId
-			)
-		).toBe(true);
+		const before = listed.data!.assignments as {
+			submissionId: number;
+			open: boolean;
+			ownReviewSubmitted: boolean;
+		}[];
+		const listedRow = before.find((row) => row.submissionId === filed.submissionId);
+		expect(listedRow).toMatchObject({ open: true, ownReviewSubmitted: false });
+		expect(listed.data).toMatchObject({
+			open: before.filter((row) => row.open).length,
+			total: before.filter((row) => row.submissionId).length,
+			count: listed.data!.total
+		});
+		expect(listed.data!.open).toBeGreaterThanOrEqual(1);
 
 		const stranger = await call(drew, 'get_review_assignment', {
 			conferenceSlug: seeded.conferenceSlug,
@@ -570,5 +578,18 @@ describe('speaker and reviewer tools', () => {
 		expect(after?.own.comment).toBe('Even clearer on a second read.');
 		expect(after?.own.status).toBe('submitted');
 		expect(after?.criteria[0]?.value).toBe(5);
+
+		const listedAgain = await call(ellis, 'list_my_review_assignments', {
+			conferenceSlug: seeded.conferenceSlug
+		});
+		const rows = listedAgain.data!.assignments as {
+			submissionId: number;
+			open: boolean;
+			ownReviewSubmitted: boolean;
+		}[];
+		const done = rows.find((row) => row.submissionId === filed.submissionId);
+		expect(done).toMatchObject({ open: false, ownReviewSubmitted: true });
+		expect(listedAgain.data!.open).toBe(rows.filter((row) => row.open).length);
+		expect(listedAgain.data!.open).toBe(listed.data!.open - 1);
 	});
 });

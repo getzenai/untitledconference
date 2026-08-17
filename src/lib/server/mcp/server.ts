@@ -50,6 +50,7 @@ export const SERVER_INSTRUCTIONS =
 	'and finalize_proposal to hand it in — a draft nobody finalizes is never submitted. Or withdraw_proposal, ' +
 	'list_my_proposals for status, and update_my_speaker_profile for bio, photo and links. ' +
 	'Reviewers start with list_my_review_assignments, then get_review_assignment for the rubric, then submit_review. ' +
+	'list_my_review_assignments already separates open from total — open is what you can file now. ' +
 	'A reviewer cannot read a submission they were not assigned. ' +
 	'get_my_profile and list_my_organizations describe the caller.';
 
