@@ -1,6 +1,6 @@
 <script lang="ts">
 	/**
-	 * The way in: a star pinned to the right edge of every app page (#676).
+	 * The way in: a star pinned to the edge of every app page (#676).
 	 *
 	 * Chat is created on first open and lives here, not in the sheet. Closing
 	 * the panel unmounts the sheet and must not throw the transcript or a
@@ -14,6 +14,11 @@
 	 * On a talk at phone width the star sits at the bottom so it does not
 	 * cover Accept (#857). Above md, and on every other page, it stays
 	 * vertically centred.
+	 *
+	 * Below md it docks on the left, not the right (#861). Right-edge
+	 * actions — Assign/Unassign, and anything else that scrolls through
+	 * that column — stay tappable. That is the relationship with
+	 * scrolling content, not another per-page exception.
 	 */
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
@@ -66,7 +71,8 @@
 	type="button"
 	size="icon"
 	class={cn(
-		'fixed right-0 z-40 size-11 rounded-l-full rounded-r-none shadow-lg',
+		'fixed z-40 size-11 shadow-lg',
+		'left-0 rounded-l-none rounded-r-full md:right-0 md:left-auto md:rounded-l-full md:rounded-r-none',
 		onTalkPage
 			? 'bottom-6 md:top-1/2 md:bottom-auto md:-translate-y-1/2'
 			: 'top-1/2 -translate-y-1/2'
