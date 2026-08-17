@@ -81,10 +81,12 @@
 					Back to your work
 				</Button>
 			{:else}
-				<Button href="/login" variant="ghost" size="sm" class="hidden sm:inline-flex"
-					>Sign in</Button
-				>
-				<Button href="/register" variant="act" size="sm">Get started free</Button>
+				<Button href="/login" variant="ghost" size="sm" data-testid="landing-sign-in">
+					Sign in
+				</Button>
+				<Button href="/register" variant="act" size="sm" data-testid="landing-get-started">
+					Get started free
+				</Button>
 			{/if}
 		{/snippet}
 	</LandingHeader>
