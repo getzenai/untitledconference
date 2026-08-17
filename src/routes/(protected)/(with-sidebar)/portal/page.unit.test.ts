@@ -96,6 +96,20 @@ describe('speaker portal task list', () => {
 		expect(body).toContain('DevFlow Conf 2027');
 	});
 
+	it('calls a past deadline overdue, the same words home uses (#865)', () => {
+		const body = draw([task(22, { dueOn: '2020-01-01T12:00:00.000Z' })]);
+
+		expect(body).toContain('1 Jan 2020, 12:00 UTC — overdue');
+		expect(body).toContain('text-status-bad');
+	});
+
+	it('does not call a future deadline overdue (#865)', () => {
+		const body = draw([task(23, { dueOn: '2099-06-01T12:00:00.000Z' })]);
+
+		expect(body).toContain('1 Jun 2099, 12:00 UTC');
+		expect(body).not.toContain('— overdue');
+	});
+
 	it('does not link an archived conference to a 404 (#498)', () => {
 		const body = draw([
 			task(21, {

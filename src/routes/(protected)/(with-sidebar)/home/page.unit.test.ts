@@ -234,6 +234,50 @@ describe('home hub', () => {
 		expect(html).toContain('DevFlow Summit · due 2 May 2027, 21:59 UTC');
 	});
 
+	it('calls a past deadline overdue, the same words the portal uses (#865)', () => {
+		const html = body(null, {
+			...emptyHub,
+			canCreateEvent: false,
+			openTasks: [
+				{
+					id: 22,
+					submissionId: null,
+					title: 'Confirm participation',
+					instructions: null,
+					status: 'open',
+					dueOn: new Date('2020-01-01T12:00:00Z'),
+					conference: { slug: 'devflow', name: 'DevFlow Summit' },
+					submissionTitle: null
+				} as never
+			]
+		});
+
+		expect(html).toContain('due 1 Jan 2020, 12:00 UTC — overdue');
+		expect(html).toContain('text-status-bad');
+	});
+
+	it('does not call a future deadline overdue (#865)', () => {
+		const html = body(null, {
+			...emptyHub,
+			canCreateEvent: false,
+			openTasks: [
+				{
+					id: 23,
+					submissionId: null,
+					title: 'Confirm participation',
+					instructions: null,
+					status: 'open',
+					dueOn: new Date('2099-06-01T12:00:00Z'),
+					conference: { slug: 'devflow', name: 'DevFlow Summit' },
+					submissionTitle: null
+				} as never
+			]
+		});
+
+		expect(html).toContain('due 1 Jun 2099, 12:00 UTC');
+		expect(html).not.toContain('— overdue');
+	});
+
 	it("names tasks and proposals as two lists, so a card's kind is visible (#615)", () => {
 		const html = body(null, {
 			...emptyHub,
