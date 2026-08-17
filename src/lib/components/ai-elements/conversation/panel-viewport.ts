@@ -59,10 +59,12 @@ export interface ResizeGeometry {
 /**
  * Where the viewport belongs after the panel changes size (#743).
  *
- * Shrinking moves neither `scrollTop` nor any node, so neither a `scroll` event
- * nor a mutation fires — the flag would go on saying "at the end" while the end
- * has moved away below the reader, and the way back down is a button that only
- * exists while the flag says otherwise.
+ * Shrinking the panel alone moves neither `scrollTop` nor any node, so neither
+ * a `scroll` event nor a mutation fires — the flag would go on saying "at the
+ * end" while the end has moved away below the reader, and the way back down is
+ * a button that only exists while the flag says otherwise. Shrinking the
+ * *window* does move `scrollTop`; that is #849, and it is handled by keeping
+ * this function's `wasAtBottom` from being overwritten in between, not here.
  *
  * A reader who was at the end is put back at the end: they were watching the
  * newest line, and the viewport moved under them rather than the other way
@@ -79,6 +81,57 @@ export function afterResizeScrollTop({
 }: ResizeGeometry): number | null {
 	if (!wasAtBottom) return null;
 	return Math.max(0, scrollHeight - clientHeight);
+}
+
+export interface ScrollOrigin {
+	/** Visible height of the viewport when it was last measured. */
+	lastClientHeight: number;
+	/** Visible height of the viewport now. */
+	clientHeight: number;
+}
+
+/**
+ * Whether a `scroll` event is the layout moving under the reader (#849).
+ *
+ * Shrinking the window fires one: the browser moves `scrollTop` itself while
+ * the panel is being re-laid out. That event is not the reader saying "I want
+ * to be somewhere else", but by position alone it is indistinguishable from
+ * one — and taken as one it clears the very flag the resize handler is about
+ * to read, so a reader who was watching the newest line is left above it.
+ *
+ * `clientHeight` tells the two apart: only a resize changes the height of the
+ * viewport. Content arriving moves `scrollHeight`, and a reader moves neither.
+ */
+export function isResizeDrivenScroll({ lastClientHeight, clientHeight }: ScrollOrigin): boolean {
+	return clientHeight !== lastClientHeight;
+}
+
+export interface EndIntent {
+	/** Whether the last measurement put the reader at the end. */
+	atBottom: boolean;
+	/** Where a scroll this panel started is heading, or `null` for none. */
+	glideTarget: number | null;
+	/** The end of the scrollable area as of that last measurement. */
+	lastEnd: number;
+}
+
+/**
+ * Whether the reader is watching the newest line — there, or on the way (#849).
+ *
+ * A message arriving scrolls the panel over a few hundred milliseconds, and for
+ * every one of those frames the reader is *not* at the end by position. A
+ * window resize inside that window read the position, decided they were reading
+ * something older, and left them behind; the glide then finished at the end the
+ * panel had before it shrank.
+ *
+ * Where the glide is heading answers what the position cannot. Any scroll the
+ * reader starts themselves clears it, so this can only ever say "the panel was
+ * carrying them to the newest line", never "they asked to be there".
+ */
+export function isWatchingTheEnd({ atBottom, glideTarget, lastEnd }: EndIntent): boolean {
+	if (atBottom) return true;
+	if (glideTarget === null) return false;
+	return glideTarget >= lastEnd - BOTTOM_THRESHOLD_PX;
 }
 
 export interface FollowGeometry {
@@ -128,6 +181,14 @@ export class PanelViewport {
 	#remembered: number | null = null;
 	/** Cleared once the viewport has been put where it belongs, or the reader moves. */
 	#placementPending = true;
+	/** Height of the viewport as of the last measurement — the resize tell (#849). */
+	#lastClientHeight = 0;
+	/** The end of the scrollable area as of that same measurement (#849). */
+	#lastEnd = 0;
+	/** Where a scroll this panel started is heading, until it lands (#849). */
+	#glideTarget: number | null = null;
+	/** How far that glide had left to go when it was last measured (#849). */
+	#lastGlideDistance = 0;
 
 	/**
 	 * `onAtBottom` is how the reactive shell hears about the flag changing.
@@ -203,8 +264,22 @@ export class PanelViewport {
 	scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
 		if (!this.#element) return;
 		this.#followAllowed = true;
-		this.#element.scrollTo({ top: this.#element.scrollHeight, behavior });
+		this.#glide(this.#element.scrollHeight, behavior);
 	};
+
+	/**
+	 * Every scroll this panel starts goes through here, so that where it is
+	 * heading is written down (#849). A smooth scroll takes a few hundred
+	 * milliseconds, and a resize inside that window has to know the reader is
+	 * being carried to the newest line — their position says the opposite for
+	 * every frame of it.
+	 */
+	#glide(top: number, behavior: ScrollBehavior) {
+		if (!this.#element) return;
+		this.#glideTarget = top;
+		this.#lastGlideDistance = Math.abs(this.#element.scrollTop - top);
+		this.#element.scrollTo({ top, behavior });
+	}
 
 	/**
 	 * Opens the panel where the reader left it, or at the end (#729).
@@ -220,12 +295,12 @@ export class PanelViewport {
 		if (!this.#element || !this.#placementPending) return;
 		const { scrollHeight, clientHeight } = this.#element;
 		if (scrollHeight <= clientHeight) return;
-		this.#element.scrollTo({
-			top: initialScrollTop({ remembered: this.#remembered, scrollHeight, clientHeight }),
+		this.#glide(
+			initialScrollTop({ remembered: this.#remembered, scrollHeight, clientHeight }),
 			// Never animated: a smooth scroll through fifty messages on open is
 			// a slot machine, and the reader did not ask for a journey.
-			behavior: 'auto'
-		});
+			'auto'
+		);
 		this.#placementPending = false;
 		this.#syncAtBottom();
 		// A reader restored into the middle of the conversation is a reader who
@@ -261,7 +336,7 @@ export class PanelViewport {
 		// Only ever move forward: a target behind the current position would
 		// fight a reader who scrolled down ahead of the stream.
 		if (target > this.#element.scrollTop + 1) {
-			this.#element.scrollTo({ top: target, behavior });
+			this.#glide(target, behavior);
 		}
 		this.#syncAtBottom();
 	}
@@ -273,39 +348,77 @@ export class PanelViewport {
 	#syncAtBottom() {
 		if (!this.#element) return;
 		const { scrollTop, scrollHeight, clientHeight } = this.#element;
+		this.#lastClientHeight = clientHeight;
+		this.#lastEnd = Math.max(0, scrollHeight - clientHeight);
+		// A glide is over once it arrives — and also once the viewport starts
+		// moving *away* from where it was heading, which a smooth scroll never
+		// does: that is someone else driving, and left standing the glide would
+		// go on answering for a reader it is no longer carrying.
+		if (this.#glideTarget !== null) {
+			const distance = Math.abs(scrollTop - this.#glideTarget);
+			if (distance <= 1 || distance > this.#lastGlideDistance + 1) {
+				this.#glideTarget = null;
+			} else {
+				this.#lastGlideDistance = distance;
+			}
+		}
 		const atBottom = scrollTop + clientHeight >= scrollHeight - BOTTOM_THRESHOLD_PX;
 		if (atBottom === this.#isAtBottom) return;
 		this.#isAtBottom = atBottom;
 		this.#onAtBottom(atBottom);
 	}
 
+	/**
+	 * A scroll that arrives with a viewport of a different height is the window
+	 * being resized, not the reader moving, and it goes to the resize path
+	 * instead of overwriting the flag that path reads (#849).
+	 */
 	#onScroll = () => {
+		if (!this.#element) return;
+		if (
+			this.#ready &&
+			isResizeDrivenScroll({
+				lastClientHeight: this.#lastClientHeight,
+				clientHeight: this.#element.clientHeight
+			})
+		) {
+			this.#onResize();
+			return;
+		}
 		this.#syncAtBottom();
 	};
 
 	/**
 	 * The viewport changed size (#743).
 	 *
-	 * `#isAtBottom` still holds the answer from before this callback ran —
-	 * nothing has recomputed it, because a resize fires neither `scroll` nor a
-	 * mutation. That stale value is exactly what is needed here, and it is why
-	 * `#syncAtBottom()` comes after the scroll rather than before it.
+	 * `#isAtBottom` still holds the answer from before the size changed, which
+	 * is exactly what is needed here — it is why `#syncAtBottom()` comes after
+	 * the scroll rather than before it. Shrinking the panel recomputes nothing
+	 * on its own, because it fires neither `scroll` nor a mutation; shrinking
+	 * the window does fire a `scroll`, and `#onScroll` sends it here rather
+	 * than letting it answer the question this handler is still asking (#849).
 	 */
 	#onResize = () => {
 		if (!this.#element) return;
 		const target = afterResizeScrollTop({
-			wasAtBottom: this.#isAtBottom,
+			wasAtBottom: isWatchingTheEnd({
+				atBottom: this.#isAtBottom,
+				glideTarget: this.#glideTarget,
+				lastEnd: this.#lastEnd
+			}),
 			scrollHeight: this.#element.scrollHeight,
 			clientHeight: this.#element.clientHeight
 		});
-		if (target !== null) this.#element.scrollTo({ top: target, behavior: 'auto' });
+		if (target !== null) this.#glide(target, 'auto');
 		this.#syncAtBottom();
 	};
 
 	#onUserIntent = () => {
 		this.#followAllowed = false;
-		// Somebody who has already moved is not carried anywhere else.
+		// Somebody who has already moved is not carried anywhere else — neither
+		// to a remembered offset, nor to the end a glide was still aiming at.
 		this.#placementPending = false;
+		this.#glideTarget = null;
 	};
 
 	#setup() {
@@ -365,5 +478,9 @@ export class PanelViewport {
 		this.#followAllowed = false;
 		this.#ready = false;
 		this.#placementPending = true;
+		this.#lastClientHeight = 0;
+		this.#lastEnd = 0;
+		this.#glideTarget = null;
+		this.#lastGlideDistance = 0;
 	}
 }

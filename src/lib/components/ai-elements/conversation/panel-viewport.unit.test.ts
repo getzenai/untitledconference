@@ -5,7 +5,13 @@
  * mistake there looks like "the panel just doesn't follow properly".
  */
 import { describe, expect, it } from 'vitest';
-import { afterResizeScrollTop, followScrollTop, initialScrollTop } from './panel-viewport';
+import {
+	afterResizeScrollTop,
+	followScrollTop,
+	initialScrollTop,
+	isResizeDrivenScroll,
+	isWatchingTheEnd
+} from './panel-viewport';
 
 /** A 400px-tall panel scrolled to the top, with 1000px of content in it. */
 const PANEL = {
@@ -122,5 +128,62 @@ describe('afterResizeScrollTop', () => {
 		expect(afterResizeScrollTop({ wasAtBottom: true, scrollHeight: 1000, clientHeight: 900 })).toBe(
 			100
 		);
+	});
+});
+
+/**
+ * Telling the reader's scroll apart from the layout's (#849).
+ *
+ * The window path fires a `scroll` while the viewport is still being resized.
+ * Read as the reader moving, it answers the question `afterResizeScrollTop` is
+ * still asking — and answers it wrong, which is how a reader ends up hundreds
+ * of pixels above the newest line.
+ */
+describe('isResizeDrivenScroll', () => {
+	it('calls a scroll that arrives with a shorter viewport a resize', () => {
+		expect(isResizeDrivenScroll({ lastClientHeight: 718, clientHeight: 218 })).toBe(true);
+	});
+
+	it('calls a growing viewport a resize too', () => {
+		expect(isResizeDrivenScroll({ lastClientHeight: 218, clientHeight: 718 })).toBe(true);
+	});
+
+	it('leaves a scroll at an unchanged height to the reader', () => {
+		// The whole point of the discriminator: content arriving moves
+		// `scrollHeight` and the reader moves `scrollTop`, so neither of them
+		// can be mistaken for a resize here.
+		expect(isResizeDrivenScroll({ lastClientHeight: 718, clientHeight: 718 })).toBe(false);
+	});
+});
+
+/**
+ * Being carried to the newest line counts as being on it (#849).
+ *
+ * The panel scrolls to a new answer over a few hundred milliseconds, and for
+ * every frame of that the reader's *position* is somewhere in the middle.
+ */
+describe('isWatchingTheEnd', () => {
+	it('takes the position when the reader is already at the end', () => {
+		expect(isWatchingTheEnd({ atBottom: true, glideTarget: null, lastEnd: 106 })).toBe(true);
+	});
+
+	it('counts a glide that is heading for the end', () => {
+		expect(isWatchingTheEnd({ atBottom: false, glideTarget: 106, lastEnd: 106 })).toBe(true);
+	});
+
+	it('counts a glide that stops just short of it', () => {
+		// Where the follow logic aims: the current message's top, which can sit
+		// a little above the very end and is still the newest line.
+		expect(isWatchingTheEnd({ atBottom: false, glideTarget: 86, lastEnd: 106 })).toBe(true);
+	});
+
+	it('ignores a glide heading somewhere else entirely', () => {
+		// Reopening into the middle of a conversation is a glide too, and it is
+		// the one that must not be dragged to the end by a resize (#844).
+		expect(isWatchingTheEnd({ atBottom: false, glideTarget: 40, lastEnd: 106 })).toBe(false);
+	});
+
+	it('leaves a reader who is neither there nor heading there alone', () => {
+		expect(isWatchingTheEnd({ atBottom: false, glideTarget: null, lastEnd: 106 })).toBe(false);
 	});
 });
