@@ -5,11 +5,7 @@
  * mistake there looks like "the panel just doesn't follow properly".
  */
 import { describe, expect, it } from 'vitest';
-import {
-	afterResizeScrollTop,
-	followScrollTop,
-	initialScrollTop
-} from './stick-to-bottom-context.svelte';
+import { afterResizeScrollTop, followScrollTop, initialScrollTop } from './panel-viewport';
 
 /** A 400px-tall panel scrolled to the top, with 1000px of content in it. */
 const PANEL = {
