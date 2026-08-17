@@ -686,10 +686,16 @@
 	{/if}
 </div>
 
-<div class="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-	<div class="space-y-4">
-		<section class="border-border bg-card rounded-lg border p-5" data-testid="talk-content">
-			<div class="flex items-baseline justify-between gap-3">
+<!--
+	#858: the implicit column below lg sizes to min-content. A long
+	reviewer address or a recording URL has no break, the column grows
+	past the screen, and the page slides sideways. min-w-0 lets the
+	column shrink; break-words on the text is what then wraps.
+-->
+<div class="grid min-w-0 gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+	<div class="min-w-0 space-y-4">
+		<section class="border-border bg-card min-w-0 rounded-lg border p-5" data-testid="talk-content">
+			<div class="flex min-w-0 items-baseline justify-between gap-3">
 				<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
 					Abstract
 				</h2>
@@ -754,7 +760,9 @@
 					</div>
 				</form>
 			{:else}
-				<p class="mt-2 leading-relaxed whitespace-pre-line">{s.abstract ?? 'No abstract.'}</p>
+				<p class="mt-2 leading-relaxed break-words whitespace-pre-line">
+					{s.abstract ?? 'No abstract.'}
+				</p>
 				{#if form?.contentSaved}
 					<p class="text-status-good mt-2 text-sm" role="status">{form.contentSaved}</p>
 				{:else if data.contentEdit}
@@ -766,17 +774,17 @@
 			{/if}
 
 			{#if !editing && (s.keyTakeaway || s.audienceLevel)}
-				<dl class="border-border mt-4 grid gap-3 border-t pt-4 text-sm sm:grid-cols-2">
+				<dl class="border-border mt-4 grid min-w-0 gap-3 border-t pt-4 text-sm sm:grid-cols-2">
 					{#if s.keyTakeaway}
-						<div>
+						<div class="min-w-0">
 							<dt class="text-muted-foreground">Key takeaway</dt>
-							<dd>{s.keyTakeaway}</dd>
+							<dd class="break-words">{s.keyTakeaway}</dd>
 						</div>
 					{/if}
 					{#if s.audienceLevel}
-						<div>
+						<div class="min-w-0">
 							<dt class="text-muted-foreground">Audience level</dt>
-							<dd>{s.audienceLevel}</dd>
+							<dd class="break-words">{s.audienceLevel}</dd>
 						</div>
 					{/if}
 				</dl>
@@ -784,16 +792,16 @@
 
 			{#if s.answers.length > 0}
 				<!-- Ü2: whatever the organizer added to the form arrives here, or they retype it. -->
-				<dl class="border-border mt-4 grid gap-3 border-t pt-4 text-sm sm:grid-cols-2">
+				<dl class="border-border mt-4 grid min-w-0 gap-3 border-t pt-4 text-sm sm:grid-cols-2">
 					{#each s.answers as answer, i (i)}
-						<div>
-							<dt class="text-muted-foreground">{answer.label}</dt>
-							<dd>
+						<div class="min-w-0">
+							<dt class="text-muted-foreground break-words">{answer.label}</dt>
+							<dd class="min-w-0 break-words">
 								{#if answer.kind === 'boolean' || answer.value === null || answer.value === ''}
 									{answerValue(answer)}
 								{:else}
 									<!-- #477: a link the submitter typed is a link here too. -->
-									<AnswerText value={answer.value} />
+									<AnswerText class="break-words" value={answer.value} />
 								{/if}
 							</dd>
 						</div>
@@ -802,7 +810,10 @@
 			{/if}
 		</section>
 
-		<section class="border-border bg-card rounded-lg border p-5" data-testid="submission-reviews">
+		<section
+			class="border-border bg-card min-w-0 rounded-lg border p-5"
+			data-testid="submission-reviews"
+		>
 			<div class="flex flex-wrap items-baseline justify-between gap-2">
 				<h2 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Reviews</h2>
 				<div class="flex flex-wrap items-center gap-3">
@@ -822,10 +833,10 @@
 			{:else}
 				<ul>
 					{#each s.reviews as review (review.id)}
-						<li class="border-border border-t py-3 first:mt-3">
-							<div class="flex items-baseline justify-between gap-3">
-								<span class="flex flex-wrap items-baseline gap-2">
-									<span class="font-medium" data-testid="review-reviewer-name"
+						<li class="border-border min-w-0 border-t py-3 first:mt-3">
+							<div class="flex min-w-0 items-baseline justify-between gap-3">
+								<span class="flex min-w-0 flex-wrap items-baseline gap-2">
+									<span class="min-w-0 font-medium break-words" data-testid="review-reviewer-name"
 										>{review.reviewerName}</span
 									>
 									{#if review.anonymized}
@@ -850,7 +861,7 @@
 								</span>
 							</div>
 							{#if review.scores.length > 0}
-								<p class="text-muted-foreground mt-1 text-xs tabular-nums">
+								<p class="text-muted-foreground mt-1 text-xs break-words tabular-nums">
 									{#each review.scores as score, i (i)}
 										{i > 0 ? ' · ' : ''}{score.criterion}:
 										{score.valueText ??
@@ -859,7 +870,7 @@
 								</p>
 							{/if}
 							{#if review.comment}
-								<p class="text-muted-foreground mt-1 text-sm">{review.comment}</p>
+								<p class="text-muted-foreground mt-1 text-sm break-words">{review.comment}</p>
 							{/if}
 						</li>
 					{/each}
@@ -1015,7 +1026,7 @@
 		</section>
 	</div>
 
-	<div class="space-y-4">
+	<div class="min-w-0 space-y-4">
 		<section class="border-border bg-card rounded-lg border p-4" data-testid="submission-speakers">
 			<h2 class="text-sm font-medium">{s.speakers.length === 1 ? 'Speaker' : 'Speakers'}</h2>
 			{#if s.speakers.length === 0}
