@@ -20,8 +20,9 @@
 	 * that column — stay tappable. That is the relationship with
 	 * scrolling content, not another per-page exception.
 	 *
-	 * Size and inset are --assistant-star-* so a page that has to start
-	 * after this column (#869) names the same numbers.
+	 * Size and inset are --assistant-star-*. `data-assistant-star` is
+	 * what reserves the column (#875), so a new page inherits it
+	 * instead of naming the same numbers.
 	 */
 	import { invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
@@ -82,6 +83,7 @@
 	)}
 	aria-label="Ask Guus"
 	data-testid="assistant-open"
+	data-assistant-star
 	onclick={openPanel}
 >
 	<SparklesIcon />
