@@ -49,8 +49,12 @@ describe('The organizer pages centre their column', () => {
 				expectCentredInParent();
 			}
 
-			// Below the breakpoint nothing may change: the column is the page, and the
-			// padding inside it is what keeps the text off the edge.
+			// This spec is older than the star column (#424, 15 Aug; #883
+			// two days later). On a phone it asked for no side margin,
+			// which meant no unused centering gap. The reserved star is
+			// 44px of parent padding on every shell that carries
+			// [data-after-star] — the same strip the reviewer queue already
+			// ships. A leftover that is not that strip is still the defect.
 			cy.viewport(390, 844);
 			for (const page of PAGES) {
 				cy.visit(`/manage/${slug}/${page}`);
@@ -58,9 +62,16 @@ describe('The organizer pages centre their column', () => {
 				cy.get('[data-testid="page-column"]').should(($column) => {
 					const column = $column[0].getBoundingClientRect();
 					const parent = $column[0].parentElement!.getBoundingClientRect();
+					const left = column.left - parent.left;
 
-					expect(column.left - parent.left, `${page}: no side margin on a phone`).to.be.lessThan(1);
-					expect(column.width, `${page}: the column is the page`).to.be.closeTo(parent.width, 1);
+					expect(
+						left,
+						`${page}: leftover is the reserved star column, not a centering gap`
+					).to.be.closeTo(44, 1);
+					expect(
+						column.width + left,
+						`${page}: the column fills what the star does not take`
+					).to.be.closeTo(parent.width, 1);
 				});
 			}
 		});
